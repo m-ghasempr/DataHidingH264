@@ -75,8 +75,8 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
         for (by=by0; by<by1; by++)
         for (bx=bx0; bx<bx1; bx++)
         {
-          mv[0][by][bx] = img->all_mv[bx][by][LIST_0][b8ref][b8mode][0];
-          mv[1][by][bx] = img->all_mv[bx][by][LIST_0][b8ref][b8mode][1];
+          mv[0][by][bx] = img->all_mv[by][bx][LIST_0][b8ref][b8mode][0];
+          mv[1][by][bx] = img->all_mv[by][bx][LIST_0][b8ref][b8mode][1];
         }
       }
       else
@@ -416,7 +416,7 @@ void compute_residue_b8block (int b8block, int i16mode) // if not INTRA16x16 it 
     for (i=i0; i<i1; i++)
     for (j=j0; j<j1; j++)
     {
-      decs->resY[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i] - img->mpr[i][j];
+      decs->resY[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i] - img->mpr[j][i];
     }
   }
 }
@@ -544,7 +544,7 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
     for (block_y=0; block_y<BLOCK_MULTIPLE; block_y++)
       for (block_x=0; block_x<BLOCK_MULTIPLE; block_x++)
         for (i=0;i<2;i++)
-          mv[i][block_y][block_x]=tmp_mv[mb_x*BLOCK_SIZE+block_x+4][mb_y*BLOCK_SIZE+block_y][i];
+          mv[i][block_y][block_x]=tmp_mv[mb_y*BLOCK_SIZE+block_y][mb_x*BLOCK_SIZE+block_x+4][i];
     
     //! Residuum ist set to zero    
     for(i=0;i<MB_BLOCK_SIZE;i++)
@@ -600,7 +600,7 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
       for (block_y=0; block_y<BLOCK_MULTIPLE; block_y++)
         for (block_x=0; block_x<BLOCK_MULTIPLE; block_x++)
           for (i=0;i<2;i++)
-            mv[i][block_y][block_x]=tmp_mv[mb_x*BLOCK_SIZE+block_x+4][mb_y*BLOCK_SIZE+block_y][i];
+            mv[i][block_y][block_x]=tmp_mv[mb_y*BLOCK_SIZE+block_y][mb_x*BLOCK_SIZE+block_x+4][i];
     
       //! Residuum ist set to zero    
       for(i=0;i<MB_BLOCK_SIZE;i++)

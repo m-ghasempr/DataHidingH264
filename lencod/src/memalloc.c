@@ -291,7 +291,7 @@ int get_mem3Dint64(int64 ****array3D, int frames, int rows, int columns)
 /*!
  ************************************************************************
  * \brief
- *    Allocate 4D memory array -> int array3D[frames][rows][columns][component]
+ *    Allocate 4D memory array -> int array4D[frames][rows][columns][component]
  *
  * \par Output:
  *    memory size in bytes
@@ -301,7 +301,7 @@ int get_mem4Dint(int *****array4D, int idx, int frames, int rows, int columns )
 {
   int  j;
 
-  if(((*array4D) = (int****)calloc(idx,sizeof(int**))) == NULL)
+  if(((*array4D) = (int****)calloc(idx,sizeof(int***))) == NULL)
     no_mem_exit("get_mem4Dint: array4D");
 
   for(j=0;j<idx;j++)
@@ -309,6 +309,30 @@ int get_mem4Dint(int *****array4D, int idx, int frames, int rows, int columns )
 
   return idx*frames*rows*columns*sizeof(int);
 }
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 5D memory array -> int array5D[refs][blocktype][rows][columns][component]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem5Dint(int ******array5D, int refs, int blocktype, int rows, int columns, int component)
+{
+  int  j;
+
+  if(((*array5D) = (int*****)calloc(refs,sizeof(int****))) == NULL)
+    no_mem_exit("get_mem5Dint: array5D");
+
+  ;
+  for(j=0;j<refs;j++)
+    get_mem4Dint( (*array5D)+j, blocktype, rows, columns, component) ;
+
+  return refs*blocktype*rows*columns*component*sizeof(int);
+}
+
 
 /*!
  ************************************************************************
@@ -474,6 +498,27 @@ void free_mem4Dint(int ****array4D, int idx, int frames )
   }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    free 5D int memory array 
+ *    which was allocated with get_mem5Dint()
+ ************************************************************************
+ */
+void free_mem5Dint(int *****array5D, int refs, int blocktype, int height)
+{
+  int  j;
+
+  if (array5D)
+  {
+    for(j=0;j<refs;j++)
+      free_mem4Dint( array5D[j], blocktype, height) ;
+    free (array5D);
+  } else
+  {
+    error ("free_mem5Dint: trying to free unused memory",100);
+  }
+}
 
 /*!
  ************************************************************************
@@ -561,6 +606,52 @@ int get_mem4Dshort(short *****array4D, int idx, int frames, int rows, int column
 /*!
  ************************************************************************
  * \brief
+ *    Allocate 5D memory array -> short array5D[refs][blocktype][rows][columns][component]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem5Dshort(short ******array5D, int refs, int blocktype, int rows, int columns, int component)
+{
+  int  j;
+
+  if(((*array5D) = (short*****)calloc(refs,sizeof(short****))) == NULL)
+    no_mem_exit("get_mem5Dshort: array5D");
+
+  ;
+  for(j=0;j<refs;j++)
+    get_mem4Dshort( (*array5D)+j, blocktype, rows, columns, component) ;
+
+  return refs*blocktype*rows*columns*component*sizeof(short);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 6D memory array -> short array6D[list][refs][blocktype][rows][columns][component]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem6Dshort(short *******array6D, int list, int refs, int blocktype, int rows, int columns, int component)
+{
+  int  j;
+
+  if(((*array6D) = (short******)calloc(list,sizeof(short*****))) == NULL)
+    no_mem_exit("get_mem6Dshort: array6D");
+
+  ;
+  for(j=0;j<list;j++)
+    get_mem5Dshort( (*array6D)+j, refs, blocktype, rows, columns, component) ;
+
+  return list * refs * blocktype * rows * columns * component * sizeof(short);
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    free 2D short memory array
  *    which was allocated with get_mem2Dshort()
  ************************************************************************
@@ -624,5 +715,49 @@ void free_mem4Dshort(short ****array4D, int idx, int frames )
   } else
   {
     error ("free_mem4Dshort: trying to free unused memory",100);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    free 5D short memory array 
+ *    which was allocated with get_mem5Dshort()
+ ************************************************************************
+ */
+void free_mem5Dshort(short *****array5D, int refs, int blocktype, int height)
+{
+  int  j;
+
+  if (array5D)
+  {
+    for(j=0;j<refs;j++)
+      free_mem4Dshort( array5D[j], blocktype, height) ;
+    free (array5D);
+  } else
+  {
+    error ("free_mem5Dshort: trying to free unused memory",100);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    free 6D short memory array 
+ *    which was allocated with get_mem6Dshort()
+ ************************************************************************
+ */
+void free_mem6Dshort(short ******array6D, int list, int refs, int blocktype, int height)
+{
+  int  j;
+
+  if (array6D)
+  {
+    for(j=0;j<list;j++)
+      free_mem5Dshort( array6D[j], refs, blocktype, height) ;
+    free (array6D);
+  } else
+  {
+    error ("free_mem6Dshort: trying to free unused memory",100);
   }
 }

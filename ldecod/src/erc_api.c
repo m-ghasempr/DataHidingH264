@@ -91,7 +91,7 @@ ercVariables_t *ercOpen( void )
 void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 picSizeX )
 {
   int *tmp = NULL;
-  int i = 0, j = 0;
+  int i = 0;
   
   if ( errorVar && errorVar->concealment ) 
   {
@@ -154,18 +154,6 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 pi
 
     for ( i = 0; i < errorVar->nOfSegments; i++ ) 
     {
-      // mark all the Blocks as empty 
-      /* // this is a duplication of the memset above
-      for ( j = 0; j < nOfMBs; j++ ) 
-      {
-        errorVar->yCondition[MBNum2YBlock (j, 0, picSizeX)] = ERC_BLOCK_EMPTY;
-        errorVar->yCondition[MBNum2YBlock (j, 1, picSizeX)] = ERC_BLOCK_EMPTY;
-        errorVar->yCondition[MBNum2YBlock (j, 2, picSizeX)] = ERC_BLOCK_EMPTY;
-        errorVar->yCondition[MBNum2YBlock (j, 3, picSizeX)] = ERC_BLOCK_EMPTY;
-        errorVar->uCondition[j] = ERC_BLOCK_EMPTY;
-        errorVar->vCondition[j] = ERC_BLOCK_EMPTY;
-      }
-      */
       errorVar->segments[i].fCorrupted = 1; //! mark segments as corrupted
       errorVar->segments[i].startMBPos = 0;
       errorVar->segments[i].endMBPos = nOfMBs - 1;

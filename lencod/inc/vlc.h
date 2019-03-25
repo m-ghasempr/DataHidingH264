@@ -13,10 +13,10 @@
 #ifndef _VLC_H_
 #define _VLC_H_
 
-int u_1 (char *tracestring, int value, DataPartition *part);
-int se_v (char *tracestring, int value, DataPartition *part);
-int ue_v (char *tracestring, int value, DataPartition *part);
-int u_v (int n, char *tracestring, int value, DataPartition *part);
+int u_1  (char *tracestring, int value, Bitstream *bitstream);
+int se_v (char *tracestring, int value, Bitstream *bitstream);
+int ue_v (char *tracestring, int value, Bitstream *bitstream);
+int u_v  (int n, char *tracestring, int value, Bitstream *bitstream);
 
 
 void levrun_linfo_c2x2(int level,int run,int *len,int *info);
@@ -24,7 +24,7 @@ void levrun_linfo_intra(int level,int run,int *len,int *info);
 void levrun_linfo_inter(int level,int run,int *len,int *info);
 
 int   writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart);
-int   writeSyntaxElement_fixed(SyntaxElement *se, DataPartition *this_dataPart);
+
 int   writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffer );
 void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream);
 int   writeSyntaxElement2Buf_Fixed(SyntaxElement *se, Bitstream* this_streamBuffer );

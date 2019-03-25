@@ -20,9 +20,10 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
+#include <float.h>
 
 #include "global.h"
-
 #include "header.h"
 #include "rtp.h"
 #include "fmo.h"
@@ -40,6 +41,7 @@ static void set_ref_pic_num();
 extern ColocatedParams *Co_located;
 extern StorablePicture **listX[6];
 void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active, int *remapping_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int weighted_prediction, int list_no);
+void SetLagrangianMultipliers();
 
 /*!
  ************************************************************************
@@ -103,9 +105,10 @@ int start_slice()
       if (currStream->bits_to_go != 8)
         header_len+=currStream->bits_to_go;
       writeVlcByteAlign(currStream);
-      arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos)/*, &(currStream->last_startcode)*/,img->type);
+      arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
       cabac_new_slice();
-    } else 
+    } 
+    else 
     {
       // Initialize CA-VLC
       CAVLC_init();
@@ -131,14 +134,19 @@ int start_slice()
  *
  ************************************************************************
  */
-int terminate_slice()
+int terminate_slice(int lastslice)
 {
+  int MbWidthC  [4]= { 0, 8, 8,  16};
+  int MbHeightC [4]= { 0, 8, 16, 16};
+
   int bytes_written;
   Bitstream *currStream;
   Slice *currSlice = img->currentSlice;
   EncodingEnvironmentPtr eep;
   int i;
   int byte_pos_before_startcode_emu_prevention;
+  int min_num_bytes=0;
+  int RawMbBits;
 
   if (input->symbol_mode == CABAC)
     write_terminating_bit (1);      // only once, not for all partitions
@@ -162,7 +170,17 @@ int terminate_slice()
       currStream->byte_buf = 0;
       bytes_written = currStream->byte_pos;
       byte_pos_before_startcode_emu_prevention= currStream->byte_pos;
-      currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, 0, currStream->byte_pos, eep->E);
+//      min_num_bytes = eep->E;
+      if (lastslice)
+      {
+        RawMbBits = 256 * img->bitdepth_luma + 2 * MbWidthC[active_sps->chroma_format_idc] * MbHeightC[active_sps->chroma_format_idc] * img->bitdepth_chroma;
+        min_num_bytes = ((96 * get_pic_bin_count()) - (RawMbBits * (int)img->PicSizeInMbs *3) + 511) / 1024;
+      }
+
+//      printf ("bytepos: %d\n", currStream->byte_pos);
+      if (min_num_bytes>currStream->byte_pos)
+        printf ("CABAC stuffing words = %6d\n", (min_num_bytes-currStream->byte_pos)/3);
+      currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, 0, currStream->byte_pos, min_num_bytes);
       *(stats->em_prev_bits) += (currStream->byte_pos - byte_pos_before_startcode_emu_prevention) * 8;
     }           // CABAC
   }           // partition loop
@@ -170,7 +188,6 @@ int terminate_slice()
   {
     store_contexts();
   }
-
   return 0;   
 }
 
@@ -182,14 +199,14 @@ int terminate_slice()
 *   returns the number of coded MBs in the SLice 
 ************************************************************************
 */
-int encode_one_slice (int SliceGroupId, Picture *pic)
+int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
 {
   Boolean end_of_slice = FALSE;
   Boolean recode_macroblock;
   int len;
   int NumberOfCodedMBs = 0;
   int CurrentMbAddr;
-  double FrameRDCost, FieldRDCost;
+  double FrameRDCost = DBL_MAX, FieldRDCost = DBL_MAX;
   
   img->cod_counter = 0;
 
@@ -199,10 +216,14 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
   init_slice (CurrentMbAddr);
   Bytes_After_Header = img->currentSlice->partArr[0].bitstream->byte_pos;
 
+  SetLagrangianMultipliers();
+
   if (input->symbol_mode==CABAC)
   {
     SetCtxModelNumber ();
   }
+  
+  img->checkref = (input->rdopt && input->RestrictRef && (img->type==P_SLICE || img->type==SP_SLICE));
 
 /*
   // Tian Dong: June 7, 2002 JVT-B042
@@ -241,6 +262,16 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
 
   while (end_of_slice == FALSE) // loop over macroblocks
   {
+    if (img->AdaptiveRounding && input->AdaptRndPeriod && (img->current_mb_nr % input->AdaptRndPeriod == 0))
+    {
+      CalculateOffsetParam();
+      
+      if(input->Transform8x8Mode)
+      {
+        CalculateOffset8Param();
+      }
+    }
+
     //sw paff
     if (!img->MbaffFrameFlag)
     {
@@ -250,19 +281,19 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       start_macroblock (CurrentMbAddr, FALSE);
       encode_one_macroblock ();
       write_one_macroblock (1);
-
+      
       terminate_macroblock (&end_of_slice, &recode_macroblock);
-
-// printf ("encode_one_slice: mb %d,  slice %d,   bitbuf bytepos %d EOS %d\n", 
+      
+//       printf ("encode_one_slice: mb %d,  slice %d,   bitbuf bytepos %d EOS %d\n", 
 //       img->current_mb_nr, img->current_slice_nr, 
 //       img->currentSlice->partArr[0].bitstream->byte_pos, end_of_slice);
-
+      
       if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
       {
         CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
         if (CurrentMbAddr == -1)   // end of slice
         {
-// printf ("FMO End of Slice Group detected, current MBs %d, force end of slice\n", NumberOfCodedMBs+1);
+//          printf ("FMO End of Slice Group detected, current MBs %d, force end of slice\n", NumberOfCodedMBs+1);
           end_of_slice = TRUE;
         }
         NumberOfCodedMBs++;       // only here we are sure that the coded MB is actually included in the slice
@@ -282,7 +313,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
     }
     else                      // TBD -- Addition of FMO
     {
-
+      
 //! This following ugly code breaks slices, at least for a slice mode that accumulates a certain
 //! number of bits into one slice.  
 //! The suggested algorithm is as follows:
@@ -310,7 +341,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
 //!      to be double checked that it works with CA-VLC as well
 //!   2. would it be an option to allocate Bitstreams with zero data in them (or copy the
 //!      already generated bitstream) for the "test coding"?  
-
+      
       if (input->MbInterlace == ADAPTIVE_CODING)
       {
         //================ code MB pair as frame MB ================
@@ -462,7 +493,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       fb->short_used = short_used;
     }
 */
-  terminate_slice ();
+  terminate_slice ( (NumberOfCodedMBs+TotalCodedMBs >= (int)img->PicSizeInMbs) );
   return NumberOfCodedMBs;
 }
 
@@ -492,8 +523,9 @@ static void init_slice (int start_mb_addr)
   // Allocate new Slice in the current Picture, and set img->currentSlice
   assert (currPic != NULL);
   currPic->no_slices++;
+  
   if (currPic->no_slices >= MAXSLICEPERPICTURE)
-    error ("Too many slices per picture, increase MAXLSICESPERPICTURE in global.h.", -1);
+    error ("Too many slices per picture, increase MAXSLICEPERPICTURE in global.h.", -1);
 
   currPic->slices[currPic->no_slices-1] = malloc_slice();
   currSlice = currPic->slices[currPic->no_slices-1];
@@ -519,9 +551,6 @@ static void init_slice (int start_mb_addr)
     currStream->byte_buf = 0;
   }
 
-    // restrict list 1 size
-//  img->num_ref_idx_l0_active = max(1, (img->type==B_SLICE ? active_pps->num_ref_idx_l0_active_minus1 + 1: active_pps->num_ref_idx_l0_active_minus1 +1 )); 
-//  img->num_ref_idx_l1_active = (img->type==B_SLICE ? active_pps->num_ref_idx_l1_active_minus1 + 1 : 0);
   img->num_ref_idx_l0_active = active_pps->num_ref_idx_l0_active_minus1 + 1; 
   img->num_ref_idx_l1_active = active_pps->num_ref_idx_l1_active_minus1 + 1;
 
@@ -531,31 +560,28 @@ static void init_slice (int start_mb_addr)
   // assign list 0 size from list size
   img->num_ref_idx_l0_active = listXsize[0];
   img->num_ref_idx_l1_active = listXsize[1];
-
-  //if (!img->MbaffFrameFlag)
+  
+  // code now also considers fields. Issue whether we should account this within the appropriate input params directly
+  if ((img->type == P_SLICE || img->type == SP_SLICE) && input->P_List0_refs)
   {
-    if ((img->type == P_SLICE || img->type == SP_SLICE) && input->P_List0_refs)
+    img->num_ref_idx_l0_active = min(img->num_ref_idx_l0_active, input->P_List0_refs * ((img->structure !=0) + 1));
+    listXsize[0] = min(listXsize[0], input->P_List0_refs * ((img->structure !=0) + 1));  
+  }
+  if (img->type == B_SLICE )
+  {
+    if (input->B_List0_refs)
     {
-      img->num_ref_idx_l0_active = min(img->num_ref_idx_l0_active, input->P_List0_refs);
-      listXsize[0] = min(listXsize[0], input->P_List0_refs);  
+      img->num_ref_idx_l0_active = min(img->num_ref_idx_l0_active, input->B_List0_refs * ((img->structure !=0) + 1));
+      listXsize[0] = min(listXsize[0], input->B_List0_refs * ((img->structure !=0) + 1));  
     }
-    if (img->type == B_SLICE )
+    if (input->B_List1_refs)
     {
       
-      if (input->B_List0_refs)
-      {
-        img->num_ref_idx_l0_active = min(img->num_ref_idx_l0_active, input->B_List0_refs);
-        listXsize[0] = min(listXsize[0], input->B_List0_refs);  
-      }
-      if (input->B_List1_refs)
-      {
-        
-        img->num_ref_idx_l1_active = min(img->num_ref_idx_l1_active, input->B_List1_refs);
-        listXsize[1] = min(listXsize[1], input->B_List1_refs);  
-      }
+      img->num_ref_idx_l1_active = min(img->num_ref_idx_l1_active, input->B_List1_refs * ((img->structure !=0) + 1));
+      listXsize[1] = min(listXsize[1], input->B_List1_refs * ((img->structure !=0) + 1));  
     }
-  } 
-
+  }
+  
   //Perform memory management based on poc distances for PyramidCoding
   if (img->nal_reference_idc  && input->PyramidCoding && input->PocMemoryManagement && dpb.used_size == dpb.size)
   {    
@@ -771,7 +797,7 @@ static void free_slice(Slice *slice)
       delete_contexts_MotionInfo(slice->mot_ctx);
       delete_contexts_TextureInfo(slice->tex_ctx);
     }
-    //free(img->currentSlice);
+
     free(slice);
   }
 }
@@ -1010,3 +1036,79 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
     }
   }
 }
+
+extern int QP2QUANT[40];
+
+void SetLagrangianMultipliers()
+{
+  int qp, j;
+  double qp_temp;
+  double lambda_scale = 1.0 - Clip3(0.0,0.5,0.05 * (double) input->jumpd);;
+  
+  if (input->rdopt) // RDOPT on computation of Lagrangian multipliers
+  {
+    for (j = 0; j < 5; j++)
+    {
+      for (qp = 0; qp < 52; qp++)
+      {          
+        qp_temp = (double)qp - SHIFT_QP;
+
+        if (input->UseExplicitLambdaParams) // consideration of explicit weights.
+        {
+          img->lambda_md[j][qp] = input->LambdaWeight[j] * pow (2, img->bitdepth_lambda_scale + qp_temp/3.0);
+          // Scale lambda due to hadamard qpel only consideration
+          img->lambda_md[j][qp] = (input->hadamard == 2 ? 0.95 : 1.00) * img->lambda_md[j][qp];
+          img->lambda_me[j][qp] = sqrt(img->lambda_md[j][qp]);
+          img->lambda_mf[j][qp] = LAMBDA_FACTOR (img->lambda_me[j][qp]);
+          if (j == B_SLICE)
+          {
+            img->lambda_md[5][qp] = input->LambdaWeight[5] * pow (2, img->bitdepth_lambda_scale + qp_temp/3.0);
+            img->lambda_md[5][qp] = (input->hadamard == 2 ? 0.95 : 1.00) * img->lambda_md[5][qp];
+            img->lambda_me[5][qp] = sqrt(img->lambda_md[5][qp]);
+            img->lambda_mf[5][qp] = LAMBDA_FACTOR (img->lambda_me[5][qp]);
+          }
+        }
+        else
+        {                          
+          if (input->successive_Bframe>0)
+            img->lambda_md[j][qp] = 0.68 * pow (2, img->bitdepth_lambda_scale + qp_temp/3.0) 
+            * (j == B_SLICE ? Clip3(2.00,4.00,(qp_temp / 6.0)) : (j == SP_SLICE) ? Clip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
+          else
+            img->lambda_md[j][qp] = 0.85 * pow (2, img->bitdepth_lambda_scale + qp_temp/3.0) 
+            * ( (j == B_SLICE) ? 4.0 : (j == SP_SLICE) ? Clip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
+          // Scale lambda due to hadamard qpel only consideration
+          img->lambda_md[j][qp] = (input->hadamard == 2 ? 0.95 : 1.00) * img->lambda_md[j][qp];
+          
+          if (j == B_SLICE)
+          {
+            img->lambda_md[5][qp] = img->lambda_md[j][qp];
+
+            if (input->PyramidCoding == 2)
+              img->lambda_md[5][qp] *= (1.0 - min(0.4,0.2 * (double) gop_structure[img->b_frame_to_code-1].pyramid_layer)) ;
+            else
+              img->lambda_md[5][qp] *= 0.80;
+            img->lambda_md[5][qp] *= lambda_scale;
+            img->lambda_me[5][qp] = sqrt(img->lambda_md[5][qp]);
+            img->lambda_mf[5][qp] = LAMBDA_FACTOR (img->lambda_me[5][qp]);
+          }
+          else
+            img->lambda_md[j][qp] *= lambda_scale;
+          img->lambda_me[j][qp] = sqrt(img->lambda_md[j][qp]);  
+          img->lambda_mf[j][qp] = LAMBDA_FACTOR (img->lambda_me[j][qp]);
+        }
+      }
+    }
+  }
+  else // RDOPT off computation of Lagrangian multipliers
+  {
+    for (j = 0; j < 6; j++)
+    {
+      for (qp = 0; qp < 52; qp++)
+      {
+        img->lambda_md[j][qp] = img->lambda_me[j][qp] = QP2QUANT[max(0,qp-SHIFT_QP)];
+        img->lambda_mf[j][qp] = LAMBDA_FACTOR (img->lambda_me[j][qp]);
+      }
+    }
+  }
+}
+

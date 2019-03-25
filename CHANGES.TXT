@@ -1,9 +1,25 @@
-Changes for Version JM 9.3a to JM 9.3
--------------------------------------
+Changes for Version JM 9.4 to JM 9.3
+------------------------------------
+- encoder: fast mode implementation (BJ)
+- encoder: FME update (WF)
+- encoder: adaptive quantization rounding offset (GS/SSu/AT)
+- encoder: restructure encode_one_macroblock (AT)
 - encoder: weighted prediction fix (AT)
 - encoder: fix reported bit rate with LastFrameNumber parameter (AT)
+- encoder: fix cost initialization for Transform8x8Mode=2 (SeS)
+- encoder: restrict motion vector size (AT)
+- encoder: fix rate control/non-rd-opt mismatch (AT)
+- encoder: cleanups (AT)
+- encoder: remove memory leak and clean up PPS usage (KS)
+- encoder: fix CABAC zero word calculation (KS)
+- decoder: fix POC mode 0 calculation (XI)
 - decoder: fix timing SEI parsing (IP)
+- decoder: fix dangling field output (KS)
+- decoder: fix VLC trace output (MT)
+- encoder/decoder: large performance and memory usage improvements (AT/KS)
 - encoder/decoder: fix CABAC CBP_block_bit (VG)
+- encoder/decoder: clean up and fix usage of skip_flag (KS/AM)
+- encoder/decoder: implement lossless coding for non 4:4:4 cases (SSu)
 
 
 Changes for Version JM 9.3 to JM 9.2
@@ -944,10 +960,12 @@ SM      Siwei Ma                swma@jdl.ac.cn
 AF      Arild Fuldseth          arild.fuldseth@tandberg.no
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AJ      Anthony Joch            anthony@ubvideo.com
+AM	Alan MacDonald		newslists@warpzillion.com
 AS      Albert Simpson          ASimpson@amphion.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
 AW      Armand Wemelsfelder     wemel@planet.nl
 BH      Barry Haskell           bhaskell@apple.com
+BJ	Byeungwoo Jeon		bjeon@yurim.skku.ac.kr
 CG      Cristina Gomila         GomilaC@tce.com
 CS	Christian Schmidt	schmidt@ece.ucsb.edu
 DC      Doug Chin               dougchin@sandvideo.com
@@ -987,6 +1005,7 @@ MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
 ML      Maxim Lobasso           lobasso@hotmail.com
 MN      Mike Nilsson            mike.nilsson@bt.com
+MT	Mario Trentini		mario_trentini@realmagic.fr
 MW      Mathias Wien            wien@ient.rwth-aachen.de
 MWa	Michael Walter		eiMichaelWalter@web.de
 OD      Olivier Deygas          olivier.deygas@st.com
@@ -1005,6 +1024,8 @@ SKa	Shinya Kadono		kadono.shinya@jp.panasonic.com
 SM	Sebastian Manciulea	sebastian@splash.ro
 SN	Satoshi Nakagawa	nakagawa@okilab.net
 SR      Shankar Regunathan      shanre@microsoft.com
+SeS	Sergey A. Sablin	sergey@elecard.net.ru
+SSu	Shijun Sun		ssun@sharplabs.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
 SY      Steve Yao               steveyao@sandvideo.com
 TH      Till Hallbach           halbach@tele.ntnu.no
@@ -1024,10 +1045,11 @@ WF	Wenfang Fu		fwf@video.mdc.tsinghua.edu.cn
 WK	Woo-Shik Kim		wskim@sait.samsung.co.kr
 WYK     Ye-Kui Wang             wyk@ieee.org
 WZ      Weimin Zeng		wzeng@wischip.com
+XI	Xin			xin@apple.com
+XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com      
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             wyk@ieee.org
-XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com      
 ZH	Zhou Heng		zhou_heng@yahoo.com
 ZL      Li Zhang                zhangli@jdl.ac.cn
 ZX      Z. Xue                  jon_xz@yahoo.com

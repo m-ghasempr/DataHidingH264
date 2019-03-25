@@ -356,7 +356,7 @@ void find_snr(
   read(p_ref, buf, size_y * size_x * symbol_size_in_bytes);
   buf2img(imgY_ref, buf, size_x, size_y, symbol_size_in_bytes);
 
-  if (dec_picture->chroma_format_idc != YUV400)
+  if (p->chroma_format_idc != YUV400)
   {
     for (uv=0; uv < 2; uv++)
     {
@@ -387,7 +387,7 @@ void find_snr(
   diff_u=0;
   diff_v=0;
   
-  if (dec_picture->chroma_format_idc != YUV400)
+  if (p->chroma_format_idc != YUV400)
   {
     for (j=0; j < size_y_cr; ++j)
     {
@@ -399,12 +399,14 @@ void find_snr(
     }
   }
 
-/*  if (diff_y == 0)
-      diff_y = 1;
+#if ZEROSNR
+  if (diff_y == 0)
+    diff_y = 1;
   if (diff_u == 0)
-      diff_u = 1;
+    diff_u = 1;
   if (diff_v == 0)
-      diff_v = 1; */
+    diff_v = 1; 
+#endif
 
   // Collecting SNR statistics
   if (diff_y != 0)
@@ -429,9 +431,9 @@ void find_snr(
   }
   else
   {
-    snr->snr_ya=(float)(snr->snr_ya*(img->number+Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr+1); // average snr chroma for all frames
-    snr->snr_ua=(float)(snr->snr_ua*(img->number+Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr+1); // average snr luma for all frames
-    snr->snr_va=(float)(snr->snr_va*(img->number+Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr+1); // average snr luma for all frames
+    snr->snr_ya=(float)(snr->snr_ya*(snr->frame_ctr)+snr->snr_y)/(snr->frame_ctr+1); // average snr chroma for all frames
+    snr->snr_ua=(float)(snr->snr_ua*(snr->frame_ctr)+snr->snr_u)/(snr->frame_ctr+1); // average snr luma for all frames
+    snr->snr_va=(float)(snr->snr_va*(snr->frame_ctr)+snr->snr_v)/(snr->frame_ctr+1); // average snr luma for all frames
   } 
 }
 
@@ -466,93 +468,116 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
   if (dec_picture->mb_field[img->current_mb_nr])
     maxold_y = dec_picture->size_y/2 - 1;
 
-  if (dx == 0 && dy == 0) {  /* fullpel position */
+  if (dx == 0 && dy == 0) 
+  {  /* fullpel position */
     for (j = 0; j < BLOCK_SIZE; j++)
       for (i = 0; i < BLOCK_SIZE; i++)
         block[i][j] = list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i))];
   }
-  else { /* other positions */
+  else 
+  { /* other positions */
 
-    if (dy == 0) { /* No vertical interpolation */
+    if (dy == 0) 
+    { /* No vertical interpolation */
 
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
+      for (j = 0; j < BLOCK_SIZE; j++) 
+      {
+        for (i = 0; i < BLOCK_SIZE; i++) 
+        {
           for (result = 0, x = -2; x < 4; x++)
             result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
           block[i][j] = max(0, min(img->max_imgpel_value, (result+16)/32));
         }
       }
 
-      if ((dx&1) == 1) {
+      if ((dx&1) == 1) 
+      {
         for (j = 0; j < BLOCK_SIZE; j++)
           for (i = 0; i < BLOCK_SIZE; i++)
             block[i][j] = (block[i][j] + list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+dx/2))] +1 )/2;
       }
     }
-    else if (dx == 0) {  /* No horizontal interpolation */
+    else if (dx == 0) 
+    {  /* No horizontal interpolation */
 
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
+      for (j = 0; j < BLOCK_SIZE; j++) 
+      {
+        for (i = 0; i < BLOCK_SIZE; i++) 
+        {
           for (result = 0, y = -2; y < 4; y++)
             result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
           block[i][j] = max(0, min(img->max_imgpel_value, (result+16)/32));
         }
       }
 
-      if ((dy&1) == 1) {
+      if ((dy&1) == 1) 
+      {
         for (j = 0; j < BLOCK_SIZE; j++)
           for (i = 0; i < BLOCK_SIZE; i++)
            block[i][j] = (block[i][j] + list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+dy/2))][max(0,min(maxold_x,x_pos+i))] +1 )/2;
       }
     }
-    else if (dx == 2) {  /* Vertical & horizontal interpolation */
+    else if (dx == 2) 
+    {  /* Vertical & horizontal interpolation */
 
-      for (j = -2; j < BLOCK_SIZE+3; j++) {
+      for (j = -2; j < BLOCK_SIZE+3; j++) 
+      {
         for (i = 0; i < BLOCK_SIZE; i++)
           for (tmp_res[i][j+2] = 0, x = -2; x < 4; x++)
             tmp_res[i][j+2] += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
       }
 
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
+      for (j = 0; j < BLOCK_SIZE; j++) 
+      {
+        for (i = 0; i < BLOCK_SIZE; i++) 
+        {
           for (result = 0, y = -2; y < 4; y++)
             result += tmp_res[i][j+y+2]*COEF[y+2];
           block[i][j] = max(0, min(img->max_imgpel_value, (result+512)/1024));
         } 
       }
 
-      if ((dy&1) == 1) {
+      if ((dy&1) == 1)
+      {
         for (j = 0; j < BLOCK_SIZE; j++)
           for (i = 0; i < BLOCK_SIZE; i++)
             block[i][j] = (block[i][j] + max(0, min(img->max_imgpel_value, (tmp_res[i][j+2+dy/2]+16)/32)) +1 )/2;
       }
     }
-    else if (dy == 2) {  /* Horizontal & vertical interpolation */
+    else if (dy == 2)
+    {  /* Horizontal & vertical interpolation */
 
-      for (j = 0; j < BLOCK_SIZE; j++) {
+      for (j = 0; j < BLOCK_SIZE; j++)
+      {
         for (i = -2; i < BLOCK_SIZE+3; i++)
           for (tmp_res[j][i+2] = 0, y = -2; y < 4; y++)
             tmp_res[j][i+2] += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
       }
 
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
+      for (j = 0; j < BLOCK_SIZE; j++)
+      {
+        for (i = 0; i < BLOCK_SIZE; i++)
+        {
           for (result = 0, x = -2; x < 4; x++)
             result += tmp_res[j][i+x+2]*COEF[x+2];
           block[i][j] = max(0, min(img->max_imgpel_value, (result+512)/1024));
         }
       }
 
-      if ((dx&1) == 1) {
+      if ((dx&1) == 1)
+      {
         for (j = 0; j < BLOCK_SIZE; j++)
           for (i = 0; i < BLOCK_SIZE; i++)
             block[i][j] = (block[i][j] + max(0, min(img->max_imgpel_value, (tmp_res[j][i+2+dx/2]+16)/32))+1)/2;
       }
     }
-    else {  /* Diagonal interpolation */
+    else
+    {  /* Diagonal interpolation */
 
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
+      for (j = 0; j < BLOCK_SIZE; j++)
+      {
+        for (i = 0; i < BLOCK_SIZE; i++)
+        {
           pres_y = dy == 1 ? y_pos+j : y_pos+j+1;
           pres_y = max(0,min(maxold_y,pres_y));
           for (result = 0, x = -2; x < 4; x++)
@@ -561,8 +586,10 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
         }
       }
 
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
+      for (j = 0; j < BLOCK_SIZE; j++)
+      {
+        for (i = 0; i < BLOCK_SIZE; i++)
+        {
           pres_x = dx == 1 ? x_pos+i : x_pos+i+1;
           pres_x = max(0,min(maxold_x,pres_x));
           for (result = 0, y = -2; y < 4; y++)
@@ -573,7 +600,6 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
 
     }
   }
-
 }
 
 
@@ -592,7 +618,7 @@ void reorder_lists(int currSliceType, Slice * currSlice)
     }
     if (NULL == listX[0][img->num_ref_idx_l0_active-1])
     {
-      error("number of entries in list 0 smaller than num_ref_idx_l0_active_minus1",500);
+      error("RefPicList0[ num_ref_idx_l0_active_minus1 ] is equal to 'no reference picture', invalid bitstream",500);
     }
     // that's a definition
     listXsize[0] = img->num_ref_idx_l0_active;
@@ -609,7 +635,7 @@ void reorder_lists(int currSliceType, Slice * currSlice)
     }
     if (NULL == listX[1][img->num_ref_idx_l1_active-1])
     {
-      error("number of entries in list 1 smaller than num_ref_idx_l1_active_minus1",500);
+      error("RefPicList1[ num_ref_idx_l1_active_minus1 ] is equal to 'no reference picture', invalid bitstream",500);
     }
     // that's a definition
     listXsize[1] = img->num_ref_idx_l1_active;
@@ -649,15 +675,18 @@ void set_ref_pic_num()
     dec_picture->bottom_ref_pic_num [slice_id][LIST_1][i]=listX[LIST_1][i]->bottom_poc * 2 + 1; 
   }
 
-  if (img->structure==FRAME)
-    for (j=2;j<6;j++)
-      for (i=0;i<listXsize[j];i++)
-      {
-        dec_picture->ref_pic_num        [slice_id][j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
-        dec_picture->frm_ref_pic_num    [slice_id][j][i] = listX[j][i]->frame_poc * 2 ;
-        dec_picture->top_ref_pic_num    [slice_id][j][i] = listX[j][i]->top_poc * 2 ;
-        dec_picture->bottom_ref_pic_num [slice_id][j][i] = listX[j][i]->bottom_poc * 2 + 1;
-      }
+  if (!active_sps->frame_mbs_only_flag)
+  {
+    if (img->structure==FRAME)
+      for (j=2;j<6;j++)
+        for (i=0;i<listXsize[j];i++)
+        {
+          dec_picture->ref_pic_num        [slice_id][j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
+          dec_picture->frm_ref_pic_num    [slice_id][j][i] = listX[j][i]->frame_poc * 2 ;
+          dec_picture->top_ref_pic_num    [slice_id][j][i] = listX[j][i]->top_poc * 2 ;
+          dec_picture->bottom_ref_pic_num [slice_id][j][i] = listX[j][i]->bottom_poc * 2 + 1;
+        }
+  }
 
 }
 
@@ -1275,7 +1304,8 @@ void exit_picture()
       img->number++;
     else
       Bframe_ctr++;    // B pictures
-    
+    snr->frame_ctr++;
+
     g_nFrame++;
   }
 
@@ -1299,7 +1329,7 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
   int mbx = xPosMB(currMBNum,dec_picture->size_x), mby = yPosMB(currMBNum,dec_picture->size_x);
   objectBuffer_t *currRegion, *pRegion;
   Macroblock *currMB = &img->mb_data[currMBNum];
-  int***  mv;
+  short***  mv;
 
   currRegion = erc_object_list + (currMBNum<<2);
 
@@ -1324,18 +1354,18 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
         jj              = 4*mby + (i/2)*2;
         if (currMB->b8mode[i]>=5 && currMB->b8mode[i]<=7)  // SMALL BLOCKS
         {
-          pRegion->mv[0]  = (dec_picture->mv[LIST_0][ii][jj][0] + dec_picture->mv[LIST_0][ii+1][jj][0] + dec_picture->mv[LIST_0][ii][jj+1][0] + dec_picture->mv[LIST_0][ii+1][jj+1][0] + 2)/4;
-          pRegion->mv[1]  = (dec_picture->mv[LIST_0][ii][jj][1] + dec_picture->mv[LIST_0][ii+1][jj][1] + dec_picture->mv[LIST_0][ii][jj+1][1] + dec_picture->mv[LIST_0][ii+1][jj+1][1] + 2)/4;
+          pRegion->mv[0]  = (dec_picture->mv[LIST_0][jj][ii][0] + dec_picture->mv[LIST_0][jj][ii+1][0] + dec_picture->mv[LIST_0][jj+1][ii][0] + dec_picture->mv[LIST_0][jj+1][ii+1][0] + 2)/4;
+          pRegion->mv[1]  = (dec_picture->mv[LIST_0][jj][ii][1] + dec_picture->mv[LIST_0][jj][ii+1][1] + dec_picture->mv[LIST_0][jj+1][ii][1] + dec_picture->mv[LIST_0][jj+1][ii+1][1] + 2)/4;
         }
         else // 16x16, 16x8, 8x16, 8x8
         {
-          pRegion->mv[0]  = dec_picture->mv[LIST_0][ii][jj][0];
-          pRegion->mv[1]  = dec_picture->mv[LIST_0][ii][jj][1];
-//          pRegion->mv[0]  = dec_picture->mv[LIST_0][4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][0];
-//          pRegion->mv[1]  = dec_picture->mv[LIST_0][4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][1];
+          pRegion->mv[0]  = dec_picture->mv[LIST_0][jj][ii][0];
+          pRegion->mv[1]  = dec_picture->mv[LIST_0][jj][ii][1];
+//          pRegion->mv[0]  = dec_picture->mv[LIST_0][4*mby+(i/2)*2][4*mbx+(i%2)*2+BLOCK_SIZE][0];
+//          pRegion->mv[1]  = dec_picture->mv[LIST_0][4*mby+(i/2)*2][4*mbx+(i%2)*2+BLOCK_SIZE][1];
         }
         erc_mvperMB      += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-        pRegion->mv[2]    = dec_picture->ref_idx[LIST_0][ii][jj];
+        pRegion->mv[2]    = dec_picture->ref_idx[LIST_0][jj][ii];
       }
     }
   }
@@ -1356,24 +1386,24 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
       }
       else
       {
-        int idx = (dec_picture->ref_idx[0][ii][jj]<0)?1:0;
+        int idx = (dec_picture->ref_idx[0][jj][ii]<0)?1:0;
 //        int idx = (currMB->b8mode[i]==0 && currMB->b8pdir[i]==2 ? LIST_0 : currMB->b8pdir[i]==1 ? LIST_1 : LIST_0);
 //        int idx = currMB->b8pdir[i]==0 ? LIST_0 : LIST_1;
         mv                = dec_picture->mv[idx];
-        pRegion->mv[0]    = (mv[ii][jj][0] + mv[ii+1][jj][0] + mv[ii][jj+1][0] + mv[ii+1][jj+1][0] + 2)/4;
-        pRegion->mv[1]    = (mv[ii][jj][1] + mv[ii+1][jj][1] + mv[ii][jj+1][1] + mv[ii+1][jj+1][1] + 2)/4;
+        pRegion->mv[0]    = (mv[jj][ii][0] + mv[jj][ii+1][0] + mv[jj+1][ii][0] + mv[jj+1][ii+1][0] + 2)/4;
+        pRegion->mv[1]    = (mv[jj][ii][1] + mv[jj][ii+1][1] + mv[jj+1][ii][1] + mv[jj+1][ii+1][1] + 2)/4;
         erc_mvperMB      += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
 
-        pRegion->mv[2]  = (dec_picture->ref_idx[idx][ii][jj]);
+        pRegion->mv[2]  = (dec_picture->ref_idx[idx][jj][ii]);
 /*        
         if (currMB->b8pdir[i]==0 || (currMB->b8pdir[i]==2 && currMB->b8mode[i]!=0)) // forward or bidirect
         {
-          pRegion->mv[2]  = (dec_picture->ref_idx[LIST_0][ii][jj]);
+          pRegion->mv[2]  = (dec_picture->ref_idx[LIST_0][jj][ii]);
           ///???? is it right, not only "img->fw_refFrArr[jj][ii-4]"
         }
         else
         {
-          pRegion->mv[2]  = (dec_picture->ref_idx[LIST_1][ii][jj]);
+          pRegion->mv[2]  = (dec_picture->ref_idx[LIST_1][jj][ii]);
 //          pRegion->mv[2]  = 0;
         }
         */

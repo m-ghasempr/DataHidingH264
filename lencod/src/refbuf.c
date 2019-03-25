@@ -22,7 +22,7 @@
  */
 void PutPel_14 (pel_t **Pic, int y, int x, pel_t val)
 {
-  Pic [IMG_PAD_SIZE*4+y][IMG_PAD_SIZE*4+x] = val;
+  Pic [IMG_PAD_SIZE_TIMES4+y][IMG_PAD_SIZE_TIMES4+x] = val;
 }
 
 void PutPel_11 (pel_t *Pic, int y, int x, pel_t val, int width)
@@ -132,11 +132,11 @@ pel_t *UMVLineX (int size, pel_t* Pic, int y, int x, int height, int width)
  */
 pel_t UMVPelY_14 (pel_t **Pic, int y, int x, int height, int width)
 {
-  int width4  = ((width+2*IMG_PAD_SIZE-1)<<2);
-  int height4 = ((height+2*IMG_PAD_SIZE-1)<<2);
+  int width4  = ((width  + 2*IMG_PAD_SIZE - 1)<<2);
+  int height4 = ((height + 2*IMG_PAD_SIZE - 1)<<2);
 
-  x = x + IMG_PAD_SIZE*4;
-  y = y + IMG_PAD_SIZE*4;
+  x = x + IMG_PAD_SIZE_TIMES4;
+  y = y + IMG_PAD_SIZE_TIMES4;
 
   if (x < 0)
   {
@@ -166,7 +166,7 @@ pel_t UMVPelY_14 (pel_t **Pic, int y, int x, int height, int width)
 
 pel_t FastPelY_14 (pel_t **Pic, int y, int x, int height, int width)
 {
-  return Pic [IMG_PAD_SIZE*4+y][IMG_PAD_SIZE*4+x];
+  return Pic [IMG_PAD_SIZE_TIMES4+y][IMG_PAD_SIZE_TIMES4+x];
 }
 
 

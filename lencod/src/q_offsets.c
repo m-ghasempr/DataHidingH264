@@ -17,27 +17,33 @@ extern char *GetConfigFileContent (char *Filename, int error_type);
 
 #define MAX_ITEMS_TO_PARSE  1000
 
-int offset4x4_check[6] = {0, 0, 0, 0, 0, 0};
-int offset8x8_check[2] = {0, 0};
+int offset4x4_check[6] = { 0, 0, 0, 0, 0, 0 };
+int offset8x8_check[2] = { 0, 0 };
 
-static const char OffsetType4x4[9][24] =
-{
+static const char OffsetType4x4[15][24] = {
   "INTRA4X4_LUMA_INTRA",
   "INTRA4X4_CHROMAU_INTRA",
   "INTRA4X4_CHROMAV_INTRA",
-  "INTRA4X4_LUMA_INTER",
-  "INTRA4X4_CHROMAU_INTER",
-  "INTRA4X4_CHROMAV_INTER",
-  "INTER4X4_LUMA",
-  "INTER4X4_CHROMAU",
-  "INTER4X4_CHROMAV"
+  "INTRA4X4_LUMA_INTERP",
+  "INTRA4X4_CHROMAU_INTERP",
+  "INTRA4X4_CHROMAV_INTERP",
+  "INTRA4X4_LUMA_INTERB",
+  "INTRA4X4_CHROMAU_INTERB",
+  "INTRA4X4_CHROMAV_INTERB",
+  "INTER4X4_LUMA_INTERP",
+  "INTER4X4_CHROMAU_INTERP",
+  "INTER4X4_CHROMAV_INTERP",
+  "INTER4X4_LUMA_INTERB",
+  "INTER4X4_CHROMAU_INTERB",
+  "INTER4X4_CHROMAV_INTERB"
 };
 
-static const char OffsetType8x8[3][24] =
-{
+static const char OffsetType8x8[5][24] = {
   "INTRA8X8_LUMA_INTRA",
-  "INTRA8X8_LUMA_INTER",
-  "INTER8X8_LUMA",
+  "INTRA8X8_LUMA_INTERP",
+  "INTRA8X8_LUMA_INTERB",
+  "INTER8X8_LUMA_INTERP",
+  "INTER8X8_LUMA_INTERB"
 };
 
 
@@ -50,72 +56,77 @@ int LevelOffset4x4Chroma_Inter[2][13][4][4];
 int LevelOffset8x8Luma_Intra[13][8][8];
 int LevelOffset8x8Luma_Inter[13][8][8];
 
-short OffsetList4x4input[9][16];
-short OffsetList8x8input[3][64];
-short OffsetList4x4[9][16];
-short OffsetList8x8[3][64];
+int AdaptRndWeight;
 
-//short UseDefaultOffsetMatrix4x4Flag[6];
-//short UseDefaultOffsetMatrix8x8Flag[2];
+short OffsetList4x4input[15][16];
+short OffsetList8x8input[5][64];
+short OffsetList4x4[15][16];
+short OffsetList8x8[5][64];
 
-static const short Offset_intra_default_intra[16] =
-{
-  341,341,341,341,
-  341,341,341,341,
-  341,341,341,341,
-  341,341,341,341
+void InitOffsetParam ();
+
+const int OffsetBits = 11;
+
+static const short Offset_intra_default_intra[16] = {
+  682, 682, 682, 682,
+  682, 682, 682, 682,
+  682, 682, 682, 682,
+  682, 682, 682, 682
 };
 
-static const short Offset_intra_default_inter[16] =
-{
-  171,171,171,171,
-  171,171,171,171,
-  171,171,171,171,
-  171,171,171,171,
+static const short Offset_intra_default_chroma[16] = {
+  682, 682, 682, 682,
+  682, 682, 682, 682,
+  682, 682, 682, 682,
+  682, 682, 682, 682
 };
 
-static const short Offset_inter_default[16] =
-{
-  171,171,171,171,
-  171,171,171,171,
-  171,171,171,171,
-  171,171,171,171,
+
+static const short Offset_intra_default_inter[16] = {
+  342, 342, 342, 342,
+  342, 342, 342, 342,
+  342, 342, 342, 342,
+  342, 342, 342, 342,
 };
 
-static const short Offset8_intra_default_intra[64] =
-{
-  341,341,341,341,341,341,341,341,
-  341,341,341,341,341,341,341,341,
-  341,341,341,341,341,341,341,341,
-  341,341,341,341,341,341,341,341,
-  341,341,341,341,341,341,341,341,
-  341,341,341,341,341,341,341,341,
-  341,341,341,341,341,341,341,341,
-  341,341,341,341,341,341,341,341
+static const short Offset_inter_default[16] = {
+  342, 342, 342, 342,
+  342, 342, 342, 342,
+  342, 342, 342, 342,
+  342, 342, 342, 342,
 };
 
-static const short Offset8_intra_default_inter[64] =
-{
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171
+static const short Offset8_intra_default_intra[64] = {
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682
 };
 
-static const short Offset8_inter_default[64] =
-{
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171,
-  171,171,171,171,171,171,171,171
+static const short Offset8_intra_default_inter[64] = {
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342
+};
+
+static const short Offset8_inter_default[64] = {
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342,
+  342, 342, 342, 342, 342, 342, 342, 342
 };
 
 
@@ -138,9 +149,9 @@ int CheckOffsetParameterName (char *s, int *type)
   int i = 0;
 
   *type = 0;
-  while ((OffsetType4x4[i] != NULL) && (i<9))
+  while ((OffsetType4x4[i] != NULL) && (i < 15))
   {
-    if (0==strcmp (OffsetType4x4[i], s))
+    if (0 == strcmp (OffsetType4x4[i], s))
       return i;
     else
       i++;
@@ -148,9 +159,9 @@ int CheckOffsetParameterName (char *s, int *type)
 
   i = 0;
   *type = 1;
-  while ((OffsetType8x8[i] != NULL) && (i<3))
+  while ((OffsetType8x8[i] != NULL) && (i < 5))
   {
-    if (0==strcmp (OffsetType8x8[i], s))
+    if (0 == strcmp (OffsetType8x8[i], s))
       return i;
     else
       i++;
@@ -198,7 +209,7 @@ void ParseQOffsetMatrix (char *buf, int bufsize)
       case '\n':
         InItem = 0;
         InString = 0;
-        *p++='\0';
+        *p++ = '\0';
         break;
       case ' ':
       case '\t':              // Skip whitespace, leave state unchanged
@@ -240,18 +251,21 @@ void ParseQOffsetMatrix (char *buf, int bufsize)
 
   item--;
 
-  for (i=0; i<item; i+=cnt)
+  for (i = 0; i < item; i += cnt)
   {
-    cnt=0;
-    if (0 > (MapIdx = CheckOffsetParameterName (items[i+cnt], &type)))
+    cnt = 0;
+    if (0 > (MapIdx = CheckOffsetParameterName (items[i + cnt], &type)))
     {
-      snprintf (errortext, ET_SIZE, " Parsing error in config file: Parameter Name '%s' not recognized.", items[i+cnt]);
+      snprintf (errortext, ET_SIZE,
+        " Parsing error in config file: Parameter Name '%s' not recognized.",
+        items[i + cnt]);
       error (errortext, 300);
     }
     cnt++;
-    if (strcmp ("=", items[i+cnt]))
+    if (strcmp ("=", items[i + cnt]))
     {
-      snprintf (errortext, ET_SIZE, " Parsing error in config file: '=' expected as the second token in each item.");
+      snprintf (errortext, ET_SIZE,
+        " Parsing error in config file: '=' expected as the second token in each item.");
       error (errortext, 300);
     }
     cnt++;
@@ -269,17 +283,19 @@ void ParseQOffsetMatrix (char *buf, int bufsize)
       offset8x8_check[MapIdx] = 1; //to indicate matrix found in cfg file
     }
 
-    for(j=0; j<range; j++)
+    for (j = 0; j < range; j++)
     {
-      if (1 != sscanf (items[i+cnt+j], "%d", &IntContent))
+      if (1 != sscanf (items[i + cnt + j], "%d", &IntContent))
       {
-        snprintf (errortext, ET_SIZE, " Parsing error: Expected numerical value for Parameter of %s, found '%s'.", items[i], items[i+cnt+j]);
+        snprintf (errortext, ET_SIZE,
+          " Parsing error: Expected numerical value for Parameter of %s, found '%s'.",
+          items[i], items[i + cnt + j]);
         error (errortext, 300);
       }
 
       OffsetList[j] = (short) IntContent; //save value in matrix
     }
-    cnt+=j;
+    cnt += j;
     printf (".");
   }
 }
@@ -295,22 +311,96 @@ void Init_QOffsetMatrix ()
 {
   char *content;
 
-  if(input->OffsetMatrixPresentFlag)
+  if (input->OffsetMatrixPresentFlag)
   {
-    printf ("Parsing Quantization Offset Matrix file %s ", input->QOffsetMatrixFile);
-    content = GetConfigFileContent(input->QOffsetMatrixFile, 0);
-    if(content!='\0')
-      ParseQOffsetMatrix(content, strlen (content));
+    printf ("Parsing Quantization Offset Matrix file %s ",
+      input->QOffsetMatrixFile);
+    content = GetConfigFileContent (input->QOffsetMatrixFile, 0);
+    if (content != '\0')
+      ParseQOffsetMatrix (content, strlen (content));
     else
     {
-      printf("\nError: %s\nProceeding with default values for all matrices.", errortext);
+      printf
+        ("\nError: %s\nProceeding with default values for all matrices.",
+        errortext);
       input->OffsetMatrixPresentFlag = 0;
-    }
+    }   
 
-    printf("\n");
+    printf ("\n");
 
+    free (content);
+  }
+  //! Now set up all offset params. This process could be reused if we wish to re-init offsets
+  InitOffsetParam ();
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Intit quantization offset params 
+ *
+ * \par Input:
+ *    none
+ *
+ * \par Output:
+ *    none
+ ************************************************************************
+ */
+void InitOffsetParam ()
+{
+  int i, j, k, temp;
   
-    free(content);
+  if (input->OffsetMatrixPresentFlag)
+  {
+    for (j = 0; j < 4; j++)
+    {
+      for (i = 0; i < 4; i++)
+      {
+        temp = (i << 2) + j;
+        for (k = 0; k < 15; k++)
+        {          
+          OffsetList4x4[k][temp] = OffsetList4x4input[k][temp];
+        }
+      }
+    }
+    for (j = 0; j < 8; j++)
+    {
+      for (i = 0; i < 8; i++)
+      {           
+        temp = (i << 3) + j;
+        for (k = 0; k < 5; k++)
+          OffsetList8x8[k][temp] = OffsetList8x8input[k][temp];
+      }
+    }
+  }
+  else
+  {        
+    for (j = 0; j < 4; j++)
+    {
+      for (i = 0; i < 4; i++)
+      {
+        temp = (i << 2) + j;
+        
+        for (k = 0; k < 3; k++)
+          OffsetList4x4[k][temp] = Offset_intra_default_intra[temp];
+        for (k = 3; k < 9; k++)
+          OffsetList4x4[k][temp] = Offset_intra_default_inter[temp];
+        for (k = 9; k < 15; k++)
+          OffsetList4x4[k][temp] = Offset_inter_default[temp];
+      }
+    }     
+    for (j = 0; j < 8; j++)
+    {
+      for (i = 0; i < 8; i++)
+      {
+        temp = (i << 3) + j;
+        OffsetList8x8[0][temp]  = Offset8_intra_default_intra[temp];           
+        OffsetList8x8[1][temp]  = Offset8_intra_default_inter[temp];
+        OffsetList8x8[2][temp]  = Offset8_intra_default_inter[temp];
+        OffsetList8x8[3][temp] = Offset8_inter_default[temp];
+        OffsetList8x8[4][temp] = Offset8_inter_default[temp];
+      }
+    }
   }
 }
 
@@ -327,71 +417,71 @@ void Init_QOffsetMatrix ()
  *    none
  ************************************************************************
  */
- void CalculateOffsetParam()
- {
-   int i, j, k, temp;
-   int qp_per;
-   
-   if(input->OffsetMatrixPresentFlag)
-   {
-     for(k=0; k<13; k++)
-     {
-       qp_per = Q_BITS + k - 10;
-       for(j=0; j<4; j++)
-       {
-         for(i=0; i<4; i++)
-         {
-           temp = (i<<2)+j;
-           if (img->type == I_SLICE)
-           {
-             LevelOffset4x4Luma_Intra[k][j][i]         = (int)OffsetList4x4input[0][temp]<<qp_per;
-             LevelOffset4x4Chroma_Intra[0][k][j][i]    = (int)OffsetList4x4input[1][temp]<<qp_per;
-             LevelOffset4x4Chroma_Intra[1][k][j][i]    = (int)OffsetList4x4input[2][temp]<<qp_per;
-           }
-           else
-           {
-             LevelOffset4x4Luma_Intra[k][j][i]         = (int)OffsetList4x4input[3][temp]<<qp_per;
-             LevelOffset4x4Chroma_Intra[0][k][j][i]    = (int)OffsetList4x4input[4][temp]<<qp_per;
-             LevelOffset4x4Chroma_Intra[1][k][j][i]    = (int)OffsetList4x4input[5][temp]<<qp_per;
-           }
-           
-           LevelOffset4x4Luma_Inter[k][j][i]         = (int)OffsetList4x4input[6][temp]<<qp_per;
-           LevelOffset4x4Chroma_Inter[0][k][j][i]    = (int)OffsetList4x4input[7][temp]<<qp_per;
-           LevelOffset4x4Chroma_Inter[1][k][j][i]    = (int)OffsetList4x4input[8][temp]<<qp_per;
-         }
-       }
-     }
-   }
-   else
-   {
-     for(k=0; k<13; k++)
-     {
-       qp_per = Q_BITS + k - 10;
-       for(j=0; j<4; j++)
-       {
-         for(i=0; i<4; i++)
-         {
-           temp = (i<<2)+j;
-           if (img->type == I_SLICE)
-           {
-             LevelOffset4x4Luma_Intra[k][j][i]         = (int)Offset_intra_default_intra[temp]<<qp_per;
-             LevelOffset4x4Chroma_Intra[0][k][j][i]    = (int)Offset_intra_default_intra[temp]<<qp_per;
-             LevelOffset4x4Chroma_Intra[1][k][j][i]    = (int)Offset_intra_default_intra[temp]<<qp_per;
-           }
-           else
-           {
-             LevelOffset4x4Luma_Intra[k][j][i]         = (int)Offset_intra_default_inter[temp]<<qp_per;
-             LevelOffset4x4Chroma_Intra[0][k][j][i]    = (int)Offset_intra_default_inter[temp]<<qp_per;
-             LevelOffset4x4Chroma_Intra[1][k][j][i]    = (int)Offset_intra_default_inter[temp]<<qp_per;
-           }
-           LevelOffset4x4Luma_Inter[k][j][i]         = (int)Offset_inter_default[temp]<<qp_per;
-           LevelOffset4x4Chroma_Inter[0][k][j][i]    = (int)Offset_inter_default[temp]<<qp_per;
-           LevelOffset4x4Chroma_Inter[1][k][j][i]    = (int)Offset_inter_default[temp]<<qp_per;
-         }
-       }
-     }
-   }
- }
+void CalculateOffsetParam ()
+{
+  int i, j, k, temp;
+  int qp_per;
+  int img_type = (img->type == SI_SLICE ? I_SLICE : (img->type == SP_SLICE ? P_SLICE : img->type));
+  
+  AdaptRndWeight = input->AdaptRndWFactor[img->nal_reference_idc!=0][img_type];
+  for (k = 0; k < 13; k++)
+  {
+    qp_per = Q_BITS + k - OffsetBits;
+    for (j = 0; j < 4; j++)
+    {
+      for (i = 0; i < 4; i++)
+      {
+        temp = (i << 2) + j;
+        if (img_type == I_SLICE)
+        {
+          LevelOffset4x4Luma_Intra[k][j][i] =
+            (int) OffsetList4x4[0][temp] << qp_per;
+          LevelOffset4x4Chroma_Intra[0][k][j][i] =
+            (int) OffsetList4x4[1][temp] << qp_per;
+          LevelOffset4x4Chroma_Intra[1][k][j][i] =
+            (int) OffsetList4x4[2][temp] << qp_per;
+        }
+        else if (img_type == B_SLICE)
+        {
+          LevelOffset4x4Luma_Intra[k][j][i] =
+            (int) OffsetList4x4[6][temp] << qp_per;
+          LevelOffset4x4Chroma_Intra[0][k][j][i] =
+            (int) OffsetList4x4[7][temp] << qp_per;
+          LevelOffset4x4Chroma_Intra[1][k][j][i] =
+            (int) OffsetList4x4[8][temp] << qp_per;
+        }
+        else
+        {
+          LevelOffset4x4Luma_Intra[k][j][i] =
+            (int) OffsetList4x4[3][temp] << qp_per;
+          LevelOffset4x4Chroma_Intra[0][k][j][i] =
+            (int) OffsetList4x4[4][temp] << qp_per;
+          LevelOffset4x4Chroma_Intra[1][k][j][i] =
+            (int) OffsetList4x4[5][temp] << qp_per;
+        }
+        
+        if (img_type == B_SLICE)
+        {
+          LevelOffset4x4Luma_Inter[k][j][i] =
+            (int) OffsetList4x4[12][temp] << qp_per;
+          LevelOffset4x4Chroma_Inter[0][k][j][i] =
+            (int) OffsetList4x4[13][temp] << qp_per;
+          LevelOffset4x4Chroma_Inter[1][k][j][i] =
+            (int) OffsetList4x4[14][temp] << qp_per;
+        }
+        else
+        {
+          LevelOffset4x4Luma_Inter[k][j][i] =
+            (int) OffsetList4x4[9][temp] << qp_per;
+          LevelOffset4x4Chroma_Inter[0][k][j][i] =
+            (int) OffsetList4x4[10][temp] << qp_per;
+          LevelOffset4x4Chroma_Inter[1][k][j][i] =
+            (int) OffsetList4x4[11][temp] << qp_per;
+        }
+      }
+    }
+  }
+}
  
  /*!
  ************************************************************************
@@ -400,50 +490,37 @@ void Init_QOffsetMatrix ()
  *
  ************************************************************************
  */
-void CalculateOffset8Param()
+void CalculateOffset8Param ()
 {
-
   int i, j, k, temp;
-   int q_bits;
-   
-   if(input->OffsetMatrixPresentFlag)
-   {
-     for(k=0; k<13; k++)
-     {
-       q_bits = Q_BITS_8 + k - 10;
-       for(j=0; j<8; j++)
-       {
-         for(i=0; i<8; i++)
-         {           
-           temp = (i<<3)+j;
-           if (img->type == I_SLICE)
-             LevelOffset8x8Luma_Intra[k][j][i] = (int)OffsetList8x8input[0][temp] << q_bits;
-           else
-             LevelOffset8x8Luma_Intra[k][j][i] = (int)OffsetList8x8input[1][temp] << q_bits;
-
-           LevelOffset8x8Luma_Inter[k][j][i] = (int)OffsetList8x8input[2][temp] << q_bits;
-         }
-       }
-     }
-   }
-   else
-   {
-     for(k=0; k<13; k++)
-     {
-       q_bits = Q_BITS_8 + k - 10;
-       for(j=0; j<8; j++)
-       {
-         for(i=0; i<8; i++)
-         {
-           temp = (i<<3)+j;
-           if (img->type == I_SLICE)
-             LevelOffset8x8Luma_Intra[k][j][i] = (int)Offset8_intra_default_intra[temp] << q_bits;
-           else
-             LevelOffset8x8Luma_Intra[k][j][i] = (int)Offset8_intra_default_inter[temp] << q_bits;
-           LevelOffset8x8Luma_Inter[k][j][i] = (int)Offset8_inter_default[temp] << q_bits;
-         }
-       }
-     }
-   }
+  int q_bits;
+  
+  for (k = 0; k < 13; k++)
+  {
+    q_bits = Q_BITS_8 + k - OffsetBits;
+    for (j = 0; j < 8; j++)
+    {
+      for (i = 0; i < 8; i++)
+      {           
+        temp = (i << 3) + j;
+        if (img->type == I_SLICE)
+          LevelOffset8x8Luma_Intra[k][j][i] =
+          (int) OffsetList8x8[0][temp] << q_bits;
+        else if (img->type == B_SLICE)
+          LevelOffset8x8Luma_Intra[k][j][i] =
+          (int) OffsetList8x8[2][temp] << q_bits;
+        else
+          LevelOffset8x8Luma_Intra[k][j][i] =
+          (int) OffsetList8x8[1][temp] << q_bits;
+        
+        if (img->type == B_SLICE)
+          LevelOffset8x8Luma_Inter[k][j][i] =
+          (int) OffsetList8x8[4][temp] << q_bits;
+        else
+          LevelOffset8x8Luma_Inter[k][j][i] =
+          (int) OffsetList8x8[3][temp] << q_bits;
+      }
+    }
+  }
 }
 

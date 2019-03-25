@@ -34,8 +34,7 @@ pic_parameter_set_rbsp_t *AllocPPS ()
 
    if ((p=calloc (sizeof (pic_parameter_set_rbsp_t), 1)) == NULL)
      no_mem_exit ("AllocPPS: PPS");
-   if ((p->slice_group_id = calloc (SIZEslice_group_id, 1)) == NULL)
-     no_mem_exit ("AllocPPS: slice_group_id");
+   p->slice_group_id = NULL;
    return p;
  }
 
@@ -75,7 +74,8 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  void FreePPS (pic_parameter_set_rbsp_t *pps)
  {
    assert (pps != NULL);
-   if (pps->slice_group_id != NULL) free (pps->slice_group_id);
+   if (pps->slice_group_id != NULL) 
+     free (pps->slice_group_id);
    free (pps);
  }
 

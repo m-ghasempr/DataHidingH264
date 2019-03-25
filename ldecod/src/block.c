@@ -165,8 +165,7 @@ int intrapred(
   for (i=0;i<4;i++)
   {
     getNeighbour(mb_nr, ioff -1 , joff +i , 1, &pix_a[i]);
-  }
-  
+  }  
   
   getNeighbour(mb_nr, ioff    , joff -1 , 1, &pix_b);
   getNeighbour(mb_nr, ioff +4 , joff -1 , 1, &pix_c);

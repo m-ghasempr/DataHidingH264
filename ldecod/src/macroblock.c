@@ -52,12 +52,12 @@ extern ColocatedParams *Co_located;
 
 
 static void SetMotionVectorPredictor (struct img_par  *img,
-                                      int             *pmv_x,
-                                      int             *pmv_y,
-                                      int             ref_frame,
-                                      int             list,
-                                      int             ***refPic,
-                                      int             ****tmp_mv,
+                                      short           *pmv_x,
+                                      short           *pmv_y,
+                                      char            ref_frame,
+                                      byte            list,
+                                      char            ***refPic,
+                                      short           ****tmp_mv,
                                       int             block_x,
                                       int             block_y,
                                       int             blockshape_x,
@@ -75,7 +75,7 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
   int i,j,k,l;
   Macroblock *currMB;   // intialization code deleted, see below, StW
 
-  assert (img->current_mb_nr >=0 && img->current_mb_nr < img->PicSizeInMbs);
+  assert (img->current_mb_nr < img->PicSizeInMbs);
 
   currMB = &img->mb_data[img->current_mb_nr];
 
@@ -117,7 +117,7 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
     error ("maximum number of supported slices exceeded, please recompile with increased value for MAX_NUM_SLICES", 200);
   }
 
-  dec_picture->slice_id[img->mb_x][img->mb_y] = img->current_slice_nr;
+  dec_picture->slice_id[img->mb_y][img->mb_x] = img->current_slice_nr;
   if (img->current_slice_nr > dec_picture->max_slice_id)
   {
     dec_picture->max_slice_id=img->current_slice_nr;
@@ -423,10 +423,10 @@ void init_macroblock(struct img_par *img)
   {                           // reset vectors and pred. modes
     for(j=0;j<BLOCK_SIZE;j++)
     {
-      dec_picture->mv[LIST_0][img->block_x+i][img->block_y+j][0]=0;
-      dec_picture->mv[LIST_0][img->block_x+i][img->block_y+j][1]=0;
-      dec_picture->mv[LIST_1][img->block_x+i][img->block_y+j][0]=0;
-      dec_picture->mv[LIST_1][img->block_x+i][img->block_y+j][1]=0;
+      dec_picture->mv[LIST_0][img->block_y+j][img->block_x+i][0]=0;
+      dec_picture->mv[LIST_0][img->block_y+j][img->block_x+i][1]=0;
+      dec_picture->mv[LIST_1][img->block_y+j][img->block_x+i][0]=0;
+      dec_picture->mv[LIST_1][img->block_y+j][img->block_x+i][1]=0;
 
       img->ipredmode[img->block_x+i][img->block_y+j] = DC_PRED;
     }
@@ -435,10 +435,10 @@ void init_macroblock(struct img_par *img)
   for (j=0; j<BLOCK_SIZE; j++)
     for (i=0; i<BLOCK_SIZE; i++)
     {
-      dec_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = -1;
-      dec_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = -1;
-      dec_picture->ref_pic_id[LIST_0][img->block_x+i][img->block_y+j] = INT64_MIN;
-      dec_picture->ref_pic_id[LIST_1][img->block_x+i][img->block_y+j] = INT64_MIN;
+      dec_picture->ref_idx[LIST_0][img->block_y+j][img->block_x+i] = -1;
+      dec_picture->ref_idx[LIST_1][img->block_y+j][img->block_x+i] = -1;
+      dec_picture->ref_pic_id[LIST_0][img->block_y+j][img->block_x+i] = INT64_MIN;
+      dec_picture->ref_pic_id[LIST_1][img->block_y+j][img->block_x+i] = INT64_MIN;
     }
 }
 
@@ -550,7 +550,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       if(!(img->type == B_SLICE))
         prevMbSkipped = (topMB->mb_type == 0);
       else 
-        prevMbSkipped = (topMB->mb_type == 0 && topMB->cbp == 0);
+        prevMbSkipped = topMB->skip_flag;
     }
     else 
       prevMbSkipped = 0;
@@ -601,11 +601,10 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     if(!dP->bitstream->ei_flag)
       currMB->ei_flag = 0;
   }
-
   // non I/SI-slice CABAC
   else if (active_pps->entropy_coding_mode_flag == CABAC)
   {
-    // read MB skipflag
+    // read MB skip_flag
     if (img->MbaffFrameFlag && (img->current_mb_nr%2 == 0||prevMbSkipped))
       field_flag_inference();
     
@@ -613,45 +612,46 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     TRACE_STRING("mb_skip_flag");
     currSE.reading = readMB_skip_flagInfo_CABAC;
     dP->readSyntaxElement(&currSE,img,inp,dP);
-    currMB->mb_type = currSE.value1;
+
+    currMB->mb_type   = currSE.value1;
+    currMB->skip_flag = !(currSE.value1);
 
     if (img->type==B_SLICE)
       currMB->cbp = currSE.value2;
+
     if(!dP->bitstream->ei_flag)
       currMB->ei_flag = 0;
     
     if ((img->type==B_SLICE) && currSE.value1==0 && currSE.value2==0)
       img->cod_counter=0;
       
-    // read MB aff
-      if (img->MbaffFrameFlag) 
+    // read MB AFF
+    if (img->MbaffFrameFlag) 
+    {
+      check_bottom=read_bottom=read_top=0;
+      if (img->current_mb_nr%2==0)
       {
-        check_bottom=read_bottom=read_top=0;
-        if (img->current_mb_nr%2==0)
-        {
-          check_bottom =  (img->type!=B_SLICE)? 
-            (currMB->mb_type == 0):
-          (currMB->mb_type == 0 && currMB->cbp == 0);
-          read_top = !check_bottom;
-        }
-        else
-          read_bottom = (img->type!=B_SLICE)? 
-          (topMB->mb_type == 0 && currMB->mb_type != 0) :
-        ((topMB->mb_type == 0 && topMB->cbp == 0) && (currMB->mb_type != 0 || currMB->cbp != 0));
-        
-        if (read_bottom || read_top)
-        {
-          TRACE_STRING("mb_field_decoding_flag");
-          currSE.reading = readFieldModeInfo_CABAC;
-          dP->readSyntaxElement(&currSE,img,inp,dP);
-          currMB->mb_field = currSE.value1;
-        }
-        if (check_bottom)
-          check_next_mb_and_get_field_mode_CABAC(&currSE,img,inp,dP);
-        
+        check_bottom =  currMB->skip_flag;
+        read_top = !check_bottom;
       }
-      if(active_pps->entropy_coding_mode_flag  == CABAC)
-        CheckAvailabilityOfNeighborsCABAC();
+      else
+      {
+        read_bottom = (topMB->skip_flag && (!currMB->skip_flag));
+       }
+      
+      if (read_bottom || read_top)
+      {
+        TRACE_STRING("mb_field_decoding_flag");
+        currSE.reading = readFieldModeInfo_CABAC;
+        dP->readSyntaxElement(&currSE,img,inp,dP);
+        currMB->mb_field = currSE.value1;
+      }
+      if (check_bottom)
+        check_next_mb_and_get_field_mode_CABAC(&currSE,img,inp,dP);
+      
+    }
+
+    CheckAvailabilityOfNeighborsCABAC();
       
     // read MB type
     if (currMB->mb_type != 0 )
@@ -693,12 +693,14 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       if(!dP->bitstream->ei_flag)
         currMB->ei_flag = 0;
       img->cod_counter--;
+      currMB->skip_flag = 0;
     } 
     else
     {
       img->cod_counter--;
       currMB->mb_type = 0;
       currMB->ei_flag = 0;
+      currMB->skip_flag = 1;
 
       // read field flag of bottom block
       if(img->MbaffFrameFlag)
@@ -713,7 +715,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
         }
         else if(img->cod_counter > 0 && (img->current_mb_nr%2 == 0))
         {
-        // check left macroblock pair first
+          // check left macroblock pair first
           if (mb_is_available(img->current_mb_nr-2, img->current_mb_nr)&&((img->current_mb_nr%(img->PicWidthInMbs*2))!=0))
           {
             currMB->mb_field = img->mb_data[img->current_mb_nr-2].mb_field;
@@ -788,7 +790,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   //============= Transform Size Flag for INTRA MBs =============
   //-------------------------------------------------------------
   //transform size flag for INTRA_4x4 and INTRA_8x8 modes
-  if (currMB->mb_type == I4MB && img->AllowTransform8x8)
+  if (currMB->mb_type == I4MB && img->Transform8x8Mode)
   {
     currSE.type   =  SE_TRANSFORM_SIZE_FLAG;
     dP = &(currSlice->partArr[partMap[SE_TRANSFORM_SIZE_FLAG]]);
@@ -861,7 +863,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
   if (IS_COPY (currMB)) //keep last macroblock
   {
-    int i, j, k, pmv[2];
+    int i, j, k;
+    short pmv[2];
     int zeroMotionAbove;
     int zeroMotionLeft;
     PixelPos mb_a, mb_b;
@@ -876,8 +879,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
     if (mb_a.available)
     {
-      a_mv_y    = dec_picture->mv[LIST_0][mb_a.pos_x][mb_a.pos_y][1];
-      a_ref_idx = dec_picture->ref_idx[LIST_0][mb_a.pos_x][mb_a.pos_y];
+      a_mv_y    = dec_picture->mv[LIST_0][mb_a.pos_y][mb_a.pos_x][1];
+      a_ref_idx = dec_picture->ref_idx[LIST_0][mb_a.pos_y][mb_a.pos_x];
 
       if (currMB->mb_field && !img->mb_data[mb_a.mb_addr].mb_field)
       {
@@ -893,8 +896,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
     if (mb_b.available)
     {
-      b_mv_y    = dec_picture->mv[LIST_0][mb_b.pos_x][mb_b.pos_y][1];
-      b_ref_idx = dec_picture->ref_idx[LIST_0][mb_b.pos_x][mb_b.pos_y];
+      b_mv_y    = dec_picture->mv[LIST_0][mb_b.pos_y][mb_b.pos_x][1];
+      b_ref_idx = dec_picture->ref_idx[LIST_0][mb_b.pos_y][mb_b.pos_x];
 
       if (currMB->mb_field && !img->mb_data[mb_b.mb_addr].mb_field)
       {
@@ -908,8 +911,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       }
     }
     
-    zeroMotionLeft  = !mb_a.available ? 1 : a_ref_idx==0 && dec_picture->mv[LIST_0][mb_a.pos_x][mb_a.pos_y][0]==0 && a_mv_y==0 ? 1 : 0;
-    zeroMotionAbove = !mb_b.available ? 1 : b_ref_idx==0 && dec_picture->mv[LIST_0][mb_b.pos_x][mb_b.pos_y][0]==0 && b_mv_y==0 ? 1 : 0;
+    zeroMotionLeft  = !mb_a.available ? 1 : a_ref_idx==0 && dec_picture->mv[LIST_0][mb_a.pos_y][mb_a.pos_x][0]==0 && a_mv_y==0 ? 1 : 0;
+    zeroMotionAbove = !mb_b.available ? 1 : b_ref_idx==0 && dec_picture->mv[LIST_0][mb_b.pos_y][mb_b.pos_x][0]==0 && b_mv_y==0 ? 1 : 0;
 
     currMB->cbp = 0;
     reset_coeffs();
@@ -921,7 +924,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       for(i=0;i<BLOCK_SIZE;i++)
         for(j=0;j<BLOCK_SIZE;j++)
           for (k=0;k<2;k++)
-            dec_picture->mv[LIST_0][img->block_x+i][img->block_y+j][k] = 0;
+            dec_picture->mv[LIST_0][img->block_y+j][img->block_x+i][k] = 0;
     }
     else
     {
@@ -931,15 +934,15 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
         for(j=0;j<BLOCK_SIZE;j++)
           for (k=0;k<2;k++)
           {
-            dec_picture->mv[LIST_0][img->block_x+i][img_block_y+j][k] = pmv[k];
+            dec_picture->mv[LIST_0][img_block_y+j][img->block_x+i][k] = pmv[k];
           }
     }
 
     for(i=0;i<BLOCK_SIZE;i++)
       for(j=0;j<BLOCK_SIZE;j++)
       {
-        dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j] = 0;
-        dec_picture->ref_pic_id[LIST_0][img->block_x+i][img_block_y+j] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j]];
+        dec_picture->ref_idx[LIST_0][img_block_y+j][img->block_x+i] = 0;
+        dec_picture->ref_pic_id[LIST_0][img_block_y+j][img->block_x+i] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][(short)dec_picture->ref_idx[LIST_0][img_block_y+j][img->block_x+i]];
       }
 
     return DECODE_MB;
@@ -1017,7 +1020,7 @@ void init_decoding_engine_IPCM(struct img_par *img)
  ************************************************************************
  * \brief
  *    Read IPCM pcm_alignment_zero_bit and pcm_byte[i] from stream to img->cof
- *    (for IPCM CABAC and IPCM CAVLC  28/11/2003)
+ *    (for IPCM CABAC and IPCM CAVLC)
  *
  * \author
  *    Dong Wang <Dong.Wang@bristol.ac.uk>
@@ -1036,48 +1039,45 @@ void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct data
     //read luma and chroma IPCM coefficients
     currSE.len=8;
 
-  for(i=0;i<16;i++)
-    for(j=0;j<16;j++)
-    {
-      readIPCMBytes_CABAC(&currSE, dP->bitstream);
-      img->cof[i/4][j/4][i%4][j%4]=currSE.value1;
-    }
+    for(i=0;i<16;i++)
+      for(j=0;j<16;j++)
+      {
+        readIPCMBytes_CABAC(&currSE, dP->bitstream);
+        img->cof[i/4][j/4][i%4][j%4]=currSE.value1;
+      }
 
-  for(i=0;i<8;i++)
-    for(j=0;j<8;j++)
-    {
-      readIPCMBytes_CABAC(&currSE, dP->bitstream);
-      img->cof[i/4][j/4+4][i%4][j%4]=currSE.value1;
-    }
+    for(i=0;i<8;i++)
+      for(j=0;j<8;j++)
+      {
+        readIPCMBytes_CABAC(&currSE, dP->bitstream);
+        img->cof[i/4][j/4+4][i%4][j%4]=currSE.value1;
+      }
 
-  for(i=0;i<8;i++)
-    for(j=0;j<8;j++)
-    {
-      readIPCMBytes_CABAC(&currSE, dP->bitstream);
-      img->cof[i/4+2][j/4+4][i%4][j%4]=currSE.value1;
-    }
+    for(i=0;i<8;i++)
+      for(j=0;j<8;j++)
+      {
+        readIPCMBytes_CABAC(&currSE, dP->bitstream);
+        img->cof[i/4+2][j/4+4][i%4][j%4]=currSE.value1;
+      }
 
-  //If the decoded MB is IPCM MB, decoding engine is initialized
+    //If the decoded MB is IPCM MB, decoding engine is initialized
 
-  // here the decoding engine is directly initialized without checking End of Slice
-  // The reason is that, whether current MB is the last MB in slice or not, there is
-  // at least one 'end of slice' syntax after this MB. So when fetching bytes in this 
+    // here the decoding engine is directly initialized without checking End of Slice
+    // The reason is that, whether current MB is the last MB in slice or not, there is
+    // at least one 'end of slice' syntax after this MB. So when fetching bytes in this 
     // initialisation process, we can guarantee there is bits available in bitstream. 
-  init_decoding_engine_IPCM(img);
 
+    init_decoding_engine_IPCM(img);
   }
   else
   { 
+    //read bits to let stream byte aligned
 
-  //read bits to let stream byte aligned
-
-
-  if((dP->bitstream->frame_bitoffset)%8!=0)
-  {
-    TRACE_STRING("pcm_alignment_zero_bit");
-    currSE.len=8-(dP->bitstream->frame_bitoffset)%8;
-    readSyntaxElement_FLC(&currSE, dP->bitstream);
-  
+    if((dP->bitstream->frame_bitoffset)%8!=0)
+    {
+      TRACE_STRING("pcm_alignment_zero_bit");
+      currSE.len=8-(dP->bitstream->frame_bitoffset)%8;
+      readSyntaxElement_FLC(&currSE, dP->bitstream);
   }
 
   //read luma and chroma IPCM coefficients
@@ -1236,12 +1236,12 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
  ************************************************************************
  */
 static void SetMotionVectorPredictor (struct img_par  *img,
-                                      int             *pmv_x,
-                                      int             *pmv_y,
-                                      int             ref_frame,
-                                      int             list,
-                                      int             ***refPic,
-                                      int             ****tmp_mv,
+                                      short           *pmv_x,
+                                      short           *pmv_y,
+                                      char            ref_frame,
+                                      byte            list,
+                                      char            ***refPic,
+                                      short           ****tmp_mv,
                                       int             block_x,
                                       int             block_y,
                                       int             blockshape_x,
@@ -1270,18 +1270,15 @@ static void SetMotionVectorPredictor (struct img_par  *img,
       if (mb_y==8)
       {
         if (blockshape_x == 16)      block_c.available  = 0;
-        else                         block_c.available &= 1;
       }
       else
       {
-        if (mb_x+blockshape_x != 8)  block_c.available &= 1;
-        else                         block_c.available  = 0;
+        if (mb_x+blockshape_x == 8)  block_c.available  = 0;
       }
     }
     else
     {
-      if (mb_x+blockshape_x != 16)   block_c.available &= 1;
-      else                           block_c.available  = 0;
+      if (mb_x+blockshape_x == 16)   block_c.available  = 0;
     }
   }
 
@@ -1294,9 +1291,9 @@ static void SetMotionVectorPredictor (struct img_par  *img,
 
   if (!img->MbaffFrameFlag)
   {
-    rFrameL    = block_a.available    ? refPic[list][block_a.pos_x][block_a.pos_y] : -1;
-    rFrameU    = block_b.available    ? refPic[list][block_b.pos_x][block_b.pos_y] : -1;
-    rFrameUR   = block_c.available    ? refPic[list][block_c.pos_x][block_c.pos_y] : -1;
+    rFrameL    = block_a.available    ? refPic[list][block_a.pos_y][block_a.pos_x] : -1;
+    rFrameU    = block_b.available    ? refPic[list][block_b.pos_y][block_b.pos_x] : -1;
+    rFrameUR   = block_c.available    ? refPic[list][block_c.pos_y][block_c.pos_x] : -1;
   }
   else
   {
@@ -1304,36 +1301,36 @@ static void SetMotionVectorPredictor (struct img_par  *img,
     {
       rFrameL    = block_a.available    ? 
         img->mb_data[block_a.mb_addr].mb_field ? 
-        refPic[list][block_a.pos_x][block_a.pos_y]:
-        refPic[list][block_a.pos_x][block_a.pos_y] * 2: 
+        refPic[list][block_a.pos_y][block_a.pos_x]:
+        refPic[list][block_a.pos_y][block_a.pos_x] * 2: 
         -1;
       rFrameU    = block_b.available    ? 
         img->mb_data[block_b.mb_addr].mb_field ? 
-        refPic[list][block_b.pos_x][block_b.pos_y]:
-        refPic[list][block_b.pos_x][block_b.pos_y] * 2: 
+        refPic[list][block_b.pos_y][block_b.pos_x]:
+        refPic[list][block_b.pos_y][block_b.pos_x] * 2: 
         -1;
       rFrameUR    = block_c.available    ? 
         img->mb_data[block_c.mb_addr].mb_field ? 
-        refPic[list][block_c.pos_x][block_c.pos_y]:
-        refPic[list][block_c.pos_x][block_c.pos_y] * 2: 
+        refPic[list][block_c.pos_y][block_c.pos_x]:
+        refPic[list][block_c.pos_y][block_c.pos_x] * 2: 
         -1;
     }
     else
     {
       rFrameL    = block_a.available    ? 
         img->mb_data[block_a.mb_addr].mb_field ? 
-        refPic[list][block_a.pos_x][block_a.pos_y] >>1:
-        refPic[list][block_a.pos_x][block_a.pos_y] : 
+        refPic[list][block_a.pos_y][block_a.pos_x] >>1:
+        refPic[list][block_a.pos_y][block_a.pos_x] : 
         -1;
       rFrameU    = block_b.available    ? 
         img->mb_data[block_b.mb_addr].mb_field ? 
-        refPic[list][block_b.pos_x][block_b.pos_y] >>1:
-        refPic[list][block_b.pos_x][block_b.pos_y] : 
+        refPic[list][block_b.pos_y][block_b.pos_x] >>1:
+        refPic[list][block_b.pos_y][block_b.pos_x] : 
         -1;
       rFrameUR    = block_c.available    ? 
         img->mb_data[block_c.mb_addr].mb_field ? 
-        refPic[list][block_c.pos_x][block_c.pos_y] >>1:
-        refPic[list][block_c.pos_x][block_c.pos_y] : 
+        refPic[list][block_c.pos_y][block_c.pos_x] >>1:
+        refPic[list][block_c.pos_y][block_c.pos_x] : 
         -1;
     }
   }
@@ -1377,40 +1374,40 @@ static void SetMotionVectorPredictor (struct img_par  *img,
   {
     if (!img->MbaffFrameFlag || hv==0)
     {
-      mv_a = block_a.available  ? tmp_mv[list][block_a.pos_x][block_a.pos_y][hv] : 0;
-      mv_b = block_b.available  ? tmp_mv[list][block_b.pos_x][block_b.pos_y][hv] : 0;
-      mv_c = block_c.available  ? tmp_mv[list][block_c.pos_x][block_c.pos_y][hv] : 0;
+      mv_a = block_a.available  ? tmp_mv[list][block_a.pos_y][block_a.pos_x][hv] : 0;
+      mv_b = block_b.available  ? tmp_mv[list][block_b.pos_y][block_b.pos_x][hv] : 0;
+      mv_c = block_c.available  ? tmp_mv[list][block_c.pos_y][block_c.pos_x][hv] : 0;
     }
     else
     {
       if (img->mb_data[img->current_mb_nr].mb_field)
       {
         mv_a = block_a.available  ? img->mb_data[block_a.mb_addr].mb_field?
-          tmp_mv[list][block_a.pos_x][block_a.pos_y][hv]:
-          tmp_mv[list][block_a.pos_x][block_a.pos_y][hv] / 2: 
+          tmp_mv[list][block_a.pos_y][block_a.pos_x][hv]:
+          tmp_mv[list][block_a.pos_y][block_a.pos_x][hv] / 2: 
           0;
         mv_b = block_b.available  ? img->mb_data[block_b.mb_addr].mb_field?
-          tmp_mv[list][block_b.pos_x][block_b.pos_y][hv]:
-          tmp_mv[list][block_b.pos_x][block_b.pos_y][hv] / 2: 
+          tmp_mv[list][block_b.pos_y][block_b.pos_x][hv]:
+          tmp_mv[list][block_b.pos_y][block_b.pos_x][hv] / 2: 
           0;
         mv_c = block_c.available  ? img->mb_data[block_c.mb_addr].mb_field?
-          tmp_mv[list][block_c.pos_x][block_c.pos_y][hv]:
-          tmp_mv[list][block_c.pos_x][block_c.pos_y][hv] / 2: 
+          tmp_mv[list][block_c.pos_y][block_c.pos_x][hv]:
+          tmp_mv[list][block_c.pos_y][block_c.pos_x][hv] / 2: 
           0;
       }
       else
       {
         mv_a = block_a.available  ? img->mb_data[block_a.mb_addr].mb_field?
-          tmp_mv[list][block_a.pos_x][block_a.pos_y][hv] * 2:
-          tmp_mv[list][block_a.pos_x][block_a.pos_y][hv]: 
+          tmp_mv[list][block_a.pos_y][block_a.pos_x][hv] * 2:
+          tmp_mv[list][block_a.pos_y][block_a.pos_x][hv]: 
           0;
         mv_b = block_b.available  ? img->mb_data[block_b.mb_addr].mb_field?
-          tmp_mv[list][block_b.pos_x][block_b.pos_y][hv] * 2:
-          tmp_mv[list][block_b.pos_x][block_b.pos_y][hv]: 
+          tmp_mv[list][block_b.pos_y][block_b.pos_x][hv] * 2:
+          tmp_mv[list][block_b.pos_y][block_b.pos_x][hv]: 
           0;
         mv_c = block_c.available  ? img->mb_data[block_c.mb_addr].mb_field?
-          tmp_mv[list][block_c.pos_x][block_c.pos_y][hv] * 2:
-          tmp_mv[list][block_c.pos_x][block_c.pos_y][hv]: 
+          tmp_mv[list][block_c.pos_y][block_c.pos_x][hv] * 2:
+          tmp_mv[list][block_c.pos_y][block_c.pos_x][hv]: 
           0;
       }
     }
@@ -1478,8 +1475,9 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   int step_h0         = BLOCK_STEP [partmode][0];
   int step_v0         = BLOCK_STEP [partmode][1];
 
-  int mv_mode, i0, j0, refframe;
-  int pmv[2];
+  int mv_mode, i0, j0;
+  char refframe;
+  short pmv[2];
   int j4, i4, ii,jj;
   int vec;
 
@@ -1489,10 +1487,10 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
 
   int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
 
-  byte **    moving_block;
-  int ****   co_located_mv;
-  int ***    co_located_ref_idx;
-  int64 ***    co_located_ref_id;
+  byte  **    moving_block;
+  short ****  co_located_mv;
+  char  ***   co_located_ref_idx;
+  int64 ***   co_located_ref_id;
 
   if ((img->MbaffFrameFlag)&&(currMB->mb_field))
   {
@@ -1529,8 +1527,9 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
       
       PixelPos mb_left, mb_up, mb_upleft, mb_upright;
       
-      int fw_rFrame,bw_rFrame;
-      int pmvfw[2]={0,0},pmvbw[2]={0,0};
+      char  fw_rFrame,bw_rFrame;
+      short pmvfw[2]={0,0},
+            pmvbw[2]={0,0};
       
       
       getLuma4x4Neighbour(img->current_mb_nr, 0, 0, -1,  0, &mb_left);
@@ -1540,100 +1539,100 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
 
       if (!img->MbaffFrameFlag)
       {
-        fw_rFrameL = mb_left.available ? dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] : -1;
-        fw_rFrameU = mb_up.available ? dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] : -1;
-        fw_rFrameUL = mb_upleft.available ? dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] : -1;
-        fw_rFrameUR = mb_upright.available ? dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] : fw_rFrameUL;      
+        fw_rFrameL = mb_left.available ? dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] : -1;
+        fw_rFrameU = mb_up.available ? dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] : -1;
+        fw_rFrameUL = mb_upleft.available ? dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] : -1;
+        fw_rFrameUR = mb_upright.available ? dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] : fw_rFrameUL;      
         
-        bw_rFrameL = mb_left.available ? dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] : -1;
-        bw_rFrameU = mb_up.available ? dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] : -1;
-        bw_rFrameUL = mb_upleft.available ? dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] : -1;
-        bw_rFrameUR = mb_upright.available ? dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] : bw_rFrameUL;      
+        bw_rFrameL = mb_left.available ? dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] : -1;
+        bw_rFrameU = mb_up.available ? dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] : -1;
+        bw_rFrameUL = mb_upleft.available ? dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] : -1;
+        bw_rFrameUR = mb_upright.available ? dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] : bw_rFrameUL;      
       }
       else
       {
         if (img->mb_data[img->current_mb_nr].mb_field)
         {
           fw_rFrameL = mb_left.available ? 
-            img->mb_data[mb_left.mb_addr].mb_field  || dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] < 0? 
-            dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] : 
-          dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] * 2: -1;
+            img->mb_data[mb_left.mb_addr].mb_field  || dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] < 0? 
+            dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] : 
+          dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] * 2: -1;
           fw_rFrameU = mb_up.available ? 
-            img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] < 0? 
-            dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] : 
-          dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] * 2: -1;
+            img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] < 0? 
+            dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] : 
+          dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] * 2: -1;
 
           fw_rFrameUL = mb_upleft.available ? 
-            img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] < 0?
-            dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] : 
-          dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] *2: -1;      
+            img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] < 0?
+            dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] : 
+          dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] *2: -1;      
 
           fw_rFrameUR = mb_upright.available ? 
-            img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] < 0 ?
-            dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] : 
-          dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] * 2: fw_rFrameUL;      
+            img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] < 0 ?
+            dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] : 
+          dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] * 2: fw_rFrameUL;      
           
           bw_rFrameL = mb_left.available ? 
-            img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y]  < 0 ?
-            dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] : 
-          dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] * 2: -1;
+            img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x]  < 0 ?
+            dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] : 
+          dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] * 2: -1;
 
           bw_rFrameU = mb_up.available ? 
-            img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y]  < 0 ?
-            dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] : 
-          dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] * 2: -1;
+            img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x]  < 0 ?
+            dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] : 
+          dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] * 2: -1;
 
           bw_rFrameUL = mb_upleft.available ? 
-            img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y]  < 0 ?
-            dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] : 
-          dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] *2: -1;      
+            img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x]  < 0 ?
+            dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] : 
+          dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] *2: -1;      
 
           bw_rFrameUR = mb_upright.available ? 
-            img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y]  < 0 ?
-            dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] : 
-          dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] * 2: bw_rFrameUL;      
+            img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x]  < 0 ?
+            dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] : 
+          dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] * 2: bw_rFrameUL;      
           
         }
         else
         {
           fw_rFrameL = mb_left.available ? 
-            img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y]  < 0 ?
-            dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] >> 1 : 
-          dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y]: -1;
+            img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x]  < 0 ?
+            dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] >> 1 : 
+          dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x]: -1;
 
           fw_rFrameU = mb_up.available ? 
-            img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y]  < 0 ?
-            dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] >> 1 :  
-          dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] : -1;
+            img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x]  < 0 ?
+            dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] >> 1 :  
+          dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] : -1;
 
           fw_rFrameUL = mb_upleft.available ? 
-            img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] < 0 ?
-            dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y]>> 1 : 
-          dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] : -1;      
+            img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] < 0 ?
+            dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x]>> 1 : 
+          dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] : -1;      
 
           fw_rFrameUR = mb_upright.available ? 
-            img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y]  < 0 ?
-            dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] >> 1 :  
-          dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] : fw_rFrameUL;      
+            img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x]  < 0 ?
+            dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] >> 1 :  
+          dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] : fw_rFrameUL;      
           
           bw_rFrameL = mb_left.available ? 
-            img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] < 0 ?
-            dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] >> 1 :  
-          dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] : -1;
+            img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] < 0 ?
+            dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] >> 1 :  
+          dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] : -1;
           bw_rFrameU = mb_up.available ? 
-            img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] < 0 ?
-            dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] >> 1 : 
-          dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] : -1;
+            img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] < 0 ?
+            dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] >> 1 : 
+          dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] : -1;
 
           bw_rFrameUL = mb_upleft.available ? 
-            img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y]  < 0 ?
-            dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] >> 1 : 
-          dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] : -1;      
+            img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x]  < 0 ?
+            dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] >> 1 : 
+          dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] : -1;      
 
           bw_rFrameUR = mb_upright.available ? 
-            img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] < 0 ?
-            dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] >> 1: 
-          dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] : bw_rFrameUL;      
+            img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] < 0 ?
+            dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] >> 1: 
+          dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] : bw_rFrameUL;      
         }
       }
       
@@ -1665,52 +1664,52 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               if (fw_rFrame >= 0)
                 {
                 
-                if  (!fw_rFrame  && ((!moving_block[i4][j6]) && (!listX[1+list_offset][0]->is_long_term)))
+                if  (!fw_rFrame  && ((!moving_block[j6][i4]) && (!listX[1+list_offset][0]->is_long_term)))
                   {                    
-                  dec_picture->mv  [LIST_0][i4][j4][0] = 0;
-                  dec_picture->mv  [LIST_0][i4][j4][1] = 0;
-                  dec_picture->ref_idx[LIST_0][i4][j4] = 0;                    
+                  dec_picture->mv  [LIST_0][j4][i4][0] = 0;
+                  dec_picture->mv  [LIST_0][j4][i4][1] = 0;
+                  dec_picture->ref_idx[LIST_0][j4][i4] = 0;                    
                   }
                   else
                   {
                   
-                  dec_picture->mv  [LIST_0][i4][j4][0] = pmvfw[0];
-                  dec_picture->mv  [LIST_0][i4][j4][1] = pmvfw[1];
-                  dec_picture->ref_idx[LIST_0][i4][j4] = fw_rFrame;
+                  dec_picture->mv  [LIST_0][j4][i4][0] = pmvfw[0];
+                  dec_picture->mv  [LIST_0][j4][i4][1] = pmvfw[1];
+                  dec_picture->ref_idx[LIST_0][j4][i4] = fw_rFrame;
                   }
                 }
                 else
                 {
-                dec_picture->mv  [LIST_0][i4][j4][0] = 0;
-                dec_picture->mv  [LIST_0][i4][j4][1] = 0;
-                dec_picture->ref_idx[LIST_0][i4][j4] = -1;
+                dec_picture->mv  [LIST_0][j4][i4][0] = 0;
+                dec_picture->mv  [LIST_0][j4][i4][1] = 0;
+                dec_picture->ref_idx[LIST_0][j4][i4] = -1;
                 }
               if (bw_rFrame >= 0)
                 {
-                if  (bw_rFrame==0 && ((!moving_block[i4][j6])&& (!listX[1+list_offset][0]->is_long_term)))
+                if  (bw_rFrame==0 && ((!moving_block[j6][i4])&& (!listX[1+list_offset][0]->is_long_term)))
                   {
-                  dec_picture->mv  [LIST_1][i4][j4][0] = 0;
-                  dec_picture->mv  [LIST_1][i4][j4][1] = 0;
-                  dec_picture->ref_idx[LIST_1][i4][j4] = 0;
+                  dec_picture->mv  [LIST_1][j4][i4][0] = 0;
+                  dec_picture->mv  [LIST_1][j4][i4][1] = 0;
+                  dec_picture->ref_idx[LIST_1][j4][i4] = 0;
                   }
                   else
                   {
-                  dec_picture->mv  [LIST_1][i4][j4][0] = pmvbw[0];
-                  dec_picture->mv  [LIST_1][i4][j4][1] = pmvbw[1];
-                  dec_picture->ref_idx[LIST_1][i4][j4] = bw_rFrame;
+                  dec_picture->mv  [LIST_1][j4][i4][0] = pmvbw[0];
+                  dec_picture->mv  [LIST_1][j4][i4][1] = pmvbw[1];
+                  dec_picture->ref_idx[LIST_1][j4][i4] = bw_rFrame;
                   }
                 }
                 else
                 {
-                dec_picture->mv  [LIST_1][i4][j4][0] = 0;
-                dec_picture->mv  [LIST_1][i4][j4][1] = 0;
-                dec_picture->ref_idx[LIST_1][i4][j4] = -1;                               
+                dec_picture->mv  [LIST_1][j4][i4][0] = 0;
+                dec_picture->mv  [LIST_1][j4][i4][1] = 0;
+                dec_picture->ref_idx[LIST_1][j4][i4] = -1;                               
                 }
 
               if (fw_rFrame <0 && bw_rFrame <0)
                 {
-                dec_picture->ref_idx[LIST_0][i4][j4] = 0;
-                dec_picture->ref_idx[LIST_1][i4][j4] = 0;                  
+                dec_picture->ref_idx[LIST_0][j4][i4] = 0;
+                dec_picture->ref_idx[LIST_1][j4][i4] = 0;                  
               }
             }
         }
@@ -1729,20 +1728,20 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               
               int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
               int imgblock_y= ((img->MbaffFrameFlag)&&(currMB->mb_field))? (img->current_mb_nr%2) ? (img->block_y-4)/2 : img->block_y/2 : img->block_y;
-              int refList = co_located_ref_idx[LIST_0 ][img->block_x+k][imgblock_y+j]== -1 ? LIST_1 : LIST_0;
-              int ref_idx = co_located_ref_idx[refList][img->block_x + k][imgblock_y + j];
+              int refList = co_located_ref_idx[LIST_0 ][imgblock_y+j][img->block_x+k]== -1 ? LIST_1 : LIST_0;
+              int ref_idx = co_located_ref_idx[refList][imgblock_y + j][img->block_x + k];
               int mapped_idx=-1, iref;                             
  
               if (ref_idx == -1)
               {
-                dec_picture->ref_idx [LIST_0][img->block_x + k][img->block_y + j] = 0;
-                dec_picture->ref_idx [LIST_1][img->block_x + k][img->block_y + j] = 0;                
+                dec_picture->ref_idx [LIST_0][img->block_y + j][img->block_x + k] = 0;
+                dec_picture->ref_idx [LIST_1][img->block_y + j][img->block_x + k] = 0;                
               }
               else
               {
                 for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
                 {
-                  if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][img->block_x + k][imgblock_y + j])
+                  if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][imgblock_y + j][img->block_x + k])
                   {
                     mapped_idx=iref;
                     break;
@@ -1754,8 +1753,8 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                 {
                   error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
                 }
-                dec_picture->ref_idx [LIST_0][img->block_x + k][img->block_y + j] = mapped_idx;
-                dec_picture->ref_idx [LIST_1][img->block_x + k][img->block_y + j] = 0;                
+                dec_picture->ref_idx [LIST_0][img->block_y + j][img->block_x + k] = mapped_idx;
+                dec_picture->ref_idx [LIST_1][img->block_y + j][img->block_x + k] = 0;                
               }
             }
           }
@@ -1820,7 +1819,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
           for (j=j0; j<j0+step_v0;j++)
             for (i=i0; i<i0+step_h0;i++)
             {
-              dec_picture->ref_idx[LIST_0][img->block_x + i][img->block_y + j] = refframe;
+              dec_picture->ref_idx[LIST_0][img->block_y + j][img->block_x + i] = refframe;
             }
           
         }
@@ -1839,7 +1838,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
           for (j=j0; j<j0+step_v0;j++)
             for (i=i0; i<i0+step_h0;i++)
             {
-              dec_picture->ref_idx[LIST_0][img->block_x + i][img->block_y + j] = 0;
+              dec_picture->ref_idx[LIST_0][img->block_y + j][img->block_x + i] = 0;
             }
         }
       }
@@ -1886,7 +1885,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
           {
             for (i=i0; i<i0+step_h0;i++)
             {
-              dec_picture->ref_idx[LIST_1][img->block_x + i][img->block_y + j] = refframe;
+              dec_picture->ref_idx[LIST_1][img->block_y + j][img->block_x + i] = refframe;
             }
           }
         }
@@ -1905,7 +1904,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
           for (j=j0; j<j0+step_v0;j++)
             for (i=i0; i<i0+step_h0;i++)
             {
-              dec_picture->ref_idx[LIST_1][img->block_x + i][img->block_y + j] = 0;
+              dec_picture->ref_idx[LIST_1][img->block_y + j][img->block_x + i] = 0;
             }
         }
       }
@@ -1930,7 +1929,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
         step_h   = BLOCK_STEP [mv_mode][0];
         step_v   = BLOCK_STEP [mv_mode][1];
         
-        refframe = dec_picture->ref_idx[LIST_0][img->block_x+i0][img->block_y+j0];
+        refframe = dec_picture->ref_idx[LIST_0][img->block_y+j0][img->block_x+i0];
         
         for (j=j0; j<j0+step_v0; j+=step_v)
         {
@@ -1958,7 +1957,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               {
                 for(jj=0;jj<step_v;jj++)
                 {
-                  dec_picture->mv  [LIST_0][i4+ii][j4+jj][k] = vec;
+                  dec_picture->mv  [LIST_0][j4+jj][i4+ii][k] = vec;
                   currMB->mvd      [LIST_0][j+jj] [i+ii] [k] = curr_mvd;
                 }
               }
@@ -1973,22 +1972,22 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
           int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
           int imgblock_y= ((img->MbaffFrameFlag)&&(currMB->mb_field))? (img->current_mb_nr%2) ? (img->block_y-4)/2:img->block_y/2 : img->block_y;
 
-          int refList = (co_located_ref_idx[LIST_0][img->block_x+i0][imgblock_y+j0]== -1 ? LIST_1 : LIST_0);
-          int ref_idx =  co_located_ref_idx[refList][img->block_x+i0][imgblock_y+j0];          
+          int refList = (co_located_ref_idx[LIST_0][imgblock_y+j0][img->block_x+i0]== -1 ? LIST_1 : LIST_0);
+          int ref_idx =  co_located_ref_idx[refList][imgblock_y+j0][img->block_x+i0];          
           
           if (ref_idx==-1)
           {
             for (j=j0; j<j0+step_v0; j++)
               for (i=i0; i<i0+step_h0; i++)
               {            
-                dec_picture->ref_idx [LIST_1][img->block_x+i][img->block_y+j]=0;
-                dec_picture->ref_idx [LIST_0][img->block_x+i][img->block_y+j]=0; 
+                dec_picture->ref_idx [LIST_1][img->block_y+j][img->block_x+i]=0;
+                dec_picture->ref_idx [LIST_0][img->block_y+j][img->block_x+i]=0; 
                 j4 = img->block_y+j;
                 i4 = img->block_x+i;            
                 for (ii=0; ii < 2; ii++) 
                 {                                    
-                  dec_picture->mv [LIST_0][i4][j4][ii]=0;
-                  dec_picture->mv [LIST_1][i4][j4][ii]=0;                  
+                  dec_picture->mv [LIST_0][j4][i4][ii]=0;
+                  dec_picture->mv [LIST_1][j4][i4][ii]=0;                  
                 }
               }
           }
@@ -2000,7 +1999,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
             for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
             {
               
-              if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][img->block_x+i0][imgblock_y+j0])
+              if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][imgblock_y+j0][img->block_x+i0])
               {
                 mapped_idx=iref;
                 break;
@@ -2021,8 +2020,8 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                 {
                   mv_scale = img->mvscale[LIST_0 + list_offset][mapped_idx];
 
-                  dec_picture->ref_idx [LIST_0][img->block_x+i][img->block_y+j] = mapped_idx;
-                  dec_picture->ref_idx [LIST_1][img->block_x+i][img->block_y+j] = 0;
+                  dec_picture->ref_idx [LIST_0][img->block_y+j][img->block_x+i] = mapped_idx;
+                  dec_picture->ref_idx [LIST_1][img->block_y+j][img->block_x+i] = 0;
                   
                   j4 = img->block_y+j;
                   j6 = imgblock_y+j;
@@ -2034,13 +2033,13 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                     if (mv_scale == 9999 || listX[LIST_0+list_offset][mapped_idx]->is_long_term)
 //                    if (mv_scale==9999 || Co_located->is_long_term)
                     {                      
-                      dec_picture->mv  [LIST_0][i4][j4][ii]=co_located_mv[refList][i4][j6][ii];
-                      dec_picture->mv  [LIST_1][i4][j4][ii]=0;
+                      dec_picture->mv  [LIST_0][j4][i4][ii]=co_located_mv[refList][j6][i4][ii];
+                      dec_picture->mv  [LIST_1][j4][i4][ii]=0;
                     }
                     else
                     {
-                      dec_picture->mv  [LIST_0][i4][j4][ii]=(mv_scale * co_located_mv[refList][i4][j6][ii] + 128 ) >> 8;
-                      dec_picture->mv  [LIST_1][i4][j4][ii]=dec_picture->mv[LIST_0][i4][j4][ii] - co_located_mv[refList][i4][j6][ii];
+                      dec_picture->mv  [LIST_0][j4][i4][ii]=(mv_scale * co_located_mv[refList][j6][i4][ii] + 128 ) >> 8;
+                      dec_picture->mv  [LIST_1][j4][i4][ii]=dec_picture->mv[LIST_0][j4][i4][ii] - co_located_mv[refList][j6][i4][ii];
                     }
                   }
                 } 
@@ -2068,7 +2067,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
         step_h   = BLOCK_STEP [mv_mode][0];
         step_v   = BLOCK_STEP [mv_mode][1];
         
-        refframe = dec_picture->ref_idx[LIST_1][img->block_x+i0][img->block_y+j0];
+        refframe = dec_picture->ref_idx[LIST_1][img->block_y+j0][img->block_x+i0];
 
         for (j=j0; j<j0+step_v0; j+=step_v)
         {
@@ -2096,7 +2095,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               {
                 for(jj=0;jj<step_v;jj++)
                 {
-                  dec_picture->mv  [LIST_1][i4+ii][j4+jj][k] = vec;
+                  dec_picture->mv  [LIST_1][j4+jj][i4+ii][k] = vec;
                   currMB->mvd      [LIST_1][j+jj] [i+ii] [k] = curr_mvd;
                 }
               }
@@ -2111,14 +2110,14 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   for(i4=img->block_x;i4<(img->block_x+4);i4++)
   for(j4=img->block_y;j4<(img->block_y+4);j4++)
   {
-    if(dec_picture->ref_idx[LIST_0][i4][j4]>=0)
-       dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][i4][j4]];
+    if(dec_picture->ref_idx[LIST_0][j4][i4]>=0)
+       dec_picture->ref_pic_id[LIST_0][j4][i4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][(short)dec_picture->ref_idx[LIST_0][j4][i4]];
     else
-       dec_picture->ref_pic_id[LIST_0][i4][j4] = INT64_MIN;
-    if(dec_picture->ref_idx[LIST_1][i4][j4]>=0)
-       dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_1 + list_offset][dec_picture->ref_idx[LIST_1][i4][j4]];  
+       dec_picture->ref_pic_id[LIST_0][j4][i4] = INT64_MIN;
+    if(dec_picture->ref_idx[LIST_1][j4][i4]>=0)
+       dec_picture->ref_pic_id[LIST_1][j4][i4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_1 + list_offset][(short)dec_picture->ref_idx[LIST_1][j4][i4]];  
     else
-       dec_picture->ref_pic_id[LIST_1][i4][j4] = INT64_MIN;  
+       dec_picture->ref_pic_id[LIST_1][j4][i4] = INT64_MIN;  
   }
 }
 
@@ -2797,7 +2796,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                                 (currMB->NoMbPartLessThan8x8Flag))
                                 && currMB->mb_type != I8MB && currMB->mb_type != I4MB
                                 && (currMB->cbp&15)
-                                && img->AllowTransform8x8);
+                                && img->Transform8x8Mode);
 
     if (need_transform_size_flag)
     {
@@ -3300,7 +3299,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
             }
           }
         
-          if (smb) // check to see if MB type is SPred or SIntra4x4 
+          if (smb // check to see if MB type is SPred or SIntra4x4 
+              || lossless_qpprime)
           {
             img->cof[0+ll][4][0][0]=img->cofu[0];   img->cof[1+ll][4][0][0]=img->cofu[1];
             img->cof[0+ll][5][0][0]=img->cofu[2];   img->cof[1+ll][5][0][0]=img->cofu[3];
@@ -3403,19 +3403,27 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
           }
           // inverse CHROMA DC YUV422 transform
           // horizontal
-          m4[0][0] = m3[0][0] + m3[1][0];
-          m4[0][1] = m3[0][1] + m3[1][1];
-          m4[0][2] = m3[0][2] + m3[1][2];
-          m4[0][3] = m3[0][3] + m3[1][3];
+          if(!lossless_qpprime)
+          {
+            m4[0][0] = m3[0][0] + m3[1][0];
+            m4[0][1] = m3[0][1] + m3[1][1];
+            m4[0][2] = m3[0][2] + m3[1][2];
+            m4[0][3] = m3[0][3] + m3[1][3];
 
-          m4[1][0] = m3[0][0] - m3[1][0];
-          m4[1][1] = m3[0][1] - m3[1][1];
-          m4[1][2] = m3[0][2] - m3[1][2];
-          m4[1][3] = m3[0][3] - m3[1][3];
-        
+            m4[1][0] = m3[0][0] - m3[1][0];
+            m4[1][1] = m3[0][1] - m3[1][1];
+            m4[1][2] = m3[0][2] - m3[1][2];
+            m4[1][3] = m3[0][3] - m3[1][3];
+          }
+          else
+          {
+            for(i=0;i<2;i++)
+              for(j=0;j<4;j++)
+                img->cof[i+uv_idx][j+4][0][0]=m3[i][j];
+          }
 
           // vertical
-          for (i=0;i<2;i++)
+          for (i=0;i<2 && !lossless_qpprime;i++)
           {
             for (j=0; j < 4;j++)    //TODO: remove m5 with m4
               m5[j]=m4[i][j]; 
@@ -3776,8 +3784,8 @@ void decode_ipcm_mb(struct img_par *img)
 
   Macroblock *currMb = &img->mb_data[img->current_mb_nr];    
 
-  //Copy coefficents to decoded picture buffer
-  //IPCM coefficents are stored in img->cof which is set in function readIPCMcoeffsFromNAL()
+  //Copy coefficients to decoded picture buffer
+  //IPCM coefficients are stored in img->cof which is set in function readIPCMcoeffsFromNAL()
 
   for(i=0;i<16;i++)
     for(j=0;j<16;j++)
@@ -3796,25 +3804,21 @@ void decode_ipcm_mb(struct img_par *img)
 
 
 
-  //For Deblocking Filter  16/08/2003
-  if (currMb->mb_type==IPCM)
-    currMb->qp=0;
+  // for deblocking filter
+  currMb->qp=0;
 
-  //For CAVLC
-  //Set the nz_coeff to 16. 
-  //These parameters are to be used in CAVLC decoding of neighbour blocks
+  // for CAVLC: Set the nz_coeff to 16. 
+  // These parameters are to be used in CAVLC decoding of neighbour blocks
   for(i=0;i<4;i++)
     for (j=0;j<(4 + img->num_blk8x8_uv);j++)
       img->nz_coeff[img->current_mb_nr][i][j]=16;
 
 
-  //For CABAC decoding of MB skip flag 
-  if (currMb->mb_type==IPCM)
-    currMb->skip_flag=1;
+  // for CABAC decoding of MB skip flag 
+  currMb->skip_flag = 0;
 
-  //for Loop filter CABAC
-  if (currMb->mb_type==IPCM)
-    currMb->cbp_blk=0xFFFF;
+  //for deblocking filter CABAC
+  currMb->cbp_blk=0xFFFF;
 
   //For CABAC decoding of Dquant
   last_dquant=0;
@@ -3844,14 +3848,15 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   const byte decode_block_scan[16] = {0,1,4,5,2,3,6,7,8,9,12,13,10,11,14,15};
 
   Macroblock *currMB   = &img->mb_data[img->current_mb_nr];
-  int ref_idx, fw_refframe=-1, bw_refframe=-1, mv_mode, pred_dir, intra_prediction; // = currMB->ref_frame;
-  int fw_ref_idx=-1, bw_ref_idx=-1;
+  short ref_idx, fw_refframe=-1, bw_refframe=-1;
+  int mv_mode, pred_dir, intra_prediction; // = currMB->ref_frame;
+  short fw_ref_idx=-1, bw_ref_idx=-1;
 
-  int  *** mv_array, ***fw_mv_array, ***bw_mv_array;
+  short  *** mv_array, ***fw_mv_array, ***bw_mv_array;
 
   int mv_scale;
 
-  int mb_nr             = img->current_mb_nr;
+  int mb_nr     = img->current_mb_nr;
   int smb       = ((img->type==SP_SLICE) && IS_INTER (currMB)) || (img->type == SI_SLICE && currMB->mb_type == SI4MB);
   int list_offset;
   int max_y_cr;
@@ -3860,17 +3865,19 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
   int jf;
 
-  int fw_rFrame=-1,bw_rFrame=-1;
-  int pmvfw[2]={0,0},pmvbw[2]={0,0};              
+  char fw_rFrame=-1,bw_rFrame=-1;
+
+  short pmvfw[2]={0,0},
+        pmvbw[2]={0,0};              
 
   int direct_pdir=-1;
 
   int curr_mb_field = ((img->MbaffFrameFlag)&&(currMB->mb_field));
 
-  byte **     moving_block;
-  int ****     co_located_mv;
-  int ***     co_located_ref_idx;
-  int64 ***    co_located_ref_id;
+  byte  **    moving_block;
+  short ****  co_located_mv;
+  char  ***   co_located_ref_idx;
+  int64 ***   co_located_ref_id;
 
   int need_4x4_transform = (!currMB->luma_transform_size_8x8_flag);
 
@@ -3979,8 +3986,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   if (img->type==B_SLICE && img->direct_spatial_mv_pred_flag && (IS_DIRECT (currMB) || 
     (IS_P8x8(currMB) && !(currMB->b8mode[0] && currMB->b8mode[1] && currMB->b8mode[2] && currMB->b8mode[3]))))
   {
-    int fw_rFrameL, fw_rFrameU, fw_rFrameUL, fw_rFrameUR;
-    int bw_rFrameL, bw_rFrameU, bw_rFrameUL, bw_rFrameUR;    
+    char fw_rFrameL, fw_rFrameU, fw_rFrameUL, fw_rFrameUR;
+    char bw_rFrameL, bw_rFrameU, bw_rFrameUL, bw_rFrameUR;    
 
     PixelPos mb_left, mb_up, mb_upleft, mb_upright;              
     
@@ -3991,101 +3998,101 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
     if (!img->MbaffFrameFlag)
     {
-      fw_rFrameL = mb_left.available ? dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] : -1;
-      fw_rFrameU = mb_up.available ? dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] : -1;
-      fw_rFrameUL = mb_upleft.available ? dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] : -1;
-      fw_rFrameUR = mb_upright.available ? dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] : fw_rFrameUL;      
+      fw_rFrameL = mb_left.available ? dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] : -1;
+      fw_rFrameU = mb_up.available ? dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] : -1;
+      fw_rFrameUL = mb_upleft.available ? dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] : -1;
+      fw_rFrameUR = mb_upright.available ? dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] : fw_rFrameUL;      
       
-      bw_rFrameL = mb_left.available ? dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] : -1;
-      bw_rFrameU = mb_up.available ? dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] : -1;
-      bw_rFrameUL = mb_upleft.available ? dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] : -1;
-      bw_rFrameUR = mb_upright.available ? dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] : bw_rFrameUL;      
+      bw_rFrameL = mb_left.available ? dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] : -1;
+      bw_rFrameU = mb_up.available ? dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] : -1;
+      bw_rFrameUL = mb_upleft.available ? dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] : -1;
+      bw_rFrameUR = mb_upright.available ? dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] : bw_rFrameUL;      
     }
     else
     {
       if (img->mb_data[img->current_mb_nr].mb_field)
       {
         fw_rFrameL = mb_left.available ? 
-          img->mb_data[mb_left.mb_addr].mb_field  || dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] < 0? 
-          dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] : 
-          dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] * 2: -1;
+          img->mb_data[mb_left.mb_addr].mb_field  || dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] < 0? 
+          dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] : 
+          dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] * 2: -1;
 
         fw_rFrameU = mb_up.available ? 
-          img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] < 0? 
-          dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] : 
-        dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] * 2: -1;
+          img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] < 0? 
+          dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] : 
+        dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] * 2: -1;
 
         fw_rFrameUL = mb_upleft.available ? 
-          img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] < 0?         
-          dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] : 
-        dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] *2: -1;      
+          img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] < 0?         
+          dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] : 
+        dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] *2: -1;      
 
         fw_rFrameUR = mb_upright.available ? 
-          img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] < 0?
-          dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] : 
-        dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] * 2: fw_rFrameUL;      
+          img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] < 0?
+          dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] : 
+        dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] * 2: fw_rFrameUL;      
         
         bw_rFrameL = mb_left.available ? 
-          img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] < 0? 
-          dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] : 
-        dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] * 2: -1;
+          img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] < 0? 
+          dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] : 
+        dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] * 2: -1;
 
         bw_rFrameU = mb_up.available ? 
-          img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] < 0? 
-          dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] : 
-        dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] * 2: -1;
+          img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] < 0? 
+          dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] : 
+        dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] * 2: -1;
 
         bw_rFrameUL = mb_upleft.available ? 
-          img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] < 0?         
-          dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] : 
-        dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] *2: -1;      
+          img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] < 0?         
+          dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] : 
+        dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] *2: -1;      
 
         bw_rFrameUR = mb_upright.available ? 
-          img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] < 0?         
-          dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] : 
-        dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] * 2: bw_rFrameUL;              
+          img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] < 0?         
+          dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] : 
+        dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] * 2: bw_rFrameUL;              
       }
       else
       {
         fw_rFrameL = mb_left.available ? 
-          img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y]  < 0 ?
-          dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] >> 1 : 
-        dec_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y]: -1;
+          img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x]  < 0 ?
+          dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] >> 1 : 
+        dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x]: -1;
         
         fw_rFrameU = mb_up.available ? 
-          img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] < 0 ?
-          dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] >> 1 :  
-        dec_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] : -1;
+          img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] < 0 ?
+          dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] >> 1 :  
+        dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] : -1;
         
         fw_rFrameUL = mb_upleft.available ? 
-          img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] < 0 ?
-          dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y]>> 1 : 
-        dec_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] : -1;      
+          img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] < 0 ?
+          dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x]>> 1 : 
+        dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] : -1;      
         
         fw_rFrameUR = mb_upright.available ? 
-          img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] < 0 ? 
-          dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] >> 1 :  
-        dec_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] : fw_rFrameUL;      
+          img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] < 0 ? 
+          dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] >> 1 :  
+        dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] : fw_rFrameUL;      
         
         bw_rFrameL = mb_left.available ? 
-          img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] < 0 ?
-          dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] >> 1 :  
-        dec_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] : -1;
+          img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] < 0 ?
+          dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] >> 1 :  
+        dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] : -1;
         
         bw_rFrameU = mb_up.available ? 
-          img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] < 0 ?
-          dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] >> 1 : 
-        dec_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] : -1;
+          img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] < 0 ?
+          dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] >> 1 : 
+        dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] : -1;
         
         bw_rFrameUL = mb_upleft.available ? 
-          img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] < 0 ?
-          dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] >> 1 : 
-        dec_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] : -1;      
+          img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] < 0 ?
+          dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] >> 1 : 
+        dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] : -1;      
         
         bw_rFrameUR = mb_upright.available ? 
-          img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] < 0 ?
-          dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] >> 1: 
-        dec_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] : bw_rFrameUL;      
+          img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] < 0 ?
+          dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] >> 1: 
+        dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] : bw_rFrameUL;      
       }
     }
 
@@ -4167,21 +4174,21 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
         if (pred_dir != 2)
         {
           //===== FORWARD/BACKWARD PREDICTION =====
-          fw_refframe = ref_idx  = dec_picture->ref_idx[LIST_0 + pred_dir][i4][j4];
+          fw_refframe = ref_idx  = dec_picture->ref_idx[LIST_0 + pred_dir][j4][i4];
           mv_array = dec_picture->mv[LIST_0 + pred_dir];
           list     = listX[0+list_offset+ pred_dir];
-          vec1_x = i4*4*mv_mul + mv_array[i4][j4][0];
+          vec1_x = i4*4*mv_mul + mv_array[j4][i4][0];
 
           if (!curr_mb_field)
           {
-            vec1_y = j4*4*mv_mul + mv_array[i4][j4][1];
+            vec1_y = j4*4*mv_mul + mv_array[j4][i4][1];
           }
           else
           {
             if (mb_nr%2 == 0) 
-              vec1_y = (img->block_y * 2 + joff) * mv_mul + mv_array[i4][j4][1];
+              vec1_y = (img->block_y * 2 + joff) * mv_mul + mv_array[j4][i4][1];
             else
-              vec1_y = ((img->block_y-4) * 2 + joff)* mv_mul + mv_array[i4][j4][1];
+              vec1_y = ((img->block_y-4) * 2 + joff)* mv_mul + mv_array[j4][i4][1];
           }
 
           get_block (ref_idx, list, vec1_x, vec1_y, img, tmp_block);
@@ -4213,8 +4220,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
             fw_mv_array = dec_picture->mv[LIST_0];
             bw_mv_array = dec_picture->mv[LIST_1];
             
-            fw_refframe = dec_picture->ref_idx[LIST_0][i4][j4];
-            bw_refframe = dec_picture->ref_idx[LIST_1][i4][j4];
+            fw_refframe = dec_picture->ref_idx[LIST_0][j4][i4];
+            bw_refframe = dec_picture->ref_idx[LIST_1][j4][i4];
             fw_ref_idx = fw_refframe;
             bw_ref_idx = bw_refframe;
           }
@@ -4233,66 +4240,66 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
               if (fw_rFrame >=0)
               {
-                if (!fw_rFrame  && ((!moving_block[i4][j6]) && (!listX[1+list_offset][0]->is_long_term)))
+                if (!fw_rFrame  && ((!moving_block[j6][i4]) && (!listX[1+list_offset][0]->is_long_term)))
                 {
-                  dec_picture->mv  [LIST_0][i4][j4][0]= 0;
-                  dec_picture->mv  [LIST_0][i4][j4][1]= 0;
-                  dec_picture->ref_idx[LIST_0][i4][j4] = 0;
+                  dec_picture->mv  [LIST_0][j4][i4][0]= 0;
+                  dec_picture->mv  [LIST_0][j4][i4][1]= 0;
+                  dec_picture->ref_idx[LIST_0][j4][i4] = 0;
                 }
                 else
                 {
-                  dec_picture->mv  [LIST_0][i4][j4][0]= pmvfw[0];
-                  dec_picture->mv  [LIST_0][i4][j4][1]= pmvfw[1];
-                  dec_picture->ref_idx[LIST_0][i4][j4] = fw_rFrame;
+                  dec_picture->mv  [LIST_0][j4][i4][0]= pmvfw[0];
+                  dec_picture->mv  [LIST_0][j4][i4][1]= pmvfw[1];
+                  dec_picture->ref_idx[LIST_0][j4][i4] = fw_rFrame;
                 }
               }
               else
               {
-                dec_picture->ref_idx[LIST_0][i4][j4] = -1;                
-                dec_picture->mv  [LIST_0][i4][j4][0]= 0;
-                dec_picture->mv  [LIST_0][i4][j4][1]= 0;
+                dec_picture->ref_idx[LIST_0][j4][i4] = -1;                
+                dec_picture->mv  [LIST_0][j4][i4][0]= 0;
+                dec_picture->mv  [LIST_0][j4][i4][1]= 0;
               }
               
               if (bw_rFrame >=0)
               {
-                if  (bw_rFrame==0 && ((!moving_block[i4][j6]) && (!listX[1+list_offset][0]->is_long_term)))
+                if  (bw_rFrame==0 && ((!moving_block[j6][i4]) && (!listX[1+list_offset][0]->is_long_term)))
                 {                  
                   
-                  dec_picture->mv  [LIST_1][i4][j4][0]= 0;
-                  dec_picture->mv  [LIST_1][i4][j4][1]= 0;
-                  dec_picture->ref_idx[LIST_1][i4][j4] = bw_rFrame;
+                  dec_picture->mv  [LIST_1][j4][i4][0]= 0;
+                  dec_picture->mv  [LIST_1][j4][i4][1]= 0;
+                  dec_picture->ref_idx[LIST_1][j4][i4] = bw_rFrame;
                   
                 }
                 else
                 {
-                  dec_picture->mv  [LIST_1][i4][j4][0]= pmvbw[0];
-                  dec_picture->mv  [LIST_1][i4][j4][1]= pmvbw[1];
+                  dec_picture->mv  [LIST_1][j4][i4][0]= pmvbw[0];
+                  dec_picture->mv  [LIST_1][j4][i4][1]= pmvbw[1];
                   
-                  dec_picture->ref_idx[LIST_1][i4][j4] = bw_rFrame;
+                  dec_picture->ref_idx[LIST_1][j4][i4] = bw_rFrame;
                 }               
               }
               else
               {                  
-                dec_picture->mv  [LIST_1][i4][j4][0]=0;
-                dec_picture->mv  [LIST_1][i4][j4][1]=0;
-                dec_picture->ref_idx[LIST_1][i4][j4] = -1;
+                dec_picture->mv  [LIST_1][j4][i4][0]=0;
+                dec_picture->mv  [LIST_1][j4][i4][1]=0;
+                dec_picture->ref_idx[LIST_1][j4][i4] = -1;
                 
               }
               
               if (fw_rFrame < 0 && bw_rFrame < 0)
               {
-                dec_picture->ref_idx[LIST_0][i4][j4] = 0;
-                dec_picture->ref_idx[LIST_1][i4][j4] = 0;
+                dec_picture->ref_idx[LIST_0][j4][i4] = 0;
+                dec_picture->ref_idx[LIST_1][j4][i4] = 0;
               }
               
-              fw_refframe = (dec_picture->ref_idx[LIST_0][i4][j4]!=-1) ? dec_picture->ref_idx[LIST_0][i4][j4]:0;
-              bw_refframe = (dec_picture->ref_idx[LIST_1][i4][j4]!=-1) ? dec_picture->ref_idx[LIST_1][i4][j4]:0;
+              fw_refframe = (dec_picture->ref_idx[LIST_0][j4][i4]!=-1) ? dec_picture->ref_idx[LIST_0][j4][i4]:0;
+              bw_refframe = (dec_picture->ref_idx[LIST_1][j4][i4]!=-1) ? dec_picture->ref_idx[LIST_1][j4][i4]:0;
               
               fw_ref_idx = fw_refframe;
               bw_ref_idx = bw_refframe;
               
-              if      (dec_picture->ref_idx[LIST_1][i4][j4]==-1) direct_pdir = 0;
-              else if (dec_picture->ref_idx[LIST_0][i4][j4]==-1) direct_pdir = 1;
+              if      (dec_picture->ref_idx[LIST_1][j4][i4]==-1) direct_pdir = 0;
+              else if (dec_picture->ref_idx[LIST_0][j4][i4]==-1) direct_pdir = 1;
               else                                               direct_pdir = 2;
               
             }
@@ -4302,20 +4309,20 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               int imgblock_y= ((img->MbaffFrameFlag)&&(currMB->mb_field))? (img->current_mb_nr%2) ? (img->block_y-4)/2:img->block_y/2: img->block_y;
               int j6= imgblock_y + j;
               
-              int refList = (co_located_ref_idx[LIST_0][i4][j6]== -1 ? LIST_1 : LIST_0);
-              int ref_idx =  co_located_ref_idx[refList][i4][j6];
+              int refList = (co_located_ref_idx[LIST_0][j6][i4]== -1 ? LIST_1 : LIST_0);
+              int ref_idx =  co_located_ref_idx[refList][j6][i4];
 
               
               if(ref_idx==-1) // co-located is intra mode
               {
                 for(hv=0; hv<2; hv++)
                 {
-                  dec_picture->mv  [LIST_0][i4][j4][hv]=0;
-                  dec_picture->mv  [LIST_1][i4][j4][hv]=0;                    
+                  dec_picture->mv  [LIST_0][j4][i4][hv]=0;
+                  dec_picture->mv  [LIST_1][j4][i4][hv]=0;                    
                 }
                 
-                dec_picture->ref_idx[LIST_0][i4][j4] = 0;
-                dec_picture->ref_idx[LIST_1][i4][j4] = 0;
+                dec_picture->ref_idx[LIST_0][j4][i4] = 0;
+                dec_picture->ref_idx[LIST_1][j4][i4] = 0;
                 
                 fw_refframe = 0;
                 fw_ref_idx = 0;
@@ -4328,7 +4335,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 {
                   for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
                   {
-                    if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][i4][j6])
+                    if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][j6][i4])
                     {
                       mapped_idx=iref;
                       break;
@@ -4350,73 +4357,73 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 //! In such case, an array is needed for each different reference.
                 if (mv_scale == 9999 || listX[LIST_0+list_offset][mapped_idx]->is_long_term)
                 {
-                  dec_picture->mv  [LIST_0][i4][j4][0]=co_located_mv[refList][i4][j6][0];
-                  dec_picture->mv  [LIST_0][i4][j4][1]=co_located_mv[refList][i4][j6][1];
+                  dec_picture->mv  [LIST_0][j4][i4][0]=co_located_mv[refList][j6][i4][0];
+                  dec_picture->mv  [LIST_0][j4][i4][1]=co_located_mv[refList][j6][i4][1];
 
-                  dec_picture->mv  [LIST_1][i4][j4][0]=0;
-                  dec_picture->mv  [LIST_1][i4][j4][1]=0;
+                  dec_picture->mv  [LIST_1][j4][i4][0]=0;
+                  dec_picture->mv  [LIST_1][j4][i4][1]=0;
                 }
                 else
                 {
-                  dec_picture->mv  [LIST_0][i4][j4][0]=(mv_scale * co_located_mv[refList][i4][j6][0] + 128 ) >> 8;
-                  dec_picture->mv  [LIST_0][i4][j4][1]=(mv_scale * co_located_mv[refList][i4][j6][1] + 128 ) >> 8;
+                  dec_picture->mv  [LIST_0][j4][i4][0]=(mv_scale * co_located_mv[refList][j6][i4][0] + 128 ) >> 8;
+                  dec_picture->mv  [LIST_0][j4][i4][1]=(mv_scale * co_located_mv[refList][j6][i4][1] + 128 ) >> 8;
                   
-                  dec_picture->mv  [LIST_1][i4][j4][0]=dec_picture->mv  [LIST_0][i4][j4][0] - co_located_mv[refList][i4][j6][0] ;
-                  dec_picture->mv  [LIST_1][i4][j4][1]=dec_picture->mv  [LIST_0][i4][j4][1] - co_located_mv[refList][i4][j6][1] ;
+                  dec_picture->mv  [LIST_1][j4][i4][0]=dec_picture->mv  [LIST_0][j4][i4][0] - co_located_mv[refList][j6][i4][0] ;
+                  dec_picture->mv  [LIST_1][j4][i4][1]=dec_picture->mv  [LIST_0][j4][i4][1] - co_located_mv[refList][j6][i4][1] ;
                 }
                 
-                fw_refframe = dec_picture->ref_idx[LIST_0][i4][j4] = mapped_idx; //listX[1][0]->ref_idx[refList][i4][j4];
-                bw_refframe = dec_picture->ref_idx[LIST_1][i4][j4] = 0;
+                fw_refframe = dec_picture->ref_idx[LIST_0][j4][i4] = mapped_idx; //listX[1][0]->ref_idx[refList][j4][i4];
+                bw_refframe = dec_picture->ref_idx[LIST_1][j4][i4] = 0;
                 
                 fw_ref_idx = fw_refframe;
                 bw_ref_idx = bw_refframe;
               }
             }
             // store reference picture ID determined by direct mode
-            dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][i4][j4]];
-            dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_1 + list_offset][dec_picture->ref_idx[LIST_1][i4][j4]];  
+            dec_picture->ref_pic_id[LIST_0][j4][i4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][(short)dec_picture->ref_idx[LIST_0][j4][i4]];
+            dec_picture->ref_pic_id[LIST_1][j4][i4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_1 + list_offset][(short)dec_picture->ref_idx[LIST_1][j4][i4]];  
           }
                  
           if (mv_mode==0 && img->direct_spatial_mv_pred_flag )
           {
-            if (dec_picture->ref_idx[LIST_0][i4][j4] >= 0)
+            if (dec_picture->ref_idx[LIST_0][j4][i4] >= 0)
             {
               
-              vec1_x = i4*4*mv_mul + fw_mv_array[i4][j4][0];
+              vec1_x = i4*4*mv_mul + fw_mv_array[j4][i4][0];
               if (!curr_mb_field)
               {
-                vec1_y = j4*4*mv_mul + fw_mv_array[i4][j4][1];
+                vec1_y = j4*4*mv_mul + fw_mv_array[j4][i4][1];
               }
               else
               {
                 if (mb_nr%2 == 0)
                 {
-                  vec1_y = (img->block_y * 2 + joff) * mv_mul + fw_mv_array[i4][j4][1];
+                  vec1_y = (img->block_y * 2 + joff) * mv_mul + fw_mv_array[j4][i4][1];
                 }
                 else
                 {
-                  vec1_y = ((img->block_y-4) * 2 + joff)* mv_mul + fw_mv_array[i4][j4][1];
+                  vec1_y = ((img->block_y-4) * 2 + joff)* mv_mul + fw_mv_array[j4][i4][1];
                 }
               }               
               get_block(fw_refframe, listX[0+list_offset], vec1_x, vec1_y, img, tmp_block);
             }
                   
-            if (dec_picture->ref_idx[LIST_1][i4][j4] >= 0)
+            if (dec_picture->ref_idx[LIST_1][j4][i4] >= 0)
             {
-              vec2_x = i4*4*mv_mul + bw_mv_array[i4][j4][0];
+              vec2_x = i4*4*mv_mul + bw_mv_array[j4][i4][0];
               if (!curr_mb_field)
               {
-                vec2_y = j4*4*mv_mul + bw_mv_array[i4][j4][1];
+                vec2_y = j4*4*mv_mul + bw_mv_array[j4][i4][1];
               }
               else
               {
                 if (mb_nr%2 == 0)
                 {
-                  vec2_y = (img->block_y * 2 + joff) * mv_mul + bw_mv_array[i4][j4][1];
+                  vec2_y = (img->block_y * 2 + joff) * mv_mul + bw_mv_array[j4][i4][1];
                 }
                 else
                 {
-                  vec2_y = ((img->block_y-4) * 2 + joff)* mv_mul + bw_mv_array[i4][j4][1];
+                  vec2_y = ((img->block_y-4) * 2 + joff)* mv_mul + bw_mv_array[j4][i4][1];
                 }            
               }
               get_block(bw_refframe, listX[1+list_offset], vec2_x, vec2_y, img, tmp_blockbw);
@@ -4424,25 +4431,25 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           }
           else
           {
-            vec1_x = i4*4*mv_mul + fw_mv_array[i4][j4][0];
-            vec2_x = i4*4*mv_mul + bw_mv_array[i4][j4][0];
+            vec1_x = i4*4*mv_mul + fw_mv_array[j4][i4][0];
+            vec2_x = i4*4*mv_mul + bw_mv_array[j4][i4][0];
             
             if (!curr_mb_field)
             {
-              vec1_y = j4*4*mv_mul + fw_mv_array[i4][j4][1];
-              vec2_y = j4*4*mv_mul + bw_mv_array[i4][j4][1];
+              vec1_y = j4*4*mv_mul + fw_mv_array[j4][i4][1];
+              vec2_y = j4*4*mv_mul + bw_mv_array[j4][i4][1];
             }
             else
             {
               if (mb_nr%2 == 0)
               {
-                vec1_y = (img->block_y * 2 + joff) * mv_mul + fw_mv_array[i4][j4][1];
-                vec2_y = (img->block_y * 2 + joff) * mv_mul + bw_mv_array[i4][j4][1];
+                vec1_y = (img->block_y * 2 + joff) * mv_mul + fw_mv_array[j4][i4][1];
+                vec2_y = (img->block_y * 2 + joff) * mv_mul + bw_mv_array[j4][i4][1];
               }
               else
               {
-                vec1_y = ((img->block_y-4) * 2 + joff)* mv_mul + fw_mv_array[i4][j4][1];
-                vec2_y = ((img->block_y-4) * 2 + joff)* mv_mul + bw_mv_array[i4][j4][1];
+                vec1_y = ((img->block_y-4) * 2 + joff)* mv_mul + fw_mv_array[j4][i4][1];
+                vec2_y = ((img->block_y-4) * 2 + joff)* mv_mul + bw_mv_array[j4][i4][1];
               }
             }
             
@@ -4636,17 +4643,17 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 for(ii=0;ii<4;ii++)
                 {
                   ifx=(i4+ii)/(img->mb_cr_size_x/4);  // ifx = Subblock_x-coordinate
-                  fw_refframe = ref_idx = dec_picture->ref_idx[LIST_0+pred_dir][ifx][jf];
-                  i1=(i4+ii)*f1_x+mv_array[ifx][jf][0];
+                  fw_refframe = ref_idx = dec_picture->ref_idx[LIST_0+pred_dir][jf][ifx];
+                  i1=(i4+ii)*f1_x+mv_array[jf][ifx][0];
 
                   if (!curr_mb_field)
-                    j1=(j4+jj)*f1_y+mv_array[ifx][jf][1];
+                    j1=(j4+jj)*f1_y+mv_array[jf][ifx][1];
                   else
                   {
                     if (mb_nr%2 == 0) 
-                      j1=((img->pix_c_y/2)                   + jj + joff)*f1_y + mv_array[ifx][jf][1];
+                      j1=((img->pix_c_y/2)                   + jj + joff)*f1_y + mv_array[jf][ifx][1];
                     else
-                      j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + mv_array[ifx][jf][1];
+                      j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + mv_array[jf][ifx][1];
                   }
 
                   j1 += list[ref_idx]->chroma_vector_adjustment;
@@ -4701,34 +4708,34 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                   if (mv_mode == 0 && img->direct_spatial_mv_pred_flag)
                   {
                     //===== DIRECT PREDICTION =====
-                    if (dec_picture->ref_idx[LIST_0][(ifx/2)*2][2*(jf/2)]!=-1)
+                    if (dec_picture->ref_idx[LIST_0][2*(jf/2)][(ifx/2)*2]!=-1)
                     {
-                      fw_refframe = dec_picture->ref_idx[LIST_0][(ifx/2)*2][2*(jf/2)];
+                      fw_refframe = dec_picture->ref_idx[LIST_0][2*(jf/2)][(ifx/2)*2];
                       fw_ref_idx = fw_refframe;
                     }
-                    if (dec_picture->ref_idx[LIST_1][(ifx/2)*2][2*(jf/2)]!=-1)
+                    if (dec_picture->ref_idx[LIST_1][2*(jf/2)][(ifx/2)*2]!=-1)
                     {
-                      bw_refframe = dec_picture->ref_idx[LIST_1][(ifx/2)*2][2*(jf/2)];
+                      bw_refframe = dec_picture->ref_idx[LIST_1][2*(jf/2)][(ifx/2)*2];
                       bw_ref_idx = bw_refframe;
                     }
 
-                    if      (dec_picture->ref_idx[LIST_1][(ifx/2)*2][2*(jf/2)]==-1) direct_pdir = 0;
-                    else if (dec_picture->ref_idx[LIST_0][(ifx/2)*2][2*(jf/2)]==-1) direct_pdir = 1;
+                    if      (dec_picture->ref_idx[LIST_1][2*(jf/2)][(ifx/2)*2]==-1) direct_pdir = 0;
+                    else if (dec_picture->ref_idx[LIST_0][2*(jf/2)][(ifx/2)*2]==-1) direct_pdir = 1;
 
                     if (direct_pdir == 0 || direct_pdir == 2)
                     {
-                      i1=(img->pix_c_x+ii+ioff)*f1_x+fw_mv_array[ifx][jf][0];
+                      i1=(img->pix_c_x+ii+ioff)*f1_x+fw_mv_array[jf][ifx][0];
                     
                       if (!curr_mb_field)
                       {
-                        j1=(img->pix_c_y+jj+joff)*f1_y+fw_mv_array[ifx][jf][1];
+                        j1=(img->pix_c_y+jj+joff)*f1_y+fw_mv_array[jf][ifx][1];
                       }
                       else
                       {
                         if (mb_nr%2 == 0) 
-                          j1=((img->pix_c_y)/2                   + jj + joff)*f1_y + fw_mv_array[ifx][jf][1];
+                          j1=((img->pix_c_y)/2                   + jj + joff)*f1_y + fw_mv_array[jf][ifx][1];
                         else
-                          j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + fw_mv_array[ifx][jf][1];
+                          j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + fw_mv_array[jf][ifx][1];
                       }
 
                       j1 += listX[0+list_offset][fw_refframe]->chroma_vector_adjustment;
@@ -4751,18 +4758,18 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     }
                     if (direct_pdir == 1 || direct_pdir == 2)
                     {
-                      i1=(img->pix_c_x+ii+ioff)*f1_x+bw_mv_array[ifx][jf][0];
+                      i1=(img->pix_c_x+ii+ioff)*f1_x+bw_mv_array[jf][ifx][0];
                     
                       if (!curr_mb_field)
                       {
-                        j1=(img->pix_c_y+jj+joff)*f1_y+bw_mv_array[ifx][jf][1];
+                        j1=(img->pix_c_y+jj+joff)*f1_y+bw_mv_array[jf][ifx][1];
                       }
                       else
                       {
                         if (mb_nr%2 == 0) 
-                          j1=((img->pix_c_y)/2                   + jj + joff)*f1_y + bw_mv_array[ifx][jf][1];
+                          j1=((img->pix_c_y)/2                   + jj + joff)*f1_y + bw_mv_array[jf][ifx][1];
                         else
-                          j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + bw_mv_array[ifx][jf][1];
+                          j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + bw_mv_array[jf][ifx][1];
                       }
                       j1 += listX[1+list_offset][bw_refframe]->chroma_vector_adjustment;
 
@@ -4786,24 +4793,24 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                   else
                   {
                     //===== BI-DIRECTIONAL PREDICTION =====
-                    fw_refframe = dec_picture->ref_idx[LIST_0][ifx][jf];
-                    bw_refframe = dec_picture->ref_idx[LIST_1][ifx][jf];
+                    fw_refframe = dec_picture->ref_idx[LIST_0][jf][ifx];
+                    bw_refframe = dec_picture->ref_idx[LIST_1][jf][ifx];
 
                     fw_ref_idx = fw_refframe;
                     bw_ref_idx = bw_refframe;
 
-                    i1=(img->pix_c_x+ii+ioff)*f1_x+fw_mv_array[ifx][jf][0];
+                    i1=(img->pix_c_x+ii+ioff)*f1_x+fw_mv_array[jf][ifx][0];
 
                     if (!curr_mb_field)
                     {
-                      j1=(img->pix_c_y+jj+joff)*f1_y+fw_mv_array[ifx][jf][1];
+                      j1=(img->pix_c_y+jj+joff)*f1_y+fw_mv_array[jf][ifx][1];
                     }
                     else
                     {
                       if (mb_nr%2 == 0) 
-                        j1=((img->pix_c_y)/2                   + jj + joff)*f1_y + fw_mv_array[ifx][jf][1];
+                        j1=((img->pix_c_y)/2                   + jj + joff)*f1_y + fw_mv_array[jf][ifx][1];
                       else
-                        j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + fw_mv_array[ifx][jf][1];
+                        j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + fw_mv_array[jf][ifx][1];
                     }
 
                     j1 += listX[0+list_offset][fw_refframe]->chroma_vector_adjustment;
@@ -4823,18 +4830,18 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                              if0*jf1*listX[0+list_offset][fw_refframe]->imgUV[uv][jj1][ii0]+
                              if1*jf1*listX[0+list_offset][fw_refframe]->imgUV[uv][jj1][ii1]+f4)/f3;
                   
-                    i1=(img->pix_c_x+ii+ioff)*f1_x+bw_mv_array[ifx][jf][0];
+                    i1=(img->pix_c_x+ii+ioff)*f1_x+bw_mv_array[jf][ifx][0];
                   
                     if (!curr_mb_field)
                     {
-                      j1=(img->pix_c_y+jj+joff)*f1_y+bw_mv_array[ifx][jf][1];
+                      j1=(img->pix_c_y+jj+joff)*f1_y+bw_mv_array[jf][ifx][1];
                     }
                     else
                     {
                       if (mb_nr%2 == 0) 
-                        j1=((img->pix_c_y)/2                   + jj + joff)*f1_y + bw_mv_array[ifx][jf][1];
+                        j1=((img->pix_c_y)/2                   + jj + joff)*f1_y + bw_mv_array[jf][ifx][1];
                       else
-                        j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + bw_mv_array[ifx][jf][1];
+                        j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + bw_mv_array[jf][ifx][1];
                     }
 
                     j1 += listX[1+list_offset][bw_refframe]->chroma_vector_adjustment;

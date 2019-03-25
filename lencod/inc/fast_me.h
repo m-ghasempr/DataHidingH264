@@ -12,6 +12,7 @@
  *   Main contributors: (see contributors.h for copyright, address and affiliation details)
  *    - Zhibo Chen         <chenzhibo@tsinghua.org.cn>
  *    - JianFeng Xu        <fenax@video.mdc.tsinghua.edu.cn>  
+ *    - Wenfang Fu         <fwf@video.mdc.tsinghua.edu.cn>
  *
  * \date
  *   Apr. 2003
@@ -56,7 +57,7 @@
     { \
     mcost = MV_COST (lambda_factor, mvshift, cand_x, cand_y, pred_x, pred_y); \
     mcost = PartCalMad(ref_pic, orig_pic, get_ref_line,blocksize_y,blocksize_x,blocksize_x4,mcost,min_mcost,cand_x,cand_y); \
-    McostState[cand_y-center_y+search_range][cand_x-center_x+search_range] = mcost; \
+    McostState[cand_y-center_y+search_range][cand_x-center_x+search_range] = 1; \
     if (mcost < min_mcost) \
     { \
     best_x = cand_x; \
@@ -71,7 +72,7 @@
         { \
         mcost = MV_COST (lambda_factor, mvshift, cand_x, cand_y, pred_x, pred_y); \
         mcost = PartCalMad(ref_pic, orig_pic, get_ref_line,blocksize_y,blocksize_x,blocksize_x4,mcost,min_mcost,cand_x,cand_y); \
-        McostState[cand_y-center_y+search_range][cand_x-center_x+search_range] = mcost; \
+        McostState[cand_y-center_y+search_range][cand_x-center_x+search_range] = 1; \
         if (mcost < min_mcost) \
           { \
           best_x = cand_x; \
@@ -82,27 +83,24 @@
         } \
       }
 
-
-int **McostState; //state for integer pel search
+byte **McostState; //state for integer pel search
+byte **SearchState; //state for fractional pel search
 
 int *****all_mincost;//store the MV and SAD information needed;
 int *****all_bwmincost;//store for backward prediction
-int pred_SAD_space,pred_SAD_time,pred_SAD_ref,pred_SAD_uplayer;//SAD prediction
+
+int pred_SAD_space, pred_SAD_ref,pred_SAD_uplayer;  //SAD prediction
+int pred_MV_ref[2], pred_MV_uplayer[2];             //pred motion vector by space or temporal correlation,Median is provided
+
 int FME_blocktype;  //blocktype for FME SetMotionVectorPredictor
-int pred_MV_time[2],pred_MV_ref[2],pred_MV_uplayer[2];//pred motion vector by space or temporal correlation,Median is provided
 
 //for early termination
-float Quantize_step;
 float  Bsize[8];
-int Thresh4x4;
 float AlphaSec[8];
 float AlphaThird[8];
 int  *flag_intra;
 int  flag_intra_SAD;
-void DefineThreshold();
-void DefineThresholdMB();
 
-byte **SearchState; //state for fractional pel search
 void DefineThreshold();
 void DefineThresholdMB();
 int get_mem_mincost (int****** mv);
@@ -167,23 +165,5 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
                          double    lambda         // <--  lagrangian parameter for determining motion cost
                          );
 
-int                                         //  ==> minimum motion cost after search
-FME_BlockMotionSearch (short     ref,           // <--  reference frame (0... or -1 (backward))
-                       int       list,
-                       int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                       int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                       int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                       int       search_range,  // <--  1-d search range for integer-position search
-                       double    lambda         // <--  lagrangian parameter for determining motion cost
-                       );
 
-int                                              //!< minimum motion cost after search
-noFME_BlockMotionSearch (short     ref,          //!< reference idx
-                         int       list,         //!< reference pciture list
-                         int       mb_x,         //!< x-coordinate inside macroblock
-                         int       mb_y,         //!< y-coordinate inside macroblock
-                         int       blocktype,    //!< block type (1-16x16 ... 7-4x4)
-                         int       search_range, //!< 1-d search range for integer-position search
-                         double    lambda        //!< lagrangian parameter for determining motion cost
-                         );
 #endif

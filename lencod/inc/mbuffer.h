@@ -55,12 +55,12 @@ typedef struct storable_picture
 
   byte *      mb_field;      //!< field macroblock indicator
 
-  short ***   ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
+  char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
 
-  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
+  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
                              //   (not  simply index) 
 
-  int64 ***   ref_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
+  int64 ***   ref_id;        //!< reference picture identifier [list][subblock_y][subblock_x]
                              //   (not  simply index) 
 
   short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
@@ -90,26 +90,26 @@ typedef struct colocated_params
 
   int64       ref_pic_num[6][MAX_LIST_SIZE];  
 
-  short ***   ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
+  char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
+  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
   short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]  
   byte **     moving_block;
 
   // Top field params
   int64       top_ref_pic_num[6][MAX_LIST_SIZE];  
-  short ***   top_ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-  int64 ***   top_ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
+  char  ***   top_ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
+  int64 ***   top_ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
   short ****  top_mv;            //!< motion vector       [list][subblock_x][subblock_y][component]  
   byte **     top_moving_block;
 
   // Bottom field params
   int64       bottom_ref_pic_num[6][MAX_LIST_SIZE];  
-  short ***   bottom_ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-  int64 ***   bottom_ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
+  char  ***   bottom_ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
+  int64 ***   bottom_ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
   short ****  bottom_mv;            //!< motion vector       [list][subblock_x][subblock_y][component] 
   byte **     bottom_moving_block;
   
-  int         is_long_term;
+  byte        is_long_term;
   byte **     field_frame;         //!< indicates if co_located is field or frame.
 
 } ColocatedParams;
@@ -172,6 +172,7 @@ void             flush_dpb();
 
 void             dpb_split_field(FrameStore *fs);
 void             dpb_combine_field(FrameStore *fs);
+void             dpb_combine_field_yuv(FrameStore *fs);
 
 void             init_lists(int currSliceType, PictureStructure currPicStructure);
 void             reorder_ref_pic_list(StorablePicture **list, int *list_size, 

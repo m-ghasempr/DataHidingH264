@@ -57,7 +57,7 @@ static int pred_weight_table();
 int SliceHeader()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
+  Bitstream *bitstream = img->currentSlice->partArr[dP_nr].bitstream;
   Slice* currSlice = img->currentSlice;
   int len = 0;
   unsigned int field_pic_flag = 0, bottom_field_flag = 0;
@@ -66,36 +66,35 @@ int SliceHeader()
   float numtmp;	
 	
   if (img->MbaffFrameFlag)
-    len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr >> 1,   partition);
+    len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr >> 1,   bitstream);
   else
-    len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr,   partition);
+    len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr,   bitstream);
 
-  len += ue_v("SH: slice_type",        get_picture_type (),   partition);
+  len += ue_v("SH: slice_type",        get_picture_type (),   bitstream);
 
-  len += ue_v("SH: pic_parameter_set_id" , active_pps->pic_parameter_set_id ,partition);
+  len += ue_v("SH: pic_parameter_set_id" , active_pps->pic_parameter_set_id ,bitstream);
 
-  // frame_num
-  len += u_v (log2_max_frame_num_minus4 + 4,"SH: frame_num", img->frame_num, partition);
+  len += u_v (log2_max_frame_num_minus4 + 4,"SH: frame_num", img->frame_num, bitstream);
 
   if (!active_sps->frame_mbs_only_flag)
   {
     // field_pic_flag    u(1)
     field_pic_flag = (img->structure ==TOP_FIELD || img->structure ==BOTTOM_FIELD)?1:0;
     assert( field_pic_flag == img->fld_flag );
-    len += u_1("SH: field_pic_flag", field_pic_flag, partition);
+    len += u_1("SH: field_pic_flag", field_pic_flag, bitstream);
 
     if (field_pic_flag)
     {
       //bottom_field_flag     u(1)
       bottom_field_flag = (img->structure == BOTTOM_FIELD)?1:0;
-      len += u_1("SH: bottom_field_flag" , bottom_field_flag ,partition);
+      len += u_1("SH: bottom_field_flag" , bottom_field_flag ,bitstream);
     }
   }
 
   if (img->currentPicture->idr_flag)
   {
     // idr_pic_id
-    len += ue_v ("SH: idr_pic_id", (img->number % 2), partition);
+    len += ue_v ("SH: idr_pic_id", (img->number % 2), bitstream);
   }
 
   if (img->pic_order_cnt_type == 0)
@@ -112,33 +111,32 @@ int SliceHeader()
         img->pic_order_cnt_lsb = (img->bottompoc & ~((((unsigned int)(-1)) << (log2_max_pic_order_cnt_lsb_minus4+4))) );
     }
 
-    len += u_v (log2_max_pic_order_cnt_lsb_minus4+4, "SH: pic_order_cnt_lsb", img->pic_order_cnt_lsb, partition);
+    len += u_v (log2_max_pic_order_cnt_lsb_minus4+4, "SH: pic_order_cnt_lsb", img->pic_order_cnt_lsb, bitstream);
 
-    if (img->pic_order_present_flag && !field_pic_flag)  // img->fld_flag
+    if (img->pic_order_present_flag && !field_pic_flag)
     {
-      len += se_v ("SH: delta_pic_order_cnt_bottom", img->delta_pic_order_cnt_bottom, partition);
+      len += se_v ("SH: delta_pic_order_cnt_bottom", img->delta_pic_order_cnt_bottom, bitstream);
     }
   }
   if (img->pic_order_cnt_type == 1 && !img->delta_pic_order_always_zero_flag)
   {
-    len += se_v ("SH: delta_pic_order_cnt[0]", img->delta_pic_order_cnt[0], partition);
+    len += se_v ("SH: delta_pic_order_cnt[0]", img->delta_pic_order_cnt[0], bitstream);
 
-    if (img->pic_order_present_flag && !field_pic_flag)  // img->fld_flag
+    if (img->pic_order_present_flag && !field_pic_flag)
     {
-      len += se_v ("SH: delta_pic_order_cnt[1]", img->delta_pic_order_cnt[1], partition);
+      len += se_v ("SH: delta_pic_order_cnt[1]", img->delta_pic_order_cnt[1], bitstream);
     }
   }
 
-  // redundant slice info redundant_pic_cnt is missing here
   if (input->redundant_slice_flag)
   {
-    len += ue_v ("SH: redundant_pic_cnt", img->redundant_pic_cnt, partition);
+    len += ue_v ("SH: redundant_pic_cnt", img->redundant_pic_cnt, bitstream);
   }
 
   // Direct Mode Type selection for B pictures
   if (img->type==B_SLICE)
   {
-    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", img->direct_spatial_mv_pred_flag, partition);  	
+    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", img->direct_spatial_mv_pred_flag, bitstream);  	
   }
 
   if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type==SP_SLICE))
@@ -154,14 +152,14 @@ int SliceHeader()
                       || (img->num_ref_idx_l1_active != (active_pps->num_ref_idx_l1_active_minus1 +1))) ? 1 : 0;
     }
 
-    len +=  u_1 ("SH: num_ref_idx_active_override_flag", override_flag, partition);
+    len +=  u_1 ("SH: num_ref_idx_active_override_flag", override_flag, bitstream);
     
     if (override_flag) 
     {
-      len += ue_v ("SH: num_ref_idx_l0_active_minus1", img->num_ref_idx_l0_active-1, partition);
+      len += ue_v ("SH: num_ref_idx_l0_active_minus1", img->num_ref_idx_l0_active-1, bitstream);
       if (img->type==B_SLICE)
       {
-        len += ue_v ("SH: num_ref_idx_l1_active_minus1", img->num_ref_idx_l1_active-1, partition);
+        len += ue_v ("SH: num_ref_idx_l1_active_minus1", img->num_ref_idx_l1_active-1, bitstream);
       }
     }
 
@@ -179,29 +177,29 @@ int SliceHeader()
 
   if(input->symbol_mode==CABAC && img->type!=I_SLICE /*&& img->type!=SI_IMG*/)
   {
-    len += ue_v("SH: cabac_init_idc", img->model_number, partition);
+    len += ue_v("SH: cabac_init_idc", img->model_number, bitstream);
   }
 
-  len += se_v("SH: slice_qp_delta", (currSlice->qp - 26 - active_pps->pic_init_qp_minus26), partition);  
+  len += se_v("SH: slice_qp_delta", (currSlice->qp - 26 - active_pps->pic_init_qp_minus26), bitstream);  
 
   if (img->type==SP_SLICE /*|| img->type==SI_SLICE*/)
   {
     if (img->type==SP_SLICE) // Switch Flag only for SP pictures
     {
-      len += u_1 ("SH: sp_for_switch_flag", 0, partition);   // 1 for switching SP, 0 for normal SP
+      len += u_1 ("SH: sp_for_switch_flag", 0, bitstream);   // 1 for switching SP, 0 for normal SP
     }
-    len += se_v ("SH: slice_qs_delta", (img->qpsp - 26), partition );
+    len += se_v ("SH: slice_qs_delta", (img->qpsp - 26), bitstream );
   }
 
   if (active_pps->deblocking_filter_control_present_flag)
   {
-    len += ue_v("SH: disable_deblocking_filter_idc",img->LFDisableIdc, partition);  // Turn loop filter on/off on slice basis 
+    len += ue_v("SH: disable_deblocking_filter_idc",img->LFDisableIdc, bitstream);  // Turn loop filter on/off on slice basis 
 
     if (img->LFDisableIdc!=1)
     {
-      len += se_v ("SH: slice_alpha_c0_offset_div2", img->LFAlphaC0Offset / 2, partition);
+      len += se_v ("SH: slice_alpha_c0_offset_div2", img->LFAlphaC0Offset / 2, bitstream);
 
-      len += se_v ("SH: slice_beta_offset_div2", img->LFBetaOffset / 2, partition);
+      len += se_v ("SH: slice_beta_offset_div2", img->LFBetaOffset / 2, bitstream);
     }
   }
 
@@ -213,15 +211,15 @@ int SliceHeader()
     num_bits_slice_group_change_cycle = (int)ceil(log(numtmp)/log(2));
 
     //! img->slice_group_change_cycle can be changed before calling FmoInit()
-    len += u_v (num_bits_slice_group_change_cycle, "SH: slice_group_change_cycle", img->slice_group_change_cycle, partition);
+    len += u_v (num_bits_slice_group_change_cycle, "SH: slice_group_change_cycle", img->slice_group_change_cycle, bitstream);
   }
 
   // NOTE: The following syntax element is actually part 
-  //        Slice data partition A RBSP syntax
+  //        Slice data bitstream A RBSP syntax
 
   if(input->partition_mode&&!img->currentPicture->idr_flag)
   {
-    len += ue_v("DPA: slice_id", img->current_slice_nr, partition);
+    len += ue_v("DPA: slice_id", img->current_slice_nr, bitstream);
   }
 
   return len;
@@ -240,31 +238,31 @@ int SliceHeader()
 static int ref_pic_list_reordering()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
+  Bitstream *bitstream = img->currentSlice->partArr[dP_nr].bitstream;
   Slice *currSlice = img->currentSlice;
 
   int i, len=0;
 
   if ((img->type!=I_SLICE) /*&&(img->type!=SI_IMG)*/ )
   {
-    len += u_1 ("SH: ref_pic_list_reordering_flag_l0", currSlice->ref_pic_list_reordering_flag_l0, partition);
+    len += u_1 ("SH: ref_pic_list_reordering_flag_l0", currSlice->ref_pic_list_reordering_flag_l0, bitstream);
     if (currSlice->ref_pic_list_reordering_flag_l0)
     {
       i=-1;
       do
       {
         i++;
-        len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->remapping_of_pic_nums_idc_l0[i], partition);
+        len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->remapping_of_pic_nums_idc_l0[i], bitstream);
         if (currSlice->remapping_of_pic_nums_idc_l0[i]==0 ||
             currSlice->remapping_of_pic_nums_idc_l0[i]==1)
         {
-          len += ue_v ("SH: abs_diff_pic_num_minus1_l0", currSlice->abs_diff_pic_num_minus1_l0[i], partition);
+          len += ue_v ("SH: abs_diff_pic_num_minus1_l0", currSlice->abs_diff_pic_num_minus1_l0[i], bitstream);
         }
         else
         {
           if (currSlice->remapping_of_pic_nums_idc_l0[i]==2)
           {
-            len += ue_v ("SH: long_term_pic_idx_l0", currSlice->long_term_pic_idx_l0[i], partition);
+            len += ue_v ("SH: long_term_pic_idx_l0", currSlice->long_term_pic_idx_l0[i], bitstream);
           }
         }
 
@@ -274,24 +272,24 @@ static int ref_pic_list_reordering()
 
   if (img->type==B_SLICE)
   {
-    len += u_1 ("SH: ref_pic_list_reordering_flag_l1", currSlice->ref_pic_list_reordering_flag_l1, partition);
+    len += u_1 ("SH: ref_pic_list_reordering_flag_l1", currSlice->ref_pic_list_reordering_flag_l1, bitstream);
     if (currSlice->ref_pic_list_reordering_flag_l1)
     {
       i=-1;
       do
       {
         i++;
-        len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->remapping_of_pic_nums_idc_l1[i], partition);
+        len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->remapping_of_pic_nums_idc_l1[i], bitstream);
         if (currSlice->remapping_of_pic_nums_idc_l1[i]==0 ||
             currSlice->remapping_of_pic_nums_idc_l1[i]==1)
         {
-          len += ue_v ("SH: abs_diff_pic_num_minus1_l1", currSlice->abs_diff_pic_num_minus1_l1[i], partition);
+          len += ue_v ("SH: abs_diff_pic_num_minus1_l1", currSlice->abs_diff_pic_num_minus1_l1[i], bitstream);
         }
         else
         {
           if (currSlice->remapping_of_pic_nums_idc_l1[i]==2)
           {
-            len += ue_v ("SH: long_term_pic_idx_l1", currSlice->long_term_pic_idx_l1[i], partition);
+            len += ue_v ("SH: long_term_pic_idx_l1", currSlice->long_term_pic_idx_l1[i], bitstream);
           }
         }
       } while (currSlice->remapping_of_pic_nums_idc_l1[i] != 3);
@@ -314,7 +312,7 @@ static int ref_pic_list_reordering()
 static int dec_ref_pic_marking()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
+  Bitstream *bitstream = img->currentSlice->partArr[dP_nr].bitstream;
 
   DecRefPicMarking_t *tmp_drpm;
 
@@ -322,14 +320,14 @@ static int dec_ref_pic_marking()
 
   if (img->currentPicture->idr_flag)
   {
-    len += u_1("SH: no_output_of_prior_pics_flag", img->no_output_of_prior_pics_flag, partition);
-    len += u_1("SH: long_term_reference_flag", img->long_term_reference_flag, partition);
+    len += u_1("SH: no_output_of_prior_pics_flag", img->no_output_of_prior_pics_flag, bitstream);
+    len += u_1("SH: long_term_reference_flag", img->long_term_reference_flag, bitstream);
   }
   else
   {
     img->adaptive_ref_pic_buffering_flag = (img->dec_ref_pic_marking_buffer!=NULL);
 
-    len += u_1("SH: adaptive_ref_pic_buffering_flag", img->adaptive_ref_pic_buffering_flag, partition);
+    len += u_1("SH: adaptive_ref_pic_buffering_flag", img->adaptive_ref_pic_buffering_flag, bitstream);
 
     if (img->adaptive_ref_pic_buffering_flag)
     {
@@ -340,23 +338,23 @@ static int dec_ref_pic_marking()
         if (tmp_drpm==NULL) error ("Error encoding MMCO commands", 500);
         
         val = tmp_drpm->memory_management_control_operation;
-        len += ue_v("SH: memory_management_control_operation", val, partition);
+        len += ue_v("SH: memory_management_control_operation", val, bitstream);
 
         if ((val==1)||(val==3)) 
         {
-          len += 1 + ue_v("SH: difference_of_pic_nums_minus1", tmp_drpm->difference_of_pic_nums_minus1, partition);
+          len += 1 + ue_v("SH: difference_of_pic_nums_minus1", tmp_drpm->difference_of_pic_nums_minus1, bitstream);
         }
         if (val==2)
         {
-          len+= ue_v("SH: long_term_pic_num", tmp_drpm->long_term_pic_num, partition);
+          len+= ue_v("SH: long_term_pic_num", tmp_drpm->long_term_pic_num, bitstream);
         }
         if ((val==3)||(val==6))
         {
-          len+= ue_v("SH: long_term_frame_idx", tmp_drpm->long_term_frame_idx, partition);
+          len+= ue_v("SH: long_term_frame_idx", tmp_drpm->long_term_frame_idx, bitstream);
         }
         if (val==4)
         {
-          len += ue_v("SH: max_long_term_pic_idx_plus1", tmp_drpm->max_long_term_frame_idx_plus1, partition);
+          len += ue_v("SH: max_long_term_pic_idx_plus1", tmp_drpm->max_long_term_frame_idx_plus1, bitstream);
         }
         
         tmp_drpm=tmp_drpm->Next;
@@ -381,44 +379,44 @@ static int dec_ref_pic_marking()
 static int pred_weight_table()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
+  Bitstream *bitstream = img->currentSlice->partArr[dP_nr].bitstream;
 
   int len = 0;
   int i,j;
 
-  len += ue_v("SH: luma_log_weight_denom", luma_log_weight_denom, partition);
+  len += ue_v("SH: luma_log_weight_denom", luma_log_weight_denom, bitstream);
   
-  len += ue_v("SH: chroma_log_weight_denom", chroma_log_weight_denom, partition);
+  len += ue_v("SH: chroma_log_weight_denom", chroma_log_weight_denom, bitstream);
 
   for (i=0; i< img->num_ref_idx_l0_active; i++)
   {
     if ( (wp_weight[0][i][0] != 1<<luma_log_weight_denom) || (wp_offset[0][i][0] != 0) )
     {
-      len += u_1 ("SH: luma_weight_flag_l0", 1, partition);
+      len += u_1 ("SH: luma_weight_flag_l0", 1, bitstream);
       
-      len += se_v ("SH: luma_weight_l0", wp_weight[0][i][0], partition);
+      len += se_v ("SH: luma_weight_l0", wp_weight[0][i][0], bitstream);
         
-      len += se_v ("SH: luma_offset_l0", wp_offset[0][i][0], partition);
+      len += se_v ("SH: luma_offset_l0", wp_offset[0][i][0], bitstream);
     }
     else
     {
-        len += u_1 ("SH: luma_weight_flag_l0", 0, partition);
+        len += u_1 ("SH: luma_weight_flag_l0", 0, bitstream);
     }
 
     if ( (wp_weight[0][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][1] != 0) || 
      (wp_weight[0][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][2] != 0)  )
     {
-      len += u_1 ("chroma_weight_flag_l0", 1, partition);
+      len += u_1 ("chroma_weight_flag_l0", 1, bitstream);
       for (j=1; j<3; j++)
       {
-        len += se_v ("chroma_weight_l0", wp_weight[0][i][j] ,partition);
+        len += se_v ("chroma_weight_l0", wp_weight[0][i][j] ,bitstream);
       
-        len += se_v ("chroma_offset_l0", wp_offset[0][i][j] ,partition);
+        len += se_v ("chroma_offset_l0", wp_offset[0][i][j] ,bitstream);
       }
     }
     else
     {
-      len += u_1 ("chroma_weight_flag_l0", 0, partition);
+      len += u_1 ("chroma_weight_flag_l0", 0, bitstream);
     }
   }
 
@@ -428,31 +426,31 @@ static int pred_weight_table()
     {
       if ( (wp_weight[1][i][0] != 1<<luma_log_weight_denom) || (wp_offset[1][i][0] != 0) )
       {
-        len += u_1 ("SH: luma_weight_flag_l1", 1, partition);
+        len += u_1 ("SH: luma_weight_flag_l1", 1, bitstream);
         
-        len += se_v ("SH: luma_weight_l1", wp_weight[1][i][0], partition);
+        len += se_v ("SH: luma_weight_l1", wp_weight[1][i][0], bitstream);
         
-        len += se_v ("SH: luma_offset_l1", wp_offset[1][i][0], partition);
+        len += se_v ("SH: luma_offset_l1", wp_offset[1][i][0], bitstream);
       }
       else
       {
-        len += u_1 ("SH: luma_weight_flag_l1", 0, partition);
+        len += u_1 ("SH: luma_weight_flag_l1", 0, bitstream);
       }
       
       if ( (wp_weight[1][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][1] != 0) || 
       (wp_weight[1][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][2] != 0) )
       {
-        len += u_1 ("chroma_weight_flag_l1", 1, partition);
+        len += u_1 ("chroma_weight_flag_l1", 1, bitstream);
         for (j=1; j<3; j++)
         {
-          len += se_v ("chroma_weight_l1", wp_weight[1][i][j] ,partition);
+          len += se_v ("chroma_weight_l1", wp_weight[1][i][j] ,bitstream);
           
-          len += se_v ("chroma_offset_l1", wp_offset[1][i][j] ,partition);
+          len += se_v ("chroma_offset_l1", wp_offset[1][i][j] ,bitstream);
         }
       }
       else
       {
-        len += u_1 ("chroma_weight_flag_l1", 0, partition);
+        len += u_1 ("chroma_weight_flag_l1", 0, bitstream);
       }
     }
   }
@@ -533,7 +531,6 @@ int Partition_BC_Header(int PartNo)
 
   int len = 0;
 
-  assert (input->of_mode == PAR_OF_RTP);
   assert (PartNo > 0 && PartNo < img->currentSlice->max_part_nr);
 
   sym->type = SE_HEADER;         // This will be true for all symbols generated here

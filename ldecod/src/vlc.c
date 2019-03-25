@@ -913,7 +913,8 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP)
     offset=(2048<<addbit)+16-2048;
     level = (code >> 1) + offset;
     code |= (1 << (len)); // for display purpose only
-  }
+    len += addbit + 16;
+ }
 
   if (sign)
     level = -level;
@@ -1002,7 +1003,7 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartiti
   currStream->frame_bitoffset = frame_bitoffset+len;
   
 #if TRACE
-  tracebits2(sym->tracestring, sym->len, sym->inf);
+  tracebits2(sym->tracestring, sym->len, code);
 #endif
   
   return 0;

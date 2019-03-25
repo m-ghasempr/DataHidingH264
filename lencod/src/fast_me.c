@@ -16,6 +16,7 @@
  *    Main contributors: (see contributors.h for copyright, address and affiliation details)
  *    - Zhibo Chen         <chenzhibo@tsinghua.org.cn>
  *    - JianFeng Xu        <fenax@video.mdc.tsinghua.edu.cn>  
+ *    - Wenfang Fu         <fwf@video.mdc.tsinghua.edu.cn>
  * \date    
  *    2003.8
  ************************************************************************
@@ -32,10 +33,10 @@
 
 #define Q_BITS          15
 
-extern  int*   byte_abs;
+extern  unsigned int*   byte_abs;
 extern  int*   mvbits;
-extern  int*   spiral_search_x;
-extern  int*   spiral_search_y;
+extern  short*   spiral_search_x;
+extern  short*   spiral_search_y;
 
 
 static pel_t (*PelY_14) (pel_t**, int, int, int, int);
@@ -80,6 +81,8 @@ void DefineThresholdMB()
   int gb_q_bits    = Q_BITS+gb_qp_per;
   int gb_qp_const,Thresh4x4;
 
+  float Quantize_step;
+
   if (img->type == I_SLICE)
     gb_qp_const=(1<<gb_q_bits)/3;    // intra
   else
@@ -113,27 +116,27 @@ int get_mem_mincost (int****** mv)
   int i, j, k, l;
 
   if ((*mv = (int*****)calloc(img->width/4,sizeof(int****))) == NULL)
-    no_mem_exit ("get_mem_mv: mv");
+    no_mem_exit ("get_mem_mincost: mv");
   for (i=0; i<img->width/4; i++)
   {
     if (((*mv)[i] = (int****)calloc(img->height/4,sizeof(int***))) == NULL)
-      no_mem_exit ("get_mem_mv: mv");
+      no_mem_exit ("get_mem_mincost: mv");
     for (j=0; j<img->height/4; j++)
     {
       if (((*mv)[i][j] = (int***)calloc(img->max_num_references, sizeof(int**))) == NULL)
-        no_mem_exit ("get_mem_mv: mv");
+        no_mem_exit ("get_mem_mincost: mv");
       for (k=0; k<img->max_num_references; k++)
       {
-        if (((*mv)[i][j][k] = (int**)calloc(9,sizeof(int*))) == NULL)
-          no_mem_exit ("get_mem_mv: mv");
-        for (l=0; l<9; l++)
+        if (((*mv)[i][j][k] = (int**)calloc(8,sizeof(int*))) == NULL)
+          no_mem_exit ("get_mem_mincost: mv");
+        for (l=0; l<8; l++)
           if (((*mv)[i][j][k][l] = (int*)calloc(3,sizeof(int))) == NULL)
-            no_mem_exit ("get_mem_mv: mv");
+            no_mem_exit ("get_mem_mincost: mv");
       }
     }
   }
 
-  return img->width/4*img->height/4*img->max_num_references*9*3*sizeof(int);
+  return img->width/4*img->height/4*img->max_num_references*8*3*sizeof(int);
 }
 /*!
  *******************************************************************************
@@ -151,27 +154,27 @@ int get_mem_bwmincost (int****** mv)
 
 
   if ((*mv = (int*****)calloc(img->width/4,sizeof(int****))) == NULL)
-    no_mem_exit ("get_mem_mv: mv");
+    no_mem_exit ("get_mem_bwmincost: mv");
   for (i=0; i<img->width/4; i++)
   {
     if (((*mv)[i] = (int****)calloc(img->height/4,sizeof(int***))) == NULL)
-      no_mem_exit ("get_mem_mv: mv");
+      no_mem_exit ("get_mem_bwmincost: mv");
     for (j=0; j<img->height/4; j++)
     {
-      if (((*mv)[i][j] = (int***)calloc(img->max_num_references,sizeof(int**))) == NULL)
-        no_mem_exit ("get_mem_mv: mv");
-      for (k=0; k<img->max_num_references; k++)
+      if (((*mv)[i][j] = (int***)calloc(1,sizeof(int**))) == NULL)
+        no_mem_exit ("get_mem_bwmincost: mv");
+      for (k=0; k<1; k++)
       {
-        if (((*mv)[i][j][k] = (int**)calloc(9,sizeof(int*))) == NULL)
-          no_mem_exit ("get_mem_mv: mv");
-        for (l=0; l<9; l++)
+        if (((*mv)[i][j][k] = (int**)calloc(8,sizeof(int*))) == NULL)
+          no_mem_exit ("get_mem_bwmincost: mv");
+        for (l=0; l<8; l++)
           if (((*mv)[i][j][k][l] = (int*)calloc(3,sizeof(int))) == NULL)
-            no_mem_exit ("get_mem_mv: mv");
+            no_mem_exit ("get_mem_bwmincost: mv");
       }
     }
   }
 
-  return img->width/4*img->height/4*img->max_num_references*9*3*sizeof(int);
+  return img->width/4*img->height/4*1*8*3*sizeof(int);
 }
 
 int get_mem_FME()
@@ -179,7 +182,7 @@ int get_mem_FME()
   int memory_size = 0;
   if (NULL==(flag_intra = calloc ((img->width>>4)+1,sizeof(int)))) no_mem_exit("get_mem_FME: flag_intra");
 
-  memory_size += get_mem2Dint(&McostState, 2*input->search_range+1, 2*input->search_range+1);
+  memory_size += get_mem2D(&McostState, 2*input->search_range+1, 2*input->search_range+1);
   memory_size += get_mem_mincost (&(all_mincost));
   memory_size += get_mem_bwmincost(&(all_bwmincost));
   memory_size += get_mem2D(&SearchState,7,7);
@@ -205,7 +208,7 @@ void free_mem_mincost (int***** mv)
     {
       for (k=0; k<img->max_num_references; k++)
       {
-        for (l=0; l<9; l++)
+        for (l=0; l<8; l++)
           free (mv[i][j][k][l]);
         free (mv[i][j][k]);
       }
@@ -232,9 +235,9 @@ void free_mem_bwmincost (int***** mv)
   {
     for (j=0; j<img->height/4; j++)
     {
-      for (k=0; k<img->max_num_references; k++)
+      for (k=0; k<1; k++)
       {
-        for (l=0; l<9; l++)
+        for (l=0; l<8; l++)
           free (mv[i][j][k][l]);
         free (mv[i][j][k]);
       }
@@ -247,10 +250,9 @@ void free_mem_bwmincost (int***** mv)
 
 void free_mem_FME()
 {
-  free_mem2Dint(McostState);
+  free_mem2D(McostState);
   free_mem_mincost (all_mincost);
   free_mem_bwmincost(all_bwmincost);
-
   free_mem2D(SearchState);
 
   free (flag_intra);
@@ -264,7 +266,7 @@ int PartCalMad(pel_t *ref_pic,pel_t** orig_pic,pel_t *(*get_ref_line)(int, pel_t
   pel_t *orig_line, *ref_line;
   for (y=0; y<blocksize_y; y++)
     {
-    ref_line  = get_ref_line (blocksize_x, ref_pic, cand_y+y, cand_x, /*img->*/height, img->width);//2004.3.3
+    ref_line  = get_ref_line (blocksize_x, ref_pic, cand_y+y, cand_x, height, img->width);//2004.3.3
     orig_line = orig_pic [y];
     
     for (x4=0; x4<blocksize_x4; x4++)
@@ -340,7 +342,7 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
   int   pos, cand_x, cand_y,  mcost;
   pel_t *(*get_ref_line)(int, pel_t*, int, int, int, int);
   int   list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
-  pel_t*  ref_pic       = listX[list+list_offset][ref]->imgY_11;//img->type==B_IMG? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
+
   int   lambda_factor = LAMBDA_FACTOR (lambda);                   // factor for determining lagragian motion cost
   int   mvshift       = 2;                  // motion vector shift for getting sub-pel units
   int   blocksize_y   = input->blc_size[blocktype][1];            // vertical block size
@@ -352,11 +354,20 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
   int   center_y      = pic_pix_y + *mv_y;                        // center position y (in pel units)
   int   best_x = 0, best_y = 0;
   int   search_step,iYMinNow, iXMinNow;
-  int   i,m, iSADLayer; 
+  int   i,m; 
   int   iAbort;
-  int   N_Bframe = input->successive_Bframe;
   float betaSec,betaThird;
   int height=((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))?img->height/2:img->height;
+   
+  //===== Use weighted Reference for ME ====
+  pel_t*  ref_pic;
+  int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
+                         (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));  
+
+  if (apply_weights && input->UseWeightedReferenceME)
+    ref_pic       = listX[list+list_offset][ref]->imgY_11_w;
+  else
+    ref_pic       = listX[list+list_offset][ref]->imgY_11;
    
 
   //===== set function for getting reference picture lines =====
@@ -371,7 +382,7 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
   }
   
   //////allocate memory for search state//////////////////////////
-  memset(McostState[0],0,(2*search_range+1)*(2*search_range+1)*4);
+  memset(McostState[0],0,(2*input->search_range+1)*(2*input->search_range+1));
   
    ///////Threshold defined for early termination///////////////////  
   if(ref>0) 
@@ -423,7 +434,7 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
   cand_y = center_y ;
   mcost = MV_COST (lambda_factor, mvshift, cand_x, cand_y, pred_x, pred_y);
   mcost = PartCalMad(ref_pic, orig_pic, get_ref_line,blocksize_y,blocksize_x,blocksize_x4,mcost,min_mcost,cand_x,cand_y);
-  McostState[search_range][search_range] = mcost;
+  McostState[search_range][search_range] = 1;
   if (mcost < min_mcost)
   {
     min_mcost = mcost;
@@ -467,18 +478,11 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
       goto sec_step;
   } 
 
-  //coordinate position prediction
-  if ((img->number > 1 + ref && ref!=-1) || (list == 1 && (Bframe_ctr%N_Bframe) > 1))  //for debug
-  {
-    cand_x = pic_pix_x + pred_MV_time[0]/4;
-    cand_y = pic_pix_y + pred_MV_time[1]/4;
-    SEARCH_ONE_PIXEL
-  }
 
   //prediciton using mV of last ref moiton vector
   if (input->PicInterlace == FIELD_CODING)
   {
-    if ((list==0 && ref > 0) || (img->type == B_SLICE && list == 0 && (ref==0 ||ref==2 ) )) 
+    if ((list==0 && ref > 0) || (img->type == B_SLICE && list == 0 && (ref==0 ||ref==1 ) )) 
       //Notes: for interlace case, ref==1 should be added
     {
       cand_x = pic_pix_x + pred_MV_ref[0]/4;
@@ -506,7 +510,7 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
     SEARCH_ONE_PIXEL
   } 
 
-  //early termination algrithm, refer to JVT-D016
+  //early termination alogrithm, refer to JVT-G016
     EARLY_TERMINATION
   
   if(blocktype>6)
@@ -539,7 +543,7 @@ first_step: //Unsymmetrical-cross search
     cand_y = iYMinNow - search_step;
     SEARCH_ONE_PIXEL
   }
-  //early termination algrithm, refer to JVT-D016
+  //early termination alogrithm, refer to JVT-G016
     EARLY_TERMINATION
   
   iXMinNow = best_x;
@@ -551,22 +555,16 @@ first_step: //Unsymmetrical-cross search
     cand_y = iYMinNow + spiral_search_y[pos];
     SEARCH_ONE_PIXEL
   }
-  //early termination algrithm, refer to JVT-D016
-    EARLY_TERMINATION
+
+  //early termination alogrithm, refer to JVT-G016
   
   for(i=1;i<=search_range/4; i++)
   {
-    iAbort = 0;   
     for (m = 0; m < 16; m++)
     {
       cand_x = iXMinNow + Big_Hexagon_x[m]*i;
       cand_y = iYMinNow + Big_Hexagon_y[m]*i; 
       SEARCH_ONE_PIXEL1(1)
-    }
-    if (iAbort)
-    { 
-      //early termination algrithm, refer to JVT-D016
-      EARLY_TERMINATION
     }
   }
 sec_step:  //Extended Hexagon-based Search
@@ -591,7 +589,6 @@ third_step: // the third step with a small search pattern
       iYMinNow = best_y;
       for(i=0;i<search_range;i++) 
       {
-        iSADLayer = 65536;
         iAbort = 1;   
         for (m = 0; m < 4; m++)
         {   
@@ -634,11 +631,22 @@ int AddUpSADQuarter(int pic_pix_x,int pic_pix_y,int blocksize_x,int blocksize_y,
   int  mcost = Mvmcost;
   int yy,kk,xx;
   int   curr_diff[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // for ABT SATD calculation
-//2004.3.3
-  pel_t **ref_pic = ref_picture->imgY_ups;
+
   int img_width  = ref_picture->size_x;
   int img_height = ref_picture->size_y;
 
+  //===== Use weighted Reference for ME ====
+  pel_t **ref_pic;      
+  int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
+                         (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));  
+  
+  if (apply_weights && input->UseWeightedReferenceME)
+  {
+    ref_pic = ref_picture->imgY_ups_w;
+  }
+  else
+    ref_pic = ref_picture->imgY_ups;
+  ///////////////////////////////////////////
   
   for (y0=0, abort_search=0; y0<blocksize_y && !abort_search; y0+=4)
   {
@@ -725,20 +733,18 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
   int   blocksize_y     = input->blc_size[blocktype][1];
   int   pic4_pix_x      = (pic_pix_x << 2);
   int   pic4_pix_y      = (pic_pix_y << 2);
-  int   max_pos_x4      = ((ref_picture->size_x/*img->width*/-blocksize_x+1)<<2);
-  int   max_pos_y4      = ((ref_picture->size_y/*img->height*/-blocksize_y+1)<<2);
+  int   max_pos_x4      = ((ref_picture->size_x-blocksize_x+1)<<2);
+  int   max_pos_y4      = ((ref_picture->size_y-blocksize_y+1)<<2);
   
   int   search_range_dynamic,iXMinNow,iYMinNow,i;
-  int   iSADLayer,m,currmv_x = 0,currmv_y = 0,iCurrSearchRange;
+  int   m,currmv_x = 0,currmv_y = 0;
   int   pred_frac_mv_x,pred_frac_mv_y,abort_search;
   int   mv_cost; 
   
   int   pred_frac_up_mv_x, pred_frac_up_mv_y;
   
-  *mv_x <<= 2;
-  *mv_y <<= 2;
-  if ((pic4_pix_x + *mv_x > 1) && (pic4_pix_x + *mv_x < max_pos_x4 - 2) &&
-    (pic4_pix_y + *mv_y > 1) && (pic4_pix_y + *mv_y < max_pos_y4 - 2)   )
+  if ((pic4_pix_x + *mv_x > 1 ) && (pic4_pix_x + *mv_x < max_pos_x4 - 2) &&
+      (pic4_pix_y + *mv_y > 1 ) && (pic4_pix_y + *mv_y < max_pos_y4 - 2)   )
   {
     PelY_14 = FastPelY_14;
   }
@@ -746,7 +752,7 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
   {
     PelY_14 = UMVPelY_14;
   }
-  
+
   search_range_dynamic = 3;
   pred_frac_mv_x = (pred_mv_x - *mv_x)%4;
   pred_frac_mv_y = (pred_mv_y - *mv_y)%4; 
@@ -762,7 +768,7 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
     cand_mv_x = *mv_x;    
     cand_mv_y = *mv_y;    
     mv_cost = MV_COST (lambda_factor, mv_shift, cand_mv_x, cand_mv_y, pred_mv_x, pred_mv_y);    
-    mcost = AddUpSADQuarter(pic_pix_x,pic_pix_y,blocksize_x,blocksize_y,cand_mv_x,cand_mv_y,ref_picture/*ref_pic*//*Wenfang Fu 2004.3.12*/,orig_pic,mv_cost,min_mcost,useABT);
+    mcost = AddUpSADQuarter(pic_pix_x,pic_pix_y,blocksize_x,blocksize_y,cand_mv_x,cand_mv_y,ref_picture,orig_pic,mv_cost,min_mcost,useABT);
     SearchState[search_range_dynamic][search_range_dynamic] = 1;
     if (mcost < min_mcost)
     {
@@ -783,7 +789,7 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
     cand_mv_x = *mv_x + pred_frac_mv_x;    
     cand_mv_y = *mv_y + pred_frac_mv_y;    
     mv_cost = MV_COST (lambda_factor, mv_shift, cand_mv_x, cand_mv_y, pred_mv_x, pred_mv_y);    
-    mcost = AddUpSADQuarter(pic_pix_x,pic_pix_y,blocksize_x,blocksize_y,cand_mv_x,cand_mv_y,ref_picture/*ref_pic*//*Wenfang Fu 2004.3.12*/,orig_pic,mv_cost,min_mcost,useABT);
+    mcost = AddUpSADQuarter(pic_pix_x,pic_pix_y,blocksize_x,blocksize_y,cand_mv_x,cand_mv_y,ref_picture,orig_pic,mv_cost,min_mcost,useABT);
     SearchState[cand_mv_y -*mv_y + search_range_dynamic][cand_mv_x - *mv_x + search_range_dynamic] = 1;
     if (mcost < min_mcost)
     {
@@ -796,11 +802,9 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
   
   iXMinNow = currmv_x;
   iYMinNow = currmv_y;
-  iCurrSearchRange = 2*search_range_dynamic+1; 
-  for(i=0;i<iCurrSearchRange;i++) 
+  for(i=0;i<search_range_dynamic;i++) 
   {
     abort_search=1;
-    iSADLayer = 65536;
     for (m = 0; m < 4; m++)
     {
       cand_mv_x = iXMinNow + Diamond_x[m];    
@@ -811,7 +815,7 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
         if(!SearchState[cand_mv_y -*mv_y+ search_range_dynamic][cand_mv_x -*mv_x+ search_range_dynamic])
         {
           mv_cost = MV_COST (lambda_factor, mv_shift, cand_mv_x, cand_mv_y, pred_mv_x, pred_mv_y);    
-          mcost = AddUpSADQuarter(pic_pix_x,pic_pix_y,blocksize_x,blocksize_y,cand_mv_x,cand_mv_y,ref_picture/*ref_pic*//*Wenfang Fu 2004.3.12*/,orig_pic,mv_cost,min_mcost,useABT);
+          mcost = AddUpSADQuarter(pic_pix_x,pic_pix_y,blocksize_x,blocksize_y,cand_mv_x,cand_mv_y,ref_picture,orig_pic,mv_cost,min_mcost,useABT);
           SearchState[cand_mv_y - *mv_y + search_range_dynamic][cand_mv_x - *mv_x + search_range_dynamic] = 1;
           if (mcost < min_mcost)
           {
@@ -851,7 +855,7 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
  */
 void   decide_intrabk_SAD()
 {
-  if (img->type != 0)
+  if (img->type != I_SLICE)
   {
     if (img->pix_x == 0 && img->pix_y == 0)
     {
@@ -878,7 +882,7 @@ void skip_intrabk_SAD(int best_mode, int ref_max)
   int i,j,k, ref;
   if (img->number > 0) 
     flag_intra[(img->pix_x)>>4] = (best_mode == 9 || best_mode == 10) ? 1:0;
-  if (img->type!=0  && (best_mode == 9 || best_mode == 10))
+  if (img->type != I_SLICE  && (best_mode == 9 || best_mode == 10))
   {
     for (i=0; i < 4; i++)
     {

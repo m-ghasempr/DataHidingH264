@@ -245,7 +245,7 @@ void write_picture(StorablePicture *p, int p_out, int real_structure)
     pending_output->size_y = p->size_y;
     pending_output->size_x_cr = p->size_x_cr;
     pending_output->size_y_cr = p->size_y_cr;
-
+    pending_output->chroma_format_idc = p->chroma_format_idc;
 
     pending_output->frame_mbs_only_flag = p->frame_mbs_only_flag;
     pending_output->frame_cropping_flag = p->frame_cropping_flag;
@@ -399,7 +399,7 @@ void write_out_picture(StorablePicture *p, int p_out)
     crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
 
     img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-    write(p_out, buf,(p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+    write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
 
     if (active_sps->frame_cropping_flag)
     {
@@ -416,7 +416,6 @@ void write_out_picture(StorablePicture *p, int p_out)
 
   img2buf (p->imgY, buf, p->size_x, p->size_y, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
   write(p_out, buf, (p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes);
-
 
   if (p->chroma_format_idc!=YUV400)
   {
@@ -534,8 +533,9 @@ void write_unpaired_field(FrameStore* fs, int p_out)
     // construct an empty bottom field
     p = fs->top_field;
     fs->bottom_field = alloc_storable_picture(BOTTOM_FIELD, p->size_x, 2*p->size_y, p->size_x_cr, 2*p->size_y_cr);
+    fs->bottom_field->chroma_format_idc = p->chroma_format_idc;
     clear_picture(fs->bottom_field);
-    dpb_combine_field(fs);
+    dpb_combine_field_yuv(fs);
     write_picture (fs->frame, p_out, TOP_FIELD);
   }
 
@@ -545,6 +545,7 @@ void write_unpaired_field(FrameStore* fs, int p_out)
     // construct an empty top field
     p = fs->bottom_field;
     fs->top_field = alloc_storable_picture(TOP_FIELD, p->size_x, 2*p->size_y, p->size_x_cr, 2*p->size_y_cr);
+    fs->top_field->chroma_format_idc = p->chroma_format_idc;
     clear_picture(fs->top_field);
     fs ->top_field->frame_cropping_flag = fs->bottom_field->frame_cropping_flag;
     if(fs ->top_field->frame_cropping_flag) 
@@ -554,7 +555,7 @@ void write_unpaired_field(FrameStore* fs, int p_out)
       fs ->top_field->frame_cropping_rect_left_offset = fs->bottom_field->frame_cropping_rect_left_offset;
       fs ->top_field->frame_cropping_rect_right_offset = fs->bottom_field->frame_cropping_rect_right_offset;
     }
-    dpb_combine_field(fs);
+    dpb_combine_field_yuv(fs);
     write_picture (fs->frame, p_out, BOTTOM_FIELD);
   }
 
@@ -654,7 +655,7 @@ void direct_output(StorablePicture *p, int p_out)
   if (out_buffer->is_used == 3)
   {
     // we have both fields, so output them
-    dpb_combine_field(out_buffer);
+    dpb_combine_field_yuv(out_buffer);
     write_picture (out_buffer->frame, p_out, FRAME);
     if (-1!=p_ref)
       find_snr(snr, out_buffer->frame, p_ref);

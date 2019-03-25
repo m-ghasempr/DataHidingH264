@@ -30,6 +30,7 @@
 #include <time.h>
 #include <sys/timeb.h>
 #include <string.h>
+#include <memory.h>
 #include <assert.h>
 
 #ifdef WIN32
@@ -50,8 +51,9 @@
 #include "ratectl.h"
 #include "mb_access.h"
 #include "output.h"
+#include "cabac.h"
 
-extern pic_parameter_set_rbsp_t PicParSet[MAXPPS];
+extern pic_parameter_set_rbsp_t *PicParSet[MAXPPS];
 
 void code_a_picture(Picture *pic);
 void frame_picture (Picture *frame, int method);
@@ -119,11 +121,11 @@ const int ONE_FOURTH_TAP[3][2] =
 
 void MbAffPostProc()
 {
-  imgpel temp[16][32];
+  imgpel temp[32][16];
 
   imgpel ** imgY  = enc_picture->imgY;
   imgpel ***imgUV = enc_picture->imgUV;
-  int i, x, y, x0, y0, uv;
+  int i, y, x0, y0, uv;
 
   if (img->yuv_format != YUV400)
   {
@@ -133,15 +135,13 @@ void MbAffPostProc()
       {
         get_mb_pos(i, &x0, &y0);
         for (y=0; y<(2*MB_BLOCK_SIZE);y++)
-          for (x=0; x<MB_BLOCK_SIZE; x++)
-            temp[x][y] = imgY[y0+y][x0+x];
+          memcpy(&temp[y],&imgY[y0+y][x0], MB_BLOCK_SIZE * sizeof(imgpel));
 
         for (y=0; y<MB_BLOCK_SIZE;y++)
-          for (x=0; x<MB_BLOCK_SIZE; x++)
-          {
-            imgY[y0+(2*y)][x0+x]   = temp[x][y];
-            imgY[y0+(2*y+1)][x0+x] = temp[x][y+MB_BLOCK_SIZE];
-          }
+        {
+          memcpy(&imgY[y0+(2*y)][x0],temp[y], MB_BLOCK_SIZE * sizeof(imgpel));
+          memcpy(&imgY[y0+(2*y + 1)][x0],temp[y+ MB_BLOCK_SIZE], MB_BLOCK_SIZE * sizeof(imgpel));
+        }
 
         x0 = x0 / (16/img->mb_cr_size_x);
         y0 = y0 / (16/img->mb_cr_size_y);
@@ -149,15 +149,14 @@ void MbAffPostProc()
         for (uv=0; uv<2; uv++)
         {
           for (y=0; y<(2*img->mb_cr_size_y);y++)    
-            for (x=0; x<img->mb_cr_size_x; x++)
-              temp[x][y] = imgUV[uv][y0+y][x0+x];
+            memcpy(&temp[y],&imgUV[uv][y0+y][x0], img->mb_cr_size_x * sizeof(imgpel));
           
           for (y=0; y<img->mb_cr_size_y;y++)
-            for (x=0; x<img->mb_cr_size_x; x++)
-            {
-              imgUV[uv][y0+(2*y)][x0+x]   = temp[x][y];
-              imgUV[uv][y0+(2*y+1)][x0+x] = temp[x][y+img->mb_cr_size_y];
-            }
+          {
+            memcpy(&imgUV[uv][y0+(2*y)][x0],temp[y], img->mb_cr_size_x * sizeof(imgpel));
+            memcpy(&imgUV[uv][y0+(2*y + 1)][x0],temp[y+ img->mb_cr_size_y], img->mb_cr_size_x * sizeof(imgpel));
+            
+          }
         }
       }
     }
@@ -170,15 +169,13 @@ void MbAffPostProc()
       {
         get_mb_pos(i, &x0, &y0);
         for (y=0; y<(2*MB_BLOCK_SIZE);y++)
-          for (x=0; x<MB_BLOCK_SIZE; x++)
-            temp[x][y] = imgY[y0+y][x0+x];
+          memcpy(&temp[y],&imgY[y0+y][x0], MB_BLOCK_SIZE * sizeof(imgpel));
 
         for (y=0; y<MB_BLOCK_SIZE;y++)
-          for (x=0; x<MB_BLOCK_SIZE; x++)
-          {
-            imgY[y0+(2*y)][x0+x]   = temp[x][y];
-            imgY[y0+(2*y+1)][x0+x] = temp[x][y+MB_BLOCK_SIZE];
-          }
+        {
+          memcpy(&imgY[y0+(2*y)][x0],temp[y], MB_BLOCK_SIZE * sizeof(imgpel));
+          memcpy(&imgY[y0+(2*y + 1)][x0],temp[y+ MB_BLOCK_SIZE], MB_BLOCK_SIZE * sizeof(imgpel));
+        }
       }
     }
   }
@@ -197,7 +194,7 @@ void MbAffPostProc()
  */
 void code_a_picture(Picture *pic)
 {
-  int NumberOfCodedMBs = 0;
+  unsigned int NumberOfCodedMBs = 0;
   int SliceGroup = 0;
   int j;
 
@@ -219,19 +216,22 @@ void code_a_picture(Picture *pic)
   CalculateQuantParam();
   CalculateOffsetParam();
 
-  if(input->AllowTransform8x8)
+  if(input->Transform8x8Mode)
   {
     CalculateQuant8Param();
     CalculateOffset8Param();
   }
 
-  while (NumberOfCodedMBs < img->total_number_mb)       // loop over slices
+  reset_pic_bin_count();
+  img->vcl_byte_count = 0;
+
+  while (NumberOfCodedMBs < img->PicSizeInMbs)       // loop over slices
   {
     // Encode one SLice Group
     while (!FmoSliceGroupCompletelyCoded (SliceGroup))
     {
       // Encode the current slice
-      NumberOfCodedMBs += encode_one_slice (SliceGroup, pic);
+      NumberOfCodedMBs += encode_one_slice (SliceGroup, pic, NumberOfCodedMBs);
       FmoSetLastMacroblockInSlice (img->current_mb_nr);
       // Proceed to next slice
       img->current_slice_nr++;
@@ -242,7 +242,8 @@ void code_a_picture(Picture *pic)
   }
   FmoEndPicture ();
 
-  if (input->rdopt == 2 && (img->type != B_SLICE))
+  // Modified for Fast Mode Decision. Inchoon Choi, SungKyunKwan Univ.
+  if (input->rdopt == 3 && (img->type != B_SLICE))
     for (j = 0; j < input->NoOfDecoders; j++)
       DeblockFrame (img, decs->decY_best[j], NULL);
 
@@ -341,7 +342,7 @@ int encode_one_frame ()
   img->LFDisableIdc    = input->LFDisableIdc;
   img->LFAlphaC0Offset = input->LFAlphaC0Offset;
   img->LFBetaOffset    = input->LFBetaOffset;
-
+  img->AdaptiveRounding = input->AdaptiveRounding;
   // Following code should consider optimal coding mode. Currently also does not support
   // multiple slices per frame.
   if (img->type == B_SLICE)
@@ -394,9 +395,9 @@ int encode_one_frame ()
       img->TopFieldFlag=0;
 
     if (input->GenerateMultiplePPS)
-      active_pps = &PicParSet[0];
+      active_pps = PicParSet[0];
 
-    frame_picture (frame_pic, 0);
+    frame_picture (frame_pic_1, 0);
    
     if ((input->RDPictureIntra || img->type!=I_SLICE) && input->RDPictureDecision)
     {
@@ -420,9 +421,9 @@ int encode_one_frame ()
       //! Note: the distortion for a field coded picture is stored in the top field
       //! the distortion values in the bottom field are dummies
       dis_fld = top_pic->distortion_y + top_pic->distortion_u + top_pic->distortion_v;
-      dis_frm = frame_pic->distortion_y + frame_pic->distortion_u + frame_pic->distortion_v;
+      dis_frm = frame_pic_1->distortion_y + frame_pic_1->distortion_u + frame_pic_1->distortion_v;
       
-      img->fld_flag = picture_structure_decision (frame_pic, top_pic, bottom_pic);
+      img->fld_flag = picture_structure_decision (frame_pic_1, top_pic, bottom_pic);
       update_field_frame_contexts (img->fld_flag);
 
       //Rate control
@@ -461,19 +462,19 @@ int encode_one_frame ()
     frame_mode_buffer (bits_frm, dis_frm_y, dis_frm_u, dis_frm_v);
     
     if (input->RDPictureDecision && img->rd_pass == 2)
-      writeout_picture (frame_pic3);
+      writeout_picture (frame_pic_3);
     else if (input->RDPictureDecision && img->rd_pass == 1)
-      writeout_picture (frame_pic2);
+      writeout_picture (frame_pic_2);
     else
-      writeout_picture (frame_pic);
+      writeout_picture (frame_pic_1);
   }
 
-  if (frame_pic3)
-    free_slice_list(frame_pic3);  
-  if (frame_pic2)
-    free_slice_list(frame_pic2);  
-  if (frame_pic)
-    free_slice_list(frame_pic);
+  if (frame_pic_3)
+    free_slice_list(frame_pic_3);  
+  if (frame_pic_2)
+    free_slice_list(frame_pic_2);  
+  if (frame_pic_1)
+    free_slice_list(frame_pic_1);
   if (top_pic)
     free_slice_list(top_pic);
   if (bottom_pic)
@@ -499,7 +500,7 @@ int encode_one_frame ()
     
   if (input->InterlaceCodingOption == FRAME_CODING)
   {
-    if (input->rdopt == 2 && img->type != B_SLICE)
+    if (input->rdopt == 3 && img->type != B_SLICE)
       UpdateDecoders ();      // simulate packet losses and move decoded image to reference buffers
     
     if (input->RestrictRef)
@@ -587,7 +588,6 @@ int encode_one_frame ()
 
   if (IMG_NUMBER == 0)
     ReportFirstframe(tmp_time,me_time);
-    //ReportFirstframe(tmp_time);
   else
   {
     //Rate control
@@ -618,13 +618,14 @@ int encode_one_frame ()
         ReportRB(tmp_time,me_time);
       else
         ReportB(tmp_time,me_time);
-
       break;
     default:      // P
       stats->bit_ctr_P += stats->bit_ctr - stats->bit_ctr_n;
       ReportP(tmp_time,me_time);
     }
   }
+  // Flush output statistics
+  fflush(stdout);
 
   stats->bit_ctr_n = stats->bit_ctr;
 
@@ -632,11 +633,11 @@ int encode_one_frame ()
   if(input->RCEnable) 
   {
     rc_update_pict(bits);
-      /*update the parameters of quadratic R-D model*/
+     
+    // update the parameters of quadratic R-D model
     if((img->type==P_SLICE)&&(active_sps->frame_mbs_only_flag))
       updateRCModel();
-    else if((img->type==P_SLICE)&&(!active_sps->frame_mbs_only_flag)\
-      &&(img->IFLAG==0))
+    else if((img->type==P_SLICE) && (!active_sps->frame_mbs_only_flag) && (img->IFLAG==0))
       updateRCModel();
   }
 
@@ -816,7 +817,6 @@ void field_picture (Picture *top, Picture *bottom)
   img->PicSizeInMbs = img->FrameSizeInMbs/2;
   // Top field
   
-//  img->bottom_field_flag = 0;
   enc_top_picture  = alloc_storable_picture (img->structure, img->width, img->height, img->width_cr, img->height_cr);
   enc_top_picture->poc=img->toppoc;
   enc_top_picture->frame_poc = img->toppoc;
@@ -837,7 +837,6 @@ void field_picture (Picture *top, Picture *bottom)
 
 
   img->fld_flag = 1;
-//  img->bottom_field_flag = 0;
  
   //Rate control
   if(input->RCEnable)
@@ -864,7 +863,6 @@ void field_picture (Picture *top, Picture *bottom)
   TopFieldBits=top->bits_per_picture;
 
   //  Bottom field
-//  img->bottom_field_flag = 0;
   enc_bottom_picture  = alloc_storable_picture (img->structure, img->width, img->height, img->width_cr, img->height_cr);
   enc_bottom_picture->poc=img->bottompoc;
   enc_bottom_picture->frame_poc = img->bottompoc;
@@ -888,12 +886,11 @@ void field_picture (Picture *top, Picture *bottom)
     img->type = P_SLICE;
 
   img->fld_flag = 1;
-//  img->bottom_field_flag = 1;
 
   //Rate control
-  if(input->RCEnable)  setbitscount(TopFieldBits);
   if(input->RCEnable)
   {
+    setbitscount(TopFieldBits);
     rc_init_pict(0,0,0); 
     img->qp  = updateQuantizationParameter(0); 
   }
@@ -905,7 +902,7 @@ void field_picture (Picture *top, Picture *bottom)
   bottom->bits_per_picture = 8 * ((((img->currentSlice)->partArr[0]).bitstream)->byte_pos);
 
   // the distortion for a field coded frame (consisting of top and bottom field)
-  // lives in the top->distortion varaibles, thye bottom-> are dummies
+  // lives in the top->distortion variables, the bottom-> are dummies
   distortion_fld (&top->distortion_y, &top->distortion_u, &top->distortion_v);
 
 }
@@ -924,8 +921,6 @@ static void distortion_fld (float *dis_fld_y, float *dis_fld_u, float *dis_fld_v
   img->buf_cycle /= 2;
   img->height = (input->img_height+img->auto_crop_bottom);
   img->height_cr = img->height_cr_frame;
-  img->total_number_mb =
-    (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 
   combine_field ();
 
@@ -1005,8 +1000,6 @@ static void frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame
     img->number /= 2;         // reset the img->number to field
     img->height = (input->img_height+img->auto_crop_bottom);
     img->height_cr = img->height_cr_frame;
-    img->total_number_mb =
-      (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
     
     snr->snr_y = snr_frame_y;
     snr->snr_u = snr_frame_u;
@@ -1180,8 +1173,6 @@ static void init_frame ()
   //! Commented out by StW, needs fixing in SEI.h to keep the trace file clean
   //  PrepareAggregationSEIMessage ();
 
-  img->total_number_mb = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
-
   img->no_output_of_prior_pics_flag = 0;
   img->long_term_reference_flag = 0;
 
@@ -1346,7 +1337,6 @@ static void init_field ()
   input->successive_Bframe /= 2;
   img->buf_cycle *= 2;
   img->number = 2 * img->number + img->fld_type;
-  img->total_number_mb = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 }
 
 
@@ -1365,11 +1355,14 @@ static void GenerateFullPelRepresentation (pel_t ** Fourthpel,
                                            pel_t * Fullpel, int xsize,
                                            int ysize)
 {
-  int x, y;
+  int x, y, yy;
   
   for (y = 0; y < ysize; y++)
+  {
+    yy = y * 4;
     for (x = 0; x < xsize; x++)
-      PutPel_11 (Fullpel, y, x, FastPelY_14 (Fourthpel, y * 4, x * 4, ysize, xsize), xsize);
+      PutPel_11 (Fullpel, y, x, FastPelY_14 (Fourthpel, yy, x * 4, ysize, xsize), xsize);
+  }
 }
 
 
@@ -1397,7 +1390,7 @@ void UnifiedOneForthPix (StorablePicture *s)
   
   int img_width =s->size_x;
   int img_height=s->size_y;
-  
+
   // don't upsample twice
   if (s->imgY_ups || s->imgY_11)
     return;
@@ -1420,9 +1413,9 @@ void UnifiedOneForthPix (StorablePicture *s)
   
   for (j = -IMG_PAD_SIZE; j < s->size_y + IMG_PAD_SIZE; j++)
   {
+    jj = max (0, min (s->size_y - 1, j));
     for (i = -IMG_PAD_SIZE; i < s->size_x + IMG_PAD_SIZE; i++)
     {
-      jj = max (0, min (s->size_y - 1, j));
       is =
         (ONE_FOURTH_TAP[0][0] *
         (imgY[jj][max (0, min (s->size_x - 1, i))] +
@@ -1517,7 +1510,6 @@ void UnifiedOneForthPix (StorablePicture *s)
     */
     // Generate 1/1th pel representation (used for integer pel MV search)
     GenerateFullPelRepresentation (out4Y, ref11, s->size_x, s->size_y);
-    
 }
 
 
@@ -1782,22 +1774,21 @@ void copy_rdopt_data (int bot_block)
 {
   int mb_nr = img->current_mb_nr;
   Macroblock *currMB = &img->mb_data[mb_nr];
-  int i, j, k, l;
+  int i, j, k;
 
   int bframe = (img->type == B_SLICE);
   int mode;
   int b8mode, b8pdir;
+  int block_y;
 
   int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
 
-  mode             = rdopt->mode;
-  currMB->mb_type  = rdopt->mb_type;   // copy mb_type 
-  currMB->cbp      = rdopt->cbp;   // copy cbp
-  currMB->cbp_blk  = rdopt->cbp_blk;   // copy cbp_blk
-#if BI_PREDICTION
+  mode                = rdopt->mode;
+  currMB->mb_type     = rdopt->mb_type;   // copy mb_type 
+  currMB->cbp         = rdopt->cbp;   // copy cbp
+  currMB->cbp_blk     = rdopt->cbp_blk;   // copy cbp_blk
   currMB->bi_pred_me  = rdopt->bi_pred_me;   // copy biprediction
-#endif
-  img->i16offset   = rdopt->i16offset;
+  img->i16offset      = rdopt->i16offset;
 
   currMB->prev_qp=rdopt->prev_qp;
   currMB->prev_delta_qp=rdopt->prev_delta_qp;
@@ -1806,91 +1797,80 @@ void copy_rdopt_data (int bot_block)
   currMB->c_ipred_mode = rdopt->c_ipred_mode;
 
   for (i = 0; i < 4+img->num_blk8x8_uv; i++)
+  {
     for (j = 0; j < 4; j++)
       for (k = 0; k < 2; k++)
-        for (l = 0; l < 65; l++)
-          img->cofAC[i][j][k][l] = rdopt->cofAC[i][j][k][l];
-
+        memcpy(img->cofAC[i][j][k],rdopt->cofAC[i][j][k], 65 * sizeof(int));
+  }
+  
   for (i = 0; i < 3; i++)
-    for (k = 0; k < 2; k++)
-      for (l = 0; l < 18; l++)
-        img->cofDC[i][k][l] = rdopt->cofDC[i][k][l];
-
-  for (j = 0; j < 4; j++)
-    for (i = 0; i < 4; i++)
-    {
-      enc_picture->ref_idx[LIST_0][img->block_x + i][img->block_y + j] = rdopt->refar[LIST_0][j][i];
-      enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_0 + list_offset][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j]];
-      if (bframe)
-      {
-        enc_picture->ref_idx[LIST_1][img->block_x + i][img->block_y + j] = rdopt->refar[LIST_1][j][i];
-        enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_1 + list_offset][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j]];
-      }
-    }
-    
-    //===== reconstruction values =====
-  for (j = 0; j < 16; j++)
-    for (i = 0; i < 16; i++)
-    {
-      enc_picture->imgY[img->pix_y + j][img->pix_x + i] = rdopt->rec_mbY[j][i];
-    }
-      
-     
-    if (img->yuv_format != YUV400)
-    {
-      for (j = 0; j < img->mb_cr_size_y; j++)
-        for (i = 0; i < img->mb_cr_size_x; i++)
-        {
-          enc_picture->imgUV[0][img->pix_c_y + j][img->pix_c_x + i] = rdopt->rec_mbU[j][i];
-          enc_picture->imgUV[1][img->pix_c_y + j][img->pix_c_x + i] = rdopt->rec_mbV[j][i];
-        }
-    }
-
-  for (i = 0; i < 4; i++)
   {
-    currMB->b8mode[i] = rdopt->b8mode[i];
-    currMB->b8pdir[i] = rdopt->b8pdir[i];
+    for (k = 0; k < 2; k++)
+      memcpy(img->cofDC[i][k],rdopt->cofDC[i][k], 18 * sizeof(int));
   }
 
+  for (j = 0; j < BLOCK_MULTIPLE; j++)
+  {
+    block_y = img->block_y + j;
+    memcpy(&enc_picture->ref_idx[LIST_0][block_y][img->block_x], rdopt->refar[LIST_0][j], BLOCK_MULTIPLE * sizeof(char));
+    for (i = 0; i < BLOCK_MULTIPLE; i++)
+      enc_picture->ref_pic_id [LIST_0][block_y][img->block_x + i] = 
+      enc_picture->ref_pic_num[LIST_0 + list_offset][(short)enc_picture->ref_idx[LIST_0][block_y][img->block_x+i]];
+  } 
+  if (bframe)
+  {
+    for (j = 0; j < BLOCK_MULTIPLE; j++)
+    {
+      block_y = img->block_y + j;
+      memcpy(&enc_picture->ref_idx[LIST_1][block_y][img->block_x], rdopt->refar[LIST_1][j], BLOCK_MULTIPLE * sizeof(char));
+      for (i = 0; i < BLOCK_MULTIPLE; i++)
+        enc_picture->ref_pic_id [LIST_1][block_y][img->block_x + i] = 
+        enc_picture->ref_pic_num[LIST_1 + list_offset][(short)enc_picture->ref_idx[LIST_1][block_y][img->block_x+i]];
+    }
+  }
+
+  //===== reconstruction values =====
+  for (j = 0; j < MB_BLOCK_SIZE; j++)
+    memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x],rdopt->rec_mbY[j], MB_BLOCK_SIZE * sizeof(imgpel));
+  
+  if (img->yuv_format != YUV400)
+  {
+    for (j = 0; j < img->mb_cr_size_y; j++)
+    {
+      memcpy(&enc_picture->imgUV[0][img->pix_c_y + j][img->pix_c_x],rdopt->rec_mbU[j], img->mb_cr_size_x * sizeof(imgpel));
+      memcpy(&enc_picture->imgUV[1][img->pix_c_y + j][img->pix_c_x],rdopt->rec_mbV[j], img->mb_cr_size_x * sizeof(imgpel));
+    }
+  }
+
+  memcpy(currMB->b8mode,rdopt->b8mode, 4 * sizeof(int));
+  memcpy(currMB->b8pdir,rdopt->b8pdir, 4 * sizeof(int));
+
   currMB->luma_transform_size_8x8_flag = rdopt->luma_transform_size_8x8_flag;
-//  currMB->NoMbPartLessThan8x8Flag  = rdopt->NoMbPartLessThan8x8Flag;  //DEL-VG-29072004
   
   //==== intra prediction modes ====
   if (mode == P8x8)
   {
-    for (k = 0, j = img->block_y; j < img->block_y + 4; j++)
-      for (i = img->block_x; i < img->block_x + 4; i++, k++)
-      {
-        img->ipredmode[i][j]        = rdopt->ipredmode[i][j];
-        currMB->intra_pred_modes[k] = rdopt->intra_pred_modes[k];
-      }
+    memcpy(currMB->intra_pred_modes,rdopt->intra_pred_modes, MB_BLOCK_PARTITIONS * sizeof(char));
+    for (j = img->block_y; j < img->block_y + BLOCK_MULTIPLE; j++)
+      memcpy(&img->ipredmode[j][img->block_x],&rdopt->ipredmode[j][img->block_x], BLOCK_MULTIPLE * sizeof(char));
   }
   else if (mode != I4MB && mode != I8MB)
   {
-    for (k = 0, j = img->block_y; j < img->block_y + 4; j++)
-      for (     i = img->block_x; i < img->block_x + 4; i++, k++)
-      {
-        img->ipredmode[i][j]        = DC_PRED;
-        currMB->intra_pred_modes[k] = DC_PRED;
-      }
+    memset(currMB->intra_pred_modes,DC_PRED, MB_BLOCK_PARTITIONS * sizeof(char));
+    for (j = img->block_y; j < img->block_y + BLOCK_MULTIPLE; j++)
+      memset(&img->ipredmode[j][img->block_x],DC_PRED, BLOCK_MULTIPLE * sizeof(char));
   }
   else if (mode == I4MB || mode == I8MB)
   {
-    for (k = 0, j = img->block_y; j < img->block_y + 4; j++)
-      for (     i = img->block_x; i < img->block_x + 4; i++, k++)
-      {
-        img->ipredmode[i][j]        = rdopt->ipredmode[i][j];
-        currMB->intra_pred_modes[k] = rdopt->intra_pred_modes[k];
-        
-      }
-      
+    memcpy(currMB->intra_pred_modes,rdopt->intra_pred_modes, MB_BLOCK_PARTITIONS * sizeof(char));
+    for (j = img->block_y; j < img->block_y + BLOCK_MULTIPLE; j++)
+      memcpy(&img->ipredmode[j][img->block_x],&rdopt->ipredmode[j][img->block_x], BLOCK_MULTIPLE * sizeof(char));
   }
 
   if (img->MbaffFrameFlag)
   {
     // motion vectors
     copy_motion_vectors_MB ();
-    
     
     if (!IS_INTRA(currMB))
     {
@@ -1902,25 +1882,25 @@ void copy_rdopt_data (int bot_block)
 
           if (b8pdir!=1)
           {
-            enc_picture->mv[LIST_0][i+img->block_x][j+img->block_y][0] = rdopt->all_mv[i][j][LIST_0][rdopt->refar[LIST_0][j][i]][b8mode][0];
-            enc_picture->mv[LIST_0][i+img->block_x][j+img->block_y][1] = rdopt->all_mv[i][j][LIST_0][rdopt->refar[LIST_0][j][i]][b8mode][1];
+            enc_picture->mv[LIST_0][j+img->block_y][i+img->block_x][0] = rdopt->all_mv[j][i][LIST_0][(short)rdopt->refar[LIST_0][j][i]][b8mode][0];
+            enc_picture->mv[LIST_0][j+img->block_y][i+img->block_x][1] = rdopt->all_mv[j][i][LIST_0][(short)rdopt->refar[LIST_0][j][i]][b8mode][1];
           }
           else
           {
-            enc_picture->mv[LIST_0][i+img->block_x][j+img->block_y][0] = 0;
-            enc_picture->mv[LIST_0][i+img->block_x][j+img->block_y][1] = 0;
+            enc_picture->mv[LIST_0][j+img->block_y][i+img->block_x][0] = 0;
+            enc_picture->mv[LIST_0][j+img->block_y][i+img->block_x][1] = 0;
           }
           if (bframe)
           {
             if (b8pdir!=0)
             {
-              enc_picture->mv[LIST_1][i+img->block_x][j+img->block_y][0] = rdopt->all_mv[i][j][LIST_1][rdopt->refar[LIST_1][j][i]][b8mode][0];
-              enc_picture->mv[LIST_1][i+img->block_x][j+img->block_y][1] = rdopt->all_mv[i][j][LIST_1][rdopt->refar[LIST_1][j][i]][b8mode][1];
+              enc_picture->mv[LIST_1][j+img->block_y][i+img->block_x][0] = rdopt->all_mv[j][i][LIST_1][(short)rdopt->refar[LIST_1][j][i]][b8mode][0];
+              enc_picture->mv[LIST_1][j+img->block_y][i+img->block_x][1] = rdopt->all_mv[j][i][LIST_1][(short)rdopt->refar[LIST_1][j][i]][b8mode][1];
             }
             else
             {
-              enc_picture->mv[LIST_1][i+img->block_x][j+img->block_y][0] = 0;
-              enc_picture->mv[LIST_1][i+img->block_x][j+img->block_y][1] = 0;
+              enc_picture->mv[LIST_1][j+img->block_y][i+img->block_x][0] = 0;
+              enc_picture->mv[LIST_1][j+img->block_y][i+img->block_x][1] = 0;
             }
           }
         }
@@ -1928,26 +1908,20 @@ void copy_rdopt_data (int bot_block)
     else
     {
       for (j = 0; j < 4; j++)
-        for (i = 0; i < 4; i++)
-        {
-          enc_picture->mv[LIST_0][i+img->block_x][j+img->block_y][0] = 0;
-          enc_picture->mv[LIST_0][i+img->block_x][j+img->block_y][1] = 0;
-          
-          if (bframe)
-          {
-            enc_picture->mv[LIST_1][i+img->block_x][j+img->block_y][0] = 0;
-            enc_picture->mv[LIST_1][i+img->block_x][j+img->block_y][1] = 0;
-          }
-        }
+        memset(enc_picture->mv[LIST_0][j+img->block_y][img->block_x], 0, 2 * BLOCK_MULTIPLE * sizeof(short));
+      if (bframe)
+      {
+        for (j = 0; j < 4; j++)
+          memset(enc_picture->mv[LIST_1][j+img->block_y][img->block_x], 0, 2 * BLOCK_MULTIPLE * sizeof(short));
+      }
     }
-  }
-  
+  }  
 }                             // end of copy_rdopt_data
   
 static void copy_motion_vectors_MB ()
 {
   int i,j,k,l;
-
+ 
   for (i = 0; i < 4; i++)
   {
     for (j = 0; j < 4; j++)
@@ -1956,34 +1930,17 @@ static void copy_motion_vectors_MB ()
       {
         for (l = 0; l < 9; l++)
         {
-          img->all_mv[i][j][LIST_0][k][l][0] = rdopt->all_mv[i][j][LIST_0][k][l][0];
-          img->all_mv[i][j][LIST_0][k][l][1] = rdopt->all_mv[i][j][LIST_0][k][l][1];
+          img->all_mv[j][i][LIST_0][k][l][0] = rdopt->all_mv[j][i][LIST_0][k][l][0];
+          img->all_mv[j][i][LIST_0][k][l][1] = rdopt->all_mv[j][i][LIST_0][k][l][1];
 
-          img->all_mv[i][j][LIST_1][k][l][0] = rdopt->all_mv[i][j][LIST_1][k][l][0];
-          img->all_mv[i][j][LIST_1][k][l][1] = rdopt->all_mv[i][j][LIST_1][k][l][1];
+          img->all_mv[j][i][LIST_1][k][l][0] = rdopt->all_mv[j][i][LIST_1][k][l][0];
+          img->all_mv[j][i][LIST_1][k][l][1] = rdopt->all_mv[j][i][LIST_1][k][l][1];
 
-#if BI_PREDICTION         
-          if (input->BiPredMotionEstimation && k==1 && img->type==B_SLICE)
-          {
-            img->bipred_mv1[i][j][LIST_0][k][l][0] = rdopt->bipred_mv1[i][j][LIST_0][k][l][0];
-            img->bipred_mv1[i][j][LIST_0][k][l][1] = rdopt->bipred_mv1[i][j][LIST_0][k][l][1];
-            
-            img->bipred_mv1[i][j][LIST_1][k][l][0] = rdopt->bipred_mv1[i][j][LIST_1][k][l][0];
-            img->bipred_mv1[i][j][LIST_1][k][l][1] = rdopt->bipred_mv1[i][j][LIST_1][k][l][1];            
-
-            img->bipred_mv2[i][j][LIST_0][k][l][0] = rdopt->bipred_mv2[i][j][LIST_0][k][l][0];
-            img->bipred_mv2[i][j][LIST_0][k][l][1] = rdopt->bipred_mv2[i][j][LIST_0][k][l][1];            
-            img->bipred_mv2[i][j][LIST_1][k][l][0] = rdopt->bipred_mv2[i][j][LIST_1][k][l][0];
-            img->bipred_mv2[i][j][LIST_1][k][l][1] = rdopt->bipred_mv2[i][j][LIST_1][k][l][1];            
-          }
-#endif
-
-          img->pred_mv[i][j][LIST_0][k][l][0] = rdopt->pred_mv[i][j][LIST_0][k][l][0];
-          img->pred_mv[i][j][LIST_0][k][l][1] = rdopt->pred_mv[i][j][LIST_0][k][l][1];
+          img->pred_mv[j][i][LIST_0][k][l][0] = rdopt->pred_mv[j][i][LIST_0][k][l][0];
+          img->pred_mv[j][i][LIST_0][k][l][1] = rdopt->pred_mv[j][i][LIST_0][k][l][1];
           
-          img->pred_mv[i][j][LIST_1][k][l][0] = rdopt->pred_mv[i][j][LIST_1][k][l][0];
-          img->pred_mv[i][j][LIST_1][k][l][1] = rdopt->pred_mv[i][j][LIST_1][k][l][1];
-          
+          img->pred_mv[j][i][LIST_1][k][l][0] = rdopt->pred_mv[j][i][LIST_1][k][l][0];
+          img->pred_mv[j][i][LIST_1][k][l][1] = rdopt->pred_mv[j][i][LIST_1][k][l][1];
         }
       }
     }
@@ -1995,18 +1952,15 @@ static void ReportNALNonVLCBits(int tmp_time, int me_time)
 {
   //! Need to add type (i.e. SPS, PPS, SEI etc).
   printf ("%04d(NVB)%8d \n", frame_no, stats->bit_ctr_parametersets_n);
-  fflush (stdout);
-
 }
 static void ReportFirstframe(int tmp_time,int me_time)
 {
   //Rate control
   int bits;
-  printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d\n",
+  printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d\n",
     frame_no, stats->bit_ctr - stats->bit_ctr_n,0,
     img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
     img->fld_flag ? "FLD" : "FRM", intras);
-  fflush (stdout);
 
   //Rate control
   if(input->RCEnable)
@@ -2029,55 +1983,48 @@ static void ReportIntra(int tmp_time, int me_time)
 {
 	
   if (img->currentPicture->idr_flag == 1)
-    printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d\n",
+    printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d\n",
     frame_no, stats->bit_ctr - stats->bit_ctr_n, 0,
     img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
     img->fld_flag ? "FLD" : "FRM", intras); 
   else
-    printf ("%04d(I)  %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d\n",
+    printf ("%04d(I)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d\n",
     frame_no, stats->bit_ctr - stats->bit_ctr_n, 0,
     img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
     img->fld_flag ? "FLD" : "FRM", intras);
-
-  fflush (stdout);
 }
 
 static void ReportSP(int tmp_time, int me_time)
 {
-  printf ("%04d(SP) %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d\n",
-    frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_pred_flag, img->qp, snr->snr_y,
-    snr->snr_u, snr->snr_v, tmp_time, me_time,
-          img->fld_flag ? "FLD" : "FRM", intras);
-  fflush (stdout);
+  printf ("%04d(SP) %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d\n",
+    frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_pred_flag, 
+    img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
+    img->fld_flag ? "FLD" : "FRM", intras);
 }
 
 static void ReportRB(int tmp_time, int me_time)
 {
-  printf ("%04d(RB) %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d %1d\n",
-    frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_bipred_idc, img->qp, snr->snr_y,
-    snr->snr_u, snr->snr_v, tmp_time, me_time,
+  printf ("%04d(RB) %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d\n",
+    frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_bipred_idc, 
+    img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
     img->fld_flag ? "FLD" : "FRM", intras,img->direct_spatial_mv_pred_flag);
-  fflush (stdout);
 }
 
 static void ReportB(int tmp_time, int me_time)
 {
-    printf ("%04d(B)  %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d %1d\n",
-    frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_bipred_idc,img->qp,
-    snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,me_time,
+    printf ("%04d(B)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d\n",
+    frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_bipred_idc,
+    img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,me_time,
     img->fld_flag ? "FLD" : "FRM",intras,img->direct_spatial_mv_pred_flag);
-  fflush (stdout);
 }
 
 
 static void ReportP(int tmp_time, int me_time)
 {            
-  printf ("%04d(P)  %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d\n",
-    frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_pred_flag, img->qp, snr->snr_y,
-    snr->snr_u, snr->snr_v, tmp_time, me_time,
-          img->fld_flag ? "FLD" : "FRM", intras);
-
-  fflush (stdout);
+    printf ("%04d(P)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d\n",
+    frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_pred_flag, 
+    img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
+    img->fld_flag ? "FLD" : "FRM", intras);
 }
 
 /*!
@@ -2179,15 +2126,14 @@ static int CalculateFrameNumber()
  ************************************************************************
  * \brief
  *    Convert file read buffer to source picture structure
- * \param imgX
- *    Pointer to image plane
- * \param buf
- *    Buffer for file output
- * \param size
- *    image size in pixel
  ************************************************************************
  */
-void buf2img (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes)
+void buf2img ( imgpel** imgX,           //!< Pointer to image plane
+               unsigned char* buf,      //!< Buffer for file output
+               int size_x,              //!< horizontal size of picture
+               int size_y,              //!< vertical size of picture
+               int symbol_size_in_bytes //!< number of bytes in file used for one pixel
+               )
 {
   int i,j;
 
@@ -2250,7 +2196,6 @@ void buf2img (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
            break;
         }
       }
-
     }
     else
     {
@@ -2509,23 +2454,25 @@ static void rdPictureCoding()
     {
       if (test_wp_P_slice(0) == 1)
       {
-        active_pps = &PicParSet[1];
+        active_pps = PicParSet[1];
       }
       else
       {
         skip_encode = input->RDPSliceWeightOnly;
-        active_pps = &PicParSet[0];
-        img->qp-=1;
+        active_pps = PicParSet[0];
+        if (!img->AdaptiveRounding)
+          img->qp-=1;
       }
     }
     else
     {
-      active_pps = &PicParSet[2];
+      active_pps = PicParSet[2];
     }
   }
   else        
   {
-    img->qp-=1;
+    if (!img->AdaptiveRounding)
+      img->qp-=1;
   }
   
   sec_pps = active_pps;
@@ -2540,8 +2487,8 @@ static void rdPictureCoding()
   }
   else
   {
-    frame_picture (frame_pic2,1);
-    img->rd_pass=picture_coding_decision(frame_pic, frame_pic2, rd_qp);
+    frame_picture (frame_pic_2,1);
+    img->rd_pass=picture_coding_decision(frame_pic_1, frame_pic_2, rd_qp);
   }
   //      update_rd_picture_contexts (img->rd_pass); 
   if (img->rd_pass==0)
@@ -2550,18 +2497,19 @@ static void rdPictureCoding()
     if (img->type!=I_SLICE && input->GenerateMultiplePPS)
     { 
       img->qp=rd_qp;
-      active_pps = &PicParSet[0];
+      active_pps = PicParSet[0];
     }
     else       
     {
       img->qp=rd_qp;
     }
     intras = previntras;
-    
+    frame_pic = frame_pic_1;
   }
   else
   {
     previntras = intras;
+    frame_pic = frame_pic_2;
   }
   // Final Encoding pass - note that we should 
   // make this more flexible in a later version.
@@ -2570,24 +2518,31 @@ static void rdPictureCoding()
   {
     skip_encode = 0;
     img->qp    = rd_qp;
-    if (img->type==P_SLICE)
+    
+    if (img->type == P_SLICE && input->GenerateMultiplePPS && (intras * 100 )/img->FrameSizeInMbs >=75)
+    {
+      img->type=I_SLICE;
+      active_pps = PicParSet[0];
+    }
+    else if (img->type==P_SLICE)
     {
       if (test_wp_P_slice(1) == 1)
       {
-        active_pps = &PicParSet[1];
+        active_pps = PicParSet[1];
       }
       else
       {
         skip_encode = input->RDPSliceWeightOnly;
-        active_pps = &PicParSet[0];
-        img->qp+=1;
+        active_pps = PicParSet[0];
+        if (!img->AdaptiveRounding)
+          img->qp+=1;
       }
     }
     else
     {
       if (test_wp_B_slice(0) == 1)
       {
-        active_pps = &PicParSet[1];
+        active_pps = PicParSet[1];
       }
       else
       {
@@ -2602,15 +2557,11 @@ static void rdPictureCoding()
   }
   else 
   {
-    active_pps = &PicParSet[0];
-    img->qp    = (rd_qp + 1);
+    active_pps = PicParSet[0];
+    if (!img->AdaptiveRounding)
+      img->qp    = (rd_qp + 1);
   }
   
-  if (img->type == P_SLICE && input->GenerateMultiplePPS && (intras * 100 )/img->FrameSizeInMbs >=75)
-  {
-    img->type=I_SLICE;
-    active_pps = &PicParSet[0];
-  }
   
   img->write_macroblock = 0;
   
@@ -2621,12 +2572,12 @@ static void rdPictureCoding()
   }
   else
   {
-    frame_picture (frame_pic3,2);
+    frame_picture (frame_pic_3,2);
     
     if (img->rd_pass==0)
-      img->rd_pass  = 2*picture_coding_decision(frame_pic , frame_pic3, rd_qp);
+      img->rd_pass  = 2*picture_coding_decision(frame_pic_1, frame_pic_3, rd_qp);
     else
-      img->rd_pass +=   picture_coding_decision(frame_pic2, frame_pic3, rd_qp);
+      img->rd_pass +=   picture_coding_decision(frame_pic_2, frame_pic_3, rd_qp);
   }
 
   //update_rd_picture_contexts (img->rd_pass); 
@@ -2634,7 +2585,7 @@ static void rdPictureCoding()
   {
     enc_picture = enc_frame_picture;
     img->type   = prevtype;
-    active_pps  = &PicParSet[0];
+    active_pps  = PicParSet[0];
     img->qp     = rd_qp;
     intras      = previntras;
   }

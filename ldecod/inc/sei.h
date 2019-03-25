@@ -11,7 +11,6 @@
 #ifndef SEI_H
 #define SEI_H
 
-//! definition of SEI payload type
 typedef enum {
   SEI_BUFFERING_PERIOD = 0,
   SEI_PIC_TIMING,
@@ -19,7 +18,7 @@ typedef enum {
   SEI_FILLER_PAYLOAD,
   SEI_USER_DATA_REGISTERED_ITU_T_T35,
   SEI_USER_DATA_UNREGISTERED,
-  SEI_RANDOM_ACCESS_POINT,
+  SEI_RECOVERY_POINT,
   SEI_DEC_REF_PIC_MARKING_REPETITION,
   SEI_SPARE_PIC,
   SEI_SCENE_INFO,
@@ -32,6 +31,9 @@ typedef enum {
   SEI_PROGRESSIVE_REFINEMENT_SEGMENT_START,
   SEI_PROGRESSIVE_REFINEMENT_SEGMENT_END,
   SEI_MOTION_CONSTRAINED_SLICE_GROUP_SET,
+  SEI_FILM_GRAIN_CHARACTERISTICS,
+  SEI_DEBLOCKING_FILTER_DISPLAY_PREFERENCE,
+  SEI_STEREO_VIDEO_INFO,
 
   SEI_MAX_ELEMENTS  //!< number of maximum syntax elements
 } SEI_type;
@@ -47,7 +49,7 @@ void interpret_scene_information( byte* payload, int size, ImageParameters *img 
 void interpret_user_data_registered_itu_t_t35_info( byte* payload, int size, ImageParameters *img );
 void interpret_user_data_unregistered_info( byte* payload, int size, ImageParameters *img );
 void interpret_pan_scan_rect_info( byte* payload, int size, ImageParameters *img );
-void interpret_random_access_info( byte* payload, int size, ImageParameters *img );
+void interpret_recovery_point_info( byte* payload, int size, ImageParameters *img );
 void interpret_filler_payload_info( byte* payload, int size, ImageParameters *img );
 void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, ImageParameters *img );
 void interpret_full_frame_freeze_info( byte* payload, int size, ImageParameters *img );

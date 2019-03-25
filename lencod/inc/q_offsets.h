@@ -24,6 +24,8 @@ extern int LevelOffset4x4Chroma_Inter[2][13][4][4];
 extern int LevelOffset8x8Luma_Intra[13][8][8];
 extern int LevelOffset8x8Luma_Inter[13][8][8];
 
+extern int AdaptRndWeight;
+
 void Init_QOffsetMatrix ();
 void CalculateOffsetParam();
 void CalculateOffset8Param();

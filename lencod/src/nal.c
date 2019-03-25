@@ -99,8 +99,11 @@ int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_n
       count = 0;
     j++;
   }
-  while (j < begin_bytepos+min_num_bytes) {
-    streamBuffer[j] = 0x00; // cabac stuffing word
+  img->vcl_byte_count += j;
+
+  for (i = 0; i< (min_num_bytes - img->vcl_byte_count); i+=3 ) 
+  {
+    streamBuffer[j]   = 0x00; // CABAC zero word
     streamBuffer[j+1] = 0x00;
     streamBuffer[j+2] = 0x03;
     j += 3;

@@ -39,7 +39,7 @@ extern seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
 // #define PRINT_SUBSEQUENCE_CHAR         // uncomment to print sub-sequence characteristics SEI info
 // #define PRINT_SCENE_INFORMATION        // uncomment to print scene information SEI info
 // #define PRINT_PAN_SCAN_RECT            // uncomment to print pan-scan rectangle SEI info
-// #define PRINT_RANDOM_ACCESS            // uncomment to print random access point SEI info
+// #define PRINT_RECOVERY_POINT            // uncomment to print random access point SEI info
 // #define PRINT_FILLER_PAYLOAD_INFO      // uncomment to print filler payload SEI info
 // #define PRINT_DEC_REF_PIC_MARKING      // uncomment to print decoded picture buffer management repetition SEI info
 // #define PRINT_RESERVED_INFO            // uncomment to print reserved SEI info
@@ -112,8 +112,8 @@ void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
     case  SEI_USER_DATA_UNREGISTERED:
       interpret_user_data_unregistered_info( msg+offset, payload_size, img );
       break;
-    case  SEI_RANDOM_ACCESS_POINT:
-      interpret_random_access_info( msg+offset, payload_size, img );
+    case  SEI_RECOVERY_POINT:
+      interpret_recovery_point_info( msg+offset, payload_size, img );
       break;
     case  SEI_DEC_REF_PIC_MARKING_REPETITION:
       interpret_dec_ref_pic_marking_repetition_info( msg+offset, payload_size, img );
@@ -865,7 +865,7 @@ void interpret_pan_scan_rect_info( byte* payload, int size, ImageParameters *img
  *    
  ************************************************************************
  */
-void interpret_random_access_info( byte* payload, int size, ImageParameters *img )
+void interpret_recovery_point_info( byte* payload, int size, ImageParameters *img )
 {
   int recovery_frame_cnt, exact_match_flag, broken_link_flag, changing_slice_group_idc;
 
@@ -885,16 +885,16 @@ void interpret_random_access_info( byte* payload, int size, ImageParameters *img
   broken_link_flag         = u_1 (    "SEI: broken_link_flag"        , buf);
   changing_slice_group_idc = u_v ( 2, "SEI: changing_slice_group_idc", buf);
 
-#ifdef PRINT_RANDOM_ACCESS
-  printf("Random access point SEI message\n");
+#ifdef PRINT_RECOVERY_POINT
+  printf("Recovery point SEI message\n");
   printf("recovery_frame_cnt       = %d\n", recovery_frame_cnt);
   printf("exact_match_flag         = %d\n", exact_match_flag);
   printf("broken_link_flag         = %d\n", broken_link_flag);
   printf("changing_slice_group_idc = %d\n", changing_slice_group_idc);
 #endif
   free (buf);
-#ifdef PRINT_RANDOM_ACCESS
-#undef PRINT_RANDOM_ACCESS
+#ifdef PRINT_RECOVERY_POINT
+#undef PRINT_RECOVERY_POINT
 #endif
 }
 

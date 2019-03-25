@@ -43,7 +43,7 @@ typedef struct storable_picture
   int         is_output;
   int         non_existing;
 
-  int         max_slice_id;
+  short       max_slice_id;
 
   int         size_x, size_y, size_x_cr, size_y_cr;
   int         chroma_vector_adjustment;
@@ -52,22 +52,22 @@ typedef struct storable_picture
   unsigned    PicWidthInMbs;
   unsigned    PicSizeInMbs;
 
-  imgpel **     imgY;          //!< Y picture component
-  imgpel ***    imgUV;         //!< U and V picture components
+  imgpel **     imgY;         //!< Y picture component
+  imgpel ***    imgUV;        //!< U and V picture components
 
-  byte *      mb_field;      //!< field macroblock indicator
+  byte  *      mb_field;      //!< field macroblock indicator
 
-  int  **     slice_id;      //!< reference picture   [mb_x][mb_y]
+  short **     slice_id;      //!< reference picture   [mb_x][mb_y]
 
-  int  ***    ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
+  char  ***    ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
 
-  int64 ***    ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
-                             //   (not  simply index) 
+  int64 ***    ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
+                              //   (not  simply index) 
 
-  int64 ***    ref_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
-                             //   (not  simply index) 
+  int64 ***    ref_id;        //!< reference picture identifier [list][subblock_y][subblock_x]
+                              //   (not  simply index) 
 
-  int  ****   mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
+  short ****   mv;            //!< motion vector       [list][subblock_y][subblock_x][component]
   
   byte **     moving_block;
   byte **     field_frame;         //!< indicates if co_located is field or frame.
@@ -100,36 +100,32 @@ typedef struct storable_picture
 //! definition a picture (field or frame)
 typedef struct colocated_params
 {
-//  byte *      mb_field;      //!< field macroblock indicator
   int         mb_adaptive_frame_field_flag;
   int         size_x, size_y;
 
   int64       ref_pic_num[6][MAX_LIST_SIZE];  
 
-  int  ***    ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-  int64 ***    ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
-  int  ****   mv;            //!< motion vector       [list][subblock_x][subblock_y][component]  
-  byte **     moving_block;
+  char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
+  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
+  short ****  mv;            //!< motion vector       [list][subblock_y][subblock_x][component]  
+  byte  **    moving_block;
 
   // Top field params
   int64       top_ref_pic_num[6][MAX_LIST_SIZE];  
-  int  ***    top_ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-  int64 ***    top_ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
-  int  ****   top_mv;            //!< motion vector       [list][subblock_x][subblock_y][component]  
+  char  ***   top_ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
+  int64 ***   top_ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
+  short ****  top_mv;            //!< motion vector       [list][subblock_y][subblock_x][component]  
   byte **     top_moving_block;
 
   // Bottom field params
   int64       bottom_ref_pic_num[6][MAX_LIST_SIZE];  
-  int  ***    bottom_ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-  int64 ***    bottom_ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
-  int  ****   bottom_mv;            //!< motion vector       [list][subblock_x][subblock_y][component] 
+  char  ***   bottom_ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
+  int64 ***   bottom_ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
+  short ****  bottom_mv;            //!< motion vector       [list][subblock_y][subblock_x][component] 
   byte **     bottom_moving_block;
   
-  int         is_long_term;
+  byte        is_long_term;
   byte **     field_frame;         //!< indicates if co_located is field or frame.
-  //struct colocated_params *top_field;     // for mb aff, if frame for referencing the top field
-  //struct colocated_params *bottom_field;  // for mb aff, if frame for referencing the bottom field
-  //struct colocated_params *frame;         // for mb aff, if field for referencing the combined frame
 
 } ColocatedParams;
 
@@ -191,6 +187,7 @@ void             flush_dpb();
 
 void             dpb_split_field(FrameStore *fs);
 void             dpb_combine_field(FrameStore *fs);
+void             dpb_combine_field_yuv(FrameStore *fs);
 
 void             init_lists(int currSliceType, PictureStructure currPicStructure);
 void             reorder_ref_pic_list(StorablePicture **list, int *list_size, 

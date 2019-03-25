@@ -51,10 +51,10 @@ int GetAnnexbNALU (NALU_t *nalu)
 {
   int info2, info3, pos = 0;
   int StartCodeFound, rewind;
-  char *Buf;
+  unsigned char *Buf;
   int LeadingZero8BitsCount=0, TrailingZero8Bits=0;
     
-  if ((Buf = (char*)calloc (nalu->max_size , sizeof(char))) == NULL) no_mem_exit("GetAnnexbNALU: Buf");
+  if ((Buf = (unsigned char*)calloc (nalu->max_size , sizeof(char))) == NULL) no_mem_exit("GetAnnexbNALU: Buf");
 
   while(!feof(bits) && (Buf[pos++]=fgetc(bits))==0);
   

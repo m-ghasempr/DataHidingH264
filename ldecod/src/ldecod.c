@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 9.3a (FRExt)
+ *     JM 9.4 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -68,7 +68,7 @@
 #include "erc_api.h"
 
 #define JM          "9 (FRExt)"
-#define VERSION     "9.3a"
+#define VERSION     "9.4"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -256,7 +256,7 @@ void Configure(int ac, char *av[])
   fprintf(stdout," B_decoder           : %8ld \n",input->B_decoder);
   fprintf(stdout," F_decoder           : %8ld \n",input->F_decoder);
   fprintf(stdout," LeakyBucketParamFile: %s \n",input->LeakyBucketParamFile); // Leaky Bucket Param file
-  calc_buffer(inp);
+  calc_buffer(input);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
 #endif
   fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
@@ -316,7 +316,7 @@ int main(int argc, char **argv)
   img->dec_ref_pic_marking_buffer = NULL;
 
   // B pictures
-  Bframe_ctr=0;
+  Bframe_ctr=snr->frame_ctr=0;
 
   // time for total decoding session
   tot_time = 0;

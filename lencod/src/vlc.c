@@ -55,18 +55,25 @@
  *
  *************************************************************************************
  */
-int ue_v (char *tracestring, int value, DataPartition *part)
+int ue_v (char *tracestring, int value, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
-  sym->type = SE_HEADER;
-  sym->mapping = ue_linfo;               // Mapping rule: unsigned integer
   sym->value1 = value;
   sym->value2 = 0;
+
+  assert (bitstream->streamBuffer != NULL);
+
+  ue_linfo(sym->value1,sym->value2,&(sym->len),&(sym->inf));
+  symbol2uvlc(sym);
+
+  writeUVLC2buffer (sym, bitstream);
+
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
+  trace2out (sym);
 #endif
-  assert (part->bitstream->streamBuffer != NULL);
-  return writeSyntaxElement_UVLC (sym, part);
+
+  return (sym->len);
 }
 
 
@@ -93,18 +100,25 @@ int ue_v (char *tracestring, int value, DataPartition *part)
  *
  *************************************************************************************
  */
-int se_v (char *tracestring, int value, DataPartition *part)
+int se_v (char *tracestring, int value, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
-  sym->type = SE_HEADER;
-  sym->mapping = se_linfo;               // Mapping rule: signed integer
   sym->value1 = value;
   sym->value2 = 0;
+
+  assert (bitstream->streamBuffer != NULL);
+  
+  se_linfo(sym->value1,sym->value2,&(sym->len),&(sym->inf));
+  symbol2uvlc(sym);
+
+  writeUVLC2buffer (sym, bitstream);
+
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
+  trace2out (sym);
 #endif
-  assert (part->bitstream->streamBuffer != NULL);
-  return writeSyntaxElement_UVLC (sym, part);
+
+  return (sym->len);
 }
 
 
@@ -132,20 +146,24 @@ int se_v (char *tracestring, int value, DataPartition *part)
  *
  *************************************************************************************
  */
-int u_1 (char *tracestring, int value, DataPartition *part)
+int u_1 (char *tracestring, int value, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
 
   sym->bitpattern = value;
   sym->len = 1;
-  sym->type = SE_HEADER;
   sym->value1 = value;
-  sym->value2 = 0;
+
+  assert (bitstream->streamBuffer != NULL);
+
+  writeUVLC2buffer(sym, bitstream);
+  
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
+  trace2out (sym);
 #endif
-  assert (part->bitstream->streamBuffer != NULL);
-  return writeSyntaxElement_fixed(sym, part);
+
+  return (sym->len);
 }
 
 
@@ -175,20 +193,24 @@ int u_1 (char *tracestring, int value, DataPartition *part)
  *************************************************************************************
  */
 
-int u_v (int n, char *tracestring, int value, DataPartition *part)
+int u_v (int n, char *tracestring, int value, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
 
   sym->bitpattern = value;
   sym->len = n;
-  sym->type = SE_HEADER;
   sym->value1 = value;
-  sym->value2 = 0;
+
+  assert (bitstream->streamBuffer != NULL);
+
+  writeUVLC2buffer(sym, bitstream);
+  
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
+  trace2out (sym);
 #endif
-  assert (part->bitstream->streamBuffer != NULL);
-  return writeSyntaxElement_fixed(sym, part);
+
+  return (sym->len);
 }
 
 
@@ -508,28 +530,6 @@ int writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
 
-  if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
-
-#if TRACE
-  if(se->type <= 1)
-    trace2out (se);
-#endif
-
-  return (se->len);
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *    passes the fixed codeword to the buffer
- ************************************************************************
- */
-int writeSyntaxElement_fixed(SyntaxElement *se, DataPartition *this_dataPart)
-{  
-  writeUVLC2buffer(se, this_dataPart->bitstream);
-  
   if(se->type != SE_HEADER)
     this_dataPart->bitstream->write_flag = 1;
 
@@ -1219,14 +1219,14 @@ void trace2out(SyntaxElement *sym)
     while(chars++ < 55)
       putc(' ',p_trace);
 
-  // Align bitpattern
+    // align bit pattern
     if(sym->len<15)
     {
       for(i=0 ; i<15-sym->len ; i++)
         fputc(' ', p_trace);
     }
     
-    // Print bitpattern
+    // print bit pattern
     bitcounter += sym->len;
     for(i=1 ; i<=sym->len ; i++)
     {

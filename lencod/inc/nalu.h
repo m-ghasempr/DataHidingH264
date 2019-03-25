@@ -19,7 +19,7 @@
 
 #include "nalucommon.h"
 
-int RBSPtoNALU (char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_type, int nal_reference_idc, 
+int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_type, int nal_reference_idc, 
                 int min_num_bytes, int UseAnnexbLongStartcode);
 
 int (*WriteNALU)(NALU_t *n);     //! Hides the write function in Annex B or RTP

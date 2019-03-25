@@ -603,7 +603,7 @@ void activate_pps(pic_parameter_set_rbsp_t *pps)
     active_pps = pps;
 
     // Fidelity Range Extensions stuff (part 2)
-    img->AllowTransform8x8 = pps->transform_8x8_mode_flag;
+    img->Transform8x8Mode = pps->transform_8x8_mode_flag;
 
   }
 }  

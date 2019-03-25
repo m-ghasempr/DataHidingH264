@@ -35,7 +35,7 @@ Boolean seiHasRandom_access_point=FALSE;
 Boolean seiHasRef_pic_buffer_management_repetition=FALSE;
 Boolean seiHasSpare_picture=FALSE;
 
-Boolean seiHasSceneInformation=FALSE; // JVT-D099
+Boolean seiHasSceneInformation=FALSE;
 
 Boolean seiHasSubseq_information=FALSE;
 Boolean seiHasSubseq_layer_characteristics=FALSE;
@@ -114,15 +114,15 @@ Boolean HaveAggregationSEI()
     return TRUE;
   if (seiHasSubseqChar)
     return TRUE;
-  if (seiHasSceneInformation) // JVT-D099
+  if (seiHasSceneInformation)
     return TRUE;
-  if (seiHasPanScanRectInfo) // Shankar Regunathan Oct 2002
+  if (seiHasPanScanRectInfo)
     return TRUE;
   if (seiHasUser_data_unregistered_info)
     return TRUE;
   if (seiHasUser_data_registered_itu_t_t35_info)
     return TRUE;
-  if (seiHasRandomAccess_info)
+  if (seiHasRecoveryPoint_info)
     return TRUE;
   return FALSE;
 //  return input->SparePictureOption && ( seiHasSpare_picture || seiHasSubseq_information || 
@@ -150,7 +150,7 @@ Boolean HaveAggregationSEI()
 void write_sei_message(int id, byte* payload, int payload_size, int payload_type)
 {
   int offset, type, size;
-  assert(payload_type > SEI_ZERO && payload_type < SEI_MAX_ELEMENTS);
+  assert(payload_type >= 0 && payload_type < SEI_MAX_ELEMENTS);
 
   type = payload_type;
   size = payload_size;
@@ -1553,15 +1553,15 @@ void CloseUser_data_registered_itu_t_t35()
  *      Shankar Regunathan                 <tian@cs.tut.fi>
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
-Boolean seiHasRandomAccess_info;
-randomaccess_information_struct seiRandomAccess;
+Boolean seiHasRecoveryPoint_info;
+recovery_point_information_struct seiRecoveryPoint;
 void InitRandomAccess()
 {
 
-  seiRandomAccess.data = malloc( sizeof(Bitstream) );
-  if( seiRandomAccess.data == NULL ) no_mem_exit("InitRandomAccess: seiRandomAccess.data");
-  seiRandomAccess.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
-  if( seiRandomAccess.data->streamBuffer == NULL ) no_mem_exit("InitRandomAccess: seiRandomAccess.data->streamBuffer");
+  seiRecoveryPoint.data = malloc( sizeof(Bitstream) );
+  if( seiRecoveryPoint.data == NULL ) no_mem_exit("InitRandomAccess: seiRandomAccess.data");
+  seiRecoveryPoint.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  if( seiRecoveryPoint.data->streamBuffer == NULL ) no_mem_exit("InitRandomAccess: seiRandomAccess.data->streamBuffer");
   ClearRandomAccess();
 
 }
@@ -1569,17 +1569,17 @@ void InitRandomAccess()
 
 void ClearRandomAccess()
 {
-  memset( seiRandomAccess.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
-  seiRandomAccess.data->bits_to_go  = 8;
-  seiRandomAccess.data->byte_pos    = 0;
-  seiRandomAccess.data->byte_buf    = 0;
-  seiRandomAccess.payloadSize       = 0;
+  memset( seiRecoveryPoint.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+  seiRecoveryPoint.data->bits_to_go  = 8;
+  seiRecoveryPoint.data->byte_pos    = 0;
+  seiRecoveryPoint.data->byte_buf    = 0;
+  seiRecoveryPoint.payloadSize       = 0;
 
-  seiRandomAccess.recovery_point_flag = 0;
-  seiRandomAccess.broken_link_flag = 0;
-  seiRandomAccess.exact_match_flag = 0;
+  seiRecoveryPoint.recovery_frame_cnt = 0;
+  seiRecoveryPoint.broken_link_flag = 0;
+  seiRecoveryPoint.exact_match_flag = 0;
 
-  seiHasRandomAccess_info = FALSE;
+  seiHasRecoveryPoint_info = FALSE;
 }
 
 void UpdateRandomAccess()
@@ -1587,64 +1587,57 @@ void UpdateRandomAccess()
 
   if(img->type == I_SLICE)
   {
-    seiRandomAccess.recovery_point_flag = 0;
-    seiRandomAccess.exact_match_flag = 1;
-    seiRandomAccess.broken_link_flag = 0;
-    seiHasRandomAccess_info = TRUE;
+    seiRecoveryPoint.recovery_frame_cnt = 0;
+    seiRecoveryPoint.exact_match_flag = 1;
+    seiRecoveryPoint.broken_link_flag = 0;
+    seiHasRecoveryPoint_info = TRUE;
   }
   else
   {
-    seiHasRandomAccess_info = FALSE;
+    seiHasRecoveryPoint_info = FALSE;
   }
 }
 
 void FinalizeRandomAccess()
 {
-  SyntaxElement sym;
-  Bitstream *dest = seiRandomAccess.data;
+  Bitstream *bitstream = seiRecoveryPoint.data;
 
-  sym.type = SE_HEADER;
-  sym.mapping = ue_linfo;
+  ue_v(   "SEI: recovery_frame_cnt",       seiRecoveryPoint.recovery_frame_cnt,       bitstream);
+  u_1 (   "SEI: exact_match_flag",         seiRecoveryPoint.exact_match_flag,         bitstream);
+  u_1 (   "SEI: broken_link_flag",         seiRecoveryPoint.broken_link_flag,         bitstream);
+  u_v (2, "SEI: changing_slice_group_idc", seiRecoveryPoint.changing_slice_group_idc, bitstream);
 
-  sym.value1 = seiRandomAccess.recovery_point_flag;
-  writeSyntaxElement2Buf_UVLC(&sym, dest);
 
-  sym.bitpattern = seiRandomAccess.exact_match_flag;
-  sym.len = 1;
-  writeSyntaxElement2Buf_Fixed(&sym, dest);
+// #define PRINT_RECOVERY_POINT
+#ifdef PRINT_RECOVERY_POINT
+  printf(" recovery_frame_cnt %d \n",       seiRecoveryPoint.recovery_frame_cnt);
+  printf(" exact_match_flag %d \n",         seiRecoveryPoint.exact_match_flag);
+  printf(" broken_link_flag %d \n",         seiRecoveryPoint.broken_link_flag);
+  printf(" changing_slice_group_idc %d \n", seiRecoveryPoint.changing_slice_group_idc);
+  printf(" %d %d \n", bitstream->byte_pos, bitstream->bits_to_go);
 
-  sym.bitpattern = seiRandomAccess.broken_link_flag;
-  sym.len = 1;
-  writeSyntaxElement2Buf_Fixed(&sym, dest);
-
-// #define PRINT_RANDOM_ACCESS
-#ifdef PRINT_RANDOM_ACCESS
-  printf(" recovery_point_flag %d exact_match_flag %d broken_link_flag %d \n", seiRandomAccess.recovery_point_flag, seiRandomAccess.exact_match_flag, seiRandomAccess.broken_link_flag);
-  printf(" %d %d \n", dest->byte_pos, dest->bits_to_go);
-#endif
-#ifdef PRINT_RANDOM_ACCESS
-#undef PRINT_RANDOM_ACCESS
+#undef PRINT_RECOVERY_POINT
 #endif
   // make sure the payload is byte aligned, stuff bits are 10..0
-  if ( dest->bits_to_go != 8 )
+  if ( bitstream->bits_to_go != 8 )
   {
-    (dest->byte_buf) <<= 1;
-    dest->byte_buf |= 1;
-    dest->bits_to_go--;
-    if ( dest->bits_to_go != 0 ) (dest->byte_buf) <<= (dest->bits_to_go);
-    dest->bits_to_go = 8;
-    dest->streamBuffer[dest->byte_pos++]=dest->byte_buf;
-    dest->byte_buf = 0;
+    (bitstream->byte_buf) <<= 1;
+    bitstream->byte_buf |= 1;
+    bitstream->bits_to_go--;
+    if ( bitstream->bits_to_go != 0 ) (bitstream->byte_buf) <<= (bitstream->bits_to_go);
+    bitstream->bits_to_go = 8;
+    bitstream->streamBuffer[bitstream->byte_pos++]=bitstream->byte_buf;
+    bitstream->byte_buf = 0;
   }
-  seiRandomAccess.payloadSize = dest->byte_pos;
+  seiRecoveryPoint.payloadSize = bitstream->byte_pos;
 }
 
 void CloseRandomAccess()
 {
-  if (seiRandomAccess.data)
+  if (seiRecoveryPoint.data)
   {
-    free(seiRandomAccess.data->streamBuffer);
-    free(seiRandomAccess.data);
+    free(seiRecoveryPoint.data->streamBuffer);
+    free(seiRecoveryPoint.data);
   }
-  seiRandomAccess.data = NULL;
+  seiRecoveryPoint.data = NULL;
 }

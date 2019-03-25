@@ -526,6 +526,7 @@ int dct_luma_16x16(int new_intra_mode)
   int ac_coef = 0;
 
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  short is_field_mode = (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field));
 
   int   b8, b4;
   int*  DCLevel = img->cofDC[0][0];
@@ -631,7 +632,7 @@ int dct_luma_16x16(int new_intra_mode)
 
   for (coeff_ctr=0;coeff_ctr<16;coeff_ctr++)
   {
-    if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+    if (is_field_mode) 
     {  // Alternate scan for field coding
         i=FIELD_SCAN[coeff_ctr][0];
         j=FIELD_SCAN[coeff_ctr][1];
@@ -648,7 +649,6 @@ int dct_luma_16x16(int new_intra_mode)
       level= abs(M4[i][j]);
     else
         level= (abs(M4[i][j]) * LevelScale4x4Luma_Intra[qp_rem][0][0] + (LevelOffset4x4Luma_Intra[qp_per][0][0]<<1)) >> (q_bits+1);
-      //level= (abs(M4[i][j]) * LevelScale4x4Luma_Intra[qp_rem][0][0] + (qp_const<<1)) >> (q_bits+1);
 
     if (input->symbol_mode == UVLC && img->qp < 10) 
     {
@@ -731,7 +731,7 @@ int dct_luma_16x16(int new_intra_mode)
       for (coeff_ctr=1;coeff_ctr<16;coeff_ctr++) // set in AC coeff
       {
 
-        if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+        if (is_field_mode) 
         {  // Alternate scan for field coding
           i=FIELD_SCAN[coeff_ctr][0];
           j=FIELD_SCAN[coeff_ctr][1];
@@ -747,7 +747,19 @@ int dct_luma_16x16(int new_intra_mode)
           level= abs( M0[i][ii][j][jj]);
         else          
           level= ( abs( M0[i][ii][j][jj]) * LevelScale4x4Luma_Intra[qp_rem][i][j] + LevelOffset4x4Luma_Intra[qp_per][i][j]) >> q_bits;
-        //level= ( abs( M0[i][ii][j][jj]) * LevelScale4x4Luma_Intra[qp_rem][i][j] + qp_const) >> q_bits;
+
+        if (img->AdaptiveRounding)
+        {
+          if (lossless_qpprime || level == 0 )
+          {
+            img->fadjust4x4[2][jj*BLOCK_SIZE+j][ii*BLOCK_SIZE+i] = 0;
+          }
+          else
+          {
+            img->fadjust4x4[2][jj*BLOCK_SIZE+j][ii*BLOCK_SIZE+i] = AdaptRndWeight * (abs(M0[i][ii][j][jj]) * LevelScale4x4Luma_Intra[qp_rem][i][j] - (level << q_bits)) + (1<< (q_bits)); 
+            img->fadjust4x4[2][jj*BLOCK_SIZE+j][ii*BLOCK_SIZE+i] >>= (q_bits + 1); 
+          }            
+        }
 
         if (level != 0)
         {
@@ -877,6 +889,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   int sign(int a,int b);
 
   int i,j,i1,j1,ilev,m5[4],m6[4],coeff_ctr;
+  int ii;
   //int qp_const;
   int level,scan_pos,run;
   int nonzero;
@@ -888,20 +901,17 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   int   b4      = 2*(pos_y%2) + (pos_x%2);
   int*  ACLevel = img->cofAC[b8][b4][0];
   int*  ACRun   = img->cofAC[b8][b4][1];
+  short pix_x, pix_y;
 
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  short is_field_mode = (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field));
+
   Boolean lossless_qpprime = ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
 
   qp_per    = (currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6; 
   qp_rem    = (currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6; 
   q_bits    = Q_BITS+qp_per;
-/*
-  if (img->type == I_SLICE)
-    qp_const=(1<<q_bits)/3;    // intra
-  else
-    qp_const=(1<<q_bits)/6;    // inter
-*/
-//  printf("q_bits %d %d %d %d\n",q_bits,qp_per,qp_const,LevelOffset4x4Luma_Intra[qp_per][0][0]);
+
   //  Horizontal transform
   for (j=0; j < BLOCK_SIZE && !lossless_qpprime; j++)
   {
@@ -942,8 +952,9 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   for (coeff_ctr=0;coeff_ctr < 16;coeff_ctr++)
   {
 
-    if (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field )) 
-    {  // Alternate scan for field coding
+    if (is_field_mode) 
+    {  
+      // Alternate scan for field coding
         i=FIELD_SCAN[coeff_ctr][0];
         j=FIELD_SCAN[coeff_ctr][1];
     }
@@ -960,10 +971,26 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
       level = abs (img->m7[i][j]);
     else if(intra == 1)
       level = (abs (img->m7[i][j]) * LevelScale4x4Luma_Intra[qp_rem][i][j] + LevelOffset4x4Luma_Intra[qp_per][i][j]) >> q_bits;
-    //level = (abs (img->m7[i][j]) * LevelScale4x4Luma_Intra[qp_rem][i][j] + qp_const) >> q_bits;    
     else
       level = (abs (img->m7[i][j]) * LevelScale4x4Luma_Inter[qp_rem][i][j] + LevelOffset4x4Luma_Inter[qp_per][i][j]) >> q_bits;
-    //level = (abs (img->m7[i][j]) * LevelScale4x4Luma_Inter[qp_rem][i][j] + qp_const) >> q_bits;
+
+    if (img->AdaptiveRounding)
+    {
+      if (lossless_qpprime || level == 0 )
+      {
+        img->fadjust4x4[intra][block_y+j][block_x+i] = 0;
+      }
+      else if(intra == 1)
+      {
+        img->fadjust4x4[intra][block_y+j][block_x+i] = AdaptRndWeight * (abs(img->m7[i][j]) * LevelScale4x4Luma_Intra[qp_rem][i][j] - (level << q_bits)) + (1<< (q_bits)); 
+        img->fadjust4x4[intra][block_y+j][block_x+i] >>= (q_bits + 1);
+      }
+      else 
+      {
+        img->fadjust4x4[intra][block_y+j][block_x+i] = AdaptRndWeight * (abs(img->m7[i][j]) * LevelScale4x4Luma_Inter[qp_rem][i][j] - (level << q_bits)) + (1<< (q_bits)); 
+        img->fadjust4x4[intra][block_y+j][block_x+i] >>= (q_bits + 1);       
+      }
+    }
 
     if (level != 0)
     {
@@ -1036,14 +1063,15 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
     m6[2]=(m5[1]>>1)-m5[3];
     m6[3]=m5[1]+(m5[3]>>1);
 
+    ii = i + block_x;
     for (j=0; j < 2; j++)
     {
       j1=3-j;
       // Residue Color Transform
       if (!img->residue_transform_flag)
       {
-        img->m7[i][j] =min(img->max_imgpel_value,max(0,(m6[j]+m6[j1]+((long)img->mpr[i+block_x][j+block_y] <<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
-        img->m7[i][j1]=min(img->max_imgpel_value,max(0,(m6[j]-m6[j1]+((long)img->mpr[i+block_x][j1+block_y]<<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
+        img->m7[i][j] =min(img->max_imgpel_value,max(0,(m6[j]+m6[j1]+((long)img->mpr[j +block_y][ii] << DQ_BITS)+DQ_ROUND)>>DQ_BITS));
+        img->m7[i][j1]=min(img->max_imgpel_value,max(0,(m6[j]-m6[j1]+((long)img->mpr[j1+block_y][ii] << DQ_BITS)+DQ_ROUND)>>DQ_BITS));
       } 
       else 
       {
@@ -1066,12 +1094,14 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   {
     for (j=0; j < BLOCK_SIZE; j++)
     {
+      pix_y = img->pix_y+block_y+j;
       for (i=0; i < BLOCK_SIZE; i++)
       {
+        pix_x = img->pix_x+block_x+i;
         if(lossless_qpprime)
-          enc_picture->imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j]+img->mpr[i+block_x][j+block_y];
+          enc_picture->imgY[pix_y][pix_x]=img->m7[i][j]+img->mpr[j+block_y][i+block_x];
         else
-          enc_picture->imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
+          enc_picture->imgY[pix_y][pix_x]=img->m7[i][j];
       }
     }
   }
@@ -1124,6 +1154,9 @@ int dct_chroma(int uv,int cr_cbp)
   int qp_per_dc = 0;
   int qp_rem_dc = 0;
   int q_bits_422 = 0;	
+  short pix_c_x, pix_c_y;
+  short is_field_mode = (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field));
+
   Boolean lossless_qpprime = ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
 
   qp_c      = currMB->qp + img->chroma_qp_offset[uv];
@@ -1190,10 +1223,20 @@ int dct_chroma(int uv,int cr_cbp)
   {
     //================== CHROMA DC YUV420 ===================
     //     2X2 transform of DC coeffs.
-    m1[0]=(img->m7[0][0]+img->m7[4][0]+img->m7[0][4]+img->m7[4][4]);
-    m1[1]=(img->m7[0][0]-img->m7[4][0]+img->m7[0][4]-img->m7[4][4]);
-    m1[2]=(img->m7[0][0]+img->m7[4][0]-img->m7[0][4]-img->m7[4][4]);
-    m1[3]=(img->m7[0][0]-img->m7[4][0]-img->m7[0][4]+img->m7[4][4]);
+    if(lossless_qpprime)
+    {
+      m1[0]=img->m7[0][0];
+      m1[1]=img->m7[4][0];
+      m1[2]=img->m7[0][4];
+      m1[3]=img->m7[4][4];
+    }
+    else 
+    {
+      m1[0]=(img->m7[0][0]+img->m7[4][0]+img->m7[0][4]+img->m7[4][4]);
+      m1[1]=(img->m7[0][0]-img->m7[4][0]+img->m7[0][4]-img->m7[4][4]);
+      m1[2]=(img->m7[0][0]+img->m7[4][0]-img->m7[0][4]-img->m7[4][4]);
+      m1[3]=(img->m7[0][0]-img->m7[4][0]-img->m7[0][4]+img->m7[4][4]);
+    }
     
     //     Quant of chroma 2X2 coeffs.
     run=-1;
@@ -1204,7 +1247,9 @@ int dct_chroma(int uv,int cr_cbp)
       run++;
       ilev=0;
       
-      if(intra == 1)
+      if(lossless_qpprime)
+        level =abs(m1[coeff_ctr]);
+      else if(intra == 1)
         level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (LevelOffset4x4Chroma_Intra[uv][qp_per][0][0]<<1)) >> (q_bits+1);
       else
         level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (LevelOffset4x4Chroma_Inter[uv][qp_per][0][0]<<1)) >> (q_bits+1);
@@ -1229,36 +1274,40 @@ int dct_chroma(int uv,int cr_cbp)
         
         ilev=sign(level, m1[coeff_ctr]);
       }
-      m1[coeff_ctr]=ilev;
+      if(!lossless_qpprime)
+        m1[coeff_ctr]=ilev;
     }
     DCLevel[scan_pos] = 0;
     
     //  Inverse transform of 2x2 DC levels
-    m5[0]=(m1[0]+m1[1]+m1[2]+m1[3]);
-    m5[1]=(m1[0]-m1[1]+m1[2]-m1[3]);
-    m5[2]=(m1[0]+m1[1]-m1[2]-m1[3]);
-    m5[3]=(m1[0]-m1[1]-m1[2]+m1[3]);
-    for(i=0; i<4; i++)
+    if(!lossless_qpprime)
     {
-      if(qp_per<5)
+      m5[0]=(m1[0]+m1[1]+m1[2]+m1[3]);
+      m5[1]=(m1[0]-m1[1]+m1[2]-m1[3]);
+      m5[2]=(m1[0]+m1[1]-m1[2]-m1[3]);
+      m5[3]=(m1[0]-m1[1]-m1[2]+m1[3]);
+      for(i=0; i<4; i++)
       {
-        if(intra == 1)
-          m1[i]=(m5[i]*InvLevelScale4x4Chroma_Intra[uv][qp_rem][0][0])>>(5-qp_per);
+        if(qp_per<5)
+        {
+          if(intra == 1)
+            m1[i]=(m5[i]*InvLevelScale4x4Chroma_Intra[uv][qp_rem][0][0])>>(5-qp_per);
+          else
+            m1[i]=(m5[i]*InvLevelScale4x4Chroma_Inter[uv][qp_rem][0][0])>>(5-qp_per);
+        }
         else
-          m1[i]=(m5[i]*InvLevelScale4x4Chroma_Inter[uv][qp_rem][0][0])>>(5-qp_per);
+        {
+          if(intra == 1)
+            m1[i]=(m5[i]*InvLevelScale4x4Chroma_Intra[uv][qp_rem][0][0])<<(qp_per-5);
+          else
+            m1[i]=(m5[i]*InvLevelScale4x4Chroma_Inter[uv][qp_rem][0][0])<<(qp_per-5);
+        }
       }
-      else
-      {
-        if(intra == 1)
-          m1[i]=(m5[i]*InvLevelScale4x4Chroma_Intra[uv][qp_rem][0][0])<<(qp_per-5);
-        else
-          m1[i]=(m5[i]*InvLevelScale4x4Chroma_Inter[uv][qp_rem][0][0])<<(qp_per-5);
-      }
+      img->m7[0][0]=m1[0];
+      img->m7[4][0]=m1[1];
+      img->m7[0][4]=m1[2];
+      img->m7[4][4]=m1[3];
     }
-    img->m7[0][0]=m1[0];
-    img->m7[4][0]=m1[1];
-    img->m7[0][4]=m1[2];
-    img->m7[4][4]=m1[3];
   }
   else if(yuv == YUV422)
   {
@@ -1272,29 +1321,32 @@ int dct_chroma(int uv,int cr_cbp)
         m3[i>>2][j>>2]= img->m7[i][j];
       
     //horizontal
-    m4[0][0] = m3[0][0] + m3[1][0];
-    m4[0][1] = m3[0][1] + m3[1][1];
-    m4[0][2] = m3[0][2] + m3[1][2];
-    m4[0][3] = m3[0][3] + m3[1][3];
-    
-    m4[1][0] = m3[0][0] - m3[1][0];
-    m4[1][1] = m3[0][1] - m3[1][1];
-    m4[1][2] = m3[0][2] - m3[1][2];
-    m4[1][3] = m3[0][3] - m3[1][3];
-
-    // vertical
-    for (i=0;i<2;i++)
+    if(!lossless_qpprime)
     {
-      for (j=0;j<2;j++)
+      m4[0][0] = m3[0][0] + m3[1][0];
+      m4[0][1] = m3[0][1] + m3[1][1];
+      m4[0][2] = m3[0][2] + m3[1][2];
+      m4[0][3] = m3[0][3] + m3[1][3];
+    
+      m4[1][0] = m3[0][0] - m3[1][0];
+      m4[1][1] = m3[0][1] - m3[1][1];
+      m4[1][2] = m3[0][2] - m3[1][2];
+      m4[1][3] = m3[0][3] - m3[1][3];
+
+      // vertical
+      for (i=0;i<2;i++)
       {
-        j1=3-j;
-        m5[j]= m4[i][j]+m4[i][j1];
-        m5[j1]=m4[i][j]-m4[i][j1];
+        for (j=0;j<2;j++)
+        {
+          j1=3-j;
+          m5[j]= m4[i][j]+m4[i][j1];
+          m5[j1]=m4[i][j]-m4[i][j1];
+        }
+        m4[i][0]=(m5[0]+m5[1]);
+        m4[i][2]=(m5[0]-m5[1]);
+        m4[i][1]=(m5[3]+m5[2]);
+        m4[i][3]=(m5[3]-m5[2]);
       }
-      m4[i][0]=(m5[0]+m5[1]);
-      m4[i][2]=(m5[0]-m5[1]);
-      m4[i][1]=(m5[3]+m5[2]);
-      m4[i][3]=(m5[3]-m5[2]);
     }
 
     run=-1;
@@ -1308,7 +1360,12 @@ int dct_chroma(int uv,int cr_cbp)
       
       run++;
 
-      if(intra == 1)
+      if(lossless_qpprime)
+      {
+        level = abs(m3[i][j]);
+        m4[i][j]=m3[i][j];
+      }
+      else if(intra == 1)
         level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0] + (LevelOffset4x4Chroma_Intra[uv][qp_per_dc][0][0]*2)) >> (q_bits_422+1);
       else
         level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0] + (LevelOffset4x4Chroma_Inter[uv][qp_per_dc][0][0]*2)) >> (q_bits_422+1);
@@ -1325,66 +1382,70 @@ int dct_chroma(int uv,int cr_cbp)
         ++scan_pos;
         run=-1;
       }
-      m3[i][j]=sign(level,m4[i][j]);
+      if(!lossless_qpprime)
+        m3[i][j]=sign(level,m4[i][j]);
     }
     DCLevel[scan_pos]=0;
 
     //inverse DC transform
     //horizontal
-    m4[0][0] = m3[0][0] + m3[1][0];
-    m4[0][1] = m3[0][1] + m3[1][1];
-    m4[0][2] = m3[0][2] + m3[1][2];
-    m4[0][3] = m3[0][3] + m3[1][3];
-    
-    m4[1][0] = m3[0][0] - m3[1][0];
-    m4[1][1] = m3[0][1] - m3[1][1];
-    m4[1][2] = m3[0][2] - m3[1][2];
-    m4[1][3] = m3[0][3] - m3[1][3];
-    
-    
-    // vertical
-    for (i=0;i<2;i++)
+    if(!lossless_qpprime)
     {
-      for (j=0; j < 4;j++)    //TODO: remove m5 with m4
-        m5[j]=m4[i][j]; 
-      
-      m6[0]=m5[0]+m5[2];
-      m6[1]=m5[0]-m5[2];
-      m6[2]=m5[1]-m5[3];
-      m6[3]=m5[1]+m5[3];
-      
-      for (j=0;j<2;j++)
+      m4[0][0] = m3[0][0] + m3[1][0];
+      m4[0][1] = m3[0][1] + m3[1][1];
+      m4[0][2] = m3[0][2] + m3[1][2];
+      m4[0][3] = m3[0][3] + m3[1][3];
+    
+      m4[1][0] = m3[0][0] - m3[1][0];
+      m4[1][1] = m3[0][1] - m3[1][1];
+      m4[1][2] = m3[0][2] - m3[1][2];
+      m4[1][3] = m3[0][3] - m3[1][3];
+    
+    
+      // vertical
+      for (i=0;i<2;i++)
       {
-        j1=3-j;
+        for (j=0; j < 4;j++)    //TODO: remove m5 with m4
+          m5[j]=m4[i][j]; 
+      
+        m6[0]=m5[0]+m5[2];
+        m6[1]=m5[0]-m5[2];
+        m6[2]=m5[1]-m5[3];
+        m6[3]=m5[1]+m5[3];
+      
+        for (j=0;j<2;j++)
+        {
+          j1=3-j;
 		
-        if(qp_per_dc<4)
-        {
-          if(intra == 1)
+          if(qp_per_dc<4)
           {
-            img->m7[i*4][j*4 ]=((((m6[j]+m6[j1])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
-            img->m7[i*4][j1*4]=((((m6[j]-m6[j1])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
+            if(intra == 1)
+            {
+              img->m7[i*4][j*4 ]=((((m6[j]+m6[j1])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
+              img->m7[i*4][j1*4]=((((m6[j]-m6[j1])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
+            }
+            else
+            {
+              img->m7[i*4][j*4 ]=((((m6[j]+m6[j1])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
+              img->m7[i*4][j1*4]=((((m6[j]-m6[j1])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
+            }
           }
           else
           {
-            img->m7[i*4][j*4 ]=((((m6[j]+m6[j1])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
-            img->m7[i*4][j1*4]=((((m6[j]-m6[j1])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
+            if(intra == 1)
+            {
+              img->m7[i*4][j*4 ]=((((m6[j]+m6[j1])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
+              img->m7[i*4][j1*4]=((((m6[j]-m6[j1])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
+            }
+            else
+            {
+              img->m7[i*4][j*4 ]=((((m6[j]+m6[j1])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
+              img->m7[i*4][j1*4]=((((m6[j]-m6[j1])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
+            }
           }
-        }
-        else
-        {
-          if(intra == 1)
-          {
-            img->m7[i*4][j*4 ]=((((m6[j]+m6[j1])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
-            img->m7[i*4][j1*4]=((((m6[j]-m6[j1])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
-          }
-          else
-          {
-            img->m7[i*4][j*4 ]=((((m6[j]+m6[j1])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
-            img->m7[i*4][j1*4]=((((m6[j]-m6[j1])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
-          }
-        }
-      }//for (j=0;j<2;j++)
-    }//for (i=0;i<2;i++)    
+        }//for (j=0;j<2;j++)
+      }//for (i=0;i<2;i++)    
+    }
   }
   else if(yuv == YUV444)
   {
@@ -1541,7 +1602,7 @@ int dct_chroma(int uv,int cr_cbp)
       for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
       {
 
-        if (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field )) 
+        if (is_field_mode) 
         {  // Alternate scan for field coding
           i=FIELD_SCAN[coeff_ctr][0];
           j=FIELD_SCAN[coeff_ctr][1];
@@ -1560,6 +1621,24 @@ int dct_chroma(int uv,int cr_cbp)
           level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+LevelOffset4x4Chroma_Intra[uv][qp_per][i][j])>>q_bits;
         else
           level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+LevelOffset4x4Chroma_Inter[uv][qp_per][i][j])>>q_bits;
+
+        if (img->AdaptiveRounding)
+        {
+          if (lossless_qpprime || level == 0 )
+          {
+            img->fadjust4x4Cr[intra][uv][n2+j][n1+i] = 0;
+          }
+          else if (intra == 1)
+          {
+            img->fadjust4x4Cr[intra][uv][n2+j][n1+i] = AdaptRndWeight * (abs(img->m7[n1+i][n2+j]) * LevelScale4x4Chroma_Intra[uv][qp_rem][i][j] - (level << q_bits)) + (1<< (q_bits)); 
+            img->fadjust4x4Cr[intra][uv][n2+j][n1+i] >>= (q_bits + 1); 
+          }          
+          else
+          {
+            img->fadjust4x4Cr[intra][uv][n2+j][n1+i] = AdaptRndWeight * (abs(img->m7[n1+i][n2+j]) * LevelScale4x4Chroma_Inter[uv][qp_rem][i][j] - (level << q_bits)) + (1<< (q_bits)); 
+            img->fadjust4x4Cr[intra][uv][n2+j][n1+i] >>= (q_bits + 1); 
+          }          
+        }
 
         if (level  != 0)
         {
@@ -1621,7 +1700,7 @@ int dct_chroma(int uv,int cr_cbp)
         for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// ac coeff
         {
 
-          if (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field )) 
+          if (is_field_mode) 
           {  // Alternate scan for field coding
             i=FIELD_SCAN[coeff_ctr][0];
             j=FIELD_SCAN[coeff_ctr][1];
@@ -1686,8 +1765,8 @@ int dct_chroma(int uv,int cr_cbp)
           // Residue Color Transform
           if (!img->residue_transform_flag)
           {
-            img->m7[n1+i][n2+j] =min(img->max_imgpel_value_uv,max(0,(m6[j]+m6[j2]+((long)img->mpr[n1+i][n2+j] <<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
-            img->m7[n1+i][n2+j2]=min(img->max_imgpel_value_uv,max(0,(m6[j]-m6[j2]+((long)img->mpr[n1+i][n2+j2]<<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
+            img->m7[n1+i][n2+j] =min(img->max_imgpel_value_uv,max(0,(m6[j]+m6[j2]+((long)img->mpr[n2+j ][n1+i] << DQ_BITS)+DQ_ROUND)>>DQ_BITS));
+            img->m7[n1+i][n2+j2]=min(img->max_imgpel_value_uv,max(0,(m6[j]-m6[j2]+((long)img->mpr[n2+j2][n1+i] << DQ_BITS)+DQ_ROUND)>>DQ_BITS));
           } 
           else 
           {
@@ -1711,12 +1790,14 @@ int dct_chroma(int uv,int cr_cbp)
   if (!img->residue_transform_flag)
   for (j=0; j < img->mb_cr_size_y; j++)
   {
+    pix_c_y = img->pix_c_y+j;
     for (i=0; i < img->mb_cr_size_x; i++)
     {
+      pix_c_x = img->pix_c_x+i;
       if(lossless_qpprime)
-        enc_picture->imgUV[uv][img->pix_c_y+j][img->pix_c_x+i]= img->m7[i][j]+img->mpr[i][j];
+        enc_picture->imgUV[uv][pix_c_y][pix_c_x]= img->m7[i][j]+img->mpr[j][i];
       else
-        enc_picture->imgUV[uv][img->pix_c_y+j][img->pix_c_x+i]= img->m7[i][j];
+        enc_picture->imgUV[uv][pix_c_y][pix_c_x]= img->m7[i][j];
     }
   }
 
@@ -1988,6 +2069,7 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   int*  ACLevel = img->cofAC[b8][b4][0];
   int*  ACRun   = img->cofAC[b8][b4][1];
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  short is_field_mode = (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field));
 
   // For encoding optimization
   int c_err1, c_err2, level1, level2;
@@ -2009,8 +2091,8 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   for (j=0; j< BLOCK_SIZE; j++)
     for (i=0; i< BLOCK_SIZE; i++)
     {
-      img->m7[i][j]+=img->mpr[i+block_x][j+block_y];
-      predicted_block[i][j]=img->mpr[i+block_x][j+block_y];
+      img->m7[i][j]+=img->mpr[j+block_y][i+block_x];
+      predicted_block[i][j]=img->mpr[j+block_y][i+block_x];
     }
 
   for (j=0; j < BLOCK_SIZE; j++)
@@ -2082,7 +2164,7 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   for (coeff_ctr=0;coeff_ctr < 16;coeff_ctr++)     // 8 times if double scan, 16 normal scan
   {
 
-    if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+    if (is_field_mode) 
     {  // Alternate scan for field coding
         i=FIELD_SCAN[coeff_ctr][0];
         j=FIELD_SCAN[coeff_ctr][1];
@@ -2236,6 +2318,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
   int cr_cbp_tmp;
   int predicted_chroma_block[MB_BLOCK_SIZE/2][MB_BLOCK_SIZE/2],qp_const2,mp1[BLOCK_SIZE];
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  short is_field_mode = (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field));
 
   int qp_per,qp_rem,q_bits;
   int qp_per_sp,qp_rem_sp,q_bits_sp;
@@ -2268,8 +2351,8 @@ int dct_chroma_sp(int uv,int cr_cbp)
   for (j=0; j < MB_BLOCK_SIZE/2; j++)
     for (i=0; i < MB_BLOCK_SIZE/2; i++)
     {
-      img->m7[i][j]+=img->mpr[i][j];
-      predicted_chroma_block[i][j]=img->mpr[i][j];
+      img->m7[i][j]+=img->mpr[j][i];
+      predicted_chroma_block[i][j]=img->mpr[j][i];
     }
 
   for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
@@ -2461,7 +2544,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
       for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
       {
 
-        if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+        if (is_field_mode) 
         {  // Alternate scan for field coding
           i=FIELD_SCAN[coeff_ctr][0];
           j=FIELD_SCAN[coeff_ctr][1];
@@ -2634,7 +2717,7 @@ void copyblock_sp(int block_x,int block_y)
   for (j=0; j< BLOCK_SIZE; j++)
     for (i=0; i< BLOCK_SIZE; i++)
     {
-      predicted_block[i][j]=img->mpr[i+block_x][j+block_y];
+      predicted_block[i][j]=img->mpr[j+block_y][i+block_x];
     }
 
   for (j=0; j < BLOCK_SIZE; j++)

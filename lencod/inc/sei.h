@@ -21,22 +21,29 @@
 
 //! definition of SEI payload type
 typedef enum {
-  SEI_ZERO,        //!< 0 is undefined, useless
-  SEI_TEMPORAL_REF,
-  SEI_CLOCK_TIMESTAMP,
-  SEI_PANSCAN_RECT,
-  SEI_BUFFERING_PERIOD,
-  SEI_HRD_PICTURE,
+  SEI_BUFFERING_PERIOD = 0,
+  SEI_PIC_TIMING,
+  SEI_PAN_SCAN_RECT,
   SEI_FILLER_PAYLOAD,
   SEI_USER_DATA_REGISTERED_ITU_T_T35,
   SEI_USER_DATA_UNREGISTERED,
-  SEI_RANDOM_ACCESS_POINT,
-  SEI_REF_PIC_BUFFER_MANAGEMENT_REPETITION,
-  SEI_SPARE_PICTURE,
-  SEI_SCENE_INFORMATION,
-  SEI_SUBSEQ_INFORMATION,
-  SEI_SUBSEQ_LAYER_CHARACTERISTICS,
-  SEI_SUBSEQ_CHARACTERISTICS,
+  SEI_RECOVERY_POINT,
+  SEI_DEC_REF_PIC_MARKING_REPETITION,
+  SEI_SPARE_PIC,
+  SEI_SCENE_INFO,
+  SEI_SUB_SEQ_INFO,
+  SEI_SUB_SEQ_LAYER_CHARACTERISTICS,
+  SEI_SUB_SEQ_CHARACTERISTICS,
+  SEI_FULL_FRAME_FREEZE,
+  SEI_FULL_FRAME_FREEZE_RELEASE,
+  SEI_FULL_FRAME_SNAPSHOT,
+  SEI_PROGRESSIVE_REFINEMENT_SEGMENT_START,
+  SEI_PROGRESSIVE_REFINEMENT_SEGMENT_END,
+  SEI_MOTION_CONSTRAINED_SLICE_GROUP_SET,
+  SEI_FILM_GRAIN_CHARACTERISTICS,
+  SEI_DEBLOCKING_FILTER_DISPLAY_PREFERENCE,
+  SEI_STEREO_VIDEO_INFO,
+
   SEI_MAX_ELEMENTS  //!< number of maximum syntax elements
 } SEI_type;
 
@@ -158,7 +165,6 @@ void FinalizeSubseqChar();
 void CloseSubseqChar();
 
 
-//! JVT-D099 Scene information SEI message
 typedef struct
 {
   int scene_id;
@@ -176,9 +182,7 @@ void InitSceneInformation();
 void CloseSceneInformation();
 void UpdateSceneInformation(Boolean HasSceneInformation, int sceneID, int sceneTransType, int secondSceneID);
 void FinalizeSceneInformation();
-//! End JVT-D099 Scene information SEI message
 
-//! Shankar Regunathan Oct 2002
 //! PanScanRect Information
 typedef struct
 {
@@ -209,8 +213,9 @@ typedef struct
   Bitstream *data;
   int payloadSize;
 } user_data_unregistered_information_struct;
-Boolean seiHasUser_data_unregistered_info;
-user_data_unregistered_information_struct seiUser_data_unregistered;
+
+extern Boolean seiHasUser_data_unregistered_info;
+extern user_data_unregistered_information_struct seiUser_data_unregistered;
 
 void InitUser_data_unregistered();
 void ClearUser_data_unregistered();
@@ -228,8 +233,9 @@ typedef struct
   Bitstream *data;
   int payloadSize;
 } user_data_registered_itu_t_t35_information_struct;
-Boolean seiHasUser_data_registered_itu_t_t35_info;
-user_data_registered_itu_t_t35_information_struct seiUser_data_registered_itu_t_t35;
+
+extern Boolean seiHasUser_data_registered_itu_t_t35_info;
+extern user_data_registered_itu_t_t35_information_struct seiUser_data_registered_itu_t_t35;
 
 void InitUser_data_registered_itu_t_t35();
 void ClearUser_data_registered_itu_t_t35();
@@ -237,18 +243,20 @@ void UpdateUser_data_registered_itu_t_t35();
 void FinalizeUser_data_registered_itu_t_t35();
 void CloseUser_data_registered_itu_t_t35();
 
-//! RandomAccess Information
+//! Recovery Point Information
 typedef struct
 {
-  unsigned char recovery_point_flag;
+  unsigned int  recovery_frame_cnt;
   unsigned char exact_match_flag;
   unsigned char broken_link_flag;
+  unsigned char changing_slice_group_idc;
 
   Bitstream *data;
   int payloadSize;
-} randomaccess_information_struct;
-Boolean seiHasRandomAccess_info;
-randomaccess_information_struct seiRandomAccess;
+} recovery_point_information_struct;
+
+extern Boolean seiHasRecoveryPoint_info;
+extern recovery_point_information_struct seiRecoveryPoint;
 
 void InitRandomAccess();
 void ClearRandomAccess();

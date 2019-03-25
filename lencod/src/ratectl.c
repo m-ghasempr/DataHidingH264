@@ -1468,7 +1468,7 @@ void RCModelEstimator (int n_windowSize)
 {
   int n_realSize = n_windowSize;
   int i;
-  double oneSampleQ;
+  double oneSampleQ = 0;
   double a00 = 0.0, a01 = 0.0, a10 = 0.0, a11 = 0.0, b0 = 0.0, b1 = 0.0;
   double MatrixValue;
   Boolean estimateX2 = FALSE;
@@ -1655,7 +1655,7 @@ void MADModelEstimator (int n_windowSize)
 {
   int n_realSize = n_windowSize;
   int i;
-  double oneSampleQ;
+  double oneSampleQ = 0;
   double a00 = 0.0, a01 = 0.0, a10 = 0.0, a11 = 0.0, b0 = 0.0, b1 = 0.0;
   double MatrixValue;
   Boolean estimateX2 = FALSE;

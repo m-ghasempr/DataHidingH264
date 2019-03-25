@@ -542,6 +542,7 @@ int test_wp_B_slice(int select_method)
   
   pel_t*  ref_pic;   
   int default_weight[3];
+  // this needs to be fixed. 
   int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
   int weight[6][MAX_REFERENCE_PICTURES][3]; 
   int offset[6][MAX_REFERENCE_PICTURES][3];       
@@ -742,9 +743,14 @@ int test_wp_B_slice(int select_method)
 
   if (select_method == 0) //! implicit mode
   {
+    int active_refs[2];
+
+    active_refs[0]=input->B_List0_refs == 0 ? listXsize[0] : min(input->B_List0_refs,listXsize[0]);
+    active_refs[1]=input->B_List1_refs == 0 ? listXsize[1] : min(input->B_List0_refs,listXsize[1]);
+
     for (clist=0; clist<2 + list_offset; clist++)
     {
-      for (index = 0; index < listXsize[clist]; index++)
+      for (index = 0; index < active_refs[clist]; index++)
       {
         for (comp=0; comp < 3; comp ++)
         {

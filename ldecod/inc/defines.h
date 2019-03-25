@@ -66,7 +66,7 @@
 
 #define MAX_CODED_FRAME_SIZE 8000000         //!< bytes for one frame
 
-// #define _LEAKYBUCKET_
+//#define _LEAKYBUCKET_
 
 #define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
 

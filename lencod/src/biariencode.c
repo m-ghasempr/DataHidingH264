@@ -52,6 +52,19 @@ int binCount = 0;
                                          }
 
 
+int pic_bin_count;
+
+void reset_pic_bin_count()
+{
+  pic_bin_count = 0;
+}
+
+int get_pic_bin_count()
+{
+  return pic_bin_count;
+}
+
+
 /*!
  ************************************************************************
  * \brief
@@ -97,7 +110,7 @@ void arienco_delete_encoding_environment(EncodingEnvironmentPtr eep)
  */
 void arienco_start_encoding(EncodingEnvironmentPtr eep,
                             unsigned char *code_buffer,
-                            int *code_len, /* int *last_startcode, */ int slice_type )
+                            int *code_len )
 {
   Elow = 0;
   Ebits_to_follow = 0;
@@ -111,7 +124,6 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
   Erange = HALF-2;
 
   eep->C = 0;
-  eep->B = *code_len;
   eep->E = 0;
 
 }
@@ -145,10 +157,11 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   while (Ebits_to_go != 8)
     put_one_bit(0);
 
-  eep->E= eep->E*8 + eep->C; // no of processed bins
-  eep->B= (*Ecodestrm_len - eep->B); // no of written bytes
+  pic_bin_count += eep->E*8 + eep->C; // no of processed bins
+
+/*  eep->E= eep->E*8 + eep->C; // no of processed bins
   eep->E -= (img->current_mb_nr-img->currentSlice->start_mb_nr);
-  eep->E = (eep->E + 31)>>5;
+  eep->E = (eep->E + 31)>>5;  */
   // eep->E now contains the minimum number of bytes for the NAL unit
 }
 
@@ -179,7 +192,7 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   }
 
   /* covers all cases where code does not bother to shift down symbol to be 
-   * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code symply 
+   * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code simply 
    * masks off the bit position and passes in the resulting value */
 
   if (symbol != 0) 

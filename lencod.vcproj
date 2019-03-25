@@ -605,6 +605,9 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath=".\lencod\src\mode_decision.c">
+			</File>
+			<File
 				RelativePath="lencod\src\mv-search.c">
 				<FileConfiguration
 					Name="Debug|Win32">
@@ -1116,6 +1119,9 @@
 			</File>
 			<File
 				RelativePath="lencod\inc\minmax.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\mode_decision.h">
 			</File>
 			<File
 				RelativePath="lencod\inc\mv-search.h">

@@ -97,7 +97,7 @@ static void LevelCheck();
  */
 void JMHelpExit ()
 {
-  fprintf( stderr, "\n   lencod [-h] [-p defenc.cfg] {[-f curenc1.cfg]...[-f curencN.cfg]}"
+  fprintf( stderr, "\n   lencod [-h] [-d defenc.cfg] {[-f curenc1.cfg]...[-f curencN.cfg]}"
     " {[-p EncParam1=EncValue1]..[-p EncParamM=EncValueM]}\n\n"    
     "## Parameters\n\n"
 
@@ -738,30 +738,14 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
+#if TRACE
   if (strlen (input->TraceFile) > 0 && (p_trace=fopen(input->TraceFile,"w"))==NULL)
   {
     snprintf(errortext, ET_SIZE, "Error open file %s", input->TraceFile);
     error (errortext, 500);
   }
+#endif
 
-
-  // consistency check size information
-  /*
-  if (input->img_height % 16 != 0 || input->img_width % 16 != 0)
-  {
-    snprintf(errortext, ET_SIZE, "Unsupported image format x=%d,y=%d, must be a multiple of 16",input->img_width,input->img_height);
-    error (errortext, 400);
-  }
-
-  if (input->PicInterlace || input->MbInterlace)
-  {
-    if (input->img_height % 32 != 0 )
-    { 
-      snprintf(errortext, ET_SIZE, "Unsupported image format y=%d, must be a multiple of 32 for adaptive frame/field",input->img_height);
-      error (errortext, 400);
-    }
-  }
- */
   if (input->img_width % 16 != 0)
   {
     img->auto_crop_right = 16-(input->img_width % 16);
@@ -920,9 +904,22 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
-  if (input->rdopt>1)
+  if (input->rdopt>2)
   {
-    snprintf(errortext, ET_SIZE, "RDOptimization=2 mode has been deactivated do to diverging of real and simulated decoders.");
+    snprintf(errortext, ET_SIZE, "RDOptimization=3 mode has been deactivated do to diverging of real and simulated decoders.");
+    error (errortext, 500);
+  }
+
+  // check RDoptimization mode and profile. FMD does not support Frex Profiles.
+  if (input->rdopt==2 && input->ProfileIDC>=FREXT_HP)
+  {
+    snprintf(errortext, ET_SIZE, "Fast Mode Decision methods does not support FREX Profiles");
+    error (errortext, 500);
+  }
+
+  if (input->hadamard == 2 && input->FMEnable)
+  {
+    snprintf(errortext, ET_SIZE, "UseHadamard=2 is not allowed when UseFME is set to 1.");
     error (errortext, 500);
   }
 
@@ -992,15 +989,15 @@ static void PatchInp ()
     error("temporal direct needs at least 2 ref frames\n",-1000);
 
   // frext
-  if(input->AllowTransform8x8 && input->sp_periodicity /*SP-frames*/)
+  if(input->Transform8x8Mode && input->sp_periodicity /*SP-frames*/)
   {
     snprintf(errortext, ET_SIZE, "\nThe new 8x8 mode is not implemented for sp-frames.");
     error (errortext, 500);
   }
 
-  if(input->AllowTransform8x8 && (input->ProfileIDC<FREXT_HP || input->ProfileIDC>FREXT_Hi444))
+  if(input->Transform8x8Mode && (input->ProfileIDC<FREXT_HP || input->ProfileIDC>FREXT_Hi444))
   {
-    snprintf(errortext, ET_SIZE, "\nAllowTransform8x8 may be used only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
+    snprintf(errortext, ET_SIZE, "\nTransform8x8Mode may be used only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
     error (errortext, 500);
   }
   if(input->ScalingMatrixPresentFlag && (input->ProfileIDC<FREXT_HP || input->ProfileIDC>FREXT_Hi444))
@@ -1135,6 +1132,10 @@ static void ProfileCheck()
 
 static void LevelCheck()
 {
-  return;
+  if ( (input->LevelIDC>=30) && (input->directInferenceFlag==0))
+  {
+    printf("\nLevelIDC 3.0 and above require direct_8x8_inference to be set to 1. Please check your settings.\n");
+    input->directInferenceFlag=1;
+  }
 }
 

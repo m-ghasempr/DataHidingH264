@@ -576,36 +576,21 @@ void decode_poc(struct img_par *img)
     
     // 2nd
 
-    if ((!img->field_pic_flag)||(!img->bottom_field_flag ))
-    {
-      img->ThisPOC= img->toppoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
-    }
-
-    if (!img->field_pic_flag)
-    {
+    if(img->field_pic_flag==0)
+    {           //frame pix
+      img->toppoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
       img->bottompoc = img->toppoc + img->delta_pic_order_cnt_bottom;
+      img->ThisPOC = img->framepoc = (img->toppoc < img->bottompoc)? img->toppoc : img->bottompoc; // POC200301
     }
-    else
-    {
-      if( img->bottom_field_flag ) 
-      {
-        img->ThisPOC= img->bottompoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
-      }
-    }
-
-    // last: some post-processing. 
-      
-//    if (img->newframe == 1)
-    {
-      if (!img->bottom_field_flag)
-      {      
-        img->framepoc = img->toppoc;
+    else if (img->bottom_field_flag==0)
+    {  //top field 
+      img->ThisPOC= img->toppoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
       }
       else
-      {
-        img->framepoc = img->bottompoc;
-      }
+    {  //bottom field
+      img->ThisPOC= img->bottompoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
     }
+    img->framepoc=img->ThisPOC;
 
     if ( img->frame_num!=img->PreviousFrameNum)
       img->PreviousFrameNum=img->frame_num;

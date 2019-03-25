@@ -213,8 +213,8 @@ void GetStrength(byte Strength[16],ImageParameters *img,int MbQAddr,int dir,int 
   int    blk_x, blk_x2, blk_y, blk_y2 ;
   short  ***list0_mv = enc_picture->mv[LIST_0];
   short  ***list1_mv = enc_picture->mv[LIST_1];
-  short  **list0_refIdxArr = enc_picture->ref_idx[LIST_0];
-  short  **list1_refIdxArr = enc_picture->ref_idx[LIST_1];
+  char   **list0_refIdxArr = enc_picture->ref_idx[LIST_0];
+  char   **list1_refIdxArr = enc_picture->ref_idx[LIST_1];
   int64  **list0_refPicIdArr = enc_picture->ref_pic_id[LIST_0];
   int64  **list1_refPicIdArr = enc_picture->ref_pic_id[LIST_1];
   int    xQ, xP, yQ, yP;
@@ -271,13 +271,12 @@ void GetStrength(byte Strength[16],ImageParameters *img,int MbQAddr,int dir,int 
           blk_x  = (mb_x<<2) + (blkQ  & 3) ;
           blk_y2 = pixP.pos_y >> 2;
           blk_x2 = pixP.pos_x >> 2;
-//            if( (img->type == B_SLICE) )
           {
               int64 ref_p0,ref_p1,ref_q0,ref_q1;      
-              ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
-              ref_q0 = list0_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list0_refPicIdArr[blk_x2][blk_y2];
-              ref_p1 = list1_refIdxArr[blk_x][blk_y]<0 ? -1 : list1_refPicIdArr[blk_x][blk_y];
-              ref_q1 = list1_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list1_refPicIdArr[blk_x2][blk_y2];
+              ref_p0 = list0_refIdxArr[blk_y][blk_x]<0 ? -1 : list0_refPicIdArr[blk_y][blk_x];
+              ref_q0 = list0_refIdxArr[blk_y2][blk_x2]<0 ? -1 : list0_refPicIdArr[blk_y2][blk_x2];
+              ref_p1 = list1_refIdxArr[blk_y][blk_x]<0 ? -1 : list1_refPicIdArr[blk_y][blk_x];
+              ref_q1 = list1_refIdxArr[blk_y2][blk_x2]<0 ? -1 : list1_refPicIdArr[blk_y2][blk_x2];
               if ( ((ref_p0==ref_q0) && (ref_p1==ref_q1)) ||
                 ((ref_p0==ref_q1) && (ref_p1==ref_q0))) 
               {
@@ -288,31 +287,34 @@ void GetStrength(byte Strength[16],ImageParameters *img,int MbQAddr,int dir,int 
                   // compare MV for the same reference picture
                   if (ref_p0==ref_q0) 
                   {
-                    Strength[idx] =  (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
-                      (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit) |
-                      (abs( list1_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
-                      (abs( list1_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit);
+                    Strength[idx] =  
+                      ( (abs( list0_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) 
+                      | (abs( list0_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit) 
+                      | (abs( list1_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) 
+                      | (abs( list1_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit));
                   }
                   else 
                   {
-                    Strength[idx] =  (abs( list0_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
-                      (abs( list0_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit) |
-                      (abs( list1_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
-                      (abs( list1_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit);
+                    Strength[idx] =  
+                      ( (abs( list0_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) 
+                      | (abs( list0_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit) 
+                      | (abs( list1_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) 
+                      | (abs( list1_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit));
                   } 
                 }
                 else 
                 { // L0 and L1 reference pictures of p0 are the same; q0 as well
                 
-                  Strength[idx] =  ((abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
-                    (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit ) |
-                    (abs( list1_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
-                    (abs( list1_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit))
+                  Strength[idx] =  
+                    ( (abs( list0_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) 
+                    | (abs( list0_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit ) 
+                    | (abs( list1_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) 
+                    | (abs( list1_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit))
                     &&
-                    ((abs( list0_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
-                    (abs( list0_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit) |
-                    (abs( list1_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
-                    (abs( list1_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit));
+                    ( (abs( list0_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) 
+                    | (abs( list0_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit) 
+                    | (abs( list1_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) 
+                    | (abs( list1_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit));
                 }       
               }
               else 
@@ -320,15 +322,6 @@ void GetStrength(byte Strength[16],ImageParameters *img,int MbQAddr,int dir,int 
                 Strength[idx] = 1;        
               } 
             }
-/*            else  
-          { // P slice
-              int64 ref_p0,ref_q0;      
-              ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
-              ref_q0 = list0_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list0_refPicIdArr[blk_x2][blk_y2];
-              Strength[idx] =  (ref_p0 != ref_q0 ) |
-                (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4 ) |
-                (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit );
-              } */
           }
         }
       }

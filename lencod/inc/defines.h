@@ -4,7 +4,7 @@
  * \file defines.h
  *
  * \brief
- *    Headerfile containing some useful global definitions
+ *    Header file containing some useful global definitions
  *
  * \author
  *    Detlev Marpe 
@@ -25,8 +25,6 @@
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
 
-#define BI_PREDICTION   1
-
 typedef unsigned char byte;    //!< byte type definition
 
 //FREXT Profile IDC definitions
@@ -40,8 +38,14 @@ typedef unsigned char byte;    //!< byte type definition
 #define YUV422 2
 #define YUV444 3
 
-#define LIST_0 0
-#define LIST_1 1
+enum {
+  LIST_0 = 0,
+  LIST_1 = 1,
+  BI_PRED = 2,
+  BI_PRED_L0 = 3,
+  BI_PRED_L1 = 4
+};
+
 #define ZEROSNR 1
 // CAVLC
 #define LUMA              0
@@ -85,7 +89,8 @@ typedef unsigned char byte;    //!< byte type definition
 #define _LUMA_MB_COEFF_COST_    5 //!< threshold for luma coeffs of inter Macroblocks
 #define _LUMA_8x8_COEFF_COST_   5 //!< threshold for luma coeffs of 8x8 Inter Partition
 
-#define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
+#define IMG_PAD_SIZE            4 //!< Number of pixels padded around the reference frame (>=4)
+#define IMG_PAD_SIZE_TIMES4    16 //!< Number of pixels padded around the reference frame in subpel units(>=16)
 
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
@@ -110,8 +115,6 @@ typedef unsigned char byte;    //!< byte type definition
 #define  LAMBDA_FACTOR(lambda)        ((int)((double)(1<<LAMBDA_ACCURACY_BITS)*lambda+0.5))
 #define  WEIGHTED_COST(factor,bits)   (((factor)*(bits))>>LAMBDA_ACCURACY_BITS)
 #define  MV_COST(f,s,cx,cy,px,py)     (WEIGHTED_COST(f,mvbits[((cx)<<(s))-px]+mvbits[((cy)<<(s))-py]))
-//#define  REF_COST(f,ref)              (WEIGHTED_COST(f,refbits[(ref)]))
-
 #define  REF_COST(f,ref,list_offset) (WEIGHTED_COST(f,((listXsize[list_offset]<=1)? 0:refbits[(ref)])))
 
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB)
@@ -130,20 +133,19 @@ typedef unsigned char byte;    //!< byte type definition
 #define MAX_QP          51
 #define SHIFT_QP        12
 
-#define LOG2_MAX_FRAME_NUM_MINUS4   7           // POC200301 moved from defines.h
-#define LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4 7     // POC200301 newly added
-
 // Direct Mode types
 #define DIR_TEMPORAL    0   //!< Temporal Direct Mode
-#define DIR_SPATIAL     1    //!< Spatial Direct Mode
+#define DIR_SPATIAL     1   //!< Spatial Direct Mode
 
-#define MAX_REFERENCE_PICTURES 15
+#define MAX_REFERENCE_PICTURES 32
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
 
-#define NO_INTRA_PMODE  9        //!< #intra prediction modes
-//!< 4x4 intra prediction modes
+// number of intra prediction modes
+#define NO_INTRA_PMODE  9        
+
+// 4x4 intra prediction modes
 #define VERT_PRED             0
 #define HOR_PRED              1
 #define DC_PRED               2
@@ -175,8 +177,10 @@ typedef unsigned char byte;    //!< byte type definition
 #define MVPRED_U        2
 #define MVPRED_UR       3
 
-
-#define BLOCK_MULTIPLE      (MB_BLOCK_SIZE/BLOCK_SIZE)
+#define BLOCK_MULTIPLE        (MB_BLOCK_SIZE/BLOCK_SIZE)
+#define MB_BLOCK_PARTITIONS   (BLOCK_MULTIPLE * BLOCK_MULTIPLE)
+#define MB_PIXELS             (MB_BLOCK_SIZE * MB_BLOCK_SIZE)
+#define BLOCK_CONTEXT         (2 * 2 * MB_BLOCK_PARTITIONS)
 
 #define MAX_SYMBOLS_PER_MB  1200  //!< Maximum number of different syntax elements for one MB
                                   // CAVLC needs more symbols per MB
@@ -188,7 +192,6 @@ typedef unsigned char byte;    //!< byte type definition
 
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
-#define BIPRED_SIMPLE 1
 
 #define Q_BITS          15
 #define DQ_BITS         6

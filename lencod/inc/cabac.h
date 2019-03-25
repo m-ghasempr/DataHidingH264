@@ -21,7 +21,10 @@
 #define _CABAC_H_
 
 // CABAC
-void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len, /* int *last_startcode, */int slice_type);
+int get_pic_bin_count();
+void reset_pic_bin_count();
+
+void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len);
 int  arienco_bits_written(EncodingEnvironmentPtr eep);
 void arienco_done_encoding(EncodingEnvironmentPtr eep);
 void biari_init_context (BiContextTypePtr ctx, const int* ini);
