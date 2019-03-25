@@ -1,4 +1,3 @@
-
 /*!
  **************************************************************************
  * \file defines.h
@@ -20,25 +19,25 @@
 #define _DEFINES_H_
 
 #if defined _DEBUG
-#define TRACE           0                   //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
+#define TRACE             0       //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #else
-#define TRACE           0                   //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
+#define TRACE             0       //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-#define GET_METIME      1       //!< Enables or disables ME computation time
-#define DUMP_DPB        0       //!< Dump DPB for debug purposes
-typedef unsigned char byte;     //!< byte type definition
+#define GET_METIME        1       //!< Enables or disables ME computation time
+#define DUMP_DPB          0       //!< Dump DPB for debug purposes
+#define IMGTYPE           1       //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
+#define ENABLE_FIELD_CTX  1       //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.
 
-#define IMGTYPE         1       //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
-
+#define MAX_RC_MODE              3
 #define RC_MAX_TEMPORAL_LEVELS   5
 
 //#define BEST_NZ_COEFF 1   // yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
 
 //AVC Profile IDC definitions
-#define BASELINE        66       //!< YUV 4:2:0/8  "Baseline"
-#define MAIN            77       //!< YUV 4:2:0/8  "Main"
-#define EXTENDED        88       //!< YUV 4:2:0/8  "Extended"
+#define BASELINE         66      //!< YUV 4:2:0/8  "Baseline"
+#define MAIN             77      //!< YUV 4:2:0/8  "Main"
+#define EXTENDED         88      //!< YUV 4:2:0/8  "Extended"
 #define FREXT_HP        100      //!< YUV 4:2:0/8 "High"
 #define FREXT_Hi10P     110      //!< YUV 4:2:0/10 "High 10"
 #define FREXT_Hi422     122      //!< YUV 4:2:2/10 "High 4:2:2"
@@ -51,10 +50,18 @@ typedef unsigned char byte;     //!< byte type definition
 #define LUMA              0
 #define LUMA_INTRA16x16DC 1
 #define LUMA_INTRA16x16AC 2
+#define CB                3
+#define CB_INTRA16x16DC   4
+#define CB_INTRA16x16AC   5
+#define CR                8
+#define CR_INTRA16x16DC   9
+#define CR_INTRA16x16AC   10
 
-#define LEVEL_NUM      6
-#define TOTRUN_NUM    15
-#define RUNBEFORE_NUM  7
+
+#define LEVEL_NUM         6
+#define TOTRUN_NUM       15
+#define RUNBEFORE_NUM     7
+#define RUNBEFORE_NUM_M1  6
 
 #define CAVLC_LEVEL_LIMIT 2063
 
@@ -69,7 +76,20 @@ typedef unsigned char byte;     //!< byte type definition
 #define CHROMA_AC       7
 #define CHROMA_DC_2x4   8
 #define CHROMA_DC_4x4   9
-#define NUM_BLOCK_TYPES 10
+
+#define CB_16DC         10
+#define CB_16AC         11
+#define CB_8x8          12
+#define CB_8x4          13
+#define CB_4x8          14
+#define CB_4x4          15
+#define CR_16DC         16
+#define CR_16AC         17
+#define CR_8x8          18
+#define CR_8x4          19
+#define CR_4x8          20
+#define CR_4x4          21 
+#define NUM_BLOCK_TYPES 22  
 
 #define _FULL_SEARCH_RANGE_
 #define _ADAPT_LAST_GROUP_
@@ -87,6 +107,7 @@ typedef unsigned char byte;     //!< byte type definition
 
 #define IMG_PAD_SIZE           20 //!< Number of pixels padded around the reference frame (>=4)
 #define IMG_PAD_SIZE_TIMES4    80 //!< Number of pixels padded around the reference frame in subpel units(>=16)
+
 
 #define MAX_VALUE       999999   //!< used for start value for some variables
 #define INVALIDINDEX  (-135792468)
@@ -133,13 +154,17 @@ typedef unsigned char byte;     //!< byte type definition
 
 #define BLOCK_SHIFT     2
 #define BLOCK_SIZE      4
-#define BLOCK_SIZE8x8   8
+#define BLOCK_SIZE_8x8  8
 #define MB_BLOCK_SIZE   16
+#define MB_PIXELS       256 //(MB_BLOCK_SIZE * MB_BLOCK_SIZE)
 #define MB_BLOCK_SHIFT  4
+#define BLOCK_MULTIPLE        4   //(MB_BLOCK_SIZE/BLOCK_SIZE)
+#define MB_BLOCK_PARTITIONS   16  //(BLOCK_MULTIPLE * BLOCK_MULTIPLE)
+#define BLOCK_CONTEXT         64  //(4 * MB_BLOCK_PARTITIONS)
 
 // These variables relate to the subpel accuracy supported by the software (1/4)
 #define BLOCK_SIZE_SP      16  // BLOCK_SIZE << 2
-#define BLOCK_SIZE8x8_SP   32  // BLOCK_SIZE8x8 << 2
+#define BLOCK_SIZE_8x8_SP  32  // BLOCK_SIZE8x8 << 2
 
 // number of intra prediction modes
 #define NO_INTRA_PMODE  9
@@ -176,11 +201,6 @@ typedef unsigned char byte;     //!< byte type definition
 #define MVPRED_U        2
 #define MVPRED_UR       3
 
-#define BLOCK_MULTIPLE        4   //(MB_BLOCK_SIZE/BLOCK_SIZE)
-#define MB_BLOCK_PARTITIONS   16  //(BLOCK_MULTIPLE * BLOCK_MULTIPLE)
-#define MB_PIXELS             256 //(MB_BLOCK_SIZE * MB_BLOCK_SIZE)
-#define BLOCK_CONTEXT         64  //(4 * MB_BLOCK_PARTITIONS)
-
 #define MAX_SYMBOLS_PER_MB  1200  //!< Maximum number of different syntax elements for one MB
                                   // CAVLC needs more symbols per MB
 
@@ -204,6 +224,8 @@ typedef unsigned char byte;     //!< byte type definition
 #define MAX_PLANE       3
 #define IS_INDEPENDENT(INP) (INP->separate_colour_plane_flag)
 #define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
+
+typedef unsigned char byte;     //!< byte type definition
 
 #endif
 

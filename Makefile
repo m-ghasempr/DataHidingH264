@@ -5,7 +5,7 @@
 ###             by Limin Wang 
 ###
 
-SUBDIRS := lencod ldecod rtpdump
+SUBDIRS := lencod ldecod rtpdump rtp_loss
 
 .PHONY: default all clean tags depend $(SUBDIRS)
 

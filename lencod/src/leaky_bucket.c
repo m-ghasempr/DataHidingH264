@@ -207,7 +207,23 @@ void calc_buffer()
   long maxBuffer, actualBuffer, InitFullness, iChannelRate;
   unsigned long *Rmin, *Bmin, *Fmin;
 
-  fprintf(stdout,"-------------------------------------------------------------------------------\n");
+  switch (input->Verbose)
+  {
+    case 1:
+      fprintf(stdout,"-------------------------------------------------------------------------------\n");
+      break;
+    case 2:
+      fprintf(stdout,"------------------------------------------------------------------------------------------------\n");
+      break;
+    case 3:
+      fprintf(stdout,"-------------------------------------------------------------------------------------------------------\n");
+      break;
+    case 0:
+    default:
+      fprintf(stdout,"-------------------------------------------------------------------------------\n");
+      printf("\nEncoding. Please Wait.\n\n");
+      break;
+  }
   printf(" Total Frames:  %ld (%d) \n", total_frame_buffer, input->no_frames);
   NumberLeakyBuckets = (unsigned long) input->NumberLeakyBuckets;
   buffer_frame = calloc(total_frame_buffer+1, sizeof(long));

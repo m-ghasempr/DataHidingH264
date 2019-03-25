@@ -32,9 +32,9 @@
  *    Update Rate Control Parameters
  *************************************************************************************
  */
-void update_rc(Macroblock *currMB, short best_mode)
+void rc_store_mad(Macroblock *currMB)
 {
-  generic_RC->MADofMB[img->current_mb_nr] = calc_MAD();
+  generic_RC->MADofMB[img->current_mb_nr] = ComputeMBMAD();
 
   if(input->basicunit < img->FrameSizeInMbs)
   {
@@ -45,34 +45,43 @@ void update_rc(Macroblock *currMB, short best_mode)
 /*!
  *************************************************************************************
  * \brief
- *    Update QP Parameters (critical in case of SKIP MBs or MBAFF)
+ *    Update QP Parameters (in case of SKIP MBs or MBAFF)
  *************************************************************************************
  */
 
-void handle_qp(Macroblock *currMB, short best_mode)
+void update_qp_cbp(Macroblock *currMB, short best_mode)
 {
   // delta_qp is present only for non-skipped macroblocks
-  if ((currMB->cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM))
+  if ((currMB->cbp!=0 || best_mode == I16MB) && (best_mode != IPCM))
     currMB->prev_cbp = 1;
   else
   {
-    currMB->delta_qp = 0;
-    currMB->qp = currMB->prev_qp;
-    img->qp = currMB->qp;
-    currMB->prev_cbp = 0;
+    currMB->delta_qp     = 0;
+    currMB->qp           = currMB->prev_qp;
+    
+    set_chroma_qp(currMB);
+
+    currMB->qp_scaled[0] = currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP;
+    currMB->qp_scaled[1] = currMB->qpc[0] + img->bitdepth_chroma_qp_scale;
+    currMB->qp_scaled[2] = currMB->qpc[1] + img->bitdepth_chroma_qp_scale;
+
+    select_dct(currMB);
+
+    img->qp           = currMB->qp;
+    currMB->prev_cbp  = 0;
   }
 
   if (input->MbInterlace)
   {
     // update rdopt buffered qps...
-    rdopt->delta_qp = currMB->delta_qp;
-    rdopt->qp = currMB->qp;
-    rdopt->prev_cbp = currMB->prev_cbp;
+    rdopt->qp        = currMB->qp;
+    rdopt->delta_qp  = currMB->delta_qp;
+    rdopt->prev_cbp  = currMB->prev_cbp;
+    memcpy(rdopt->qp_scaled, currMB->qp_scaled, 3 * sizeof(int));
 
     delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
     qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
-  }
-  set_chroma_qp(currMB);
+  }  
 }
 
 /*!
@@ -163,7 +172,7 @@ int Qstep2QP( double Qstep )
  *
  *************************************************************************************
 */
-int calc_MAD()
+int ComputeMBMAD()
 {
   int k, l, sum = 0;
 
@@ -198,12 +207,14 @@ double ComputeFrameMAD()
  *
  *************************************************************************************
 */
-void copy_rc_generic( rc_generic *dst, rc_generic *src )
+void rc_copy_generic( rc_generic *dst, rc_generic *src )
 {
   /* buffer original addresses for which memory has been allocated */
   int *tmpMADofMB = dst->MADofMB;
 
   /* copy object */
+
+  // This could be written as: *dst = *src;
   memcpy( (void *)dst, (void *)src, sizeof(rc_generic) );
 
   /* restore original addresses */
@@ -220,12 +231,12 @@ void copy_rc_generic( rc_generic *dst, rc_generic *src )
  *
  *************************************************************************************
  */
-void generic_alloc( rc_generic **prc )
+void rc_alloc_generic( rc_generic **prc )
 {
   *prc = (rc_generic *) malloc ( sizeof( rc_generic ) );
   if (NULL == *prc)
   {
-    no_mem_exit("init_global_buffers: generic_alloc");
+    no_mem_exit("init_global_buffers: rc_alloc_generic");
   }
   (*prc)->MADofMB = (int *) calloc (img->FrameSizeInMbs, sizeof (int));
   if (NULL == (*prc)->MADofMB)
@@ -243,7 +254,7 @@ void generic_alloc( rc_generic **prc )
  *
  *************************************************************************************
  */
-void generic_free(rc_generic **prc)
+void rc_free_generic(rc_generic **prc)
 {
   if (NULL!=(*prc)->MADofMB)
   {
@@ -264,53 +275,55 @@ void generic_free(rc_generic **prc)
  *
  *************************************************************************************
  */
-void init_GOP_rc()
+void rc_init_gop_params(void)
 {
-  int M,N,n,np,nb;           //Rate control
+  int np, nb; 
+
+  switch( input->RCUpdateMode )
   {
-    if (img->type == I_SLICE && ((input->RCUpdateMode != RC_MODE_1 && input->RCUpdateMode != RC_MODE_3) || !(img->number) ) )
+  case RC_MODE_1: case RC_MODE_3: 
+    if (!(img->number) )
     {
-      if (input->intra_period == 0)
-      {
-        n = input->no_frames + (input->no_frames - 1) * input->successive_Bframe;
+      /* number of P frames */
+      np = input->no_frames - 1;
+      /* number of B frames */
+      nb = np * input->successive_Bframe;
 
-        /* number of P frames */
-        np = input->no_frames-1;
-
-        /* number of B frames */
-        nb = (input->no_frames - 1) * input->successive_Bframe;
-      }
-      else if ( input->RCUpdateMode != RC_MODE_1 && input->RCUpdateMode != RC_MODE_3 )
-      {
-        N = input->intra_period*(input->successive_Bframe+1);
-        M = input->successive_Bframe+1;
-        n = (img->number == 0) ? N - ( M - 1) : N;
-
-        /* last GOP may contain less frames */
-        if ((img->number / input->intra_period) >= (input->no_frames / input->intra_period))
-        {
-          if (img->number != 0)
-            n = (input->no_frames - img->number) + (input->no_frames - img->number - 1) * input->successive_Bframe + input->successive_Bframe;
-          else
-            n = input->no_frames  + (input->no_frames - 1) * input->successive_Bframe;
-        }
-
-        /* number of P frames */
-        if (img->number == 0)
-          np = (n + 2 * (M - 1)) / M - 1; /* first GOP */
-        else
-          np = (n + (M - 1)) / M - 1;
-
-        /* number of B frames */
-        nb = n - np - 1;
-      }
-      else // applies RC to I and B slices
-      {
-        np = input->no_frames - 1; // includes I and P slices/frames except the very first IDR I_SLICE
-        nb = (input->no_frames - 1) * input->successive_Bframe;
-      }
       rc_init_GOP(quadratic_RC, np, nb);
     }
+    break;
+  case RC_MODE_0: case RC_MODE_2:
+    if (input->idr_period == 0)
+    {
+      /* number of P frames */
+      np = input->no_frames - 1;
+      /* number of B frames */
+      nb = np * input->successive_Bframe;
+    }
+    else   
+    {
+      int M = input->successive_Bframe + 1;
+      int N = M * input->idr_period;      
+      int n = (img->number == 0) ? N - ( M - 1) : N;
+
+      /* last GOP may contain less frames */
+      if ((img->number / input->idr_period) >= (input->no_frames / input->idr_period))
+      {
+        if (img->number != 0)
+          n = (input->no_frames - img->number) * (input->successive_Bframe + 1);
+        else
+          n = input->no_frames  + (input->no_frames - 1) * input->successive_Bframe;
+      }
+
+      /* number of P frames */
+      np = (img->number == 0) ? 1 + ((n - 2) / M) : (n - 1) / M; 
+      /* number of B frames */
+      nb = n - np - 1;
+    }
+    rc_init_GOP(quadratic_RC, np, nb);
+    break;
+  default:
+    break;
   }
 }
 
@@ -321,30 +334,113 @@ void init_GOP_rc()
  *
  *************************************************************************************
  */
-void init_frame_rc(int FrameNumberInFile)
+
+void rc_init_frame(int FrameNumberInFile)
 {
-  /*update the number of MBs in the basic unit for MB adaptive
-  f/f coding*/
+  switch( input->RCUpdateMode )
+  {
+  case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
+
+  // update the number of MBs in the basic unit for MBAFF coding
   if( (input->MbInterlace) && (input->basicunit < img->FrameSizeInMbs) && (img->type == P_SLICE || (input->RCUpdateMode == RC_MODE_1 && img->number) ) )
     img->BasicUnit = input->basicunit << 1;
   else
     img->BasicUnit = input->basicunit;
 
-  if ( input->RDPictureDecision )
-  {
-    // store rate allocation quadratic...
-    copy_rc_jvt( quadratic_RC_init, quadratic_RC );
-    // ...and generic model
-    copy_rc_generic( generic_RC_init, generic_RC );
+    if ( input->RDPictureDecision )
+    {    
+      rc_copy_quadratic( quadratic_RC_init, quadratic_RC ); // store rate allocation quadratic...    
+      rc_copy_generic( generic_RC_init, generic_RC ); // ...and generic model
+    }
+    rc_init_pict_ptr(quadratic_RC, 1,0,1, 1.0F);
+
+    if( active_sps->frame_mbs_only_flag)
+      generic_RC->TopFieldFlag=0;
+
+    img->qp = updateQP(quadratic_RC, 0);
+    break;
+  default:
+    break;
   }
-
-  rc_init_pict(quadratic_RC, 1,0,1, 1.0F);   
-
-  img->qp  = updateQP(quadratic_RC, 0);
-
-  //pic_type = img->type;
-  //QP =0;
-
-  if( active_sps->frame_mbs_only_flag)
-    generic_RC->TopFieldFlag=0;
 }
+
+/*!
+ *************************************************************************************
+ * \brief
+ *    Initialize Sequence Level Rate Control parameters
+ *
+ *************************************************************************************
+ */
+
+void rc_init_sequence(void)
+{
+  switch( input->RCUpdateMode )
+  {
+  case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
+    rc_init_seq(quadratic_RC);
+    break;
+  default:
+    break;
+  }
+}
+
+void rc_store_slice_header_bits( int len )
+{
+  switch (input->RCUpdateMode)
+  {
+  case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
+    generic_RC->NumberofHeaderBits +=len;
+
+    // basic unit layer rate control
+    if(img->BasicUnit < img->FrameSizeInMbs)
+      generic_RC->NumberofBasicUnitHeaderBits +=len;
+    break;
+  default:
+    break;
+  }
+}
+
+void update_qp_cbp_tmp(Macroblock *currMB, int cbp, int best_mode)
+{
+  if (((cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM) ))
+    currMB->prev_cbp = 1;
+  else if ((cbp==0 && !input->RCEnable) || (best_mode==IPCM))
+  {
+    currMB->delta_qp  = 0;
+    currMB->qp        = currMB->prev_qp;
+    currMB->qp_scaled[0] = currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP;
+    currMB->qp_scaled[1] = currMB->qpc[0] + img->bitdepth_chroma_qp_scale;
+    currMB->qp_scaled[2] = currMB->qpc[1] + img->bitdepth_chroma_qp_scale;
+
+    select_dct(currMB);
+
+    set_chroma_qp(currMB);
+    img->qp           = currMB->qp;
+    currMB->prev_cbp  = 0;
+  }
+}
+
+/*!
+*************************************************************************************
+* \brief
+*    Update Rate Control Difference
+*************************************************************************************
+*/
+void rc_store_diff(int cpix_x, int cpix_y, imgpel prediction[16][16])
+{
+  int i, j;
+  int *iDst;
+  imgpel *Src1, *Src2;
+
+  for(j = 0; j < MB_BLOCK_SIZE; j++)
+  {
+    iDst = diffy[j];
+    Src1 = &pCurImg[cpix_y + j][cpix_x];
+    Src2 = prediction[j];
+    for (i = 0; i < MB_BLOCK_SIZE; i++)
+    {
+      iDst[i] = Src1[i] - Src2[i];
+    }
+  }
+}
+

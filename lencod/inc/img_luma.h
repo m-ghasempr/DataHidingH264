@@ -19,11 +19,12 @@
 #define _IMG_LUMA_H_
 
 void getSubImagesLuma       ( StorablePicture *s );
-void getHorSubImageSixTap   ( StorablePicture *s, int dst_y, int dst_x, int src_y, int src_x );
-void getVerSubImageSixTap   ( StorablePicture *s, int dst_y, int dst_x, int src_y, int src_x, int use_stored_int );
-void getHorSubImageBiLinear ( StorablePicture *s, int dst_y, int dst_x, int src_y_l, int src_x_l, int src_y_r, int src_x_r, int offset );
-void getVerSubImageBiLinear ( StorablePicture *s, int dst_y, int dst_x, int src_y_l, int src_x_l, int src_y_r, int src_x_r, int offset );
-void getDiagSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y_l, int src_x_l, int src_y_r, int src_x_r, int offset_y_l, int offset_x_l,
-                              int offset_y_r, int offset_x_r );
-
+void getSubImageInteger     ( StorablePicture *s, imgpel **dstImg, imgpel **srcImg);
+void getHorSubImageSixTap   ( StorablePicture *s, imgpel **dst_imgY, imgpel **ref_imgY);
+void getVerSubImageSixTap   ( StorablePicture *s, imgpel **dst_imgY, imgpel **ref_imgY);
+void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dst_imgY, imgpel **ref_imgY);
+void getSubImageBiLinear    ( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR);
+void getHorSubImageBiLinear ( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR);
+void getVerSubImageBiLinear ( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB);
+void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB);
 #endif // _IMG_LUMA_H_

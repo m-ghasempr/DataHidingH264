@@ -46,6 +46,7 @@ typedef struct
   int nal_reference_idc;        //! NALU_PRIORITY_xxxx
   int nal_unit_type;            //! NALU_TYPE_xxxx    
   byte *buf;                    //! contains the first byte followed by the EBSP
+  unsigned short lost_packets;  //! true, if packet loss is detected
 } NALU_t;
 
 

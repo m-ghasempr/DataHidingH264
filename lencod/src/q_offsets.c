@@ -58,14 +58,12 @@ static const char OffsetType8x8[15][24] = {
 };
 
 
-int ****LevelOffset4x4Luma;
-int *****LevelOffset4x4Chroma;
-int ****LevelOffset8x8Luma;
-int *****LevelOffset8x8Chroma;
+int *****LevelOffset4x4Comp;
+int *****LevelOffset8x8Comp;
 
 // global pointers for level offset matrices
-int ****ptLevelOffset4x4Luma;
-int ****ptLevelOffset8x8Luma;
+int ****ptLevelOffset4x4;
+int ****ptLevelOffset8x8;
 
 int AdaptRndWeight;
 int AdaptRndCrWeight;
@@ -156,30 +154,28 @@ static const short Offset8_inter_default[64] = {
  ***********************************************************************
  * \brief
  *    Allocate Q matrix arrays
-***********************************************************************
+ ***********************************************************************
  */
 void allocate_QOffsets ()
 {
   int max_bitdepth = imax(input->BitDepthLuma, input->BitDepthChroma);
   int max_qp = (3 + 6*(max_bitdepth) - MIN_QP);
 
-  get_mem4Dint(&LevelOffset4x4Luma,      2, max_qp + 1, 4, 4);
-  get_mem5Dint(&LevelOffset4x4Chroma, 2, 2, max_qp + 1, 4, 4);
-  get_mem4Dint(&LevelOffset8x8Luma,      2, max_qp + 1, 8, 8);
-  get_mem5Dint(&LevelOffset8x8Chroma, 2, 2, max_qp + 1, 8, 8);
+  get_mem5Dint(&LevelOffset4x4Comp, 3, 2, max_qp + 1, 4, 4);
+  get_mem5Dint(&LevelOffset8x8Comp, 3, 2, max_qp + 1, 8, 8);
 
   if (input->AdaptRoundingFixed)
   {
-    get_mem3Dshort(&OffsetList4x4, 1, 15, 16);
+    get_mem3Dshort(&OffsetList4x4, 1, 25, 16);
     get_mem3Dshort(&OffsetList8x8, 1, 15, 64);    
   }
   else
   {
-    get_mem3Dshort(&OffsetList4x4, max_qp + 1, 15, 16);
+    get_mem3Dshort(&OffsetList4x4, max_qp + 1, 25, 16);
     get_mem3Dshort(&OffsetList8x8, max_qp + 1, 15, 64);    
   }
 
-  get_mem2Dshort(&OffsetList4x4input, 15, 16);
+  get_mem2Dshort(&OffsetList4x4input, 25, 16);
   get_mem2Dshort(&OffsetList8x8input, 15, 64);
 }
 
@@ -187,17 +183,15 @@ void allocate_QOffsets ()
  ***********************************************************************
  * \brief
  *    Free Q matrix arrays
-************************************************************************
+ ***********************************************************************
  */
 void free_QOffsets ()
 {
   int max_bitdepth = imax(input->BitDepthLuma, input->BitDepthChroma);
   int max_qp = (3 + 6*(max_bitdepth) - MIN_QP);
 
-  free_mem4Dint(LevelOffset4x4Luma,      2, max_qp + 1);
-  free_mem5Dint(LevelOffset4x4Chroma, 2, 2, max_qp + 1);
-  free_mem4Dint(LevelOffset8x8Luma,      2, max_qp + 1);
-  free_mem5Dint(LevelOffset8x8Chroma, 2, 2, max_qp + 1);
+  free_mem5Dint(LevelOffset4x4Comp, 3, 2, max_qp + 1);
+  free_mem5Dint(LevelOffset8x8Comp, 3, 2, max_qp + 1);
 
   if (input->AdaptRoundingFixed)
   {
@@ -443,7 +437,7 @@ void InitOffsetParam ()
   {
     if (input->OffsetMatrixPresentFlag)
     {
-      memcpy(&(OffsetList4x4[i][0][0]),&(OffsetList4x4input[0][0]), 15 * 16 * sizeof(short));
+      memcpy(&(OffsetList4x4[i][0][0]),&(OffsetList4x4input[0][0]), 25 * 16 * sizeof(short));
       memcpy(&(OffsetList8x8[i][0][0]),&(OffsetList8x8input[0][0]), 15 * 64 * sizeof(short));
     }
     else
@@ -454,7 +448,7 @@ void InitOffsetParam ()
         memcpy(&(OffsetList4x4[i][k][0]),&(Offset_intra_default_chroma[0]),  16 * sizeof(short));
       for (k = 3; k < 9; k++) // 3,4,5,6,7,8 (INTRA4X4_LUMA/CHROMA_INTERP/INTERB)
         memcpy(&(OffsetList4x4[i][k][0]),&(Offset_intra_default_inter[0]),  16 * sizeof(short));
-      for (k = 9; k < 15; k++) // 9,10,11,12,13,14 (INTER4X4)
+      for (k = 9; k < 25; k++) // 9,10,11,12,13,14 (INTER4X4)
         memcpy(&(OffsetList4x4[i][k][0]),&(Offset_inter_default[0]),  16 * sizeof(short));
 
       // 0 (INTRA8X8_LUMA_INTRA)
@@ -496,8 +490,11 @@ void InitOffsetParam ()
  */
 void CalculateOffsetParam ()
 {
-  int i, j, k, l, temp;
+  int i, j, k, temp;  
   int qp_per, qp;
+  short **OffsetList;
+  static int **LevelOffsetCmp0Intra, **LevelOffsetCmp1Intra, **LevelOffsetCmp2Intra;
+  static int **LevelOffsetCmp0Inter, **LevelOffsetCmp1Inter, **LevelOffsetCmp2Inter;
   int img_type = (img->type == SI_SLICE ? I_SLICE : (img->type == SP_SLICE ? P_SLICE : img->type));
 
   int max_qp_scale = imax(img->bitdepth_luma_qp_scale, img->bitdepth_chroma_qp_scale);
@@ -506,48 +503,97 @@ void CalculateOffsetParam ()
   AdaptRndWeight = input->AdaptRndWFactor[img->nal_reference_idc != 0][img_type];
   AdaptRndCrWeight = input->AdaptRndCrWFactor[img->nal_reference_idc != 0][img_type];
 
-  for (qp = 0; qp < max_qp + 1; qp++)
+  if (img_type == I_SLICE )
   {
-    k = qp_per_matrix [qp];
-    qp_per = Q_BITS + k - OffsetBits;
-    l = input->AdaptRoundingFixed ? 0 : qp;
-    for (j = 0; j < 4; j++)
+    for (qp = 0; qp < max_qp + 1; qp++)
     {
-      for (i = 0; i < 4; i++)
-      {
-        temp = (j << 2) + i;
-        if (img_type == I_SLICE)
-        {
-          LevelOffset4x4Luma[1][qp][j][i]     = (int) OffsetList4x4[l][0][temp] << qp_per;
-          LevelOffset4x4Chroma[0][1][qp][j][i] = (int) OffsetList4x4[l][1][temp] << qp_per;
-          LevelOffset4x4Chroma[1][1][qp][j][i] = (int) OffsetList4x4[l][2][temp] << qp_per;
-        }
-        else if (img_type == B_SLICE)
-        {
-          LevelOffset4x4Luma[1][qp][j][i]     = (int) OffsetList4x4[l][6][temp] << qp_per;
-          LevelOffset4x4Chroma[0][1][qp][j][i] = (int) OffsetList4x4[l][7][temp] << qp_per;
-          LevelOffset4x4Chroma[1][1][qp][j][i] = (int) OffsetList4x4[l][8][temp] << qp_per;
-        }
-        else
-        {
-          LevelOffset4x4Luma[1][qp][j][i]     = (int) OffsetList4x4[l][3][temp] << qp_per;
-          LevelOffset4x4Chroma[0][1][qp][j][i] = (int) OffsetList4x4[l][4][temp] << qp_per;
-          LevelOffset4x4Chroma[1][1][qp][j][i] = (int) OffsetList4x4[l][5][temp] << qp_per;
-        }
+      k = qp_per_matrix [qp];
+      qp_per = Q_BITS + k - OffsetBits;
+      OffsetList = OffsetList4x4[input->AdaptRoundingFixed ? 0 : qp];
+      LevelOffsetCmp0Intra = LevelOffset4x4Comp[0][1][qp];
+      LevelOffsetCmp1Intra = LevelOffset4x4Comp[1][1][qp];
+      LevelOffsetCmp2Intra = LevelOffset4x4Comp[2][1][qp];
 
-        if (img_type == B_SLICE)
+      temp = 0;
+      for (j = 0; j < 4; j++)
+      {
+        for (i = 0; i < 4; i++, temp++)
         {
-          LevelOffset4x4Luma[0][qp][j][i]     = (int) OffsetList4x4[l][12][temp] << qp_per;
-          LevelOffset4x4Chroma[0][0][qp][j][i] = (int) OffsetList4x4[l][13][temp] << qp_per;
-          LevelOffset4x4Chroma[1][0][qp][j][i] = (int) OffsetList4x4[l][14][temp] << qp_per;
-        }
-        else
-        {
-          LevelOffset4x4Luma[0][qp][j][i]     = (int) OffsetList4x4[l][9][temp] << qp_per;
-          LevelOffset4x4Chroma[0][0][qp][j][i] = (int) OffsetList4x4[l][10][temp] << qp_per;
-          LevelOffset4x4Chroma[1][0][qp][j][i] = (int) OffsetList4x4[l][11][temp] << qp_per;
+          LevelOffsetCmp0Intra[j][i] = (int) OffsetList[0][temp] << qp_per;
+          LevelOffsetCmp1Intra[j][i] = (int) OffsetList[1][temp] << qp_per;
+          LevelOffsetCmp2Intra[j][i] = (int) OffsetList[2][temp] << qp_per;
         }
       }
+    }
+  }
+  else if (img_type == B_SLICE)
+  {
+    for (qp = 0; qp < max_qp + 1; qp++)
+    {
+      k = qp_per_matrix [qp];
+      qp_per = Q_BITS + k - OffsetBits;
+      OffsetList = OffsetList4x4[input->AdaptRoundingFixed ? 0 : qp];
+      LevelOffsetCmp0Intra = LevelOffset4x4Comp[0][1][qp];
+      LevelOffsetCmp1Intra = LevelOffset4x4Comp[1][1][qp];
+      LevelOffsetCmp2Intra = LevelOffset4x4Comp[2][1][qp];
+      LevelOffsetCmp0Inter = LevelOffset4x4Comp[0][0][qp];
+      LevelOffsetCmp1Inter = LevelOffset4x4Comp[1][0][qp];
+      LevelOffsetCmp2Inter = LevelOffset4x4Comp[2][0][qp];
+
+
+      for (temp = 0, j = 0; j < 4; j++)
+      {
+        for (i = 0; i < 4; i++, temp++)
+        {          
+          // intra
+          LevelOffsetCmp0Intra[j][i] = (int) OffsetList[6][temp] << qp_per;
+          LevelOffsetCmp1Intra[j][i] = (int) OffsetList[7][temp] << qp_per;
+          LevelOffsetCmp2Intra[j][i] = (int) OffsetList[8][temp] << qp_per;
+        }
+      }
+
+      for (temp = 0, j = 0; j < 4; j++)
+      {
+        for (i = 0; i < 4; i++, temp++)
+        {          
+          // inter
+          LevelOffsetCmp0Inter[j][i] = (int) OffsetList[12][temp] << qp_per;
+          LevelOffsetCmp1Inter[j][i] = (int) OffsetList[13][temp] << qp_per;
+          LevelOffsetCmp2Inter[j][i] = (int) OffsetList[14][temp] << qp_per;
+        }
+      }
+
+    }
+  }
+  else
+  {
+    for (qp = 0; qp < max_qp + 1; qp++)
+    {
+      k = qp_per_matrix [qp];
+      qp_per = Q_BITS + k - OffsetBits;
+      OffsetList = OffsetList4x4[input->AdaptRoundingFixed ? 0 : qp];
+      LevelOffsetCmp0Intra = LevelOffset4x4Comp[0][1][qp];
+      LevelOffsetCmp1Intra = LevelOffset4x4Comp[1][1][qp];
+      LevelOffsetCmp2Intra = LevelOffset4x4Comp[2][1][qp];
+      LevelOffsetCmp0Inter = LevelOffset4x4Comp[0][0][qp];
+      LevelOffsetCmp1Inter = LevelOffset4x4Comp[1][0][qp];
+      LevelOffsetCmp2Inter = LevelOffset4x4Comp[2][0][qp];
+
+      temp = 0;
+      for (j = 0; j < 4; j++)
+      {
+        for (i = 0; i < 4; i++, temp++)
+        {
+          // intra
+          LevelOffsetCmp0Intra[j][i] = (int) OffsetList[3][temp] << qp_per;
+          LevelOffsetCmp1Intra[j][i] = (int) OffsetList[4][temp] << qp_per;
+          LevelOffsetCmp2Intra[j][i] = (int) OffsetList[5][temp] << qp_per;
+          // inter
+          LevelOffsetCmp0Inter[j][i] = (int) OffsetList[9 ][temp] << qp_per;
+          LevelOffsetCmp1Inter[j][i] = (int) OffsetList[10][temp] << qp_per;
+          LevelOffsetCmp2Inter[j][i] = (int) OffsetList[11][temp] << qp_per;
+        }
+      }      
     }
   }
 
@@ -556,22 +602,21 @@ void CalculateOffsetParam ()
   {
     if( img->colour_plane_id == 0 )
     {
-      ptLevelOffset4x4Luma   = LevelOffset4x4Luma;
+      ptLevelOffset4x4 = LevelOffset4x4Comp[0];
     }
     else if( img->colour_plane_id == 1 )
     {
-      ptLevelOffset4x4Luma   = LevelOffset4x4Chroma[0];
+      ptLevelOffset4x4   = LevelOffset4x4Comp[1];
     }
     else if( img->colour_plane_id == 2 )
     {
-      ptLevelOffset4x4Luma   = LevelOffset4x4Chroma[1];
+      ptLevelOffset4x4   = LevelOffset4x4Comp[2];
     }
   }
   else
   {
-    ptLevelOffset4x4Luma = LevelOffset4x4Luma;
+    ptLevelOffset4x4 = LevelOffset4x4Comp[0];
   }
-
 }
 
 /*!
@@ -589,57 +634,89 @@ void CalculateOffset8Param ()
   int max_qp_scale = imax(img->bitdepth_luma_qp_scale, img->bitdepth_chroma_qp_scale);
   int max_qp = 51 + max_qp_scale - MIN_QP;
 
-  for (qp = 0; qp < max_qp + 1; qp++)
+  if (img->type == I_SLICE || img->type == SI_SLICE )
   {
-    q_bits = Q_BITS_8 + qp_per_matrix[qp] - OffsetBits;
-    k = input->AdaptRoundingFixed ? 0 : qp;
-    for (j = 0; j < 8; j++)
+    for (qp = 0; qp < max_qp + 1; qp++)
     {
-      for (i = 0; i < 8; i++)
+      q_bits = Q_BITS_8 + qp_per_matrix[qp] - OffsetBits;
+      k = input->AdaptRoundingFixed ? 0 : qp;
+      for (j = 0; j < 8; j++)
       {
-        temp = (j << 3) + i;
-        // INTRA8X8
-        if (img->type == I_SLICE)
-          LevelOffset8x8Luma[1][qp][j][i] = (int) OffsetList8x8[k][0][temp] << q_bits;
-        else if (img->type == B_SLICE)
-          LevelOffset8x8Luma[1][qp][j][i] = (int) OffsetList8x8[k][2][temp] << q_bits;
-        else
-          LevelOffset8x8Luma[1][qp][j][i] = (int) OffsetList8x8[k][1][temp] << q_bits;
+        temp = (j << 3);
+        for (i = 0; i < 8; i++)
+        {          
+          // INTRA8X8
+          LevelOffset8x8Comp[0][1][qp][j][i] = (int) OffsetList8x8[k][0][temp] << q_bits;
 
-        // INTER8X8
-        if (img->type == B_SLICE)
-          LevelOffset8x8Luma[0][qp][j][i] = (int) OffsetList8x8[k][4][temp] << q_bits;
-        else
-          LevelOffset8x8Luma[0][qp][j][i] = (int) OffsetList8x8[k][3][temp] << q_bits;
+          // INTRA8X8 CHROMAU
+          LevelOffset8x8Comp[1][1][qp][j][i] = (int) OffsetList8x8[k][5][temp] << q_bits;
 
-       // INTRA8X8 CHROMAU
-        if (img->type == I_SLICE)
-          LevelOffset8x8Chroma[0][1][qp][j][i] = (int) OffsetList8x8[k][5][temp] << q_bits;
-        else if (img->type == B_SLICE)
-          LevelOffset8x8Chroma[0][1][qp][j][i] = (int) OffsetList8x8[k][7][temp] << q_bits;
-        else
-          LevelOffset8x8Chroma[0][1][qp][j][i] = (int) OffsetList8x8[k][6][temp] << q_bits;
+          // INTRA8X8 CHROMAV
+          LevelOffset8x8Comp[2][1][qp][j][i] = (int) OffsetList8x8[k][10][temp++] << q_bits;
+        }
+      }
+    }
+  }
+  else if ((img->type == P_SLICE) || (img->type == SP_SLICE))
+  {
+    for (qp = 0; qp < max_qp + 1; qp++)
+    {
+      q_bits = Q_BITS_8 + qp_per_matrix[qp] - OffsetBits;
+      k = input->AdaptRoundingFixed ? 0 : qp;
+      for (j = 0; j < 8; j++)
+      {
+        temp = (j << 3);
+        for (i = 0; i < 8; i++)
+        {
+          // INTRA8X8
+          LevelOffset8x8Comp[0][1][qp][j][i] = (int) OffsetList8x8[k][1][temp] << q_bits;
 
-        // INTER8X8 CHROMAU
-        if (img->type == B_SLICE)
-          LevelOffset8x8Chroma[0][0][qp][j][i] = (int) OffsetList8x8[k][9][temp] << q_bits;
-        else
-          LevelOffset8x8Chroma[0][0][qp][j][i] = (int) OffsetList8x8[k][8][temp] << q_bits;
+          // INTER8X8
+          LevelOffset8x8Comp[0][0][qp][j][i] = (int) OffsetList8x8[k][3][temp] << q_bits;
 
-       // INTRA8X8 CHROMAV
-        if (img->type == I_SLICE)
-          LevelOffset8x8Chroma[1][1][qp][j][i] = (int) OffsetList8x8[k][10][temp] << q_bits;
-        else if (img->type == B_SLICE)
-          LevelOffset8x8Chroma[1][1][qp][j][i] = (int) OffsetList8x8[k][12][temp] << q_bits;
-        else
-          LevelOffset8x8Chroma[1][1][qp][j][i] = (int) OffsetList8x8[k][11][temp] << q_bits;
+          // INTRA8X8 CHROMAU
+          LevelOffset8x8Comp[1][1][qp][j][i] = (int) OffsetList8x8[k][6][temp] << q_bits;
 
-        // INTER8X8 CHROMAV
-        if (img->type == B_SLICE)
-          LevelOffset8x8Chroma[1][0][qp][j][i] = (int) OffsetList8x8[k][14][temp] << q_bits;
-        else
-          LevelOffset8x8Chroma[1][0][qp][j][i] = (int) OffsetList8x8[k][13][temp] << q_bits;
+          // INTER8X8 CHROMAU
+          LevelOffset8x8Comp[1][0][qp][j][i] = (int) OffsetList8x8[k][8][temp] << q_bits;
 
+          // INTRA8X8 CHROMAV
+          LevelOffset8x8Comp[2][1][qp][j][i] = (int) OffsetList8x8[k][11][temp] << q_bits;
+
+          // INTER8X8 CHROMAV
+          LevelOffset8x8Comp[2][0][qp][j][i] = (int) OffsetList8x8[k][13][temp++] << q_bits;
+        }
+      }
+    }
+  }
+  else
+  {
+    for (qp = 0; qp < max_qp + 1; qp++)
+    {
+      q_bits = Q_BITS_8 + qp_per_matrix[qp] - OffsetBits;
+      k = input->AdaptRoundingFixed ? 0 : qp;
+      for (j = 0; j < 8; j++)
+      {
+        temp = (j << 3);
+        for (i = 0; i < 8; i++)
+        {
+          // INTRA8X8
+          LevelOffset8x8Comp[0][1][qp][j][i] = (int) OffsetList8x8[k][2][temp] << q_bits;
+          // INTER8X8
+          LevelOffset8x8Comp[0][0][qp][j][i] = (int) OffsetList8x8[k][4][temp] << q_bits;
+
+          // INTRA8X8 CHROMAU
+          LevelOffset8x8Comp[1][1][qp][j][i] = (int) OffsetList8x8[k][7][temp] << q_bits;
+
+          // INTER8X8 CHROMAU
+          LevelOffset8x8Comp[1][0][qp][j][i] = (int) OffsetList8x8[k][9][temp] << q_bits;
+
+          // INTRA8X8 CHROMAV
+          LevelOffset8x8Comp[2][1][qp][j][i] = (int) OffsetList8x8[k][12][temp] << q_bits;
+
+          // INTER8X8 CHROMAV
+          LevelOffset8x8Comp[2][0][qp][j][i] = (int) OffsetList8x8[k][14][temp++] << q_bits;
+        }
       }
     }
   }
@@ -649,20 +726,36 @@ void CalculateOffset8Param ()
   {
     if( img->colour_plane_id == 0 )
     {
-      ptLevelOffset8x8Luma   = LevelOffset8x8Luma;
+      ptLevelOffset8x8 = LevelOffset8x8Comp[0];
     }
     else if( img->colour_plane_id == 1 )
     {
-      ptLevelOffset8x8Luma   = LevelOffset8x8Chroma[0];
+      ptLevelOffset8x8 = LevelOffset8x8Comp[1];
     }
     else if( img->colour_plane_id == 2 )
     {
-      ptLevelOffset8x8Luma   = LevelOffset8x8Chroma[1];
+      ptLevelOffset8x8 = LevelOffset8x8Comp[2];
     }
   }
   else
   {
-    ptLevelOffset8x8Luma = LevelOffset8x8Luma;
+    ptLevelOffset8x8 = LevelOffset8x8Comp[0];
   }
 }
 
+void SelectColorType (int colour_id)
+{
+  switch (colour_id)
+  {
+  case 0:
+  default:
+    ptLevelOffset8x8   = LevelOffset8x8Comp[0];
+    break;
+  case 1:
+    ptLevelOffset8x8   = LevelOffset8x8Comp[1];
+    break;
+  case 2:
+    ptLevelOffset8x8   = LevelOffset8x8Comp[2];
+    break;
+  }
+}

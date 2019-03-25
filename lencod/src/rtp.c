@@ -4,14 +4,11 @@
  * \file rtp.c
  *
  * \brief
- *    Functions to handle RTP headers and packets per RFC1889 and RTP NAL spec
- *    Functions support little endian systems only (Intel, not Motorola/Sparc)
- *
- * \date
- *    30 September 2001
+ *    Functions to handle RTP headers and packets per RFC 3984
+ *    with restricted functionality.
  *
  * \author
- *    Stephan Wenger   stewe@cs.tu-berlin.de
+ *    Stephan Wenger    stewe@cs.tu-berlin.de
  *****************************************************************************/
 
 #include <stdlib.h>
@@ -39,8 +36,8 @@
 
 int CurrentRTPTimestamp = 0;      //! The RTP timestamp of the current packet,
                                   //! incremented with all P and I frames
-int CurrentRTPSequenceNumber = 0; //! The RTP sequence number of the current packet
-                                  //! incremented by one for each sent packet
+unsigned short CurrentRTPSequenceNumber = 0; //! The RTP sequence number of the current packet
+                                             //! incremented by one for each sent packet
 
 FILE *f;
 /*!
@@ -66,7 +63,7 @@ FILE *f;
  *    for RTP header fields
  *
  * \date
- *    30 Spetember 2001
+ *    30 September 2001
  *
  * \author
  *    Stephan Wenger   stewe@cs.tu-berlin.de
@@ -86,7 +83,6 @@ int ComposeRTPPacket (RTPpacket_t *p)
   assert (p->cc == 0);    // mixer designers need to change this one
   assert (p->m == 0 || p->m == 1);
   assert (p->pt < 128);
-  assert (p->seq < 65536);
   assert (p->payload != NULL);
   assert (p->paylen < 65536 - 40);  // 2**16 -40 for IP/UDP/RTP header
   assert (p->packet != NULL);
@@ -107,7 +103,7 @@ int ComposeRTPPacket (RTPpacket_t *p)
   temp16 = htons((unsigned short)p->seq);
   memcpy (&p->packet[2], &temp16, 2);  // change to shifts for unified byte sex
 
-  //declare a temporary variable to perform network byte order converson
+  //declare a temporary variable to perform network byte order conversion
   temp32 = htonl(p->timestamp);
   memcpy (&p->packet[4], &temp32, 4);  // change to shifts for unified byte sex
 
@@ -551,7 +547,7 @@ void PrepareAggregationSEIMessage()
   }
 
   if (seiHasTone_mapping)
-  {	
+  {
     FinalizeToneMapping();
     write_sei_message(AGGREGATION_SEI, seiToneMapping.data->streamBuffer, seiToneMapping.payloadSize, SEI_TONE_MAPPING);
     ClearToneMapping();

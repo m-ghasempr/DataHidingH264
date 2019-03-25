@@ -36,6 +36,7 @@
 #include "ifunctions.h"
 #include "parsetcommon.h"
 
+#define FILE_NAME_SIZE 255
 
 typedef unsigned char  byte;                     //!<  8 bit unsigned
 #if (IMGTYPE == 1)
@@ -135,14 +136,18 @@ typedef enum
   INTRA_MB_16x16
 } IntraInterDecision;
 
-typedef enum 
+typedef enum
 {
+  BITS_HEADER,
   BITS_TOTAL_MB,
-  BITS_HEADER_MB,
+  BITS_MB_MODE,
   BITS_INTER_MB,
   BITS_CBP_MB,
   BITS_COEFF_Y_MB,
   BITS_COEFF_UV_MB,
+  BITS_COEFF_CB_MB,  
+  BITS_COEFF_CR_MB,
+  BITS_DELTA_QUANT_MB,
   MAX_BITCOUNTER_MB
 } BitCountType;
 
@@ -163,8 +168,8 @@ typedef enum
 
 typedef enum 
 {
- LIST_0=0,
- LIST_1=1
+  LIST_0=0,
+  LIST_1=1
 } Lists;
 
 
@@ -174,6 +179,18 @@ typedef enum
   TOP_FIELD,
   BOTTOM_FIELD
 } PictureStructure;           //!< New enum for field processing
+
+typedef enum
+{
+  // YUV
+  PLANE_Y = 0,  // PLANE_Y
+  PLANE_U = 1,  // PLANE_Cb
+  PLANE_V = 2,  // PLANE_Cr
+  // RGB
+  PLANE_G = 0,
+  PLANE_B = 1,
+  PLANE_R = 2,
+} ColorPlane;
 
 
 typedef enum 
@@ -249,7 +266,6 @@ typedef struct
   BiContextType delta_qp_contexts[NUM_DELTA_QP_CTX];
   BiContextType mb_aff_contexts  [NUM_MB_AFF_CTX];
   BiContextType transform_size_contexts [NUM_TRANSFORM_SIZE_CTX];
-
 } MotionInfoContexts;
 
 #define NUM_IPR_CTX    2
@@ -268,12 +284,10 @@ typedef struct
   BiContextType  cipr_contexts[NUM_CIPR_CTX];
   BiContextType  cbp_contexts [3][NUM_CBP_CTX];
   BiContextType  bcbp_contexts[NUM_BLOCK_TYPES][NUM_BCBP_CTX];
-  BiContextType  map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
-  BiContextType  last_contexts[NUM_BLOCK_TYPES][NUM_LAST_CTX];
+  BiContextType  map_contexts     [2][NUM_BLOCK_TYPES][NUM_MAP_CTX];
+  BiContextType  last_contexts    [2][NUM_BLOCK_TYPES][NUM_LAST_CTX];
   BiContextType  one_contexts [NUM_BLOCK_TYPES][NUM_ONE_CTX];
   BiContextType  abs_contexts [NUM_BLOCK_TYPES][NUM_ABS_CTX];
-  BiContextType  fld_map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
-  BiContextType  fld_last_contexts[NUM_BLOCK_TYPES][NUM_LAST_CTX];
 } TextureInfoContexts;
 
 
@@ -340,14 +354,15 @@ typedef struct macroblock
   int           mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int           cbp;
   int64         cbp_blk ;
-  int64         cbp_bits;
-
-  int           is_skip;
+  int64         cbp_blk_CbCr[2]; 
+  int64         cbp_bits    [3];
+  int64         cbp_bits_8x8[3];
 
   int           i16mode;
   char          b8mode[4];
   char          b8pdir[4];
-  int           ei_flag;
+  char          ei_flag;             //!< error indicator flag that enables concealment
+  char          dpl_flag;            //!< error indicator flag that signals a missing data partition
 
   int           LFDisableIdc;
   int           LFAlphaC0Offset;
@@ -358,6 +373,7 @@ typedef struct macroblock
 
   int           skip_flag;
 
+  int mbAddrX;
   int mbAddrA, mbAddrB, mbAddrC, mbAddrD;
   int mbAvailA, mbAvailB, mbAvailC, mbAvailD;
 
@@ -402,7 +418,7 @@ typedef struct
   PictureStructure    structure;     //!< Identify picture structure type
   int                 start_mb_nr;   //!< MUST be set by NAL even in case of ei_flag == 1
   int                 max_part_nr;
-  int                 dp_mode;       //!< data partioning mode
+  int                 dp_mode;       //!< data partitioning mode
   int                 next_header;
 //  int                 last_mb_nr;    //!< only valid when entropy coding == CABAC
   DataPartition       *partArr;      //!< array of partitions
@@ -426,6 +442,8 @@ typedef struct
 
   int                 pic_parameter_set_id;   //!<the ID of the picture parameter set the slice is reffering to
 
+  int                 dpB_NotPresent;    //!< non-zero, if data partition B is lost
+  int                 dpC_NotPresent;    //!< non-zero, if data partition C is lost
 } Slice;
 
 //****************************** ~DM ***********************************
@@ -460,26 +478,29 @@ typedef struct img_par
   int pix_c_y;
 
   int allrefzero;
-  imgpel mpr[3][16][16];                      //!< predicted block
+  
   int mvscale[6][MAX_REFERENCE_PICTURES];
-  int m7[16][16];                             //!< final 4x4 block. Extended to 16x16 for ABT
-  int cof[4][12][4][4];                       //!< correction coefficients from predicted
+
+  imgpel mpr[MAX_PLANE][16][16];     //!< predicted block
+  int    m7 [MAX_PLANE][16][16];     //!< residual macroblock
+  int    cof[MAX_PLANE][16][16];     //!< transformed coefficients 
+  
   int cofu[16];
-  byte **ipredmode;                            //!< prediction type [90][74]
+  byte **ipredmode;                  //!< prediction type [90][74]
   int ***nz_coeff;
   int **siblock;
-  int cod_counter;                            //!< Current count of number of skipped macroblocks in a row
+  int cod_counter;                   //!< Current count of number of skipped macroblocks in a row
 
   int newframe;
 
-  int structure;                               //!< Identify picture structure type
+  int structure;                     //!< Identify picture structure type
   int pstruct_next_P;
 
   // B pictures
-  Slice       *currentSlice;                   //!< pointer to current Slice data struct
-  Macroblock          *mb_data;                //!< array containing all MBs of a whole frame
-  Macroblock    *mb_data_JV[MAX_PLANE];        //!< mb_data to be used for 4:4:4 independent mode
-  int colour_plane_id;                         //!< colour_plane_id of the current coded slice
+  Slice      *currentSlice;          //!< pointer to current Slice data struct
+  Macroblock *mb_data;               //!< array containing all MBs of a whole frame
+  Macroblock *mb_data_JV[MAX_PLANE]; //!< mb_data to be used for 4:4:4 independent mode
+  int colour_plane_id;               //!< colour_plane_id of the current coded slice
   int ChromaArrayType;
 
   int subblock_x;
@@ -578,10 +599,10 @@ typedef struct img_par
   int bitdepth_scale[2];
   int bitdepth_luma_qp_scale;
   int bitdepth_chroma_qp_scale;
-  unsigned int dc_pred_value_luma;            //!< luma value for DC prediction (depends on luma pel bit depth)
-  unsigned int dc_pred_value_chroma;          //!< chroma value for DC prediction (depends on chroma pel bit depth)
+  unsigned int dc_pred_value_comp[MAX_PLANE]; //!< component value for DC prediction (depends on component pel bit depth)
   int max_imgpel_value;                       //!< max value that one luma picture element (pixel) can take (depends on pic_unit_bitdepth)
   int max_imgpel_value_uv;                    //!< max value that one chroma picture element (pixel) can take (depends on pic_unit_bitdepth)
+  int max_imgpel_value_comp[MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
   int Transform8x8Mode;
   int profile_idc;
   int yuv_format;
@@ -651,14 +672,15 @@ time_t tot_time;
 // input parameters from configuration file
 struct inp_par
 {
-  char infile[100];                       //!< H.264 inputfile
-  char outfile[100];                      //!< Decoded YUV 4:2:0 output
-  char reffile[100];                      //!< Optional YUV 4:2:0 reference file for SNR measurement
+  char infile[FILE_NAME_SIZE];                       //!< H.264 inputfile
+  char outfile[FILE_NAME_SIZE];                      //!< Decoded YUV 4:2:0 output
+  char reffile[FILE_NAME_SIZE];                      //!< Optional YUV 4:2:0 reference file for SNR measurement
   int FileFormat;                         //!< File format of the Input file, PAR_OF_ANNEXB or PAR_OF_RTP
   int ref_offset;
   int poc_scale;
   int write_uv;
   int silent;
+  int loopfilter_bitstream;               //!< Loop filter usage determined by flags and parameters in bitstream 
 
 #ifdef _LEAKYBUCKET_
   unsigned long R_decoder;                //!< Decoder Rate in HRD Model
@@ -737,27 +759,28 @@ void exit_picture();
 int  read_new_slice();
 void decode_one_slice(struct img_par *img,struct inp_par *inp);
 
-void start_macroblock(struct img_par *img,int CurrentMBInScanOrder);
-void read_one_macroblock(struct img_par *img,struct inp_par *inp);
-void read_ipred_modes(struct img_par *img,struct inp_par *inp);
-int  decode_one_macroblock(struct img_par *img,struct inp_par *inp);
+void start_macroblock(Macroblock **currMB, struct img_par *img,int CurrentMBInScanOrder);
+void read_one_macroblock(Macroblock *currMB, struct img_par *img,struct inp_par *inp);
+void read_ipred_modes(Macroblock *currMB, struct img_par *img,struct inp_par *inp);
+int  decode_one_macroblock(Macroblock *currMB, struct img_par *img,struct inp_par *inp);
 Boolean  exit_macroblock(struct img_par *img,struct inp_par *inp, int eos_bit);
-void decode_ipcm_mb(struct img_par *img);
+void decode_ipcm_mb(Macroblock *currMB, struct img_par *img);
 
 
-void readMotionInfoFromNAL (struct img_par *img,struct inp_par *inp);
-void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp);
+void readMotionInfoFromNAL (Macroblock *currMB, struct img_par *img,struct inp_par *inp);
+void readCBPandCoeffsFromNAL(Macroblock *currMB, struct img_par *img,struct inp_par *inp);
+void concealIPCMcoeffs(struct img_par *img);
 void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct datapartition *dP);
-void SetMotionVectorPredictor (struct img_par  *img, short pmv[2], char ref_frame, byte list, 
+void SetMotionVectorPredictor (Macroblock *currMB, struct img_par  *img, short pmv[2], char ref_frame, byte list, 
                                char ***refPic, short ****tmp_mv, 
                                int block_x, int block_y, int blockshape_x, int blockshape_y);
 
-void readLumaCoeff8x8_CABAC (struct img_par *img,struct inp_par *inp, int b8);
-void itrans8x8(struct img_par *img, int ioff, int joff);
+void readLumaCoeff8x8_CABAC (Macroblock *currMB, ColorPlane pl, struct img_par *img,struct inp_par *inp, int b8);
+void itrans8x8(ColorPlane pl, struct img_par *img, int ioff, int joff);
 
 void copyblock_sp(struct img_par *img,int block_x,int block_y);
-int  intrapred_luma_16x16(struct img_par *img,int predmode);
-void intrapred_chroma(struct img_par *img, int uv);
+int  intrapred_luma_16x16(Macroblock *currMB, ColorPlane pl, struct img_par *img,int predmode);
+void intrapred_chroma(Macroblock *currMB, struct img_par *img, int uv);
 
 // SLICE function pointers
 int  (*nal_startcode_follows) (struct img_par*, int );
@@ -814,6 +837,11 @@ unsigned CeilLog2_sf( unsigned uiVal);
 void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps);
 void CalculateQuantParam(void);
 void CalculateQuant8Param(void);
+
+//For residual DPCM
+int Inv_Residual_trans_4x4(struct img_par *img, int ioff, int joff, int i0, int j0, int chroma, int yuv);
+int Inv_Residual_trans_8x8(ColorPlane PLANE_Y, struct img_par *img, int ioff,int joff);
+int ipmode_DPCM;
 
 // For 4:4:4 independent mode
 void change_plane_JV( int nplane );

@@ -32,9 +32,8 @@ NOTE: This file contains only a quick overview.
 1.1 Windows
 -----------
   
-  Workspaces for MS Visual C++ 6.0/2003/2005 are provided with the names 
+  Workspaces for MS Visual C++ 2003/2005 are provided with the names 
 
-    jm.dsw      - MS Visual C++ 6.0
     jm_vc7.sln  - MS Visual C++ 2003
     jm_vc8.sln  - MS Visual C++ 2005
 

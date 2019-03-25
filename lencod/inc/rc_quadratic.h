@@ -105,7 +105,6 @@ typedef struct
   double *FCBUPFMAD;
 
   Boolean GOPOverdue;
-  int64   Iprev_bits;
   int64   Pprev_bits;
 
   /* rate control variables */
@@ -123,47 +122,64 @@ typedef struct
 
 // rate control functions
 // init/copy
-void rc_alloc   ( rc_quadratic **prc );
-void rc_free    ( rc_quadratic **prc );
-void copy_rc_jvt( rc_quadratic *dst, rc_quadratic *src );
+void rc_alloc_quadratic( rc_quadratic **prc );
+void rc_free_quadratic ( rc_quadratic **prc );
+void rc_copy_quadratic ( rc_quadratic *dst, rc_quadratic *src );
 
 // rate control (externally visible)
-void rc_init_seq   (rc_quadratic *prc);
-void rc_init_GOP   (rc_quadratic *prc, int np, int nb);
-void rc_update_pict_frame(rc_quadratic *prc, int nbits);
-void rc_init_pict  (rc_quadratic *prc, int fieldpic,int topfield, int targetcomputation, float mult);
-void rc_update_pict(rc_quadratic *prc, int nbits);
+void rc_init_seq          (rc_quadratic *prc);
+void rc_init_GOP          (rc_quadratic *prc, int np, int nb);
+void rc_update_pict_frame (rc_quadratic *prc, int nbits);
+void rc_init_pict         (rc_quadratic *prc, int fieldpic, int topfield, int targetcomputation, float mult);
+void rc_update_pict       (rc_quadratic *prc, int nbits);
+void rc_update_picture    (int bits);
 
-void updateQPInterlace( rc_quadratic *prc );
-void updateQPNonPicAFF( rc_quadratic *prc );
-void updateBottomField( rc_quadratic *prc );
-int  updateFirstP( rc_quadratic *prc, int topfield );
-int  updateNegativeTarget( rc_quadratic *prc, int topfield, int m_Qp );
-int  updateFirstBU( rc_quadratic *prc, int topfield );
-void updateLastBU( rc_quadratic *prc, int topfield );
-void predictCurrPicMAD( rc_quadratic *prc );
-void updateModelQPBU( rc_quadratic *prc, int topfield, int m_Qp );
-void updateQPInterlaceBU( rc_quadratic *prc );
-void updateModelQPFrame( rc_quadratic *prc, int m_Bits );
-
-void updateRCModel (rc_quadratic *prc);
-int  (*updateQP)(rc_quadratic *prc, int topfield);
 int  updateQPRC0(rc_quadratic *prc, int topfield);
 int  updateQPRC1(rc_quadratic *prc, int topfield);
 int  updateQPRC2(rc_quadratic *prc, int topfield);
 int  updateQPRC3(rc_quadratic *prc, int topfield);
 
 // internal functions
+void updateQPInterlace   ( rc_quadratic *prc );
+void updateQPNonPicAFF   ( rc_quadratic *prc );
+void updateBottomField   ( rc_quadratic *prc );
+int  updateFirstP        ( rc_quadratic *prc, int topfield );
+int  updateNegativeTarget( rc_quadratic *prc, int topfield, int m_Qp );
+int  updateFirstBU       ( rc_quadratic *prc, int topfield );
+void updateLastBU        ( rc_quadratic *prc, int topfield );
+void predictCurrPicMAD   ( rc_quadratic *prc );
+void updateModelQPBU     ( rc_quadratic *prc, int topfield, int m_Qp );
+void updateQPInterlaceBU ( rc_quadratic *prc );
+void updateModelQPFrame  ( rc_quadratic *prc, int m_Bits );
+
+void updateRCModel    (rc_quadratic *prc);
 void updateMADModel   (rc_quadratic *prc);
 void RCModelEstimator (rc_quadratic *prc, int n_windowSize, Boolean *m_rgRejected);
 void MADModelEstimator(rc_quadratic *prc, int n_windowSize, Boolean *PictureRejected);
-int  updateComplexity( rc_quadratic *prc, Boolean is_updated, int nbits );
-void updatePparams( rc_quadratic *prc, int complexity );
-void updateBparams( rc_quadratic *prc, int complexity );
+int  updateComplexity (rc_quadratic *prc, Boolean is_updated, int nbits );
+void updatePparams    (rc_quadratic *prc, int complexity );
+void updateBparams    (rc_quadratic *prc, int complexity );
+
+// external generic functions
+void rc_handle_mb         ( int prev_mb, Macroblock *currMB, Slice *curr_slice );
+void rc_init_top_field    ( void );
+void rc_init_bottom_field ( int TopFieldBits );
+void rc_init_frame_rdpic  ( float rateRatio );
+void rc_allocate_memory   ( void );
+void rc_free_memory       ( void );
+void rc_update_mb_stats   ( Macroblock *currMB, int *bitCount );
+void rc_save_state        ( void );
+void rc_restore_state     ( void );
 
 // rate control CURRENT pointers
 rc_quadratic *quadratic_RC;
 // rate control object pointers for RDPictureDecision buffering...
 rc_quadratic *quadratic_RC_init, *quadratic_RC_best;
+
+// generic function pointers
+int  (*updateQP)                (rc_quadratic *prc, int topfield);
+void (*rc_update_pict_frame_ptr)(rc_quadratic *prc, int nbits);
+void (*rc_update_picture_ptr)   (int bits);
+void (*rc_init_pict_ptr)        (rc_quadratic *prc, int fieldpic, int topfield, int targetcomputation, float mult);
 
 #endif

@@ -47,7 +47,7 @@ void readMB_transform_size_flag_CABAC( SyntaxElement *se, struct img_par *img, D
 int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, DataPartition *this_dataPart);
 
 int  check_next_mb_and_get_field_mode_CABAC(SyntaxElement *se,struct img_par *img,DataPartition  *act_dp);
-void CheckAvailabilityOfNeighborsCABAC();
+void CheckAvailabilityOfNeighborsCABAC(Macroblock *currMB);
 
 
 #endif  // _CABAC_H_

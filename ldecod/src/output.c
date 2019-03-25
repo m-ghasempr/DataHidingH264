@@ -540,17 +540,17 @@ void clear_picture(StorablePicture *p)
   for(i=0;i<p->size_y;i++)
   {
     for (j=0; j<p->size_x; j++)
-      p->imgY[i][j] = (imgpel) img->dc_pred_value_luma;
+      p->imgY[i][j] = (imgpel) img->dc_pred_value_comp[0];
   }
   for(i=0;i<p->size_y_cr;i++)
   {
     for (j=0; j<p->size_x_cr; j++)
-      p->imgUV[0][i][j] = (imgpel) img->dc_pred_value_chroma;
+      p->imgUV[0][i][j] = (imgpel) img->dc_pred_value_comp[1];
   }
   for(i=0;i<p->size_y_cr;i++)
   {
     for (j=0; j<p->size_x_cr; j++)
-      p->imgUV[1][i][j] = (imgpel) img->dc_pred_value_chroma;
+      p->imgUV[1][i][j] = (imgpel) img->dc_pred_value_comp[2];
   }
 
 }

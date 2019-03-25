@@ -26,6 +26,7 @@
 #include "mb_access.h"
 #include "elements.h"
 #include "transform8x8.h"
+#include "transform.h"
 
 #define Q_BITS_8        16
 #define DQ_BITS_8       6 
@@ -221,16 +222,17 @@ void   LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, 
  *
  ************************************************************************
  */
-int intrapred8x8( struct img_par *img,  //!< image parameters
+int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
+                  ColorPlane pl,        //!< Current Colorplane
+                  struct img_par *img,  //!< image parameters
                   int b8)
 
 {
   int i,j;
   int s0;
   imgpel PredPel[25];  // array of predictor pels
-  imgpel **imgY = dec_picture->imgY;  // For MB level frame/field coding tools -- set default to imgY
-
-  int mb_nr=img->current_mb_nr;
+  int uv = pl-1;
+  imgpel **imgY = (pl) ? dec_picture->imgUV[uv] : dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
   PixelPos pix_b, pix_c, pix_d;
@@ -248,18 +250,19 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
   int ipos0 = ioff    , ipos1 = ioff + 1, ipos2 = ioff + 2, ipos3 = ioff + 3;
   int ipos4 = ioff + 4, ipos5 = ioff + 5, ipos6 = ioff + 6, ipos7 = ioff + 7;
   int jpos, ipos;
-  imgpel *pred_pels, (*mpr)[16] = img->mpr[LumaComp];  
+  imgpel *pred_pels, (*mpr)[16] = img->mpr[pl];
 
   byte predmode = img->ipredmode[img_block_y][img_block_x];
+  ipmode_DPCM = predmode;  //For residual DPCM
 
   for (i=0;i<8;i++)
   {
-    getNeighbour(mb_nr, ioff - 1, joff + i, IS_LUMA, &pix_a[i]);
+    getNeighbour(currMB, ioff - 1, joff + i, IS_LUMA, &pix_a[i]);
   }
 
-  getNeighbour(mb_nr, ioff    , joff - 1, IS_LUMA, &pix_b);
-  getNeighbour(mb_nr, ioff + 8, joff - 1, IS_LUMA, &pix_c);
-  getNeighbour(mb_nr, ioff - 1, joff - 1, IS_LUMA, &pix_d);
+  getNeighbour(currMB, ioff    , joff - 1, IS_LUMA, &pix_b);
+  getNeighbour(currMB, ioff + 8, joff - 1, IS_LUMA, &pix_c);
+  getNeighbour(currMB, ioff - 1, joff - 1, IS_LUMA, &pix_d);
 
   pix_c.available = pix_c.available &&!(ioff == 8 && joff == 8);
 
@@ -299,7 +302,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
   }
   else
   {
-    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = img->dc_pred_value_luma;
+    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = img->dc_pred_value_comp[pl];
   }
 
   if (block_available_up_right)
@@ -333,7 +336,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
   }
   else
   {
-    P_Q = P_R = P_S = P_T = P_U = P_V = P_W = P_X = img->dc_pred_value_luma;
+    P_Q = P_R = P_S = P_T = P_U = P_V = P_W = P_X = img->dc_pred_value_comp[pl];
   }
 
   if (block_available_up_left)
@@ -342,7 +345,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
   }
   else
   {
-    P_Z = img->dc_pred_value_luma;
+    P_Z = img->dc_pred_value_comp[pl];
   }
 
   LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
@@ -370,10 +373,10 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
     else //if (!block_available_up && !block_available_left)
     {
       // top left corner, nothing to predict from
-      s0 = img->dc_pred_value_luma;
+      s0 = img->dc_pred_value_comp[pl];
     }
-    for(j = joff; j < joff + 2*BLOCK_SIZE; j++)
-      for(i = ioff; i < ioff + 2*BLOCK_SIZE; i++)
+    for(j = joff; j < joff + BLOCK_SIZE_8x8; j++)
+      for(i = ioff; i < ioff + BLOCK_SIZE_8x8; i++)
         mpr[j][i] = (imgpel) s0;
     break;
 
@@ -381,7 +384,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
     if (!block_available_up)
       printf ("warning: Intra_8x8_Vertical prediction mode not allowed at mb %d\n",img->current_mb_nr);
 
-    for (i=0; i < 2*BLOCK_SIZE; i++)
+    for (i=0; i < BLOCK_SIZE_8x8; i++)
     {
       ipos = i+ioff;
       mpr[jpos0][ipos] =
@@ -398,7 +401,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
     if (!block_available_left)
       printf ("warning: Intra_8x8_Horizontal prediction mode not allowed at mb %d\n",img->current_mb_nr);
 
-    for (j=0; j < 2*BLOCK_SIZE; j++)
+    for (j=0; j < BLOCK_SIZE_8x8; j++)
     {
       jpos = j + joff;
       mpr[jpos][ipos0]  =
@@ -916,100 +919,34 @@ void LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, in
  * \brief
  *    Inverse 8x8 transformation
  ***********************************************************************
- */
-void itrans8x8(struct img_par *img, //!< image parameters
+ */ 
+void itrans8x8(ColorPlane pl,
+               struct img_par *img, //!< image parameters
               int ioff,            //!< index to 4x4 block
               int joff)            //!<
 {
   int i,j;
-  int m6[8][8];
   Boolean lossless_qpprime = (Boolean) ((img->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
-  static int ipos;
-  static int a[8], b[8];
-  imgpel (*mpr)[16] = img->mpr[LumaComp];
+  imgpel (*mpr)[16] = img->mpr[pl];
+  int    (*m7)[16] = img->m7[pl];
+  int     max_imgpel_value = pl ? img->max_imgpel_value_uv : img->max_imgpel_value;
 
   if(lossless_qpprime)
   {
     for( j = joff; j < joff + 8; j++)
     {
       for( i = ioff; i < ioff + 8; i++)
-        img->m7[j][i] = iClip1(img->max_imgpel_value, (img->m7[j][i]+(long)mpr[j][i]));
+        m7[j][i] = iClip1(max_imgpel_value, (m7[j][i] + (long)mpr[j][i])); 
     }
   }
   else
   {
-    int *m7;
-    for( i = 0; i < 8; i++)
-    {
-      m7 = &img->m7[joff + i][ioff];
-      a[0] =  m7[0] + m7[4];
-      a[4] =  m7[0] - m7[4];
-      a[2] = (m7[2]>>1) - m7[6];
-      a[6] =  m7[2] + (m7[6]>>1);
-
-      b[0] = a[0] + a[6];
-      b[2] = a[4] + a[2];
-      b[4] = a[4] - a[2];
-      b[6] = a[0] - a[6];
-
-      a[1] = -m7[3] + m7[5] - m7[7] - (m7[7]>>1);
-      a[3] =  m7[1] + m7[7] - m7[3] - (m7[3]>>1);
-      a[5] = -m7[1] + m7[7] + m7[5] + (m7[5]>>1);
-      a[7] =  m7[3] + m7[5] + m7[1] + (m7[1]>>1);
-
-      b[1] =   a[1] + (a[7]>>2);
-      b[7] = -(a[1]>>2) + a[7];
-      b[3] =   a[3] + (a[5]>>2);
-      b[5] =  (a[3]>>2) - a[5];
-
-      m6[0][i] = b[0] + b[7];
-      m6[1][i] = b[2] + b[5];
-      m6[2][i] = b[4] + b[3];
-      m6[3][i] = b[6] + b[1];
-      m6[4][i] = b[6] - b[1];
-      m6[5][i] = b[4] - b[3];
-      m6[6][i] = b[2] - b[5];
-      m6[7][i] = b[0] - b[7];
-    }
-    for( i = 0; i < 8; i++)
-    {
-      ipos = ioff + i;
-      m7 = m6[i]; 
-      a[0] = m7[0] + m7[4];
-      a[4] = m7[0] - m7[4];
-      a[2] = (m7[2]>>1) - m7[6];
-      a[6] =  m7[2] + (m7[6]>>1);
-
-      b[0] = a[0] + a[6];
-      b[2] = a[4] + a[2];
-      b[4] = a[4] - a[2];
-      b[6] = a[0] - a[6];
-
-      a[1] = -m7[3] + m7[5] - m7[7] - (m7[7]>>1);
-      a[3] =  m7[1] + m7[7] - m7[3] - (m7[3]>>1);
-      a[5] = -m7[1] + m7[7] + m7[5] + (m7[5]>>1);
-      a[7] =  m7[3] + m7[5] + m7[1] + (m7[1]>>1);
-
-      b[1] =   a[1] + (a[7]>>2);
-      b[7] = -(a[1]>>2) + a[7];
-      b[3] =   a[3] + (a[5]>>2);
-      b[5] =  (a[3]>>2) - a[5];
-
-      img->m7[joff + 0][ipos] = b[0] + b[7];
-      img->m7[joff + 1][ipos] = b[2] + b[5];
-      img->m7[joff + 2][ipos] = b[4] + b[3];
-      img->m7[joff + 3][ipos] = b[6] + b[1];
-      img->m7[joff + 4][ipos] = b[6] - b[1];
-      img->m7[joff + 5][ipos] = b[4] - b[3];
-      img->m7[joff + 6][ipos] = b[2] - b[5];
-      img->m7[joff + 7][ipos] = b[0] - b[7];
-    }
-
+    inverse8x8(m7, m7, joff, ioff);
     for( j = joff; j < joff + 8; j++)
     {
       for( i = ioff; i < ioff + 8; i++)
-        img->m7[j][i] = iClip1(img->max_imgpel_value, 
-        rshift_rnd_sf((img->m7[j][i]+((long)mpr[j][i] << DQ_BITS_8)),DQ_BITS_8));
+        m7[j][i] = iClip1(img->max_imgpel_value,  
+        rshift_rnd_sf((m7[j][i]+((long)mpr[j][i] << DQ_BITS_8)),DQ_BITS_8)); 
     }
   }
 }

@@ -240,6 +240,9 @@
 				RelativePath=".\ldecod\src\sei.c">
 			</File>
 			<File
+				RelativePath=".\ldecod\src\transform.c">
+			</File>
+			<File
 				RelativePath=".\ldecod\src\transform8x8.c">
 			</File>
 			<File
@@ -344,6 +347,9 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\sei.h">
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\transform.h">
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\transform8x8.h">

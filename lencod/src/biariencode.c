@@ -156,7 +156,7 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
   Elow = 0;
   Echunks_outstanding = 0;
   Ebuffer = 0;
-  Epbuf = -1;	// to remove redundant chunk ^^
+  Epbuf = -1;  // to remove redundant chunk ^^
   Ebits_to_go = BITS_TO_LOAD + 1; // to swallow first redundant bit
 
   Ecodestrm = code_buffer;
@@ -192,22 +192,23 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   int bl = Ebits_to_go;
   int remaining_bits = BITS_TO_LOAD - bl; // output (2 + remaining) bits for terminating the codeword + one stop bit
   unsigned char mask;
+  int* bitCount = img->mb_data[img->current_mb_nr].bitcounter;
 
   pic_bin_count += eep->E*8 + eep->C; // no of processed bins
 
   if (remaining_bits <= 5) // one terminating byte 
   {
-    stats->bit_use_stuffingBits[img->type]+=(5-remaining_bits);
+    bitCount[BITS_STUFFING]+=(5-remaining_bits);
     mask = 255 - ((1 << (6-remaining_bits)) - 1); 
     low = (low >> (MAX_BITS - 8)) & mask; // mask out the (2+remaining_bits) MSBs
-    low += (1<<(5-remaining_bits));		 // put the terminating stop bit '1'
+    low += (1<<(5-remaining_bits));       // put the terminating stop bit '1'
 
     _put_last_chunk_plus_outstanding_final(low);
     put_buffer(eep);
   }
-  else if(remaining_bits <=13)				// two terminating bytes
+  else if(remaining_bits <=13)            // two terminating bytes
   {
-    stats->bit_use_stuffingBits[img->type]+=(13-remaining_bits);
+    bitCount[BITS_STUFFING]+=(13-remaining_bits);
     _put_last_chunk_plus_outstanding_final(((low >> (MAX_BITS - 8)) & 0xFF)); // mask out the 8 MSBs for output
 
     put_buffer(eep);
@@ -215,7 +216,7 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
     {
       mask = 255 - ((1 << (14 - remaining_bits)) - 1); 
       low = (low >> (MAX_BITS - 16)) & mask; 
-      low += (1<<(13-remaining_bits));		 // put the terminating stop bit '1'
+      low += (1<<(13-remaining_bits));     // put the terminating stop bit '1'
       put_one_byte_final(low);
     }
     else
@@ -227,7 +228,7 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   { 
     _put_last_chunk_plus_outstanding(((low >> (MAX_BITS - BITS_TO_LOAD)) & B_LOAD_MASK)); // mask out the 16 MSBs for output
     put_buffer(eep);
-    stats->bit_use_stuffingBits[img->type]+=(21-remaining_bits);
+    bitCount[BITS_STUFFING]+=(21-remaining_bits);
 
     if (remaining_bits > 14)
     {
@@ -257,12 +258,12 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
 {
   register unsigned int range = Erange;
   register unsigned int low = Elow;
-  unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3];	 
+  unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3]; 
   register int bl = Ebits_to_go;
 
   range -= rLPS;
 
-  eep->C++;	
+  eep->C++;
   bi_ct->count += cabac_encoding;
 
   /* covers all cases where code does not bother to shift down symbol to be 
@@ -291,7 +292,7 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
     }
 
   } 
-  else					//LPS
+  else         //LPS
   {
     unsigned int renorm;
 
@@ -327,9 +328,12 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   Elow = (low << BITS_TO_LOAD )& (ONE - 1);
   low = (low >> (MAX_BITS - BITS_TO_LOAD)) & B_LOAD_MASK; // mask out the 8/16 MSBs for output
 
-  if (low < B_LOAD_MASK){			// no carry possible, output now
-    _put_last_chunk_plus_outstanding(low);}
-  else{					// low == "FF.."; keep it, may affect future carry
+  if (low < B_LOAD_MASK) // no carry possible, output now
+  {
+    _put_last_chunk_plus_outstanding(low);
+  }
+  else          // low == "FF.."; keep it, may affect future carry
+  {
     Echunks_outstanding++;
   }
   Erange = range;
@@ -363,15 +367,18 @@ void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol
   {
     Elow = (low << BITS_TO_LOAD )& (ONE - 1);
     low = (low >> (MAX_BITS - BITS_TO_LOAD)) & B_LOAD_MASK; // mask out the 8/16 MSBs for output
-    if (low < B_LOAD_MASK)	{		// no carry possible, output now
+    if (low < B_LOAD_MASK)      // no carry possible, output now
+    {
       _put_last_chunk_plus_outstanding(low);}
-    else{					// low == "FF"; keep it, may affect future carry
-      Echunks_outstanding++;}
+    else          // low == "FF"; keep it, may affect future carry
+    {
+      Echunks_outstanding++;
+    }
 
     Ebits_to_go = BITS_TO_LOAD;
     return;
   }
-  else					// no renorm needed
+  else         // no renorm needed
   {
     Elow = low;
     return;
@@ -410,7 +417,7 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
       }
     }
   }
-  else			// LPS
+  else     // LPS
   {
     low += range<<bl;
     range = 2;
@@ -437,10 +444,14 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
 
   Elow = (low << BITS_TO_LOAD ) & (ONE - 1);
   low = (low >> (MAX_BITS - BITS_TO_LOAD)) & B_LOAD_MASK; // mask out the 8/16 MSBs
-  if (low < B_LOAD_MASK){			// no carry possible, output now
-    _put_last_chunk_plus_outstanding(low);}
-  else{					// low == "FF"; keep it, may affect future carry
-    Echunks_outstanding++;}
+  if (low < B_LOAD_MASK)
+  {  // no carry possible, output now
+    _put_last_chunk_plus_outstanding(low);
+  }
+  else
+  {  // low == "FF"; keep it, may affect future carry
+    Echunks_outstanding++;
+  }
 
   Erange = range;
   bl += BITS_TO_LOAD;

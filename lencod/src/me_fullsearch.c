@@ -77,7 +77,7 @@ FullPelBlockMotionSearch (imgpel*   orig_pic,     // <--  original pixel values 
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE))) && input->UseWeightedReferenceME;
   int   dist_method = F_PEL + 3 * apply_weights;
 
-  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
+  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
 
   img_width  = ref_picture->size_x;
   img_height = ref_picture->size_y;
@@ -199,7 +199,7 @@ FullPelBlockMotionBiPred (imgpel*   orig_pic,      // <--  original pixel values
   short ref1_center_y = pic_pix_y + *s_mv_y;                      // mvy of second pred (in pel units)
 
 
-  short apply_weights = (active_pps->weighted_bipred_idc>0);
+  short apply_weights = (active_pps->weighted_bipred_idc > 0);
 
   short offset1 = (apply_weights ? (list == 0?  wp_offset[list_offset    ][ref][0]:  wp_offset[list_offset + 1][0  ][ref]) : 0);
   short offset2 = (apply_weights ? (list == 0?  wp_offset[list_offset + 1][ref][0]:  wp_offset[list_offset    ][0  ][ref]) : 0);
@@ -207,8 +207,8 @@ FullPelBlockMotionBiPred (imgpel*   orig_pic,      // <--  original pixel values
   StorablePicture *ref_picture1 = listX[list       + list_offset][ref];
   StorablePicture *ref_picture2 = listX[(list ^ 1) + list_offset][0];
 
-  ref_pic1_sub.luma = ref_picture1->curr_imgY_sub;
-  ref_pic2_sub.luma = ref_picture2->curr_imgY_sub;
+  ref_pic1_sub.luma = ref_picture1->p_curr_img_sub;
+  ref_pic2_sub.luma = ref_picture2->p_curr_img_sub;
 
   img_width     = ref_picture1->size_x;
   img_height    = ref_picture1->size_y;
@@ -375,7 +375,7 @@ SubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel values 
   int max_pos_y4 = ((ref_picture->size_y - blocksize_y + 2*IMG_PAD_SIZE)<<2);
   int lambda_factor = lambda[H_PEL];
 
-  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
+  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
 
   width_pad  = ref_picture->size_x_pad;
   height_pad = ref_picture->size_y_pad;
@@ -562,11 +562,11 @@ SubPelBlockSearchBiPred (imgpel*   orig_pic,      // <--  original pixel values 
   int max_pos_y4 = ((ref_picture1->size_y - blocksize_y + 2*IMG_PAD_SIZE)<<2);
   int lambda_factor = lambda[H_PEL];
 
-  ref_pic1_sub.luma = ref_picture1->curr_imgY_sub;
-  ref_pic2_sub.luma = ref_picture2->curr_imgY_sub;
+  ref_pic1_sub.luma = ref_picture1->p_curr_img_sub;
+  ref_pic2_sub.luma = ref_picture2->p_curr_img_sub;
 
-  img_width     = ref_picture1->size_x;
-  img_height    = ref_picture1->size_y;
+  img_width    = ref_picture1->size_x;
+  img_height   = ref_picture1->size_y;
   width_pad    = ref_picture1->size_x_pad;
   height_pad   = ref_picture1->size_y_pad;
 

@@ -34,7 +34,7 @@
 #include "mb_access.h"
 #include "block.h"
 #include "vlc.h"
-
+#include "transform.h"
 
 const int quant_coef[6][4][4] = {
   {{13107, 8066,13107, 8066},{ 8066, 5243, 8066, 5243},{13107, 8066,13107, 8066},{ 8066, 5243, 8066, 5243}},
@@ -96,9 +96,13 @@ const byte QP_SCALE_CR[52]=
 #define P_L (PredPel[12])
 
 // global pointers for 4x4 quantization parameters
-extern int ****ptLevelScale4x4Luma;
-extern int ****ptInvLevelScale4x4Luma;
-extern int ****ptLevelOffset4x4Luma;
+extern int ****ptLevelOffset4x4;
+static int **levelscale = NULL, **leveloffset = NULL;
+static int **invlevelscale = NULL;
+static int **fadjust4x4 = NULL;
+static int **levelscaleDC = NULL, **leveloffsetDC = NULL;
+static int **invlevelscaleDC = NULL;
+
 
 /*!
  ************************************************************************
@@ -116,18 +120,19 @@ extern int ****ptLevelOffset4x4Luma;
  *      none
  ************************************************************************
  */
-void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available, int *all_available)
+void intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *left_available, int *up_available, int *all_available)
 {
   int i,j;
   int s0;
-  imgpel PredPel[13];  // array of predictor pels
-  imgpel **imgY = enc_picture->imgY;  // For MB level frame/field coding tools -- set default to imgY
-  imgpel *imgYpel;
+  imgpel  PredPel[13];  // array of predictor pels
+  imgpel  **img_enc = enc_picture->p_curr_img;
+  imgpel  *img_pel;  
   imgpel (*cur_pred)[16];
+  imgpel (*curr_mpr_4x4)[16][16]  = img->mpr_4x4[pl];
+  unsigned int dc_pred_value = img->dc_pred_value;
 
   int ioff = (img_x & 15);
   int joff = (img_y & 15);
-  int mb_nr=img->current_mb_nr;
 
   PixelPos pix_a[4];
   PixelPos pix_b, pix_c, pix_d;
@@ -139,12 +144,12 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
 
   for (i=0;i<4;i++)
   {
-    getNeighbour(mb_nr, ioff -1 , joff +i , IS_LUMA, &pix_a[i]);
+    getNeighbour(currMB, ioff -1 , joff +i , IS_LUMA, &pix_a[i]);
   }
 
-  getNeighbour(mb_nr, ioff    , joff -1 , IS_LUMA, &pix_b);
-  getNeighbour(mb_nr, ioff +4 , joff -1 , IS_LUMA, &pix_c);
-  getNeighbour(mb_nr, ioff -1 , joff -1 , IS_LUMA, &pix_d);
+  getNeighbour(currMB, ioff    , joff -1 , IS_LUMA, &pix_b);
+  getNeighbour(currMB, ioff +4 , joff -1 , IS_LUMA, &pix_c);
+  getNeighbour(currMB, ioff -1 , joff -1 , IS_LUMA, &pix_d);
 
   pix_c.available = pix_c.available && !((ioff==4) && ((joff==4)||(joff==12)));
 
@@ -174,25 +179,25 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   // form predictor pels
   if (block_available_up)
   {
-    imgYpel = &imgY[pix_b.pos_y][pix_b.pos_x];
-    P_A = *(imgYpel++);
-    P_B = *(imgYpel++);
-    P_C = *(imgYpel++);
-    P_D = *(imgYpel);
+    img_pel = &img_enc[pix_b.pos_y][pix_b.pos_x];
+    P_A = *(img_pel++);
+    P_B = *(img_pel++);
+    P_C = *(img_pel++);
+    P_D = *(img_pel);
 
   }
   else
   {
-    P_A = P_B = P_C = P_D = img->dc_pred_value_luma;
+    P_A = P_B = P_C = P_D = dc_pred_value;
   }
 
   if (block_available_up_right)
   {
-    imgYpel = &imgY[pix_c.pos_y][pix_c.pos_x];
-    P_E = *(imgYpel++);
-    P_F = *(imgYpel++);
-    P_G = *(imgYpel++);
-    P_H = *(imgYpel);
+    img_pel = &img_enc[pix_c.pos_y][pix_c.pos_x];
+    P_E = *(img_pel++);
+    P_F = *(img_pel++);
+    P_G = *(img_pel++);
+    P_H = *(img_pel);
   }
   else
   {
@@ -201,27 +206,26 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
 
   if (block_available_left)
   {
-    P_I = imgY[pix_a[0].pos_y][pix_a[0].pos_x];
-    P_J = imgY[pix_a[1].pos_y][pix_a[1].pos_x];
-    P_K = imgY[pix_a[2].pos_y][pix_a[2].pos_x];
-    P_L = imgY[pix_a[3].pos_y][pix_a[3].pos_x];
+    P_I = img_enc[pix_a[0].pos_y][pix_a[0].pos_x];
+    P_J = img_enc[pix_a[1].pos_y][pix_a[1].pos_x];
+    P_K = img_enc[pix_a[2].pos_y][pix_a[2].pos_x];
+    P_L = img_enc[pix_a[3].pos_y][pix_a[3].pos_x];
   }
   else
   {
-    P_I = P_J = P_K = P_L = img->dc_pred_value_luma;
+    P_I = P_J = P_K = P_L = dc_pred_value;
   }
 
   if (block_available_up_left)
   {
-    P_X = imgY[pix_d.pos_y][pix_d.pos_x];
+    P_X = img_enc[pix_d.pos_y][pix_d.pos_x];
   }
   else
   {
-    P_X = img->dc_pred_value_luma;
+    P_X = dc_pred_value;
   }
-
   for(i=0;i<9;i++)
-    img->mprr[i][0][0]=-1;
+    curr_mpr_4x4[i][0][0]=-1;
 
   ///////////////////////////////
   // make DC prediction
@@ -245,11 +249,11 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   else //if (!block_available_up && !block_available_left)
   {
     // top left corner, nothing to predict from
-    s0 = img->dc_pred_value_luma;
+    s0 = dc_pred_value;
   }
 
   // store DC prediction
-  cur_pred = img->mprr[DC_PRED];
+  cur_pred = curr_mpr_4x4[DC_PRED];
   for (j=0; j < BLOCK_SIZE; j++)
   {
     for (i=0; i < BLOCK_SIZE; i++)
@@ -261,7 +265,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   ///////////////////////////////
 
   //Mode vertical
-  cur_pred = img->mprr[VERT_PRED];
+  cur_pred = curr_mpr_4x4[VERT_PRED];
   for (i=0; i < BLOCK_SIZE; i++)
   {
     cur_pred[0][i] =
@@ -273,7 +277,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
     cur_pred [0][0]=-1;
 
   //Mode horizontal
-  cur_pred = img->mprr[HOR_PRED];
+  cur_pred = curr_mpr_4x4[HOR_PRED];
   for (i=0; i < BLOCK_SIZE; i++)
   {
     cur_pred[i][0]  =
@@ -287,7 +291,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   if (block_available_up)
   {
     // Mode DIAG_DOWN_LEFT_PRED
-    cur_pred = img->mprr[DIAG_DOWN_LEFT_PRED];
+    cur_pred = curr_mpr_4x4[DIAG_DOWN_LEFT_PRED];
     cur_pred[0][0] = (imgpel) ((P_A + P_C + 2*(P_B) + 2) >> 2);
     cur_pred[0][1] =
     cur_pred[1][0] = (imgpel) ((P_B + P_D + 2*(P_C) + 2) >> 2);
@@ -306,7 +310,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
     cur_pred[3][3] = (imgpel) ((P_G + 3*(P_H) + 2) >> 2);
 
     // Mode VERT_LEFT_PRED
-    cur_pred = img->mprr[VERT_LEFT_PRED];
+    cur_pred = curr_mpr_4x4[VERT_LEFT_PRED];
     cur_pred[0][0] = (imgpel) ((P_A + P_B + 1) >> 1);
     cur_pred[0][1] =
     cur_pred[2][0] = (imgpel) ((P_B + P_C + 1) >> 1);
@@ -330,7 +334,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   if (block_available_left)
   {
     // Mode HOR_UP_PRED
-    cur_pred = img->mprr[HOR_UP_PRED];
+    cur_pred = curr_mpr_4x4[HOR_UP_PRED];
     cur_pred[0][0] = (imgpel) ((P_I + P_J + 1) >> 1);
     cur_pred[0][1] = (imgpel) ((P_I + 2*P_J + P_K + 2) >> 2);
     cur_pred[0][2] =
@@ -353,7 +357,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   if (block_available_up && block_available_left && block_available_up_left)
   {
     // Mode DIAG_DOWN_RIGHT_PRED
-    cur_pred = img->mprr[DIAG_DOWN_RIGHT_PRED];
+    cur_pred = curr_mpr_4x4[DIAG_DOWN_RIGHT_PRED];
     cur_pred[3][0] = (imgpel) ((P_L + 2*P_K + P_J + 2) >> 2);
     cur_pred[2][0] =
     cur_pred[3][1] = (imgpel) ((P_K + 2*P_J + P_I + 2) >> 2);
@@ -371,8 +375,8 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
     cur_pred[1][3] = (imgpel) ((P_A + 2*P_B + P_C + 2) >> 2);
     cur_pred[0][3] = (imgpel) ((P_B + 2*P_C + P_D + 2) >> 2);
 
-     // Mode VERT_RIGHT_PRED
-    cur_pred = img->mprr[VERT_RIGHT_PRED];
+    // Mode VERT_RIGHT_PRED
+    cur_pred = curr_mpr_4x4[VERT_RIGHT_PRED];
     cur_pred[0][0] =
     cur_pred[2][1] = (imgpel) ((P_X + P_A + 1) >> 1);
     cur_pred[0][1] =
@@ -391,7 +395,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
     cur_pred[3][0] = (imgpel) ((P_I + 2*P_J + P_K + 2) >> 2);
 
     // Mode HOR_DOWN_PRED
-    cur_pred = img->mprr[HOR_DOWN_PRED];
+    cur_pred = curr_mpr_4x4[HOR_DOWN_PRED];
     cur_pred[0][0] =
     cur_pred[1][2] = (imgpel) ((P_X + P_I + 1) >> 1);
     cur_pred[0][1] =
@@ -411,6 +415,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   }
 }
 
+
 /*!
  ************************************************************************
  * \brief
@@ -423,7 +428,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
  *    none
  ************************************************************************
  */
-void intrapred_luma_16x16()
+void intrapred_16x16(Macroblock *currMB, ColorPlane pl)
 {
   int s0=0,s1,s2;
   imgpel s[2][16];
@@ -432,8 +437,9 @@ void intrapred_luma_16x16()
   int ih,iv;
   int ib,ic,iaa;
 
-  imgpel   **imgY_pred = enc_picture->imgY;  // For Mb level field/frame coding tools -- default to frame pred
-  int          mb_nr = img->current_mb_nr;
+  imgpel **img_enc = enc_picture->p_curr_img;
+  imgpel (*curr_mpr_16x16)[16][16]  = img->mpr_16x16[pl];
+  unsigned int dc_pred_value = img->dc_pred_value;
 
   PixelPos up;          //!< pixel position p(0,-1)
   PixelPos left[17];    //!< pixel positions p(-1, -1..15)
@@ -442,10 +448,10 @@ void intrapred_luma_16x16()
 
   for (i=0;i<17;i++)
   {
-    getNeighbour(mb_nr, -1,  i-1, IS_LUMA, &left[i]);
+    getNeighbour(currMB, -1,  i-1, IS_LUMA, &left[i]);
   }
 
-  getNeighbour(mb_nr,    0,   -1, IS_LUMA, &up);
+  getNeighbour(currMB,    0,   -1, IS_LUMA, &up);
 
   if (!(input->UseConstrainedIntraPred))
   {
@@ -466,13 +472,13 @@ void intrapred_luma_16x16()
   if (up_avail)
   {
     for (i=up.pos_x; i < up.pos_x + MB_BLOCK_SIZE; i++)
-      s1 += imgY_pred[up.pos_y][i];    // sum hor pix
+      s1 += img_enc[up.pos_y][i];    // sum hor pix
   }
 
   if (left_avail)
   {
     for (i=1; i < MB_BLOCK_SIZE + 1; i++)
-      s2 += imgY_pred[left[i].pos_y][left[i].pos_x];    // sum vert pix
+      s2 += img_enc[left[i].pos_y][left[i].pos_x];    // sum vert pix
   }
 
   if (up_avail)
@@ -485,29 +491,30 @@ void intrapred_luma_16x16()
   {
     s0=left_avail
       ? rshift_rnd_sf(s2, MB_BLOCK_SHIFT)           // upper edge
-      : img->dc_pred_value_luma;                        // top left corner, nothing to predict from
+      : dc_pred_value;                              // top left corner, nothing to predict from
   }
 
   // vertical prediction
   if (up_avail)
-    memcpy(s[0], &imgY_pred[up.pos_y][up.pos_x], MB_BLOCK_SIZE * sizeof(imgpel));
+    memcpy(s[0], &img_enc[up.pos_y][up.pos_x], MB_BLOCK_SIZE * sizeof(imgpel));
 
   // horizontal prediction
   if (left_avail)
   {
     for (i=1; i < MB_BLOCK_SIZE + 1; i++)
-      s[1][i - 1]=imgY_pred[left[i].pos_y][left[i].pos_x];
+      s[1][i - 1]=img_enc[left[i].pos_y][left[i].pos_x];
   }
 
   for (j=0; j < MB_BLOCK_SIZE; j++)
   {
-    memcpy(img->mprr_2[VERT_PRED_16][j], s[0], MB_BLOCK_SIZE * sizeof(imgpel)); // store vertical prediction
+    memcpy(curr_mpr_16x16[VERT_PRED_16][j], s[0], MB_BLOCK_SIZE * sizeof(imgpel)); // store vertical prediction
     for (i=0; i < MB_BLOCK_SIZE; i++)
     {
-      img->mprr_2[HOR_PRED_16 ][j][i] = s[1][j]; // store horizontal prediction
-      img->mprr_2[DC_PRED_16  ][j][i] = s0;      // store DC prediction
+      curr_mpr_16x16[HOR_PRED_16 ][j][i] = s[1][j]; // store horizontal prediction
+      curr_mpr_16x16[DC_PRED_16  ][j][i] = s0;      // store DC prediction
     }
   }
+  
   if (!up_avail || !left_avail || !left_up_avail) // edge
     return;
 
@@ -518,22 +525,22 @@ void intrapred_luma_16x16()
   for (i=1;i<9;i++)
   {
     if (i<8)
-      ih += i*(imgY_pred[up.pos_y][up.pos_x+7+i] - imgY_pred[up.pos_y][up.pos_x+7-i]);
+      ih += i*(img_enc[up.pos_y][up.pos_x+7+i] - img_enc[up.pos_y][up.pos_x+7-i]);
     else
-      ih += i*(imgY_pred[up.pos_y][up.pos_x+7+i] - imgY_pred[left[0].pos_y][left[0].pos_x]);
+      ih += i*(img_enc[up.pos_y][up.pos_x+7+i] - img_enc[left[0].pos_y][left[0].pos_x]);
 
-    iv += i*(imgY_pred[left[8+i].pos_y][left[8+i].pos_x] - imgY_pred[left[8-i].pos_y][left[8-i].pos_x]);
+    iv += i*(img_enc[left[8+i].pos_y][left[8+i].pos_x] - img_enc[left[8-i].pos_y][left[8-i].pos_x]);
   }
   ib=(5*ih+32)>>6;
   ic=(5*iv+32)>>6;
 
-  iaa=16*(imgY_pred[up.pos_y][up.pos_x+15]+imgY_pred[left[16].pos_y][left[16].pos_x]);
+  iaa=16*(img_enc[up.pos_y][up.pos_x+15]+img_enc[left[16].pos_y][left[16].pos_x]);
 
   for (j=0;j< MB_BLOCK_SIZE;j++)
   {
     for (i=0;i< MB_BLOCK_SIZE;i++)
     {
-      img->mprr_2[PLANE_16][j][i]= iClip3( 0, img->max_imgpel_value,rshift_rnd_sf((iaa+(i-7)*ib +(j-7)*ic), 5));// store plane prediction
+      curr_mpr_16x16[PLANE_16][j][i]= iClip3( 0, img->max_imgpel_value,rshift_rnd_sf((iaa+(i-7)*ib +(j-7)*ic), 5));// store plane prediction
     }
   }
 }
@@ -551,128 +558,79 @@ void intrapred_luma_16x16()
  *    none
  ************************************************************************
  */
-int dct_luma_16x16(int new_intra_mode)
+int dct_16x16(Macroblock *currMB, ColorPlane pl, int new_intra_mode)
 {
   //int qp_const;
   int i,j;
   int ii,jj;
-  int jdiv, jmod;
   static int M1[16][16];
   static int M4[4][4];
-  static int M5[4],M6[4];
-  static int M0[4][4][4][4];
+  static int scaled_coeff;
+  static int *m7;
   int run,scan_pos,coeff_ctr,level;
-  int qp_per,qp_rem,q_bits;
   int ac_coef = 0;
+  static imgpel *img_Y, *predY;
 
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-
+  int   jpos, ipos;
   int   b8, b4;
-  int*  DCLevel = img->cofDC[0][0];
-  int*  DCRun   = img->cofDC[0][1];
+
+  //begin the changes
+  int   pl_off = pl<<2;
+  int*  DCLevel = img->cofDC[pl][0];
+  int*  DCRun   = img->cofDC[pl][1];
   int*  ACLevel;
-  int*  ACRun;
-  int **levelscale,**leveloffset;
-  int **invlevelscale;
-  int   qp = currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP;
+  int*  ACRun;  
+  imgpel **img_enc          = enc_picture->p_curr_img;
+  int    max_imgpel_value   = img->max_imgpel_value;
+  int    qp                 = currMB->qp_scaled[pl]; 
   Boolean lossless_qpprime = (Boolean) ((qp == 0) && (img->lossless_qpprime_flag == 1));
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
+  imgpel  (*curr_mpr_16x16)[16][16]  = img->mpr_16x16[pl];
 
-  // Note that we could just use currMB->qp here
-  qp_per = qp_per_matrix[qp];
-  qp_rem = qp_rem_matrix[qp];
-  q_bits = Q_BITS + qp_per;
+  int qp_per = qp_per_matrix[qp];
+  int qp_rem = qp_rem_matrix[qp];
+  int q_bits = Q_BITS + qp_per;
 
   // select scaling parameters
-  levelscale    = ptLevelScale4x4Luma   [1][qp_rem];
-  invlevelscale = ptInvLevelScale4x4Luma[1][qp_rem];
-  leveloffset   = ptLevelOffset4x4Luma  [1][qp]; // note that we could always use "qp" here. will change it in the next commit
+  levelscale    = LevelScale4x4Comp[pl][1][qp_rem];
+  invlevelscale = InvLevelScale4x4Comp[pl][1][qp_rem];
+  leveloffset   = ptLevelOffset4x4  [1][qp]; 
 
-  for (j=0;j<16;j++)
+  fadjust4x4 = img->AdaptiveRounding ? (pl ? &img->fadjust4x4Cr[pl-1][2][0] : &img->fadjust4x4[2][0]): NULL;
+
+  for (j = 0; j < 16; j++)
   {
-    jdiv = j >> 2;
-    jmod = j & 0x03;
-    jj = img->opix_y+j;
-    for (i=0;i<16;i++)
+    predY = curr_mpr_16x16[new_intra_mode][j];
+    img_Y = &pCurImg[img->opix_y + j][img->opix_x];
+    for (i = 0; i < 16; i++)
     {
-      M1[j][i] = imgY_org[jj][img->opix_x+i] - img->mprr_2[new_intra_mode][j][i];
-      M0[jdiv][i >> 2][jmod][i & 0x03] = M1[j][i];
+      M1[j][i] = img_Y[i] - predY[i];
     }
   }
 
   if (!lossless_qpprime)
   {
-    for (jj=0;jj<4;jj++)
+    // forward 4x4 DCT
+    for (j = 0; j < 16; j+=4)
     {
-      for (ii=0;ii<4;ii++)
+      for (i = 0;i < 16; i+=4)
       {
-        for (j=0;j<4;j++)
-        {
-          M5[0] = M0[jj][ii][j][0] + M0[jj][ii][j][3];
-          M5[1] = M0[jj][ii][j][1] + M0[jj][ii][j][2];
-          M5[2] = M0[jj][ii][j][1] - M0[jj][ii][j][2];
-          M5[3] = M0[jj][ii][j][0] - M0[jj][ii][j][3];
-
-          M4[j][0] = M5[0]   + M5[1];
-          M4[j][2] = M5[0]   - M5[1];
-          M4[j][1] = (M5[3] << 1) + M5[2];
-          M4[j][3] = M5[3]   - (M5[2] << 1);
-        }
-        // vertical
-        for (i=0;i<4;i++)
-        {
-          M5[0] = M4[0][i] + M4[3][i];
-          M5[1] = M4[1][i] + M4[2][i];
-          M5[2] = M4[1][i] - M4[2][i];
-          M5[3] = M4[0][i] - M4[3][i];
-
-          M0[jj][ii][0][i] =  M5[0]   + M5[1];
-          M0[jj][ii][2][i] =  M5[0]   - M5[1];
-          M0[jj][ii][1][i] = (M5[3] << 1) + M5[2];
-          M0[jj][ii][3][i] =  M5[3]   - (M5[2] << 1);
-        }
+        forward4x4(M1, M1, j, i);
       }
     }
 
     // pick out DC coeff
+    for (j = 0; j < 4; j++)
+      for (i = 0; i < 4; i++)
+        M4[j][i]= M1[j << 2][i << 2];
 
-    for (j=0;j<4;j++)
-    {
-      for (i=0;i<4;i++)
-        M4[j][i]= M0[j][i][0][0];
-    }
-
-    for (j=0;j<4;j++)
-    {
-      M5[0] = M4[j][0]+M4[j][3];
-      M5[1] = M4[j][1]+M4[j][2];
-      M5[2] = M4[j][1]-M4[j][2];
-      M5[3] = M4[j][0]-M4[j][3];
-
-      M4[j][0] = M5[0]+M5[1];
-      M4[j][2] = M5[0]-M5[1];
-      M4[j][1] = M5[3]+M5[2];
-      M4[j][3] = M5[3]-M5[2];
-    }
-
-    // vertical
-    for (i=0;i<4;i++)
-    {
-      M5[0] = M4[0][i]+M4[3][i];
-      M5[1] = M4[1][i]+M4[2][i];
-      M5[2] = M4[1][i]-M4[2][i];
-      M5[3] = M4[0][i]-M4[3][i];
-
-      M4[0][i]=(M5[0]+M5[1])>>1;
-      M4[2][i]=(M5[0]-M5[1])>>1;
-      M4[1][i]=(M5[3]+M5[2])>>1;
-      M4[3][i]=(M5[3]-M5[2])>>1;
-    }
+    // hadamard of DC coefficients
+    hadamard4x4(M4, M4);
 
     // quant
     run=-1;
     scan_pos=0;
-
+    
     for (coeff_ctr=0;coeff_ctr<16;coeff_ctr++)
     {
       i=pos_scan[coeff_ctr][0];
@@ -681,60 +639,104 @@ int dct_luma_16x16(int new_intra_mode)
       run++;
       level= (iabs(M4[j][i]) * levelscale[0][0] + (leveloffset[0][0]<<1)) >> (q_bits+1);
 
-      if (input->symbol_mode == UVLC && img->qp < 10)
-      {
-        if (level > CAVLC_LEVEL_LIMIT)
-          level = CAVLC_LEVEL_LIMIT;
-      }
-
       if (level != 0)
       {
-        DCLevel[scan_pos] = isignab(level,M4[j][i]);
-        DCRun  [scan_pos] = run;
-        ++scan_pos;
+        if (input->symbol_mode == CAVLC && img->qp < 10)
+          level = imin(level, CAVLC_LEVEL_LIMIT);
+
+        level = isignab(level, M4[j][i]);
+        DCLevel[scan_pos  ] = level;
+        DCRun  [scan_pos++] = run;
         run=-1;
+        M4[j][i] = level;
       }
-      M4[j][i]=isignab(level,M4[j][i]);
+      else
+        M4[j][i] = 0;
     }
     DCLevel[scan_pos]=0;
 
     // inverse DC transform
-    for (j=0;j<4;j++)
-    {
-      M6[0] = M4[j][0] + M4[j][2];
-      M6[1] = M4[j][0] - M4[j][2];
-      M6[2] = M4[j][1] - M4[j][3];
-      M6[3] = M4[j][1] + M4[j][3];
+    ihadamard4x4(M4, M4);
 
-      M4[j][0] = M6[0] + M6[3];
-      M4[j][1] = M6[1] + M6[2];
-      M4[j][2] = M6[1] - M6[2];
-      M4[j][3] = M6[0] - M6[3];
+    // Reset DC coefficients
+    for (j=0;j<4;j++)
+      for (i=0;i<4;i++)
+        M1[j<<2][i<<2] = rshift_rnd_sf(((M4[j][i]) * invlevelscale[0][0]) << qp_per, 6);
+
+    // AC inverse trans/quant for MB
+    for (jj=0;jj<4;jj++)
+    {
+      jpos = jj << 2;
+      for (ii=0;ii<4;ii++)
+      {
+        ipos = ii << 2;
+
+        run      = -1;
+        scan_pos =  0;
+        b8       = 2*(jj >> 1) + (ii >> 1);
+        b4       = 2*(jj & 0x01) + (ii & 0x01);
+        ACLevel  = img->cofAC[b8+pl_off][b4][0];
+        ACRun    = img->cofAC[b8+pl_off][b4][1];
+
+        for (coeff_ctr = 1; coeff_ctr < 16; coeff_ctr++) // set in AC coeff
+        {
+          i=pos_scan[coeff_ctr][0];
+          j=pos_scan[coeff_ctr][1];
+
+          run++;
+          m7 = &M1[jpos + j][ipos];
+          scaled_coeff = iabs( m7[i]) * levelscale[j][i];
+          level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
+
+          if (level != 0)
+          {
+            if (img->AdaptiveRounding)
+              fadjust4x4[jpos + j][ipos + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
+
+            ac_coef = 15;
+            level = isignab(level, m7[i]);
+            ACLevel[scan_pos  ] = level; 
+            ACRun  [scan_pos++] = run;
+            run=-1;
+            
+            m7[i] = rshift_rnd_sf((level * invlevelscale[j][i])<<qp_per, 4);
+          }          
+          else
+          {
+            m7[i] = 0;          
+            if (img->AdaptiveRounding)
+              fadjust4x4[jpos + j][ipos + i] = 0;
+          }
+        }
+
+        ACLevel[scan_pos] = 0;
+
+        //IDCT
+        inverse4x4(M1, M1, jpos, ipos);
+      }
     }
 
-    for (i=0;i<4;i++)
+    for (j=0;j<16;j++)
     {
+      img_Y = &img_enc[img->pix_y + j][img->pix_x];
+      predY = curr_mpr_16x16[new_intra_mode][j];
+      for (i=0;i<16;i++)
+        img_Y[i] = iClip1( max_imgpel_value, rshift_rnd_sf(M1[j][i], DQ_BITS) + predY[i]);
+    }
 
-      M6[0] = M4[0][i] + M4[2][i];
-      M6[1] = M4[0][i] - M4[2][i];
-      M6[2] = M4[1][i] - M4[3][i];
-      M6[3] = M4[1][i] + M4[3][i];
-
-      M0[0][i][0][0] = rshift_rnd_sf(((M6[0]+M6[3])*invlevelscale[0][0])<<qp_per,6);
-      M0[1][i][0][0] = rshift_rnd_sf(((M6[1]+M6[2])*invlevelscale[0][0])<<qp_per,6);
-      M0[2][i][0][0] = rshift_rnd_sf(((M6[1]-M6[2])*invlevelscale[0][0])<<qp_per,6);
-      M0[3][i][0][0] = rshift_rnd_sf(((M6[0]-M6[3])*invlevelscale[0][0])<<qp_per,6);
+    if(img->type == SP_SLICE)
+    {
+      for (j = img->pix_y; j < img->pix_y + 16;j++)
+        for (i = img->pix_x; i < img->pix_x + 16;i++)
+          lrec[j][i]=-16; //signals an I16 block in the SP frame
     }
   }
-  else  // lossless_qpprime
+  else  // Lossless qpprime code
   {
-
     // pick out DC coeff
-    for (j=0;j<4;j++)
-    {
-      for (i=0;i<4;i++)
-        M4[j][i]= M0[j][i][0][0];
-    }
+    for (j = 0; j < 4;j++)
+      for (i = 0; i < 4;i++)
+        M4[j][i]= M1[j << 2][i << 2];
 
     run=-1;
     scan_pos=0;
@@ -748,103 +750,53 @@ int dct_luma_16x16(int new_intra_mode)
 
       level= iabs(M4[j][i]);
 
-      if (input->symbol_mode == UVLC && img->qp < 10 && level > CAVLC_LEVEL_LIMIT)
-        level = CAVLC_LEVEL_LIMIT;
-
       if (level != 0)
       {
-        DCLevel[scan_pos] = isignab(level,M4[j][i]);
-        DCRun  [scan_pos] = run;
-        ++scan_pos;
+        if (input->symbol_mode == CAVLC && img->qp < 10)
+          level = imin(level, CAVLC_LEVEL_LIMIT);
+
+        DCLevel[scan_pos  ] = isignab(level,M4[j][i]);
+        DCRun  [scan_pos++] = run;
         run=-1;
       }
     }
     DCLevel[scan_pos]=0;
-  }
 
-  // AC inverse trans/quant for MB
-  for (jj=0;jj<4;jj++)
-  {
-    for (ii=0;ii<4;ii++)
+    // AC inverse trans/quant for MB
+    for (jj=0;jj<4;jj++)
     {
-      for (j=0;j<4;j++)
+      for (ii=0;ii<4;ii++)
       {
-        memcpy(M4[j],M0[jj][ii][j], BLOCK_SIZE * sizeof(int));
-      }
+        for (j=0;j<4;j++)
+        {
+          // memcpy(M4[j],&M1[(jj<<2)+j][(ii<<2)], BLOCK_SIZE * sizeof(int));
+          //For residual DPCM
+          if(new_intra_mode>1)  //non residual DPCM
+            memcpy(M4[j],&M1[(jj<<2)+j][(ii<<2)], BLOCK_SIZE * sizeof(int));
+          else //residual DPCM
+          {
+            memcpy(lossless_res[j],&M1[(jj<<2)+j][(ii<<2)], BLOCK_SIZE * sizeof(int)); 
+          }
+        }
 
-      run      = -1;
-      scan_pos =  0;
-      b8       = 2*(jj >> 1) + (ii >> 1);
-      b4       = 2*(jj & 0x01) + (ii & 0x01);
-      ACLevel  = img->cofAC [b8][b4][0];
-      ACRun    = img->cofAC [b8][b4][1];
+        //For residual DPCM
+        if(new_intra_mode<2)
+        {
+          Residual_DPCM_4x4_for_Intra16x16(new_intra_mode);  
 
-      if(!lossless_qpprime)
-      {
+          for (j=0;j<4;j++)
+            memcpy(M4[j],lossless_res[j], BLOCK_SIZE * sizeof(int));  
+        }
+
+        run      = -1;
+        scan_pos =  0;
+        b8       = 2*(jj >> 1) + (ii >> 1);
+        b4       = 2*(jj & 0x01) + (ii & 0x01);
+        ACLevel  = img->cofAC [b8+pl_off][b4][0];
+        ACRun    = img->cofAC [b8+pl_off][b4][1];
+
         for (coeff_ctr=1;coeff_ctr<16;coeff_ctr++) // set in AC coeff
         {
-
-          i=pos_scan[coeff_ctr][0];
-          j=pos_scan[coeff_ctr][1];
-
-          run++;
-          level= ( iabs( M4[j][i]) * levelscale[j][i] + leveloffset[j][i]) >> q_bits;
-
-          if (img->AdaptiveRounding)
-          {
-            img->fadjust4x4[2][jj*BLOCK_SIZE+j][ii*BLOCK_SIZE+i] = (level == 0) ? 0
-              : rshift_rnd_sf((AdaptRndWeight * (iabs(M4[j][i]) * levelscale[j][i] - (level << q_bits))),(q_bits + 1));
-          }
-
-          if (level != 0)
-          {
-            ac_coef = 15;
-            ACLevel[scan_pos] = isignab(level,M4[j][i]);
-            ACRun  [scan_pos] = run;
-            ++scan_pos;
-            run=-1;
-          }
-
-          level=isignab(level, M4[j][i]);
-
-          M4[j][i]=rshift_rnd_sf((level*invlevelscale[j][i])<<qp_per, 4);
-        }
-
-        ACLevel[scan_pos] = 0;
-
-        // IDCT horizontal
-        for (j=0;j<4 ;j++)
-        {
-          M6[0] = M4[j][0]     +  M4[j][2];
-          M6[1] = M4[j][0]     -  M4[j][2];
-          M6[2] =(M4[j][1]>>1) -  M4[j][3];
-          M6[3] = M4[j][1]     + (M4[j][3]>>1);
-
-          M4[j][0] = M6[0] + M6[3];
-          M4[j][1] = M6[1] + M6[2];
-          M4[j][2] = M6[1] - M6[2];
-          M4[j][3] = M6[0] - M6[3];
-        }
-
-        // vertical
-        for (i=0;i<4;i++)
-        {
-          M6[0]= M4[0][i]     +  M4[2][i];
-          M6[1]= M4[0][i]     -  M4[2][i];
-          M6[2]=(M4[1][i]>>1) -  M4[3][i];
-          M6[3]= M4[1][i]     + (M4[3][i]>>1);
-
-          M0[jj][ii][0][i] = M6[0] + M6[3];
-          M0[jj][ii][1][i] = M6[1] + M6[2];
-          M0[jj][ii][2][i] = M6[1] - M6[2];
-          M0[jj][ii][3][i] = M6[0] - M6[3];
-        }
-      }
-      else  // Lossless qpprime code
-      {
-        for (coeff_ctr=1;coeff_ctr<16;coeff_ctr++) // set in AC coeff
-        {
-
           i=pos_scan[coeff_ctr][0];
           j=pos_scan[coeff_ctr][1];
 
@@ -855,85 +807,45 @@ int dct_luma_16x16(int new_intra_mode)
           if (level != 0)
           {
             ac_coef = 15;
-            ACLevel[scan_pos] = isignab(level,M4[j][i]);
-            ACRun  [scan_pos] = run;
-            ++scan_pos;
+            ACLevel[scan_pos  ] = isignab(level,M4[j][i]);
+            ACRun  [scan_pos++] = run;
             run=-1;
           }
           // set adaptive rounding params to 0 since process is not meaningful here.
           if (img->AdaptiveRounding)
-          {
-            img->fadjust4x4[2][jj*BLOCK_SIZE+j][ii*BLOCK_SIZE+i] = 0;
-          }
+            fadjust4x4[jj*BLOCK_SIZE+j][ii*BLOCK_SIZE+i] = 0;
         }
         ACLevel[scan_pos] = 0;
-      }
-    }
-  }
 
-  for (jj=0;jj<BLOCK_MULTIPLE; jj++)
-  {
-    for (ii=0;ii<BLOCK_MULTIPLE; ii++)
-      for (j=0;j<BLOCK_SIZE;j++)
-      {
-        memcpy(&M1[jj*BLOCK_SIZE + j][ii*BLOCK_SIZE], M0[jj][ii][j], BLOCK_SIZE * sizeof(int));
-      }
-  }
-
-  if(lossless_qpprime)
-  {
-    if(img->type!=SP_SLICE)
-    {
-      for (j=0;j<16;j++)
-      {
-        jj = img->pix_y+j;
-        for (i=0;i<16;i++)
-          enc_picture->imgY[jj][img->pix_x+i]=(imgpel)(M1[j][i]+img->mprr_2[new_intra_mode][j][i]);
-      }
-    }
-    else
-    {
-      for (j = 0; j < MB_BLOCK_SIZE; j++)
-      {
-        jj = img->pix_y+j;
-        for (i = 0; i < MB_BLOCK_SIZE ; i++)
+        ///For residual DPCM.  inv. residual DCPM
+        if(new_intra_mode<2)  
         {
-          enc_picture->imgY[jj][img->pix_x+i]=(imgpel)(M1[j][i]+img->mprr_2[new_intra_mode][j][i]);
-          lrec[jj][img->pix_x+i] = -16; //signals an I16 block in the SP frame
+          Inv_Residual_DPCM_4x4_for_Intra16x16(new_intra_mode);  
+
+          for (j=0;j<4;j++)
+            memcpy(&M1[(jj<<2)+j][(ii<<2)],lossless_res[j], BLOCK_SIZE * sizeof(int)); 
         }
       }
     }
-  }
-  else
-  {
-    if(img->type!=SP_SLICE)
+
+    for (j = 0;j < 16;j++)
     {
-      for (j=0;j<16;j++)
-      {
-        jj = img->pix_y+j;
-        for (i=0;i<16;i++)
-          enc_picture->imgY[jj][img->pix_x+i] =
-          iClip1( img->max_imgpel_value, rshift_rnd_sf((M1[j][i]+((long)img->mprr_2[new_intra_mode][j][i]<<DQ_BITS)),DQ_BITS));
-      }
+      img_Y = &img_enc[img->pix_y + j][img->pix_x];
+      predY = curr_mpr_16x16[new_intra_mode][j];        
+      for (i=0;i<16;i++)
+        img_Y[i]=(imgpel)(M1[j][i] + predY[i]);
     }
-    else
+
+    if(img->type == SP_SLICE)
     {
-      for (j=0;j<16;j++)
-      {
-        jj = img->pix_y+j;
-        for (i=0;i<16;i++)
-        {
-          enc_picture->imgY[jj][img->pix_x+i] =
-            iClip1( img->max_imgpel_value, rshift_rnd_sf((M1[j][i]+((long)img->mprr_2[new_intra_mode][j][i]<<DQ_BITS)),DQ_BITS));
-          lrec[jj][img->pix_x+i]=-16; //signals an I16 block in the SP frame
-        }
-      }
+      for (j = img->pix_y; j < img->pix_y + 16;j++)
+        for (i = img->pix_x; i < img->pix_x + 16;i++)
+          lrec[j][i]=-16; //signals an I16 block in the SP frame
     }
   }
 
   return ac_coef;
 }
-
 
 /*!
 ************************************************************************
@@ -950,209 +862,460 @@ int dct_luma_16x16(int new_intra_mode)
 *    coeff_cost: Counter for nonzero coefficients, used to discard expensive levels.
 ************************************************************************
 */
-int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
+int dct_4x4(Macroblock *currMB, ColorPlane pl, int block_x,int block_y, int *coeff_cost, int intra)
 {
-  int i,j, ilev, coeff_ctr;
-  static int m4[4][4], m5[4], m6[4];
-  int level,scan_pos = 0,run = -1;
-  int nonzero = FALSE;
-  int qp_per, qp_rem, q_bits;
-  
+  int i,j, coeff_ctr;
+  static int m4[16][16];
+  static int *m7;
+  static imgpel *orig_img, *pred_img; 
+  static int scaled_coeff;
+  const byte *c_cost = COEFF_COST4x4[input->disthres];
+  int level, scan_pos = 0, run = -1;
+  int nonzero = FALSE;  
+
   int   pos_x   = block_x >> BLOCK_SHIFT;
   int   pos_y   = block_y >> BLOCK_SHIFT;
   int   b8      = 2*(pos_y >> 1) + (pos_x >> 1);
   int   b4      = 2*(pos_y & 0x01) + (pos_x & 0x01);
-  int*  ACLevel = img->cofAC[b8][b4][0];
-  int*  ACRun   = img->cofAC[b8][b4][1];
-  int   pix_y, pix_x;
+  
+  imgpel **img_enc      = enc_picture->p_curr_img;
+  imgpel (*curr_mpr)[16] = img->mpr[pl];
+  int    (*curr_res)[16] = img->m7[pl]; 
 
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-  int   qp = currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP;
-  Boolean lossless_qpprime = (Boolean) (qp == 0 && img->lossless_qpprime_flag==1);
-
-  int **levelscale,**leveloffset;
-  int **invlevelscale;
-
+  int   pl_off  = pl<<2;
+  int*  ACLevel = img->cofAC[b8+pl_off][b4][0];
+  int*  ACRun   = img->cofAC[b8+pl_off][b4][1];
+  int   max_imgpel_value = img->max_imgpel_value;
+  int   qp = currMB->qp_scaled[pl]; 
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
 
-  qp_per = qp_per_matrix[qp];
-  qp_rem = qp_rem_matrix[qp];
-  q_bits = Q_BITS + qp_per;
+  int qp_per = qp_per_matrix[qp];
+  int qp_rem = qp_rem_matrix[qp];
+  int q_bits = Q_BITS + qp_per;
 
   // select scaling parameters
-  levelscale    = ptLevelScale4x4Luma[intra][qp_rem];
-  invlevelscale = ptInvLevelScale4x4Luma[intra][qp_rem];
-  leveloffset   = ptLevelOffset4x4Luma[intra][qp];
+  levelscale    = LevelScale4x4Comp[pl][intra][qp_rem];
+  invlevelscale = InvLevelScale4x4Comp[pl][intra][qp_rem];
+  leveloffset   = ptLevelOffset4x4[intra][qp];
 
-  if (!lossless_qpprime)
+  fadjust4x4    = img->AdaptiveRounding ? (pl ? &img->fadjust4x4Cr[pl-1][intra][block_y] : &img->fadjust4x4[intra][block_y]) : NULL;
+
+  //  Forward DCT transform
+  forward4x4(curr_res, m4, block_y, block_x);
+
+  // Quantization
+  for (coeff_ctr = 0; coeff_ctr < 16; coeff_ctr++)
   {
-    //  Horizontal transform
-    for (j=0; j < BLOCK_SIZE; j++)
+    i = pos_scan[coeff_ctr][0];
+    j = pos_scan[coeff_ctr][1];
+
+    run++;
+    m7 = &m4[block_y + j][block_x];
+    scaled_coeff = iabs (m7[i]) * levelscale[j][i];
+    level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
+
+    if (level != 0)
     {
-      m5[0] = img->m7[j][0]+img->m7[j][3];
-      m5[1] = img->m7[j][1]+img->m7[j][2];
-      m5[2] = img->m7[j][1]-img->m7[j][2];
-      m5[3] = img->m7[j][0]-img->m7[j][3];
-
-      m4[j][0] = m5[0]   + m5[1];
-      m4[j][2] = m5[0]   - m5[1];
-      m4[j][1] = (m5[3]<<1) + m5[2];
-      m4[j][3] = m5[3]   - (m5[2]<<1);
-    }
-
-    //  Vertical transform
-    for (i=0; i < BLOCK_SIZE; i++)
-    {
-      m5[0] = m4[0][i] + m4[3][i];
-      m5[1] = m4[1][i] + m4[2][i];
-      m5[2] = m4[1][i] - m4[2][i];
-      m5[3] = m4[0][i] - m4[3][i];
-
-      m4[0][i] = m5[0]   + m5[1];
-      m4[2][i] = m5[0]   - m5[1];
-      m4[1][i] = (m5[3]<<1) + m5[2];
-      m4[3][i] = m5[3]   - (m5[2]<<1);
-    }
-
-    // Quant
-    for (coeff_ctr=0;coeff_ctr < 16;coeff_ctr++)
-    {
-
-      i=pos_scan[coeff_ctr][0];
-      j=pos_scan[coeff_ctr][1];
-
-      run++;
-      ilev=0;
-
-      level = (iabs (m4[j][i]) * levelscale[j][i] + leveloffset[j][i]) >> q_bits;
-
       if (img->AdaptiveRounding)
-      {
-        img->fadjust4x4[intra][block_y+j][block_x+i] = (level == 0)
-          ? 0
-          : rshift_rnd_sf((AdaptRndWeight * (iabs(m4[j][i]) * levelscale[j][i] - (level << q_bits))), q_bits + 1);
-      }
+        fadjust4x4[j][block_x+i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), q_bits + 1);
 
-      if (level != 0)
-      {
-        nonzero=TRUE;
+      nonzero=TRUE;
 
-        *coeff_cost += (level > 1) ? MAX_VALUE : COEFF_COST[input->disthres][run];
+      *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
-        ACLevel[scan_pos] = isignab(level,m4[j][i]);
-
-        ACRun  [scan_pos] = run;
-        ++scan_pos;
-        run=-1;                     // reset zero level counter
-
-        level = isignab(level, m4[j][i]);
-        ilev  = rshift_rnd_sf(((level*invlevelscale[j][i])<< qp_per), 4);
-      }
-      m4[j][i]=ilev;
+      level = isignab(level, m7[i]);
+      ACLevel[scan_pos  ] = level;
+      ACRun  [scan_pos++] = run; 
+      m7[i]  = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 4);
+      // reset zero level counter
+      run = -1;                          
     }
-
-    ACLevel[scan_pos] = 0;
-
-    if (scan_pos)
+    else
     {
-      //     IDCT.
-      //     horizontal
-      for (j=0; j < BLOCK_SIZE; j++)
-      {
-        m6[0]=(m4[j][0]     +  m4[j][2]);
-        m6[1]=(m4[j][0]     -  m4[j][2]);
-        m6[2]=(m4[j][1]>>1) -  m4[j][3];
-        m6[3]= m4[j][1]     + (m4[j][3]>>1);
+      if (img->AdaptiveRounding)
+        fadjust4x4[j][block_x+i] = 0;            
+      m7[i] = 0;
+    }      
+  }
 
-        m4[j][0] = m6[0] + m6[3];
-        m4[j][1] = m6[1] + m6[2];
-        m4[j][2] = m6[1] - m6[2];
-        m4[j][3] = m6[0] - m6[3];
-      }
+  ACLevel[scan_pos] = 0;
 
-      //  vertical
+  if (scan_pos)
+  {
+    // inverse 4x4 DCT transform
+    inverse4x4(m4, curr_res, block_y, block_x);
+
+    // generate final block
+    for (j=block_y; j < block_y + BLOCK_SIZE; j++)
+    { 
+      orig_img = &img_enc[img->pix_y + j][img->pix_x + block_x];
+      pred_img = &curr_mpr[j][block_x];
+      m7 = &curr_res[j][block_x];
       for (i=0; i < BLOCK_SIZE; i++)
       {
-
-        m6[0]=(m4[0][i]     +  m4[2][i]);
-        m6[1]=(m4[0][i]     -  m4[2][i]);
-        m6[2]=(m4[1][i]>>1) -  m4[3][i];
-        m6[3]= m4[1][i]     + (m4[3][i]>>1);
-
-        img->m7[0][i] = m6[0]+m6[3];
-        img->m7[1][i] = m6[1]+m6[2];
-        img->m7[2][i] = m6[1]-m6[2];
-        img->m7[3][i] = m6[0]-m6[3];
-      }
-
-      // generate final block
-      for (j=0; j < BLOCK_SIZE; j++)
-      {        
-        for (i=0; i < BLOCK_SIZE; i++)
-        {
-          enc_picture->imgY[img->pix_y + block_y + j][img->pix_x + block_x + i]     
-          = iClip1( img->max_imgpel_value, rshift_rnd_sf((img->m7[j][i]+((long)img->mpr[block_y + j][block_x + i] << DQ_BITS)),DQ_BITS));
-        }
-      }
-
-    }
-    else // no transformed residual;
-    {
-      for (j=block_y; j < block_y + BLOCK_SIZE; j++)
-      {
-        memcpy(&(enc_picture->imgY[img->pix_y + j][img->pix_x + block_x]),&(img->mpr[j][block_x]), BLOCK_SIZE * sizeof(imgpel));
+        orig_img[i] = iClip1( max_imgpel_value, rshift_rnd_sf(m7[i], DQ_BITS) + pred_img[i]);
       }
     }
   }
-  else // Lossless qpprime code
+  else // no transformed residual;
   {
-    for (coeff_ctr=0;coeff_ctr < 16;coeff_ctr++)
+    for (j=block_y; j < block_y + BLOCK_SIZE; j++)
     {
-      i=pos_scan[coeff_ctr][0];
-      j=pos_scan[coeff_ctr][1];
-
-      run++;
-      ilev=0;
-
-      level = iabs (img->m7[j][i]);
-
-      if (img->AdaptiveRounding)
-      {
-        img->fadjust4x4[intra][block_y+j][block_x+i] = 0;
-      }
-
-      if (level != 0)
-      {
-        nonzero=TRUE;
-
-        *coeff_cost += MAX_VALUE;
-
-        ACLevel[scan_pos] = isignab(level,img->m7[j][i]);
-        ACRun  [scan_pos] = run;
-        ++scan_pos;
-        run=-1;                     // reset zero level counter
-
-        level=isignab(level, m4[j][i]);
-
-        ilev=level;
-      }
-    }
-    ACLevel[scan_pos] = 0;
-
-    for (j=0; j < BLOCK_SIZE; j++)
-    {
-      pix_y = img->pix_y + block_y + j;
-      pix_x = img->pix_x+block_x;
-      for (i=0; i < BLOCK_SIZE; i++)
-      {
-        enc_picture->imgY[pix_y][pix_x+i]=img->m7[j][i]+img->mpr[j+block_y][i+block_x];
-      }
+      memcpy(&(img_enc[img->pix_y + j][img->pix_x + block_x]),&(curr_mpr[j][block_x]), BLOCK_SIZE * sizeof(imgpel));
     }
   }
 
   return nonzero;
 }
 
+/*!
+************************************************************************
+* \brief
+*    The routine performs transform,quantization,inverse transform, adds the diff.
+*    to the prediction and writes the result to the decoded luma frame. Includes the
+*    RD constrained quantization also.
+*
+* \par Input:
+*    block_x,block_y: Block position inside a macro block (0,4,8,12).
+*
+* \par Output_
+*    nonzero: 0 if no levels are nonzero.  1 if there are nonzero levels.             \n
+*    coeff_cost: Counter for nonzero coefficients, used to discard expensive levels.
+************************************************************************
+*/
+int dct_4x4_qpprime(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra)
+{
+  int i,j, coeff_ctr;
+  int level, scan_pos = 0, run = -1;
+  int nonzero = FALSE;  
+  imgpel **img_enc       = enc_picture->p_curr_img;
+  imgpel (*curr_mpr)[16] = img->mpr[pl];
+  int    (*curr_res)[16] = img->m7[pl]; 
+
+  int   pos_x   = block_x >> BLOCK_SHIFT;
+  int   pos_y   = block_y >> BLOCK_SHIFT;
+  int   b8      = 2*(pos_y >> 1) + (pos_x >> 1);
+  int   b4      = 2*(pos_y & 0x01) + (pos_x & 0x01);
+  int   pl_off = pl<<2;
+  int*  ACLevel = img->cofAC[b8+pl_off][b4][0];
+  int*  ACRun   = img->cofAC[b8+pl_off][b4][1];
+  int   pix_y, pix_x;
+
+  const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
+
+  // select scaling parameters
+  fadjust4x4    = img->AdaptiveRounding ? &img->fadjust4x4[intra][block_y] : NULL;
+
+  for (coeff_ctr=0;coeff_ctr < 16;coeff_ctr++)
+  {
+    i=pos_scan[coeff_ctr][0];
+    j=pos_scan[coeff_ctr][1];
+
+    run++;
+
+    level = iabs(curr_res[j+block_y][i+block_x]);
+
+    if (img->AdaptiveRounding)
+      fadjust4x4[j][block_x+i] = 0;
+
+    if (level != 0)
+    {
+      nonzero=TRUE;
+
+      *coeff_cost += MAX_VALUE;
+
+      level=isignab(level, curr_res[j+block_y][i+block_x]);      
+      ACLevel[scan_pos  ] = level;
+      ACRun  [scan_pos++] = run;
+      run=-1;                     // reset zero level counter        
+    }
+  }
+  ACLevel[scan_pos] = 0;
+
+  if(ipmode_DPCM<2)  //For residual DPCM
+  {
+    Inv_Residual_DPCM_4x4(pl, block_y, block_x);
+  }
+
+
+  for (j=0; j < BLOCK_SIZE; j++)
+  {
+    pix_y = img->pix_y + block_y + j;
+    pix_x = img->pix_x+block_x;
+    for (i=0; i < BLOCK_SIZE; i++)
+    {
+      img_enc[pix_y][pix_x+i]=curr_res[j+block_y][i+block_x] + curr_mpr[j+block_y][i+block_x];
+    }
+  }
+
+  return nonzero;
+}
+
+
+/*!
+************************************************************************
+* \brief
+*    Residual DPCM for Intra lossless coding
+*
+* \par Input:
+*    block_x,block_y: Block position inside a macro block (0,4,8,12).
+************************************************************************
+*/
+int Residual_DPCM_4x4(int ipmode, ColorPlane pl, int block_y, int block_x)
+{
+  int i,j;
+  int temp[4][4];
+
+  if(ipmode==VERT_PRED)
+  {
+    for (j=0; j<4; j++)
+      for (i=1; i<4; i++) 
+        temp[i][j] = img->m7[pl][block_y+i][block_x+j] - img->m7[pl][block_y+i-1][block_x+j];
+
+    for (j=0; j<4; j++)
+      for (i=1; i<4; i++)
+        img->m7[pl][block_y+i][block_x+j] = temp[i][j];
+  }
+  else  //HOR_PRED
+  {
+    for (j=1; j<4; j++)
+      for (i=0; i<4; i++)
+        temp[i][j] = img->m7[pl][block_y+i][block_x+j] - img->m7[pl][block_y+i][block_x+j-1];
+
+    for (j=1; j<4; j++)
+      for (i=0; i<4; i++)
+        img->m7[pl][block_y+i][block_x+j] = temp[i][j];
+  }
+  return 0;
+}
+
+/*!
+************************************************************************
+* \brief
+*    Inverse residual DPCM for Intra lossless coding
+*
+* \par Input:
+*    block_x,block_y: Block position inside a macro block (0,4,8,12).
+************************************************************************
+*/
+//For residual DPCM
+int Inv_Residual_DPCM_4x4(ColorPlane pl, int block_y, int block_x)  
+{
+  int i;
+  int temp[4][4];
+
+  if(ipmode_DPCM==VERT_PRED)
+  {
+    for(i=0; i<4; i++)
+    {
+      temp[1][i]=img->m7[pl][block_y+0][block_x+i]+img->m7[pl][block_y+1][block_x+i];
+      temp[2][i]=img->m7[pl][block_y+0][block_x+i]+img->m7[pl][block_y+1][block_x+i]+img->m7[pl][block_y+2][block_x+i];
+      temp[3][i]=img->m7[pl][block_y+0][block_x+i]+img->m7[pl][block_y+1][block_x+i]+img->m7[pl][block_y+2][block_x+i]+img->m7[pl][block_y+3][block_x+i];
+    }
+    for(i=0; i<4; i++)
+    {
+      img->m7[pl][block_y+1][block_x+i]=temp[1][i];
+      img->m7[pl][block_y+2][block_x+i]=temp[2][i];
+      img->m7[pl][block_y+3][block_x+i]=temp[3][i];
+    }
+  }
+  else //HOR_PRED
+  {
+    for(i=0; i<4; i++)
+    {
+      temp[i][1]=img->m7[pl][block_y+i][block_x+0]+img->m7[pl][block_y+i][block_x+1];
+      temp[i][2]=img->m7[pl][block_y+i][block_x+0]+img->m7[pl][block_y+i][block_x+1]+img->m7[pl][block_y+i][block_x+2];
+      temp[i][3]=img->m7[pl][block_y+i][block_x+0]+img->m7[pl][block_y+i][block_x+1]+img->m7[pl][block_y+i][block_x+2]+img->m7[pl][block_y+i][block_x+3];    
+    }
+    for(i=0; i<4; i++)
+    {
+      img->m7[pl][block_y+i][block_x+1]=temp[i][1];
+      img->m7[pl][block_y+i][block_x+2]=temp[i][2];
+      img->m7[pl][block_y+i][block_x+3]=temp[i][3];
+    }
+  }
+  return 0;
+}
+
+/*!
+************************************************************************
+* \brief
+*    Residual DPCM for Intra lossless coding
+*
+* \par Input:
+*    block_x,block_y: Block position inside a macro block (0,8).
+************************************************************************
+*/
+//For residual DPCM
+int Residual_DPCM_8x8(int ipmode, ColorPlane pl, int block_y, int block_x)
+{
+  int i,j;
+  int temp[8][8];
+
+  if(ipmode==VERT_PRED)
+  {
+    for (j=0; j<8; j++)
+      for (i=1; i<8; i++) 
+        temp[i][j] = img->m7[pl][block_y+i][block_x+j] - img->m7[pl][block_y+i-1][block_x+j];
+
+    for (j=0; j<8; j++)
+      for (i=1; i<8; i++)
+        img->m7[pl][block_y+i][block_x+j] = temp[i][j];
+  }
+  else  //HOR_PRED
+  {
+    for (j=1; j<8; j++)
+      for (i=0; i<8; i++)
+        temp[i][j] = img->m7[pl][block_y+i][block_x+j] - img->m7[pl][block_y+i][block_x+j-1];
+
+    for (j=1; j<8; j++)
+      for (i=0; i<8; i++)
+        img->m7[pl][block_y+i][block_x+j] = temp[i][j];
+  }
+  return 0;
+}
+/*!
+************************************************************************
+* \brief
+*    Inverse residual DPCM for Intra lossless coding
+*
+* \par Input:
+*    block_x,block_y: Block position inside a macro block (0,8).
+************************************************************************
+*/
+//For residual DPCM
+int Inv_Residual_DPCM_8x8(ColorPlane pl, int block_y, int block_x)  
+{
+  int i;
+  int temp[8][8];
+
+  if(ipmode_DPCM==VERT_PRED)
+  {
+    for(i=0; i<8; i++)
+    {
+      temp[1][i]=img->m7[pl][block_y+0][block_x+i]+img->m7[pl][block_y+1][block_x+i];
+      temp[2][i]=img->m7[pl][block_y+0][block_x+i]+img->m7[pl][block_y+1][block_x+i]+img->m7[pl][block_y+2][block_x+i];
+      temp[3][i]=img->m7[pl][block_y+0][block_x+i]+img->m7[pl][block_y+1][block_x+i]+img->m7[pl][block_y+2][block_x+i]+img->m7[pl][block_y+3][block_x+i];
+      temp[4][i]=img->m7[pl][block_y+0][block_x+i]+img->m7[pl][block_y+1][block_x+i]+img->m7[pl][block_y+2][block_x+i]+img->m7[pl][block_y+3][block_x+i]+img->m7[pl][block_y+4][block_x+i];
+      temp[5][i]=img->m7[pl][block_y+0][block_x+i]+img->m7[pl][block_y+1][block_x+i]+img->m7[pl][block_y+2][block_x+i]+img->m7[pl][block_y+3][block_x+i]+img->m7[pl][block_y+4][block_x+i]+img->m7[pl][block_y+5][block_x+i];
+      temp[6][i]=img->m7[pl][block_y+0][block_x+i]+img->m7[pl][block_y+1][block_x+i]+img->m7[pl][block_y+2][block_x+i]+img->m7[pl][block_y+3][block_x+i]+img->m7[pl][block_y+4][block_x+i]+img->m7[pl][block_y+5][block_x+i]+img->m7[pl][block_y+6][block_x+i];
+      temp[7][i]=img->m7[pl][block_y+0][block_x+i]+img->m7[pl][block_y+1][block_x+i]+img->m7[pl][block_y+2][block_x+i]+img->m7[pl][block_y+3][block_x+i]+img->m7[pl][block_y+4][block_x+i]+img->m7[pl][block_y+5][block_x+i]+img->m7[pl][block_y+6][block_x+i]+img->m7[pl][block_y+7][block_x+i];
+    }
+    for(i=0; i<8; i++)
+    {
+      img->m7[pl][block_y+1][block_x+i]=temp[1][i];
+      img->m7[pl][block_y+2][block_x+i]=temp[2][i];
+      img->m7[pl][block_y+3][block_x+i]=temp[3][i];
+      img->m7[pl][block_y+4][block_x+i]=temp[4][i];
+      img->m7[pl][block_y+5][block_x+i]=temp[5][i];
+      img->m7[pl][block_y+6][block_x+i]=temp[6][i];
+      img->m7[pl][block_y+7][block_x+i]=temp[7][i];
+    }
+  }
+  else //HOR_PRED
+  {
+    for(i=0; i<8; i++)
+    {
+      temp[i][1]=img->m7[pl][block_y+i][block_x+0]+img->m7[pl][block_y+i][block_x+1];
+      temp[i][2]=img->m7[pl][block_y+i][block_x+0]+img->m7[pl][block_y+i][block_x+1]+img->m7[pl][block_y+i][block_x+2];
+      temp[i][3]=img->m7[pl][block_y+i][block_x+0]+img->m7[pl][block_y+i][block_x+1]+img->m7[pl][block_y+i][block_x+2]+img->m7[pl][block_y+i][block_x+3];
+      temp[i][4]=img->m7[pl][block_y+i][block_x+0]+img->m7[pl][block_y+i][block_x+1]+img->m7[pl][block_y+i][block_x+2]+img->m7[pl][block_y+i][block_x+3]+img->m7[pl][block_y+i][block_x+4];
+      temp[i][5]=img->m7[pl][block_y+i][block_x+0]+img->m7[pl][block_y+i][block_x+1]+img->m7[pl][block_y+i][block_x+2]+img->m7[pl][block_y+i][block_x+3]+img->m7[pl][block_y+i][block_x+4]+img->m7[pl][block_y+i][block_x+5];
+      temp[i][6]=img->m7[pl][block_y+i][block_x+0]+img->m7[pl][block_y+i][block_x+1]+img->m7[pl][block_y+i][block_x+2]+img->m7[pl][block_y+i][block_x+3]+img->m7[pl][block_y+i][block_x+4]+img->m7[pl][block_y+i][block_x+5]+img->m7[pl][block_y+i][block_x+6];
+      temp[i][7]=img->m7[pl][block_y+i][block_x+0]+img->m7[pl][block_y+i][block_x+1]+img->m7[pl][block_y+i][block_x+2]+img->m7[pl][block_y+i][block_x+3]+img->m7[pl][block_y+i][block_x+4]+img->m7[pl][block_y+i][block_x+5]+img->m7[pl][block_y+i][block_x+6]+img->m7[pl][block_y+i][block_x+7];
+    }
+    for(i=0; i<8; i++)
+    {
+      img->m7[pl][block_y+i][block_x+1]=temp[i][1];
+      img->m7[pl][block_y+i][block_x+2]=temp[i][2];
+      img->m7[pl][block_y+i][block_x+3]=temp[i][3];
+      img->m7[pl][block_y+i][block_x+4]=temp[i][4];
+      img->m7[pl][block_y+i][block_x+5]=temp[i][5];
+      img->m7[pl][block_y+i][block_x+6]=temp[i][6];
+      img->m7[pl][block_y+i][block_x+7]=temp[i][7];
+    }
+  }
+  return 0;
+}
+
+/*!
+************************************************************************
+* \brief
+*    Residual DPCM for Intra lossless coding
+************************************************************************
+*/
+//For residual DPCM
+int Residual_DPCM_4x4_for_Intra16x16(int ipmode)  
+{
+  int i,j;
+  int temp[4][4];
+
+  if(ipmode==VERT_PRED)
+  {
+    for (j=0; j<4; j++)
+      for (i=1; i<4; i++) 
+        temp[i][j] = lossless_res[i][j] - lossless_res[i-1][j];
+
+    for (j=0; j<4; j++)
+      for (i=1; i<4; i++)
+        lossless_res[i][j] = temp[i][j];
+  }
+  else  //HOR_PRED
+  {
+    for (j=1; j<4; j++)
+      for (i=0; i<4; i++)
+        temp[i][j] = lossless_res[i][j] - lossless_res[i][j-1];
+
+    for (j=1; j<4; j++)
+      for (i=0; i<4; i++)
+        lossless_res[i][j] = temp[i][j];
+  }
+  return 0;
+}
+/*!
+************************************************************************
+* \brief
+*    Inverse residual DPCM for Intra lossless coding
+************************************************************************
+*/
+//For residual DPCM
+int Inv_Residual_DPCM_4x4_for_Intra16x16(int ipmode)  
+{
+  int i;
+  int temp[4][4];
+
+  if(ipmode==VERT_PRED)
+  {
+    for (i=0; i<4; i++) 
+    {
+      temp[1][i]=lossless_res[0][i]+lossless_res[1][i];
+      temp[2][i]=lossless_res[0][i]+lossless_res[1][i]+lossless_res[2][i];
+      temp[3][i]=lossless_res[0][i]+lossless_res[1][i]+lossless_res[2][i]+lossless_res[3][i];
+    }
+    for (i=0; i<4; i++)
+    {
+      lossless_res[1][i]=temp[1][i];
+      lossless_res[2][i]=temp[2][i];
+      lossless_res[3][i]=temp[3][i];
+    }
+  }
+  else  //HOR_PRED
+  {
+    for(i=0; i<4; i++)
+    {
+      temp[i][1]=lossless_res[i][0]+lossless_res[i][1];
+      temp[i][2]=lossless_res[i][0]+lossless_res[i][1]+lossless_res[i][2];
+      temp[i][3]=lossless_res[i][0]+lossless_res[i][1]+lossless_res[i][2]+lossless_res[i][3];
+    }
+    for (i=0; i<4; i++)
+    {
+      lossless_res[i][1]=temp[i][1];
+      lossless_res[i][2]=temp[i][2];
+      lossless_res[i][3]=temp[i][3];
+    }    
+  }
+  return 0;
+}
 
 /*!
  ************************************************************************
@@ -1170,16 +1333,16 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
  *    cr_cbp: Updated chroma coded block pattern.
  ************************************************************************
  */
-int dct_chroma(int uv,int cr_cbp)
+int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
 {
-  int i,j,i1,j2,ilev,n2,n1,j1,mb_y,coeff_ctr,level ,scan_pos,run;
+  int i,j,n2,n1,coeff_ctr,level ,scan_pos,run;
   static int m1[BLOCK_SIZE],m5[BLOCK_SIZE],m6[BLOCK_SIZE];
   int coeff_cost;
   int cr_cbp_tmp;
   int DCcoded=0 ;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  static imgpel *orig_img, *pred_img;
 
-  int qp_per,qp_rem,q_bits;
+  const byte *c_cost = COEFF_COST4x4[input->disthres];
 
   int   b4;
   int*  DCLevel = img->cofDC[uv+1][0];
@@ -1187,39 +1350,46 @@ int dct_chroma(int uv,int cr_cbp)
   int*  ACLevel;
   int*  ACRun;
   int   intra = IS_INTRA (currMB);
-  int   uv_scale = uv*(img->num_blk8x8_uv >> 1);
+  int   uv_scale = uv * (img->num_blk8x8_uv >> 1);
+  static int scaled_coeff;
 
   //FRExt
   static const int64 cbpblk_pattern[4]={0, 0xf0000, 0xff0000, 0xffff0000};
   int yuv = img->yuv_format;
   int b8;
+  static int *m7;
   static int m3[4][4];
   static int m4[4][4];
   int qp_per_dc = 0;
   int qp_rem_dc = 0;
   int q_bits_422 = 0;
-  int ***levelscale, ***leveloffset;
-  int ***invlevelscale;
-  short pix_c_x, pix_c_y;
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
   int cur_qp = currMB->qpc[uv] + img->bitdepth_chroma_qp_scale;
   int cur_qp_dc = currMB->qpc[uv] + 3 + img->bitdepth_chroma_qp_scale;
 
   Boolean lossless_qpprime = (Boolean) ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
 
-  qp_per = qp_per_matrix[cur_qp];
-  qp_rem = qp_rem_matrix[cur_qp];
-  q_bits = Q_BITS+qp_per;
+  int qp_per = qp_per_matrix[cur_qp];
+  int qp_rem = qp_rem_matrix[cur_qp];
+  int q_bits = Q_BITS + qp_per;
+  int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
+  int    (*curr_res)[16] = img->m7[uv + 1]; 
+  imgpel (*curr_mpr)[16] = img->mpr[uv + 1]; 
 
-  levelscale    = LevelScale4x4Chroma[uv][intra];
-  leveloffset   = LevelOffset4x4Chroma[uv][intra];
-  invlevelscale = InvLevelScale4x4Chroma[uv][intra];
+  levelscale    = LevelScale4x4Comp   [uv + 1][intra][qp_rem];
+  leveloffset   = LevelOffset4x4Comp  [uv + 1][intra][cur_qp];
+  invlevelscale = InvLevelScale4x4Comp[uv + 1][intra][qp_rem];
+  fadjust4x4    = img->AdaptiveRounding ? img->fadjust4x4Cr[intra][uv] : NULL;
 
   if (img->yuv_format == YUV422)
   {
     //for YUV422 only
     qp_per_dc = qp_per_matrix[cur_qp_dc];
     qp_rem_dc = qp_rem_matrix[cur_qp_dc];
+    
+    invlevelscaleDC = InvLevelScale4x4Comp[uv + 1][intra][qp_rem_dc];
+    levelscaleDC    = LevelScale4x4Comp   [uv + 1][intra][qp_rem_dc];
+    leveloffsetDC   = LevelOffset4x4Comp  [uv + 1][intra][cur_qp_dc];
 
     q_bits_422 = Q_BITS + qp_per_dc;
   }
@@ -1232,36 +1402,7 @@ int dct_chroma(int uv,int cr_cbp)
     {
       for (n1=0; n1 < img->mb_cr_size_x; n1 += BLOCK_SIZE)
       {
-        //  Horizontal transform.
-        for (j=0; j < BLOCK_SIZE; j++)
-        {
-          mb_y=n2+j;
-
-          m5[0]=img->m7[mb_y][n1  ]+img->m7[mb_y][n1+3];
-          m5[1]=img->m7[mb_y][n1+1]+img->m7[mb_y][n1+2];
-          m5[2]=img->m7[mb_y][n1+1]-img->m7[mb_y][n1+2];
-          m5[3]=img->m7[mb_y][n1  ]-img->m7[mb_y][n1+3];
-
-          img->m7[mb_y][n1  ] = (m5[0]   + m5[1]);
-          img->m7[mb_y][n1+2] = (m5[0]   - m5[1]);
-          img->m7[mb_y][n1+1] = (m5[3]<<1) + m5[2];
-          img->m7[mb_y][n1+3] =  m5[3]   - (m5[2]<<1);
-        }
-
-        //  Vertical transform.
-        for (i=0; i < BLOCK_SIZE; i++)
-        {
-          j1=n1+i;
-          m5[0] = img->m7[n2  ][j1] + img->m7[n2+3][j1];
-          m5[1] = img->m7[n2+1][j1] + img->m7[n2+2][j1];
-          m5[2] = img->m7[n2+1][j1] - img->m7[n2+2][j1];
-          m5[3] = img->m7[n2  ][j1] - img->m7[n2+3][j1];
-
-          img->m7[n2  ][j1] = (m5[0]     + m5[1]);
-          img->m7[n2+2][j1] = (m5[0]     - m5[1]);
-          img->m7[n2+1][j1] = (m5[3]<<1) + m5[2];
-          img->m7[n2+3][j1] =  m5[3]     - (m5[2]<<1);
-        }
+        forward4x4(curr_res, curr_res, n1, n2);
       }
     }
   }
@@ -1274,38 +1415,34 @@ int dct_chroma(int uv,int cr_cbp)
     scan_pos=0;
     if(!lossless_qpprime)
     {
-      m1[0]=(img->m7[0][0] + img->m7[0][4] + img->m7[4][0] + img->m7[4][4]);
-      m1[1]=(img->m7[0][0] - img->m7[0][4] + img->m7[4][0] - img->m7[4][4]);
-      m1[2]=(img->m7[0][0] + img->m7[0][4] - img->m7[4][0] - img->m7[4][4]);
-      m1[3]=(img->m7[0][0] - img->m7[0][4] - img->m7[4][0] + img->m7[4][4]);
+      m1[0]=(curr_res[0][0] + curr_res[0][4] + curr_res[4][0] + curr_res[4][4]);
+      m1[1]=(curr_res[0][0] - curr_res[0][4] + curr_res[4][0] - curr_res[4][4]);
+      m1[2]=(curr_res[0][0] + curr_res[0][4] - curr_res[4][0] - curr_res[4][4]);
+      m1[3]=(curr_res[0][0] - curr_res[0][4] - curr_res[4][0] + curr_res[4][4]);
 
       //     Quant of chroma 2X2 coeffs.
       for (coeff_ctr=0; coeff_ctr < 4; coeff_ctr++)
       {
         run++;
-        ilev=0;
 
-        level =(iabs(m1[coeff_ctr]) * levelscale[qp_rem][0][0] + (leveloffset[cur_qp][0][0]<<1)) >> (q_bits+1);
-
-        if (input->symbol_mode == UVLC && img->qp < 4)
-        {
-          if (level > CAVLC_LEVEL_LIMIT)
-            level = CAVLC_LEVEL_LIMIT;
-        }
+        level =(iabs(m1[coeff_ctr]) * levelscale[0][0] + (leveloffset[0][0]<<1)) >> (q_bits+1);
 
         if (level  != 0)
         {
+          if (input->symbol_mode == CAVLC && img->qp < 4)
+            level = imin(level, CAVLC_LEVEL_LIMIT);
+
           currMB->cbp_blk |= 0xf0000 << (uv << 2) ;    // if one of the 2x2-DC levels is != 0 set the
           cr_cbp=imax(1,cr_cbp);                     // coded-bit all 4 4x4 blocks (bit 16-19 or 20-23)
-          DCcoded = 1 ;
-          DCLevel[scan_pos] = isignab(level ,m1[coeff_ctr]);
-          DCRun  [scan_pos] = run;
-          scan_pos++;
-          run=-1;
-
-          ilev=isignab(level, m1[coeff_ctr]);
+          DCcoded = 1;
+          level = isignab(level, m1[coeff_ctr]);
+          DCLevel[scan_pos  ] = level;
+          DCRun  [scan_pos++] = run;
+          run=-1;          
+          m1[coeff_ctr] = level;
         }
-        m1[coeff_ctr]=ilev;
+        else
+          m1[coeff_ctr] = 0;
       }
 
       DCLevel[scan_pos] = 0;
@@ -1315,46 +1452,36 @@ int dct_chroma(int uv,int cr_cbp)
       m5[2]=(m1[0] + m1[1] - m1[2] - m1[3]);
       m5[3]=(m1[0] - m1[1] - m1[2] + m1[3]);
 
-      m1[0]=((m5[0] * invlevelscale[qp_rem][0][0])<<qp_per)>>5;
-      m1[1]=((m5[1] * invlevelscale[qp_rem][0][0])<<qp_per)>>5;
-      m1[2]=((m5[2] * invlevelscale[qp_rem][0][0])<<qp_per)>>5;
-      m1[3]=((m5[3] * invlevelscale[qp_rem][0][0])<<qp_per)>>5;
-
-      img->m7[0][0] = m1[0];
-      img->m7[0][4] = m1[1];
-      img->m7[4][0] = m1[2];
-      img->m7[4][4] = m1[3];
+      curr_res[0][0] = ((m5[0] * invlevelscale[0][0]) << qp_per) >> 5;
+      curr_res[0][4] = ((m5[1] * invlevelscale[0][0]) << qp_per) >> 5;
+      curr_res[4][0] = ((m5[2] * invlevelscale[0][0]) << qp_per) >> 5;
+      curr_res[4][4] = ((m5[3] * invlevelscale[0][0]) << qp_per) >> 5;
     }
     else // Lossless qpprime
     {
-      m1[0]=img->m7[0][0];
-      m1[1]=img->m7[0][4];
-      m1[2]=img->m7[4][0];
-      m1[3]=img->m7[4][4];
+      m1[0]=curr_res[0][0];
+      m1[1]=curr_res[0][4];
+      m1[2]=curr_res[4][0];
+      m1[3]=curr_res[4][4];
 
       for (coeff_ctr=0; coeff_ctr < 4; coeff_ctr++)
       {
         run++;
-        ilev=0;
 
         level =iabs(m1[coeff_ctr]);
 
-        if (input->symbol_mode == UVLC && img->qp < 4)
-        {
-          if (level > CAVLC_LEVEL_LIMIT) level = CAVLC_LEVEL_LIMIT;
-        }
-
         if (level  != 0)
         {
-          currMB->cbp_blk |= 0xf0000 << (uv << 2) ;    // if one of the 2x2-DC levels is != 0 set the
-          cr_cbp=imax(1,cr_cbp);                     // coded-bit all 4 4x4 blocks (bit 16-19 or 20-23)
-          DCcoded = 1 ;
-          DCLevel[scan_pos] = isignab(level ,m1[coeff_ctr]);
-          DCRun  [scan_pos] = run;
-          scan_pos++;
-          run=-1;
+          if (input->symbol_mode == CAVLC && img->qp < 4)
+            level = imin(level, CAVLC_LEVEL_LIMIT);
 
-          ilev=isignab(level, m1[coeff_ctr]);
+          currMB->cbp_blk |= 0xf0000 << (uv << 2) ;    // if one of the 2x2-DC levels is != 0 set the
+          cr_cbp=imax(1, cr_cbp);                     // coded-bit all 4 4x4 blocks (bit 16-19 or 20-23)
+          DCcoded = 1;
+          level = isignab(level, m1[coeff_ctr]);
+          DCLevel[scan_pos  ] = level;
+          DCRun  [scan_pos++] = run;
+          run=-1;
         }
       }
       DCLevel[scan_pos] = 0;
@@ -1370,8 +1497,9 @@ int dct_chroma(int uv,int cr_cbp)
     for (j=0; j < img->mb_cr_size_y; j+=BLOCK_SIZE)
     {
       for (i=0; i < img->mb_cr_size_x; i+=BLOCK_SIZE)
-        m3[i>>2][j>>2]= img->m7[j][i];
+        m3[i>>2][j>>2]= curr_res[j][i];
     }
+
     //horizontal
     if(!lossless_qpprime)
     {
@@ -1417,7 +1545,7 @@ int dct_chroma(int uv,int cr_cbp)
         m4[i][j]=m3[i][j];
       }
       else
-        level =(iabs(m4[i][j]) * levelscale[qp_rem_dc][0][0] + (leveloffset[cur_qp_dc][0][0]*2)) >> (q_bits_422+1);
+        level =(iabs(m4[i][j]) * levelscale[0][0] + (leveloffsetDC[0][0]*2)) >> (q_bits_422+1);
 
       if (level != 0)
       {
@@ -1426,9 +1554,8 @@ int dct_chroma(int uv,int cr_cbp)
         cr_cbp=imax(1,cr_cbp);                       // coded-bit all 4 4x4 blocks (bit 16-31 or 32-47) //YUV444
         DCcoded = 1 ;
 
-        DCLevel[scan_pos] = isignab(level,m4[i][j]);
-        DCRun  [scan_pos] = run;
-        ++scan_pos;
+        DCLevel[scan_pos  ] = isignab(level,m4[i][j]);
+        DCRun  [scan_pos++] = run;
         run=-1;
       }
       if(!lossless_qpprime)
@@ -1458,134 +1585,21 @@ int dct_chroma(int uv,int cr_cbp)
         m6[2]=m4[i][1]-m4[i][3];
         m6[3]=m4[i][1]+m4[i][3];
 
-        if(qp_per_dc<4)
+        if(qp_per_dc < 4)
         {
-          img->m7[0 ][i*4]=((((m6[0]+m6[3])*invlevelscale[qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
-          img->m7[4 ][i*4]=((((m6[1]+m6[2])*invlevelscale[qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
-          img->m7[8 ][i*4]=((((m6[1]-m6[2])*invlevelscale[qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
-          img->m7[12][i*4]=((((m6[0]-m6[3])*invlevelscale[qp_rem_dc][0][0]+(1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
+          curr_res[0 ][i*4] = ((((m6[0]+m6[3])*invlevelscaleDC[0][0] + (1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
+          curr_res[4 ][i*4] = ((((m6[1]+m6[2])*invlevelscaleDC[0][0] + (1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
+          curr_res[8 ][i*4] = ((((m6[1]-m6[2])*invlevelscaleDC[0][0] + (1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
+          curr_res[12][i*4] = ((((m6[0]-m6[3])*invlevelscaleDC[0][0] + (1<<(3-qp_per_dc)))>>(4-qp_per_dc))+2)>>2;
         }
         else
         {
-          img->m7[0 ][i*4]=((((m6[0]+m6[3])*invlevelscale[qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
-          img->m7[4 ][i*4]=((((m6[1]+m6[2])*invlevelscale[qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
-          img->m7[8 ][i*4]=((((m6[1]-m6[2])*invlevelscale[qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
-          img->m7[12][i*4]=((((m6[0]-m6[3])*invlevelscale[qp_rem_dc][0][0])<<(qp_per_dc-4))+2)>>2;
+          curr_res[0 ][i*4] = ((((m6[0]+m6[3])*invlevelscaleDC[0][0])<<(qp_per_dc-4))+2)>>2;
+          curr_res[4 ][i*4] = ((((m6[1]+m6[2])*invlevelscaleDC[0][0])<<(qp_per_dc-4))+2)>>2;
+          curr_res[8 ][i*4] = ((((m6[1]-m6[2])*invlevelscaleDC[0][0])<<(qp_per_dc-4))+2)>>2;
+          curr_res[12][i*4] = ((((m6[0]-m6[3])*invlevelscaleDC[0][0])<<(qp_per_dc-4))+2)>>2;
         }
       }//for (i=0;i<2;i++)
-    }
-  }
-  else if(yuv == YUV444)
-  {
-    //================== CHROMA DC YUV444 ===================
-    //transform DC coeff
-    //pick out DC coeff
-    for (j=0; j < img->mb_cr_size_y; j+=BLOCK_SIZE)
-    {
-      for (i=0; i < img->mb_cr_size_x; i+=BLOCK_SIZE)
-        m4[i>>2][j>>2]= img->m7[j][i];
-    }
-
-    //horizontal
-    for (j=0;j<4 && !lossless_qpprime;j++)
-    {
-      m5[0] = m4[0][j] + m4[3][j];
-      m5[1] = m4[1][j] + m4[2][j];
-      m5[2] = m4[1][j] - m4[2][j];
-      m5[3] = m4[0][j] - m4[3][j];
-
-      m4[0][j]=m5[0]+m5[1];
-      m4[2][j]=m5[0]-m5[1];
-      m4[1][j]=m5[3]+m5[2];
-      m4[3][j]=m5[3]-m5[2];
-    }
-    // vertical
-    for (i=0;i<4 && !lossless_qpprime;i++)
-    {
-      m5[0] = m4[i][0] + m4[i][3];
-      m5[1] = m4[i][1] + m4[i][2];
-      m5[2] = m4[i][1] - m4[i][2];
-      m5[3] = m4[i][0] - m4[i][3];
-
-      m4[i][0]=(m5[0]+m5[1])>>1;
-      m4[i][2]=(m5[0]-m5[1])>>1;
-      m4[i][1]=(m5[3]+m5[2])>>1;
-      m4[i][3]=(m5[3]-m5[2])>>1;
-    }
-
-    run=-1;
-    scan_pos=0;
-
-    //quant of chroma DC-coeffs
-    for (coeff_ctr=0;coeff_ctr<16;coeff_ctr++)
-    {
-      i=SNGL_SCAN[coeff_ctr][0];
-      j=SNGL_SCAN[coeff_ctr][1];
-
-      run++;
-
-      if(lossless_qpprime)
-        level = iabs(m4[i][j]);
-      else
-        level =(iabs(m4[i][j]) * levelscale[qp_rem][0][0] + (leveloffset[cur_qp][0][0]*2)) >> (q_bits+1);
-
-      if (level != 0)
-      {
-        //YUV444
-        currMB->cbp_blk |= ((int64)0xffff0000) << (uv << 4) ;   // if one of the DC levels is != 0 set the
-        cr_cbp=imax(1,cr_cbp);                                  // coded-bit all 4 4x4 blocks (bit 16-31 or 32-47) //YUV444
-        DCcoded = 1 ;
-
-        DCLevel[scan_pos] = isignab(level,m4[i][j]);
-        DCRun  [scan_pos] = run;
-        ++scan_pos;
-        run=-1;
-      }
-      if(!lossless_qpprime)
-        m4[i][j]=isignab(level,m4[i][j]);
-    }
-    DCLevel[scan_pos]=0;
-
-    // inverse DC transform
-    //horizontal
-    if (!lossless_qpprime)
-    {
-      for (j = 0; j < 4; j++)
-      {
-        m6[0] = m4[0][j] + m4[2][j];
-        m6[1] = m4[0][j] - m4[2][j];
-        m6[2] = m4[1][j] - m4[3][j];
-        m6[3] = m4[1][j] + m4[3][j];
-
-        m4[0][j] = m6[0] + m6[3];
-        m4[1][j] = m6[1] + m6[2];
-        m4[2][j] = m6[1] - m6[2];
-        m4[3][j] = m6[0] - m6[3];
-      }
-
-      //vertical
-      for (i=0;i<4;i++)
-      {
-        m6[0]=m4[i][0]+m4[i][2];
-        m6[1]=m4[i][0]-m4[i][2];
-        m6[2]=m4[i][1]-m4[i][3];
-        m6[3]=m4[i][1]+m4[i][3];
-
-        if(qp_per<4)
-        {
-          img->m7[0 ][i*4] = ((((m6[0] + m6[3])*invlevelscale[qp_rem][0][0]+(1<<(3-qp_per)))>>(4-qp_per))+2)>>2;
-          img->m7[4 ][i*4] = ((((m6[1] + m6[2])*invlevelscale[qp_rem][0][0]+(1<<(3-qp_per)))>>(4-qp_per))+2)>>2;
-          img->m7[8 ][i*4] = ((((m6[1] - m6[2])*invlevelscale[qp_rem][0][0]+(1<<(3-qp_per)))>>(4-qp_per))+2)>>2;
-          img->m7[12][i*4] = ((((m6[0] - m6[3])*invlevelscale[qp_rem][0][0]+(1<<(3-qp_per)))>>(4-qp_per))+2)>>2;
-        }
-        else
-        {
-          img->m7[0 ][i*4] = ((((m6[0]+m6[3])*invlevelscale[qp_rem][0][0])<<(qp_per-4))+2)>>2;
-          img->m7[4 ][i*4] = ((((m6[1]+m6[2])*invlevelscale[qp_rem][0][0])<<(qp_per-4))+2)>>2;
-          img->m7[8 ][i*4] = ((((m6[1]-m6[2])*invlevelscale[qp_rem][0][0])<<(qp_per-4))+2)>>2;
-          img->m7[12][i*4] = ((((m6[0]-m6[3])*invlevelscale[qp_rem][0][0])<<(qp_per-4))+2)>>2;
-        }
-      }
     }
   }
 
@@ -1593,126 +1607,87 @@ int dct_chroma(int uv,int cr_cbp)
   coeff_cost=0;
   cr_cbp_tmp=0;
 
-  for (b8=0; b8 < (img->num_blk8x8_uv >> 1); b8++)
+  if(!lossless_qpprime)
   {
-    for (b4=0; b4 < 4; b4++)
+    for (b8=0; b8 < (img->num_blk8x8_uv >> 1); b8++)
     {
-      int64 uv_cbpblk = ((int64)1) << cbp_blk_chroma[b8 + uv_scale][b4];
-      n1 = hor_offset[yuv][b8][b4];
-      n2 = ver_offset[yuv][b8][b4];
-      ACLevel = img->cofAC[4+b8+uv_scale][b4][0];
-      ACRun   = img->cofAC[4+b8+uv_scale][b4][1];
-      run=-1;
-      scan_pos=0;
-
-      if(!lossless_qpprime)
+      for (b4=0; b4 < 4; b4++)
       {
+        int64 uv_cbpblk = ((int64)1) << cbp_blk_chroma[b8 + uv_scale][b4];
+        n1 = hor_offset[yuv][b8][b4];
+        n2 = ver_offset[yuv][b8][b4];
+        ACLevel = img->cofAC[4 + b8 + uv_scale][b4][0];
+        ACRun   = img->cofAC[4 + b8 + uv_scale][b4][1];
+        run=-1;
+        scan_pos=0;
+
         for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)  // start change rd_quant
         {
           i=pos_scan[coeff_ctr][0];
           j=pos_scan[coeff_ctr][1];
+          m7 = &curr_res[n2+j][n1];
 
           ++run;
-          ilev=0;
-
-          level=(iabs(img->m7[n2+j][n1+i])*levelscale[qp_rem][j][i]+leveloffset[cur_qp][j][i])>>q_bits;
-
-          if (img->AdaptiveRounding)
-          {
-            img->fadjust4x4Cr[intra][uv][n2+j][n1+i] = (level == 0)
-              ? 0
-              : rshift_rnd_sf((AdaptRndCrWeight * (iabs(img->m7[n2+j][n1+i]) * levelscale[qp_rem][j][i] - (level << q_bits))), (q_bits + 1));
-          }
+          scaled_coeff = iabs(m7[i])*levelscale[j][i];
+          level=(scaled_coeff + leveloffset[j][i]) >> q_bits;
 
           if (level  != 0)
           {
+            if (img->AdaptiveRounding)
+              fadjust4x4[n2+j][n1+i] = rshift_rnd_sf((AdaptRndCrWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
+
             currMB->cbp_blk |= uv_cbpblk;
             // if level > 1 set high cost to avoid thresholding
-            coeff_cost += (level > 1) ? MAX_VALUE : COEFF_COST[input->disthres][run];
+            coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
             cr_cbp_tmp=2;
-            ACLevel[scan_pos] = isignab(level,img->m7[n2+j][n1+i]);
-            ACRun  [scan_pos] = run;
-            ++scan_pos;
-            run=-1;
+            level=isignab(level, m7[i]);
+            ACLevel[scan_pos  ] = level;
+            ACRun  [scan_pos++] = run;
+            run=-1;          
 
-            level=isignab(level, img->m7[n2+j][n1+i]);
-
-            ilev = rshift_rnd_sf((level*invlevelscale[qp_rem][j][i])<<qp_per, 4);
+            m7[i] = rshift_rnd_sf((level * invlevelscale[j][i]) << qp_per, 4);
             // inverse scale can be alternative performed as follows to ensure 16bit
             // arithmetic is satisfied.
-            // ilev = (qp_per<4)
-            //      ? rshift_rnd_sf((level*invlevelscale[qp_rem][j][i]),4-qp_per);
-            //      : (level*invlevelscale[qp_rem][j][i])<<(qp_per-4);
+            // curr_res[n2+j][n1+i] = (qp_per<4)
+            //      ? rshift_rnd_sf((level*invlevelscale[j][i]),4-qp_per);
+            //      : (level*invlevelscale[j][i])<<(qp_per-4);
           }
-          img->m7[n2+j][n1+i]=ilev;
-        }
-      }
-      else
-      {
-        for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
-        {
-          i=pos_scan[coeff_ctr][0];
-          j=pos_scan[coeff_ctr][1];
-
-          ++run;
-          ilev=0;
-
-          level = iabs(img->m7[n2+j][n1+i]);
-
-          if (img->AdaptiveRounding)
+          else
           {
-            img->fadjust4x4Cr[intra][uv][n2+j][n1+i] = 0;
-          }
-
-          if (level  != 0)
-          {
-            currMB->cbp_blk |= uv_cbpblk;
-            coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
-
-            cr_cbp_tmp=2;
-            ACLevel[scan_pos] = isignab(level,img->m7[n2+j][n1+i]);
-            ACRun  [scan_pos] = run;
-            ++scan_pos;
-            run=-1;
-
-            level=isignab(level, img->m7[n2+j][n1+i]);
-            ilev = level;
+            m7[i] = 0;
+            if (img->AdaptiveRounding)
+              fadjust4x4[n2+j][n1+i] = 0;
           }
         }
+        ACLevel[scan_pos] = 0;
       }
-      ACLevel[scan_pos] = 0;
     }
-  }
-
-  if(!lossless_qpprime)
-  {
-    // Perform thresholding
+  
+      // Perform thresholding
     // * reset chroma coeffs
     if(coeff_cost < _CHROMA_COEFF_COST_)
     {
       int64 uv_cbpblk = ((int64)cbpblk_pattern[yuv] << (uv << (1+yuv)));
       cr_cbp_tmp = 0;
 
-      for (b8=0; b8 < (img->num_blk8x8_uv >> 1); b8++)
+      for (b8 = 0; b8 < (img->num_blk8x8_uv >> 1); b8++)
       {
-        for (b4=0; b4 < 4; b4++)
+        for (b4 = 0; b4 < 4; b4++)
         {
           n1 = hor_offset[yuv][b8][b4];
           n2 = ver_offset[yuv][b8][b4];
           ACLevel = img->cofAC[4 + b8 + uv_scale][b4][0];
           ACRun   = img->cofAC[4 + b8 + uv_scale][b4][1];
-          if( DCcoded == 0)
+
+          if (DCcoded == 0)
             currMB->cbp_blk &= ~(uv_cbpblk);  // if no chroma DC's: then reset coded-bits of this chroma subblock
 
           ACLevel[0] = 0;
 
           for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// ac coeff
           {
-            i = pos_scan[coeff_ctr][0];
-            j = pos_scan[coeff_ctr][1];
-
-            img->m7[n2+j][n1+i] = 0;
+            curr_res[n2 + pos_scan[coeff_ctr][1]][n1 + pos_scan[coeff_ctr][0]] = 0;
             ACLevel[coeff_ctr]  = 0;
           }
         }
@@ -1721,71 +1696,82 @@ int dct_chroma(int uv,int cr_cbp)
 
     //     IDCT.
     //     Horizontal.
-    if(cr_cbp_tmp==2)
+    if(cr_cbp_tmp == 2)
       cr_cbp = 2;
 
     for (n2=0; n2 < img->mb_cr_size_y; n2 += BLOCK_SIZE)
     {
       for (n1=0; n1 < img->mb_cr_size_x; n1 += BLOCK_SIZE)
       {
-        for (j=0; j < BLOCK_SIZE; j++)
-        {
-          j2 = n2 + j;
-          memcpy(&m5[0],&img->m7[j2][n1], BLOCK_SIZE * sizeof(int));
-
-          m6[0] = (m5[0]     +  m5[2]);
-          m6[1] = (m5[0]     -  m5[2]);
-          m6[2] = (m5[1]>>1) -  m5[3];
-          m6[3] =  m5[1]     + (m5[3]>>1);
-
-          img->m7[j2][n1  ] = m6[0] + m6[3];
-          img->m7[j2][n1+1] = m6[1] + m6[2];
-          img->m7[j2][n1+2] = m6[1] - m6[2];
-          img->m7[j2][n1+3] = m6[0] - m6[3];
-        }
-
-        //     Vertical.
-        for (i=0; i < BLOCK_SIZE; i++)
-        {
-          i1 = n1 + i;
-          for (j=0; j < BLOCK_SIZE; j++)
-          {
-            m5[j]=img->m7[n2+j][i1];
-          }
-          
-          m6[0] = (m5[0] + m5[2]);
-          m6[1] = (m5[0] - m5[2]);
-          m6[2] = (m5[1]>>1) - m5[3];
-          m6[3] =  m5[1] + (m5[3]>>1);
-
-          img->m7[n2  ][i1] = iClip1(img->max_imgpel_value_uv, rshift_rnd_sf((m6[0]+m6[3]+((long)img->mpr[n2  ][i1] << DQ_BITS)),DQ_BITS));
-          img->m7[n2+1][i1] = iClip1(img->max_imgpel_value_uv, rshift_rnd_sf((m6[1]+m6[2]+((long)img->mpr[n2+1][i1] << DQ_BITS)),DQ_BITS));
-          img->m7[n2+2][i1] = iClip1(img->max_imgpel_value_uv, rshift_rnd_sf((m6[1]-m6[2]+((long)img->mpr[n2+2][i1] << DQ_BITS)),DQ_BITS));
-          img->m7[n2+3][i1] = iClip1(img->max_imgpel_value_uv, rshift_rnd_sf((m6[0]-m6[3]+((long)img->mpr[n2+3][i1] << DQ_BITS)),DQ_BITS));
-        }
+        inverse4x4(curr_res, curr_res, n2, n1);
       }
     }
 
     //  Decoded block moved to memory
     for (j=0; j < img->mb_cr_size_y; j++)
     {
-      pix_c_y = img->pix_c_y + j;
+      orig_img = &enc_picture->imgUV[uv][img->pix_c_y + j][img->pix_c_x];
+      pred_img = curr_mpr[j];
+      m7 = curr_res[j];
       for (i=0; i < img->mb_cr_size_x; i++)
       {
-        pix_c_x = img->pix_c_x + i;
-        enc_picture->imgUV[uv][pix_c_y][pix_c_x]= (imgpel) img->m7[j][i];
+        orig_img[i]= (imgpel) iClip1(max_imgpel_value_uv, rshift_rnd_sf((m7[i]),DQ_BITS) + pred_img[i]);
       }
     }
   }
   else
   {
-    for (j=0; j < img->mb_cr_size_y; j++)
+    for (b8=0; b8 < (img->num_blk8x8_uv >> 1); b8++)
     {
-      pix_c_y = img->pix_c_y + j;
-      for (i=0; i < img->mb_cr_size_x; i++)
+      for (b4=0; b4 < 4; b4++)
       {
-        pix_c_x = img->pix_c_x + i;
-        enc_picture->imgUV[uv][pix_c_y][pix_c_x]= (imgpel) img->m7[j][i] + img->mpr[j][i];
+        int64 uv_cbpblk = ((int64)1) << cbp_blk_chroma[b8 + uv_scale][b4];
+        n1 = hor_offset[yuv][b8][b4];
+        n2 = ver_offset[yuv][b8][b4];
+        ACLevel = img->cofAC[4 + b8 + uv_scale][b4][0];
+        ACRun   = img->cofAC[4 + b8 + uv_scale][b4][1];
+        run=-1;
+        scan_pos=0;
+
+        for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
+        {
+          i=pos_scan[coeff_ctr][0];
+          j=pos_scan[coeff_ctr][1];
+
+          ++run;
+
+          level = iabs(curr_res[n2+j][n1+i]);
+
+          if (img->AdaptiveRounding)
+          {
+            fadjust4x4[n2+j][n1+i] = 0;
+          }
+
+          if (level  != 0)
+          {
+            currMB->cbp_blk |= uv_cbpblk;
+            coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
+
+            cr_cbp_tmp=2;
+            ACLevel[scan_pos  ] = isignab(level,curr_res[n2+j][n1+i]);
+            ACRun  [scan_pos++] = run;
+            run=-1;
+
+            level=isignab(level, curr_res[n2+j][n1+i]);
+          }
+        }
+        ACLevel[scan_pos] = 0;
+      }
+    }
+
+    for (j=0; j < img->mb_cr_size_y; j++)
+    {      
+      orig_img = &enc_picture->imgUV[uv][img->pix_c_y + j][img->pix_c_x];
+      m7 = curr_res[j];
+      pred_img = curr_mpr[j];
+      for (i=0; i < img->mb_cr_size_x; i++)
+      {        
+        orig_img[i] = (imgpel) m7[i] + pred_img[i];
       }
     }
   }
@@ -1810,15 +1796,19 @@ int dct_chroma(int uv,int cr_cbp)
  *
  ************************************************************************
  */
-int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
+int dct_4x4_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra)
 {
-  int i,j,i1,j1,ilev,m5[4],m6[4],coeff_ctr;
-  int qp_const,level,scan_pos,run;
+  int i,j,j1,m5[4],m6[4],coeff_ctr;
+  int qp_const,ilev, level,scan_pos,run;
   int nonzero;
 
+  imgpel **img_enc = enc_picture->p_curr_img;
+  imgpel (*curr_mpr)[16] = img->mpr[pl];
+  int    (*curr_res)[16] = img->m7[pl]; 
   int predicted_block[BLOCK_SIZE][BLOCK_SIZE],c_err,qp_const2;
   int qp_per,qp_rem,q_bits;
   int qp_per_sp,qp_rem_sp,q_bits_sp;
+  const byte *c_cost = COEFF_COST4x4[input->disthres];
 
   int   pos_x   = block_x >> BLOCK_SHIFT;
   int   pos_y   = block_y >> BLOCK_SHIFT;
@@ -1826,7 +1816,6 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   int   b4      = 2*(pos_y & 0x01) + (pos_x & 0x01);
   int*  ACLevel = img->cofAC[b8][b4][0];
   int*  ACRun   = img->cofAC[b8][b4][1];
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   // For encoding optimization
   int c_err1, c_err2, level1, level2;
@@ -1848,52 +1837,50 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   for (j=0; j< BLOCK_SIZE; j++)
     for (i=0; i< BLOCK_SIZE; i++)
     {
-      img->m7[j][i]+=img->mpr[j+block_y][i+block_x];
-      predicted_block[i][j]=img->mpr[j+block_y][i+block_x];
+      curr_res[j][i]+=curr_mpr[j+block_y][i+block_x];
+      predicted_block[i][j]=curr_mpr[j+block_y][i+block_x];
     }
 
   for (j=0; j < BLOCK_SIZE; j++)
-  {
-    for (i=0; i < 2; i++)
-    {
-      i1=3-i;
-      m5[i]=img->m7[j][i]+img->m7[j][i1];
-      m5[i1]=img->m7[j][i]-img->m7[j][i1];
-    }
-    img->m7[j][0]=(m5[0]+m5[1]);
-    img->m7[j][2]=(m5[0]-m5[1]);
-    img->m7[j][1]=m5[3]*2+m5[2];
-    img->m7[j][3]=m5[3]-m5[2]*2;
+  {    
+    m5[0] = curr_res[j][0] + curr_res[j][3];
+    m5[1] = curr_res[j][1] + curr_res[j][2];
+    m5[2] = curr_res[j][1] - curr_res[j][2];      
+    m5[3] = curr_res[j][0] - curr_res[j][3];
+    
+    curr_res[j][0] = (m5[0]   + m5[1]);
+    curr_res[j][2] = (m5[0]   - m5[1]);
+    curr_res[j][1] =  m5[3]*2 + m5[2];
+    curr_res[j][3] =  m5[3]   - m5[2]*2;
   }
 
   //  Vertical transform
 
   for (i=0; i < BLOCK_SIZE; i++)
-  {
-    for (j=0; j < 2; j++)
-    {
-      j1=3-j;
-      m5[j]=img->m7[j][i]+img->m7[j1][i];
-      m5[j1]=img->m7[j][i]-img->m7[j1][i];
-    }
-    img->m7[0][i]=(m5[0]+m5[1]);
-    img->m7[2][i]=(m5[0]-m5[1]);
-    img->m7[1][i]=m5[3]*2+m5[2];
-    img->m7[3][i]=m5[3]-m5[2]*2;
+  {    
+    m5[0] = curr_res[0][i] + curr_res[3][i];
+    m5[1] = curr_res[1][i] + curr_res[2][i];
+    m5[2] = curr_res[1][i] - curr_res[2][i];    
+    m5[3] = curr_res[0][i] - curr_res[3][i];
+
+    
+    curr_res[0][i] =(m5[0]   + m5[1]);
+    curr_res[2][i] =(m5[0]   - m5[1]);
+    curr_res[1][i] = m5[3]*2 + m5[2];
+    curr_res[3][i] = m5[3]   - m5[2]*2;
   }
 
   for (j=0; j < BLOCK_SIZE; j++)
   {
-    for (i=0; i < 2; i++)
-    {
-      i1=3-i;
-      m5[i]=predicted_block[i][j]+predicted_block[i1][j];
-      m5[i1]=predicted_block[i][j]-predicted_block[i1][j];
-    }
-    predicted_block[0][j]=(m5[0]+m5[1]);
-    predicted_block[2][j]=(m5[0]-m5[1]);
-    predicted_block[1][j]=m5[3]*2+m5[2];
-    predicted_block[3][j]=m5[3]-m5[2]*2;
+    m5[0] = predicted_block[0][j] + predicted_block[3][j];
+    m5[1] = predicted_block[1][j] + predicted_block[2][j];
+    m5[2] = predicted_block[1][j] - predicted_block[2][j];      
+    m5[3] = predicted_block[0][j] - predicted_block[3][j];
+    
+    predicted_block[0][j] =(m5[0]   + m5[1]);
+    predicted_block[2][j] =(m5[0]   - m5[1]);
+    predicted_block[1][j] = m5[3]*2 + m5[2];
+    predicted_block[3][j] = m5[3]   - m5[2]*2;
   }
 
   //  Vertical transform
@@ -1940,21 +1927,21 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
     // case 1
     level1 = (iabs (predicted_block[i][j]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp;
     level1 = (level1 << q_bits_sp) / quant_coef[qp_rem_sp][i][j];
-    c_err1 = img->m7[j][i]-isignab(level1, predicted_block[i][j]);
+    c_err1 = curr_res[j][i]-isignab(level1, predicted_block[i][j]);
     level1 = (iabs (c_err1) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
 
     // case 2
-    c_err2=img->m7[j][i]-predicted_block[i][j];
+    c_err2=curr_res[j][i]-predicted_block[i][j];
     level2 = (iabs (c_err2) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
 
     // select prediction
     if ((level1 != level2) && (level1 != 0) && (level2 != 0))
     {
-      D_dis1 = img->m7[j][i] - ((isignab(level1,c_err1)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_block[i][j];
+      D_dis1 = curr_res[j][i] - ((isignab(level1,c_err1)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_block[i][j];
       levrun_linfo_inter(level1, run, &len, &info);
       D_dis1 = D_dis1*D_dis1 + lambda_mode * len;
 
-      D_dis2 = img->m7[j][i] - ((isignab(level2,c_err2)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_block[i][j];
+      D_dis2 = curr_res[j][i] - ((isignab(level2,c_err2)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_block[i][j];
       levrun_linfo_inter(level2, run, &len, &info);
       D_dis2 = D_dis2 * D_dis2 + lambda_mode * len;
 
@@ -1986,7 +1973,8 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
       if (level > 1)
         *coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
       else
-        *coeff_cost += COEFF_COST[input->disthres][run];
+        *coeff_cost += c_cost[run];
+
       ACLevel[scan_pos] = isignab(level,c_err);
       ACRun  [scan_pos] = run;
       ++scan_pos;
@@ -1994,12 +1982,13 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
       ilev=((isignab(level,c_err)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6);
     }
     ilev+=predicted_block[i][j] ;
+    
     if(!si_frame_indicator && !sp2_frame_indicator)//stores the SP frame coefficients in lrec, will be useful to encode these and create SI or SP switching frame
     {
       lrec[img->pix_y+block_y+j][img->pix_x+block_x+i]=
         isignab((iabs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp, ilev);
-    }
-    img->m7[j][i] = isignab((iabs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2)>> q_bits_sp, ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
+    }    
+    curr_res[j][i] = isignab((iabs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2)>> q_bits_sp, ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
   }
   ACLevel[scan_pos] = 0;
 
@@ -2011,19 +2000,17 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   {
     for (i=0; i < BLOCK_SIZE; i++)
     {
-      m5[i]=img->m7[j][i];
+      m5[i]=curr_res[j][i];
     }
     m6[0]=(m5[0]+m5[2]);
     m6[1]=(m5[0]-m5[2]);
     m6[2]=(m5[1]>>1)-m5[3];
     m6[3]=m5[1]+(m5[3]>>1);
 
-    for (i=0; i < 2; i++)
-    {
-      i1=3-i;
-      img->m7[j][i]=m6[i]+m6[i1];
-      img->m7[j][i1]=m6[i]-m6[i1];
-    }
+    curr_res[j][0]=m6[0]+m6[3];
+    curr_res[j][1]=m6[1]+m6[2];
+    curr_res[j][2]=m6[1]-m6[2];    
+    curr_res[j][3]=m6[0]-m6[3];
   }
 
   //  vertical
@@ -2032,26 +2019,24 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   {
     for (j=0; j < BLOCK_SIZE; j++)
     {
-      m5[j]=img->m7[j][i];
+      m5[j]=curr_res[j][i];
     }
     m6[0]=(m5[0]+m5[2]);
     m6[1]=(m5[0]-m5[2]);
     m6[2]=(m5[1]>>1)-m5[3];
     m6[3]=m5[1]+(m5[3]>>1);
 
-    for (j=0; j < 2; j++)
-    {
-      j1=3-j;
-      img->m7[j][i] =iClip3(0,img->max_imgpel_value,rshift_rnd_sf(m6[j]+m6[j1], DQ_BITS));
-      img->m7[j1][i]=iClip3(0,img->max_imgpel_value,rshift_rnd_sf(m6[j]-m6[j1], DQ_BITS));
-    }
+    curr_res[0][i] = iClip1 (img->max_imgpel_value,rshift_rnd_sf(m6[0]+m6[3], DQ_BITS));
+    curr_res[1][i] = iClip1 (img->max_imgpel_value,rshift_rnd_sf(m6[1]+m6[2], DQ_BITS));
+    curr_res[2][i] = iClip1 (img->max_imgpel_value,rshift_rnd_sf(m6[1]-m6[2], DQ_BITS));
+    curr_res[3][i] = iClip1 (img->max_imgpel_value,rshift_rnd_sf(m6[0]-m6[3], DQ_BITS));
   }
 
   //  Decoded block moved to frame memory
 
   for (j=0; j < BLOCK_SIZE; j++)
   for (i=0; i < BLOCK_SIZE; i++)
-    enc_picture->imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]= (imgpel) img->m7[j][i];
+    img_enc[img->pix_y+block_y+j][img->pix_x+block_x+i]= (imgpel) curr_res[j][i];
 
   return nonzero;
 }
@@ -2072,14 +2057,14 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
  *    cr_cbp: Updated chroma coded block pattern.
  ************************************************************************
  */
-int dct_chroma_sp(int uv,int cr_cbp)
+int dct_chroma_sp(Macroblock *currMB, int uv,int cr_cbp)
 {
   int i,j,i1,j2,ilev,n2,n1,j1,mb_y,coeff_ctr,qp_const,c_err,level ,scan_pos,run;
   int m1[BLOCK_SIZE],m5[BLOCK_SIZE],m6[BLOCK_SIZE];
   int coeff_cost;
   int cr_cbp_tmp;
   int predicted_chroma_block[MB_BLOCK_SIZE>>1][MB_BLOCK_SIZE>>1],qp_const2,mp1[BLOCK_SIZE];
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  const byte *c_cost = COEFF_COST4x4[input->disthres];
 
   int qp_per,qp_rem,q_bits;
   int qp_per_sp,qp_rem_sp,q_bits_sp;
@@ -2094,10 +2079,13 @@ int dct_chroma_sp(int uv,int cr_cbp)
   int len, info;
   double D_dis1, D_dis2;
   double lambda_mode   = 0.85 * pow (2, (currMB->qp -SHIFT_QP)/3.0) * 4;
+  int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
 
 
   int qpChroma = iClip3(-img->bitdepth_chroma_qp_scale, 51, currMB->qp + active_pps->chroma_qp_index_offset);
   int qpChromaSP=iClip3(-img->bitdepth_chroma_qp_scale, 51, currMB->qpsp + active_pps->chroma_qp_index_offset);
+  int    (*curr_res)[16] = img->m7[uv + 1]; 
+  imgpel (*curr_mpr)[16] = img->mpr[uv + 1]; 
 
   qp_per    = ((qpChroma<0?qpChroma:QP_SCALE_CR[qpChroma])-MIN_QP)/6;
   qp_rem    = ((qpChroma<0?qpChroma:QP_SCALE_CR[qpChroma])-MIN_QP)%6;
@@ -2112,8 +2100,8 @@ int dct_chroma_sp(int uv,int cr_cbp)
   for (j=0; j < MB_BLOCK_SIZE>>1; j++)
     for (i=0; i < MB_BLOCK_SIZE>>1; i++)
     {
-      img->m7[j][i]+=img->mpr[j][i];
-      predicted_chroma_block[i][j]=img->mpr[j][i];
+      curr_res[j][i]+=curr_mpr[j][i];
+      predicted_chroma_block[i][j]=curr_mpr[j][i];
     }
 
   for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
@@ -2125,16 +2113,16 @@ int dct_chroma_sp(int uv,int cr_cbp)
       for (j=0; j < BLOCK_SIZE; j++)
       {
         mb_y=n2+j;
-        for (i=0; i < 2; i++)
-        {
-          i1=3-i;
-          m5[i]=img->m7[mb_y][i+n1]+img->m7[mb_y][i1+n1];
-          m5[i1]=img->m7[mb_y][i+n1]-img->m7[mb_y][i1+n1];
-        }
-        img->m7[mb_y][n1]  =(m5[0]+m5[1]);
-        img->m7[mb_y][n1+2]=(m5[0]-m5[1]);
-        img->m7[mb_y][n1+1]=m5[3]*2+m5[2];
-        img->m7[mb_y][n1+3]=m5[3]-m5[2]*2;
+        
+        m5[0]=curr_res[mb_y][0+n1]+curr_res[mb_y][3+n1];
+        m5[1]=curr_res[mb_y][1+n1]+curr_res[mb_y][2+n1];
+        m5[2]=curr_res[mb_y][1+n1]-curr_res[mb_y][2+n1];          
+        m5[3]=curr_res[mb_y][0+n1]-curr_res[mb_y][3+n1];
+        
+        curr_res[mb_y][n1]  =(m5[0]+m5[1]);
+        curr_res[mb_y][n1+2]=(m5[0]-m5[1]);
+        curr_res[mb_y][n1+1]=m5[3]*2+m5[2];
+        curr_res[mb_y][n1+3]=m5[3]-m5[2]*2;
       }
 
       //  Vertical transform.
@@ -2142,16 +2130,16 @@ int dct_chroma_sp(int uv,int cr_cbp)
       for (i=0; i < BLOCK_SIZE; i++)
       {
         j1=n1+i;
-        for (j=0; j < 2; j++)
-        {
-          j2=3-j;
-          m5[j]=img->m7[n2+j][j1]+img->m7[n2+j2][j1];
-          m5[j2]=img->m7[n2+j][j1]-img->m7[n2+j2][j1];
-        }
-        img->m7[n2  ][j1]=(m5[0]+m5[1]);
-        img->m7[n2+2][j1]=(m5[0]-m5[1]);
-        img->m7[n2+1][j1]=m5[3]*2+m5[2];
-        img->m7[n2+3][j1]=m5[3]-m5[2]*2;
+        
+        m5[0]=curr_res[n2+0][j1]+curr_res[n2+3][j1];
+        m5[1]=curr_res[n2+1][j1]+curr_res[n2+2][j1];
+        m5[2]=curr_res[n2+1][j1]-curr_res[n2+2][j1];        
+        m5[3]=curr_res[n2+0][j1]-curr_res[n2+3][j1];
+        
+        curr_res[n2  ][j1]=(m5[0]+m5[1]);
+        curr_res[n2+2][j1]=(m5[0]-m5[1]);
+        curr_res[n2+1][j1]=m5[3]*2+m5[2];
+        curr_res[n2+3][j1]=m5[3]-m5[2]*2;
       }
     }
   }
@@ -2196,10 +2184,10 @@ int dct_chroma_sp(int uv,int cr_cbp)
   }
 
   //     2X2 transform of DC coeffs.
-  m1[0]=(img->m7[0][0]+img->m7[0][4]+img->m7[4][0]+img->m7[4][4]);
-  m1[1]=(img->m7[0][0]-img->m7[0][4]+img->m7[4][0]-img->m7[4][4]);
-  m1[2]=(img->m7[0][0]+img->m7[0][4]-img->m7[4][0]-img->m7[4][4]);
-  m1[3]=(img->m7[0][0]-img->m7[0][4]-img->m7[4][0]+img->m7[4][4]);
+  m1[0]=(curr_res[0][0]+curr_res[0][4]+curr_res[4][0]+curr_res[4][4]);
+  m1[1]=(curr_res[0][0]-curr_res[0][4]+curr_res[4][0]-curr_res[4][4]);
+  m1[2]=(curr_res[0][0]+curr_res[0][4]-curr_res[4][0]-curr_res[4][4]);
+  m1[3]=(curr_res[0][0]-curr_res[0][4]-curr_res[4][0]+curr_res[4][4]);
 
   //     2X2 transform of DC coeffs.
   mp1[0]=(predicted_chroma_block[0][0]+predicted_chroma_block[4][0]+predicted_chroma_block[0][4]+predicted_chroma_block[4][4]);
@@ -2257,7 +2245,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
       c_err = (level1 == 0) ? c_err1 : c_err2;
     }
 
-    if (input->symbol_mode == UVLC && img->qp < 4)
+    if (input->symbol_mode == CAVLC && img->qp < 4)
     {
       if (level > CAVLC_LEVEL_LIMIT)
       {
@@ -2269,9 +2257,8 @@ int dct_chroma_sp(int uv,int cr_cbp)
     {
       currMB->cbp_blk |= 0xf0000 << (uv << 2) ;  // if one of the 2x2-DC levels is != 0 the coded-bit
       cr_cbp=imax(1,cr_cbp);
-      DCLevel[scan_pos] = isignab(level ,c_err);
-      DCRun  [scan_pos] = run;
-      scan_pos++;
+      DCLevel[scan_pos  ] = isignab(level ,c_err);
+      DCRun  [scan_pos++] = run;
       run=-1;
       ilev=((isignab(level,c_err)*dequant_coef[qp_rem][0][0]*A[0][0]<< qp_per) >>5);
     }
@@ -2284,10 +2271,10 @@ int dct_chroma_sp(int uv,int cr_cbp)
 
   //  Inverse transform of 2x2 DC levels
 
-  img->m7[0][0]=(m1[0]+m1[1]+m1[2]+m1[3])/2;
-  img->m7[0][4]=(m1[0]-m1[1]+m1[2]-m1[3])/2;
-  img->m7[4][0]=(m1[0]+m1[1]-m1[2]-m1[3])/2;
-  img->m7[4][4]=(m1[0]-m1[1]-m1[2]+m1[3])/2;
+  curr_res[0][0]=(m1[0] + m1[1] + m1[2] + m1[3])>>1;
+  curr_res[0][4]=(m1[0] - m1[1] + m1[2] - m1[3])>>1;
+  curr_res[4][0]=(m1[0] + m1[1] - m1[2] - m1[3])>>1;
+  curr_res[4][4]=(m1[0] - m1[1] - m1[2] + m1[3])>>1;
 
   //     Quant of chroma AC-coeffs.
   coeff_cost=0;
@@ -2323,21 +2310,21 @@ int dct_chroma_sp(int uv,int cr_cbp)
     // quantization on prediction
     c_err1 = (iabs(predicted_chroma_block[n1+i][n2+j]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp;
     c_err1 = (c_err1 << q_bits_sp) / quant_coef[qp_rem_sp][i][j];
-    c_err1 = img->m7[n2+j][n1+i] - isignab(c_err1, predicted_chroma_block[n1+i][n2+j]);
+    c_err1 = curr_res[n2+j][n1+i] - isignab(c_err1, predicted_chroma_block[n1+i][n2+j]);
     level1 = (iabs(c_err1) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
 
     // no quantization on prediction
-    c_err2 = img->m7[n2+j][n1+i] - predicted_chroma_block[n1+i][n2+j];
+    c_err2 = curr_res[n2+j][n1+i] - predicted_chroma_block[n1+i][n2+j];
     level2 = (iabs(c_err2) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
 
     if (level1 != level2 && level1 != 0 && level2 != 0)
     {
-      D_dis1 = img->m7[n2+j][n1+i] - ((isignab(level1,c_err1)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_chroma_block[n1+i][n2+j];
+      D_dis1 = curr_res[n2+j][n1+i] - ((isignab(level1,c_err1)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_chroma_block[n1+i][n2+j];
 
       levrun_linfo_inter(level1, run, &len, &info);
       D_dis1 = D_dis1 * D_dis1 + lambda_mode * len;
 
-      D_dis2 = img->m7[n2+j][n1+i] - ((isignab(level2,c_err2)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_chroma_block[n1+i][n2+j];
+      D_dis2 = curr_res[n2+j][n1+i] - ((isignab(level2,c_err2)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_chroma_block[n1+i][n2+j];
       levrun_linfo_inter(level2, run, &len, &info);
       D_dis2 = D_dis2 * D_dis2 + lambda_mode * len;
 
@@ -2369,7 +2356,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
           if (level > 1)
             coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
           else
-            coeff_cost += COEFF_COST[input->disthres][run];
+            coeff_cost += c_cost[run];
 
           cr_cbp_tmp=2;
           ACLevel[scan_pos] = isignab(level,c_err);
@@ -2382,7 +2369,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
         if(!si_frame_indicator && !sp2_frame_indicator)
           if(!( (n2+j) % 4==0 && (n1+i)%4 ==0 ))
             lrec_uv[uv][img->pix_c_y+n1+j][img->pix_c_x+n2+i]=isignab((iabs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp,ilev);//stores the SP frames coefficients, will be useful to encode SI or switching SP frame
-        img->m7[n2+j][n1+i] = isignab((iabs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp,ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
+        curr_res[n2+j][n1+i] = isignab((iabs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp,ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
       }
       ACLevel[scan_pos] = 0;
     }
@@ -2403,19 +2390,17 @@ int dct_chroma_sp(int uv,int cr_cbp)
       {
         for (i=0; i < BLOCK_SIZE; i++)
         {
-          m5[i]=img->m7[n2+j][n1+i];
+          m5[i]=curr_res[n2+j][n1+i];
         }
         m6[0]=(m5[0]+m5[2]);
         m6[1]=(m5[0]-m5[2]);
         m6[2]=(m5[1]>>1)-m5[3];
         m6[3]=m5[1]+(m5[3]>>1);
-
-        for (i=0; i < 2; i++)
-        {
-          i1=3-i;
-          img->m7[n2+j][n1+i]=m6[i]+m6[i1];
-          img->m7[n2+j][n1+i1]=m6[i]-m6[i1];
-        }
+        
+        curr_res[n2+j][n1+0]=m6[0]+m6[3];
+        curr_res[n2+j][n1+1]=m6[1]+m6[2];
+        curr_res[n2+j][n1+2]=m6[1]-m6[2];        
+        curr_res[n2+j][n1+3]=m6[0]-m6[3];        
       }
 
       //     Vertical.
@@ -2423,19 +2408,17 @@ int dct_chroma_sp(int uv,int cr_cbp)
       {
         for (j=0; j < BLOCK_SIZE; j++)
         {
-          m5[j]=img->m7[n2+j][n1+i];
+          m5[j]=curr_res[n2+j][n1+i];
         }
         m6[0]=(m5[0]+m5[2]);
         m6[1]=(m5[0]-m5[2]);
         m6[2]=(m5[1]>>1)-m5[3];
         m6[3]=m5[1]+(m5[3]>>1);
 
-        for (j=0; j < 2; j++)
-        {
-          j2=3-j;
-          img->m7[n2+j][n1+i] =iClip3(0,img->max_imgpel_value_uv,rshift_rnd_sf(m6[j]+m6[j2], DQ_BITS));
-          img->m7[n2+j2][n1+i]=iClip3(0,img->max_imgpel_value_uv,rshift_rnd_sf(m6[j]-m6[j2], DQ_BITS));
-        }
+        curr_res[n2+0][n1+i] = iClip1 (max_imgpel_value_uv,rshift_rnd_sf(m6[0]+m6[3], DQ_BITS));
+        curr_res[n2+1][n1+i] = iClip1 (max_imgpel_value_uv,rshift_rnd_sf(m6[1]+m6[2], DQ_BITS));
+        curr_res[n2+2][n1+i] = iClip1 (max_imgpel_value_uv,rshift_rnd_sf(m6[1]-m6[2], DQ_BITS));          
+        curr_res[n2+3][n1+i] = iClip1 (max_imgpel_value_uv,rshift_rnd_sf(m6[0]-m6[3], DQ_BITS));
       }
     }
   }
@@ -2444,7 +2427,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
   for (j=0; j < BLOCK_SIZE*2; j++)
     for (i=0; i < BLOCK_SIZE*2; i++)
     {
-      enc_picture->imgUV[uv][img->pix_c_y+j][img->pix_c_x+i]= (imgpel) img->m7[j][i];
+      enc_picture->imgUV[uv][img->pix_c_y+j][img->pix_c_x+i]= (imgpel) curr_res[j][i];
     }
 
   return cr_cbp;
@@ -2465,23 +2448,25 @@ int dct_chroma_sp(int uv,int cr_cbp)
  *    coeff_cost: Counter for nonzero coefficients, used to discard expensive levels.
  ************************************************************************
  */
-void copyblock_sp(int block_x,int block_y)
+void copyblock_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y)
 {
   int i,j,i1,j1,m5[4],m6[4];
-
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   int predicted_block[BLOCK_SIZE][BLOCK_SIZE];
   int qp_per = (currMB->qpsp-MIN_QP)/6;
   int qp_rem = (currMB->qpsp-MIN_QP)%6;
   int q_bits    = Q_BITS+qp_per;
   int qp_const2=(1<<q_bits)/2;  //sp_pred
+  imgpel **img_enc       = enc_picture->p_curr_img;
+  imgpel (*curr_mpr)[16] = img->mpr[pl]; 
+  int    (*curr_res)[16] = img->m7[pl]; 
+  
 
   //  Horizontal transform
   for (j=0; j< BLOCK_SIZE; j++)
     for (i=0; i< BLOCK_SIZE; i++)
     {
-      predicted_block[i][j]=img->mpr[j+block_y][i+block_x];
+      predicted_block[i][j]=curr_mpr[j+block_y][i+block_x];
     }
 
   for (j=0; j < BLOCK_SIZE; j++)
@@ -2519,7 +2504,7 @@ void copyblock_sp(int block_x,int block_y)
   {
     for (i=0; i < BLOCK_SIZE; i++)
     {
-      img->m7[j][i]=isignab((iabs(predicted_block[i][j])* quant_coef[qp_rem][i][j]+qp_const2)>> q_bits,predicted_block[i][j])*dequant_coef[qp_rem][i][j]<<qp_per;
+      curr_res[j][i]=isignab((iabs(predicted_block[i][j])* quant_coef[qp_rem][i][j]+qp_const2)>> q_bits,predicted_block[i][j])*dequant_coef[qp_rem][i][j]<<qp_per;
       if(!si_frame_indicator && !sp2_frame_indicator)
       {
         lrec[img->pix_y+block_y+j][img->pix_x+block_x+i] =
@@ -2535,44 +2520,40 @@ void copyblock_sp(int block_x,int block_y)
   {
     for (i=0;i<BLOCK_SIZE;i++)
     {
-      m5[i]=img->m7[j][i];
+      m5[i]=curr_res[j][i];
     }
     m6[0]=(m5[0]+m5[2]);
     m6[1]=(m5[0]-m5[2]);
     m6[2]=(m5[1]>>1)-m5[3];
     m6[3]=m5[1]+(m5[3]>>1);
 
-    for (i=0;i<2;i++)
-    {
-      i1=3-i;
-      img->m7[j][i]=m6[i]+m6[i1];
-      img->m7[j][i1]=m6[i]-m6[i1];
-    }
+    curr_res[j][0]=m6[0]+m6[3];
+    curr_res[j][1]=m6[1]+m6[2];
+    curr_res[j][2]=m6[1]-m6[2];
+    curr_res[j][3]=m6[0]-m6[3];
   }
   // vertical
   for (i=0;i<BLOCK_SIZE;i++)
   {
     for (j=0;j<BLOCK_SIZE;j++)
-      m5[j]=img->m7[j][i];
+      m5[j]=curr_res[j][i];
 
     m6[0]=(m5[0]+m5[2]);
     m6[1]=(m5[0]-m5[2]);
     m6[2]=(m5[1]>>1)-m5[3];
     m6[3]=m5[1]+(m5[3]>>1);
 
-    for (j=0;j<2;j++)
-    {
-      j1=3-j;
-      img->m7[j][i] =iClip3(0,img->max_imgpel_value,rshift_rnd_sf(m6[j]+m6[j1], DQ_BITS));
-      img->m7[j1][i]=iClip3(0,img->max_imgpel_value,rshift_rnd_sf(m6[j]-m6[j1], DQ_BITS));
-    }
+    curr_res[0][i] = iClip1 (img->max_imgpel_value,rshift_rnd_sf(m6[0]+m6[3], DQ_BITS));
+    curr_res[1][i] = iClip1 (img->max_imgpel_value,rshift_rnd_sf(m6[1]+m6[2], DQ_BITS));
+    curr_res[2][i] = iClip1 (img->max_imgpel_value,rshift_rnd_sf(m6[1]-m6[2], DQ_BITS));    
+    curr_res[3][i] = iClip1 (img->max_imgpel_value,rshift_rnd_sf(m6[0]-m6[3], DQ_BITS));
   }
 
   //  Decoded block moved to frame memory
 
   for (j=0; j < BLOCK_SIZE; j++)
     for (i=0; i < BLOCK_SIZE; i++)
-      enc_picture->imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=(imgpel) img->m7[j][i];
+      img_enc[img->pix_y+block_y+j][img->pix_x+block_x+i]=(imgpel) curr_res[j][i];
 }
 
 
@@ -2648,12 +2629,15 @@ int writePCMByteAlign(Bitstream *currStream)
  ************************************************************************
  */
 
-int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
+int dct_4x4_sp2(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra)
 {
   int i,j,i1,j1,ilev,m5[4],m6[4],coeff_ctr;
   int qp_const,level,scan_pos,run;
   int nonzero;
 
+  imgpel **img_enc = enc_picture->p_curr_img;
+  imgpel (*curr_mpr)[16] = img->mpr[pl];   
+  int    (*curr_res)[16] = img->m7[pl];   
   int predicted_block[BLOCK_SIZE][BLOCK_SIZE],c_err,qp_const2;
   int qp_per,qp_rem,q_bits;
   int qp_per_sp,qp_rem_sp,q_bits_sp;
@@ -2664,6 +2648,7 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
   int   b4      = 2*(pos_y & 0x01) + (pos_x & 0x01);
   int*  ACLevel = img->cofAC[b8][b4][0];
   int*  ACRun   = img->cofAC[b8][b4][1];
+  const byte *c_cost = COEFF_COST4x4[input->disthres];
 
   int level1;
 
@@ -2682,9 +2667,9 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
     for (i=0; i< BLOCK_SIZE; i++)
     {
       //Coefficients obtained from the prior encoding of the SP frame
-      img->m7[j][i]=lrec[img->pix_y+block_y+j][img->pix_x+block_x+i];
+      curr_res[j][i]=lrec[img->pix_y+block_y+j][img->pix_x+block_x+i];
       //Predicted block
-      predicted_block[i][j]=img->mpr[j+block_y][i+block_x];
+      predicted_block[i][j]=curr_mpr[j+block_y][i+block_x];
     }
 
   //Horizontal transform
@@ -2744,7 +2729,7 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
     //quantization of the predicted block
     level1 = (iabs (predicted_block[i][j]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp;
     //substracted from lrec
-    c_err = img->m7[j][i]-isignab(level1, predicted_block[i][j]);   //substracting the predicted block
+    c_err = curr_res[j][i]-isignab(level1, predicted_block[i][j]);   //substracting the predicted block
 
 
     level = iabs(c_err);
@@ -2754,7 +2739,7 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
       if (level > 1)
         *coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
       else
-        *coeff_cost += COEFF_COST[input->disthres][run];
+        *coeff_cost += c_cost[run];
       ACLevel[scan_pos] = isignab(level,c_err);
       ACRun  [scan_pos] = run;
       ++scan_pos;
@@ -2762,7 +2747,7 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
     }
     //from now on we are in decoder land
     ilev=c_err + isignab(level1,predicted_block[i][j]) ;  // adding the quantized predicted block
-    img->m7[j][i] = ilev  *dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
+    curr_res[j][i] = ilev  *dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
 
   }
   ACLevel[scan_pos] = 0;
@@ -2775,7 +2760,7 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
   {
     for (i=0; i < BLOCK_SIZE; i++)
     {
-      m5[i]=img->m7[j][i];
+      m5[i]=curr_res[j][i];
     }
     m6[0]=(m5[0]+m5[2]);
     m6[1]=(m5[0]-m5[2]);
@@ -2785,8 +2770,8 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
     for (i=0; i < 2; i++)
     {
       i1=3-i;
-      img->m7[j][i]=m6[i]+m6[i1];
-      img->m7[j][i1]=m6[i]-m6[i1];
+      curr_res[j][i]=m6[i]+m6[i1];
+      curr_res[j][i1]=m6[i]-m6[i1];
     }
   }
 
@@ -2796,7 +2781,7 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
   {
     for (j=0; j < BLOCK_SIZE; j++)
     {
-      m5[j]=img->m7[j][i];
+      m5[j]=curr_res[j][i];
     }
     m6[0]=(m5[0]+m5[2]);
     m6[1]=(m5[0]-m5[2]);
@@ -2806,15 +2791,15 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
     for (j=0; j < 2; j++)
     {
       j1=3-j;
-      img->m7[j][i] =iClip3(0,255,rshift_rnd_sf(m6[j]+m6[j1], DQ_BITS));
-      img->m7[j1][i]=iClip3(0,255,rshift_rnd_sf(m6[j]-m6[j1], DQ_BITS));
+      curr_res[j][i] =iClip1 (255,rshift_rnd_sf(m6[j]+m6[j1], DQ_BITS));
+      curr_res[j1][i]=iClip1 (255,rshift_rnd_sf(m6[j]-m6[j1], DQ_BITS));
     }
   }
 
   //  Decoded block moved to frame memory
   for (j=0; j < BLOCK_SIZE; j++)
     for (i=0; i < BLOCK_SIZE; i++){
-      enc_picture->imgY[img->pix_y+block_y+i][img->pix_x+block_x+j]=(imgpel) img->m7[i][j];
+      img_enc[img->pix_y+block_y+i][img->pix_x+block_x+j]=(imgpel) curr_res[i][j];
     }
   return nonzero;
 }
@@ -2839,14 +2824,14 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
  *
  ************************************************************************
  */
-int dct_chroma_sp2(int uv,int cr_cbp)
+int dct_chroma_sp2(Macroblock *currMB, int uv,int cr_cbp)
 {
   int i,j,i1,j2,ilev,n2,n1,j1,mb_y,coeff_ctr,qp_const,c_err,level ,scan_pos,run;
   int m1[BLOCK_SIZE],m5[BLOCK_SIZE],m6[BLOCK_SIZE];
   int coeff_cost;
   int cr_cbp_tmp;
   int predicted_chroma_block[MB_BLOCK_SIZE/2][MB_BLOCK_SIZE/2],qp_const2,mp1[BLOCK_SIZE];
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  const byte *c_cost = COEFF_COST4x4[input->disthres];
 
   int qp_per,qp_rem,q_bits;
   int qp_per_sp,qp_rem_sp,q_bits_sp;
@@ -2857,6 +2842,8 @@ int dct_chroma_sp2(int uv,int cr_cbp)
   int*  ACLevel;
   int*  ACRun;
   int  level1;
+  int    (*curr_res)[16] = img->m7[uv + 1]; 
+  imgpel (*curr_mpr)[16] = img->mpr[uv + 1]; 
 
   qp_per    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)/6;
   qp_rem    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)%6;
@@ -2866,14 +2853,14 @@ int dct_chroma_sp2(int uv,int cr_cbp)
   qp_per_sp    = ((img->qpsp<0?img->qpsp:QP_SCALE_CR[img->qpsp])-MIN_QP)/6;
   qp_rem_sp    = ((img->qpsp<0?img->qpsp:QP_SCALE_CR[img->qpsp])-MIN_QP)%6;
   q_bits_sp    = Q_BITS+qp_per_sp;
-  qp_const2=(1<<q_bits_sp)/2;  //sp_pred
+  qp_const2    = (1<<q_bits_sp)/2;  //sp_pred
 
 
   for (j=0; j < MB_BLOCK_SIZE>>1; j++)
     for (i=0; i < MB_BLOCK_SIZE>>1; i++)
     {
-      predicted_chroma_block[i][j]=img->mpr[j][i];
-      img->m7[j][i]=lrec_uv[uv][img->pix_c_y+j][img->pix_c_x+i];
+      predicted_chroma_block[i][j]=curr_mpr[j][i];
+      curr_res[j][i]=lrec_uv[uv][img->pix_c_y+j][img->pix_c_x+i];
     }
 
   for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
@@ -2917,10 +2904,10 @@ int dct_chroma_sp2(int uv,int cr_cbp)
   }
 
   //   DC coefficients already transformed and quantized
-  m1[0]= img->m7[0][0];
-  m1[1]= img->m7[4][0];
-  m1[2]= img->m7[0][4];
-  m1[3]= img->m7[4][4];
+  m1[0]= curr_res[0][0];
+  m1[1]= curr_res[4][0];
+  m1[2]= curr_res[0][4];
+  m1[3]= curr_res[4][4];
 
   //     2X2 transform of predicted DC coeffs.
   mp1[0]=(predicted_chroma_block[0][0]+predicted_chroma_block[4][0]+predicted_chroma_block[0][4]+predicted_chroma_block[4][4]);
@@ -2962,10 +2949,10 @@ int dct_chroma_sp2(int uv,int cr_cbp)
 
   //  Invers transform of 2x2 DC levels
 
-  img->m7[0][0]=(m1[0]+m1[1]+m1[2]+m1[3])/2;
-  img->m7[4][0]=(m1[0]-m1[1]+m1[2]-m1[3])/2;
-  img->m7[0][4]=(m1[0]+m1[1]-m1[2]-m1[3])/2;
-  img->m7[4][4]=(m1[0]-m1[1]-m1[2]+m1[3])/2;
+  curr_res[0][0]=(m1[0]+m1[1]+m1[2]+m1[3])/2;
+  curr_res[4][0]=(m1[0]-m1[1]+m1[2]-m1[3])/2;
+  curr_res[0][4]=(m1[0]+m1[1]-m1[2]-m1[3])/2;
+  curr_res[4][4]=(m1[0]-m1[1]-m1[2]+m1[3])/2;
 
   //     Quant of chroma AC-coeffs.
   coeff_cost=0;
@@ -3000,7 +2987,7 @@ int dct_chroma_sp2(int uv,int cr_cbp)
         // quantization on prediction
         level1 = (iabs(predicted_chroma_block[n1+j][n2+i]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp;
         //substracted from lrec
-        c_err  = img->m7[n1+i][n2+j] - isignab(level1, predicted_chroma_block[n1+j][n2+i]);
+        c_err  = curr_res[n1+i][n2+j] - isignab(level1, predicted_chroma_block[n1+j][n2+i]);
         level  = iabs(c_err) ;
 
         if (level  != 0)
@@ -3009,7 +2996,7 @@ int dct_chroma_sp2(int uv,int cr_cbp)
           if (level > 1)
             coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
           else
-            coeff_cost += COEFF_COST[input->disthres][run];
+            coeff_cost += c_cost[run];
 
           cr_cbp_tmp=2;
           ACLevel[scan_pos] = isignab(level,c_err);
@@ -3020,7 +3007,7 @@ int dct_chroma_sp2(int uv,int cr_cbp)
 
         //from now on decoder land
         ilev=c_err + isignab(level1,predicted_chroma_block[n1+j][n2+i]);
-        img->m7[n1+i][n2+j] = ilev * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
+        curr_res[n1+i][n2+j] = ilev * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
       }
       ACLevel[scan_pos] = 0;
     }
@@ -3040,7 +3027,7 @@ int dct_chroma_sp2(int uv,int cr_cbp)
       {
         for (i=0; i < BLOCK_SIZE; i++)
         {
-          m5[i]=img->m7[n1+i][n2+j];
+          m5[i]=curr_res[n1+i][n2+j];
         }
         m6[0]=(m5[0]+m5[2]);
         m6[1]=(m5[0]-m5[2]);
@@ -3050,8 +3037,8 @@ int dct_chroma_sp2(int uv,int cr_cbp)
         for (i=0; i < 2; i++)
         {
           i1=3-i;
-          img->m7[n1+i][n2+j]=m6[i]+m6[i1];
-          img->m7[n1+i1][n2+j]=m6[i]-m6[i1];
+          curr_res[n1+i][n2+j]=m6[i]+m6[i1];
+          curr_res[n1+i1][n2+j]=m6[i]-m6[i1];
         }
       }
 
@@ -3060,7 +3047,7 @@ int dct_chroma_sp2(int uv,int cr_cbp)
       {
         for (j=0; j < BLOCK_SIZE; j++)
         {
-          m5[j]=img->m7[n1+i][n2+j];
+          m5[j]=curr_res[n1+i][n2+j];
         }
         m6[0]=(m5[0]+m5[2]);
         m6[1]=(m5[0]-m5[2]);
@@ -3070,8 +3057,8 @@ int dct_chroma_sp2(int uv,int cr_cbp)
         for (j=0; j < 2; j++)
         {
           j2=3-j;
-          img->m7[n1+i][n2+j] =iClip3(0,255,rshift_rnd_sf(m6[j]+m6[j2], DQ_BITS));
-          img->m7[n1+i][n2+j2]=iClip3(0,255,rshift_rnd_sf(m6[j]-m6[j2], DQ_BITS));
+          curr_res[n1+i][n2+j] =iClip1 (255,rshift_rnd_sf(m6[j]+m6[j2], DQ_BITS));
+          curr_res[n1+i][n2+j2]=iClip1 (255,rshift_rnd_sf(m6[j]-m6[j2], DQ_BITS));
         }
       }
     }
@@ -3081,12 +3068,31 @@ int dct_chroma_sp2(int uv,int cr_cbp)
   for (j=0; j < BLOCK_SIZE; j++)
     for (i=0; i < BLOCK_SIZE; i++)
     {
-      enc_picture->imgUV[uv][img->pix_c_y+i][img->pix_c_x+j]= (imgpel) img->m7[i][j];
-      enc_picture->imgUV[uv][img->pix_c_y+i][img->pix_c_x+j+4]= (imgpel) img->m7[i+4][j];
-      enc_picture->imgUV[uv][img->pix_c_y+i+4][img->pix_c_x+j]= (imgpel) img->m7[i][j+4];
-      enc_picture->imgUV[uv][img->pix_c_y+i+4][img->pix_c_x+j+4]= (imgpel) img->m7[i+4][j+4];
+      enc_picture->imgUV[uv][img->pix_c_y+i][img->pix_c_x+j  ]= (imgpel) curr_res[i][j];
+      enc_picture->imgUV[uv][img->pix_c_y+i][img->pix_c_x+j+4]= (imgpel) curr_res[i+4][j];
+      enc_picture->imgUV[uv][img->pix_c_y+i+4][img->pix_c_x+j]= (imgpel) curr_res[i][j+4];
+      enc_picture->imgUV[uv][img->pix_c_y+i+4][img->pix_c_x+j+4]= (imgpel) curr_res[i+4][j+4];
     }
 
   return cr_cbp;
 }
 
+
+void select_dct(Macroblock *currMB)
+{
+  if (img->type!=SP_SLICE)
+  {
+    pDCT_4x4 = (currMB->qp_scaled[img->colour_plane_id] == 0 && img->lossless_qpprime_flag == 1) ? dct_4x4_qpprime : dct_4x4;
+    dct_cr_4x4  = dct_chroma;
+  }
+  else if(!si_frame_indicator && !sp2_frame_indicator)
+  {
+    pDCT_4x4 = dct_4x4_sp;
+    dct_cr_4x4  = dct_chroma_sp;
+  }
+  else
+  {
+    pDCT_4x4 = dct_4x4_sp2;
+    dct_cr_4x4  = dct_chroma_sp2;
+  }
+}

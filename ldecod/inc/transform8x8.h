@@ -17,7 +17,7 @@
 #ifndef _TRANSFORM8X8_H_
 #define _TRANSFORM8X8_H_
 
-int    intrapred8x8(struct img_par *img, int b8);
-void   itrans8x8(struct img_par *img, int ioff, int joff);
+int    intrapred8x8(Macroblock *currMB, ColorPlane pl, struct img_par *img, int b8);
+void   itrans8x8(ColorPlane pl, struct img_par *img, int ioff, int joff);
 
 #endif

@@ -71,7 +71,7 @@ void estimate_weighting_factor_P_slice(int select_offset)
   {
     for (j = 0; j < img->width; j++)
     {
-      dc_org += (double) imgY_org[i][j];
+      dc_org += (double) pCurImg[i][j];
     }
   }
 
@@ -81,7 +81,7 @@ void estimate_weighting_factor_P_slice(int select_offset)
     {
       dc_ref[n] = 0.0;
 
-      tmpPtr = listX[clist][n]->curr_imgY_sub[0][0];
+      tmpPtr = listX[clist][n]->p_curr_img_sub[0][0];
 
       // Y
       for (j = IMG_PAD_SIZE; j < img->height + IMG_PAD_SIZE; j++)
@@ -267,7 +267,7 @@ void estimate_weighting_factor_B_slice()
     {
       for (j = 0; j < img->width; j++)
       {
-        dc_org += (double) imgY_org[i][j];
+        dc_org += (double) pCurImg[i][j];
       }
     }
 
@@ -277,7 +277,7 @@ void estimate_weighting_factor_B_slice()
       {
         dc_ref[clist][n] = 0.0;
 
-        tmpPtr = listX[clist][n]->curr_imgY_sub[0][0];
+        tmpPtr = listX[clist][n]->p_curr_img_sub[0][0];
 
         // To simplify these computations we may wish to perform these after a reference is 
         // stored in the reference buffer and attach them to the storedimage structure!!!
@@ -414,7 +414,7 @@ int test_wp_P_slice(int select_offset)
   {
     for (j = 0; j < img->width; j++)
     {
-      dc_org += (double) imgY_org[i][j];
+      dc_org += (double) pCurImg[i][j];
     }
   }
 
@@ -424,7 +424,7 @@ int test_wp_P_slice(int select_offset)
     {
       dc_ref[n] = 0.0;
 
-      tmpPtr = listX[clist][n]->curr_imgY_sub[0][0];
+      tmpPtr = listX[clist][n]->p_curr_img_sub[0][0];
 
       // Y
       for (j = IMG_PAD_SIZE; j < img->height + IMG_PAD_SIZE; j++)
@@ -610,7 +610,7 @@ int test_wp_B_slice(int select_method)
     {
       for (j = 0; j < img->width; j++)
       {
-        dc_org += (double) imgY_org[i][j];
+        dc_org += (double) pCurImg[i][j];
       }
     }
 
@@ -620,7 +620,7 @@ int test_wp_B_slice(int select_method)
       {
         dc_ref[clist][n] = 0.0;
 
-        tmpPtr = listX[clist][n]->curr_imgY_sub[0][0];
+        tmpPtr = listX[clist][n]->p_curr_img_sub[0][0];
 
         // To simplify these computations we may wish to perform these after a reference is 
         // stored in the reference buffer and attach them to the storedimage structure!!!

@@ -128,10 +128,10 @@ int GetAnnexbNALU (NALU_t *nalu)
 // printf ("GetAnnexbNALU, eof case: pos %d nalu->len %d, nalu->reference_idc %d, nal_unit_type %d \n", pos, nalu->len, nalu->nal_reference_idc, nalu->nal_unit_type);
 
 #if TRACE
-  fprintf (p_trace, "\n\nLast NALU in File\n\n");
-  fprintf (p_trace, "Annex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
-    nalu->startcodeprefix_len == 4?"long":"short", nalu->len, nalu->forbidden_bit, nalu->nal_reference_idc, nalu->nal_unit_type);
-  fflush (p_trace);
+      fprintf (p_trace, "\n\nLast NALU in File\n\n");
+      fprintf (p_trace, "Annex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
+               nalu->startcodeprefix_len == 4?"long":"short", nalu->len, nalu->forbidden_bit, nalu->nal_reference_idc, nalu->nal_unit_type);
+      fflush (p_trace);
 #endif
       free(Buf);
       return pos-1;
@@ -157,7 +157,11 @@ int GetAnnexbNALU (NALU_t *nalu)
   else if (info2 == 1)
     rewind = -3;
   else
+  {
     printf(" Panic: Error in next start code search \n");
+    free(Buf);
+    return -1;
+  }
 
   if (0 != fseek (bits, rewind, SEEK_CUR))
   {
@@ -178,6 +182,7 @@ int GetAnnexbNALU (NALU_t *nalu)
   nalu->nal_reference_idc = (nalu->buf[0]>>5) & 3;
   nalu->nal_unit_type = (nalu->buf[0]) & 0x1f;
 
+  nalu->lost_packets = 0;
 
 //printf ("GetAnnexbNALU, regular case: pos %d nalu->len %d, nalu->reference_idc %d, nal_unit_type %d \n", pos, nalu->len, nalu->nal_reference_idc, nalu->nal_unit_type);
 #if TRACE
@@ -255,7 +260,7 @@ static int FindStartCode (unsigned char *Buf, int zeros_in_startcode)
   return info;
 }
 
-void CheckZeroByteNonVCL(NALU_t *nalu, int * ret)
+void CheckZeroByteNonVCL(NALU_t *nalu)
 {
   int CheckZeroByte=0;
 
@@ -283,13 +288,12 @@ void CheckZeroByteNonVCL(NALU_t *nalu, int * ret)
     CheckZeroByte=1;
   if(CheckZeroByte && nalu->startcodeprefix_len==3)
   {
-    printf("warning: zero_byte shall exist\n");
-    //because it is not a very serious problem, we may not indicate an error by setting ret to -1
-    //*ret=-1;
+    printf("Warning: zero_byte shall exist\n");
+    //because it is not a very serious problem, we do not exit here
   }
 }
 
-void CheckZeroByteVCL(NALU_t *nalu, int * ret)
+void CheckZeroByteVCL(NALU_t *nalu)
 {
   int CheckZeroByte=0;
 
@@ -310,7 +314,6 @@ void CheckZeroByteVCL(NALU_t *nalu, int * ret)
   if(CheckZeroByte && nalu->startcodeprefix_len==3)
   {
     printf("warning: zero_byte shall exist\n");
-    //because it is not a very serious problem, we may not indicate an error by setting ret to -1
-    //*ret=-1;
+    //because it is not a very serious problem, we do not exit here
   }
 }

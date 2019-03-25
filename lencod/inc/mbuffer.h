@@ -42,6 +42,7 @@ typedef struct storable_picture
   int         non_existing;
 
   int         size_x, size_y, size_x_cr, size_y_cr;
+  int         size_x_padded, size_y_padded;
   int         size_x_pad, size_y_pad;
   int         size_x_cr_pad, size_y_cr_pad;
   int         chroma_vector_adjustment;
@@ -49,8 +50,8 @@ typedef struct storable_picture
   int         MbaffFrameFlag;
 
   imgpel **   imgY;          //!< Y picture component
-  imgpel ****   imgY_sub;      //!< Y picture component upsampled (Quarter pel)
-  imgpel *****  imgUV_sub;      //!< UV picture component upsampled (Quarter/One-Eighth pel)
+  imgpel **** imgY_sub;      //!< Y picture component upsampled (Quarter pel)
+  imgpel *****imgUV_sub;      //!< UV picture component upsampled (Quarter/One-Eighth pel)
   imgpel ***  imgUV;         //!< U and V picture components
 
   byte *      mb_field;      //!< field macroblock indicator
@@ -80,7 +81,8 @@ typedef struct storable_picture
   int         frame_cropping_rect_top_offset;
   int         frame_cropping_rect_bottom_offset;
 
-  imgpel ****   p_imgY_sub[MAX_PLANE];     //!< pointer array for storing top address of imgY_sub/imgUV_sub[]
+  imgpel **   p_img[MAX_PLANE];          //!< pointer array for accessing imgY/imgUV[]
+  imgpel **** p_img_sub[MAX_PLANE];     //!< pointer array for storing top address of imgY_sub/imgUV_sub[]
 
   char  ***   ref_idx_JV[MAX_PLANE];       //!< ref_idx to be used for 4:4:4 independent mode encoding
   int64 ***   ref_pic_id_JV[MAX_PLANE];    //!< ref_pic_id to be used for 4:4:4 independent mode encoding
@@ -88,8 +90,8 @@ typedef struct storable_picture
   short ****  mv_JV[MAX_PLANE];            //!< mv to be used for 4:4:4 independent mode encoding
   int colour_plane_id;                     //!< colour_plane_id to be used for 4:4:4 independent mode encoding
 
-  imgpel **** curr_imgY;                   //!< current int-pel ref. picture area to be used for motion estimation
-  imgpel **** curr_imgY_sub;               //!< current sub-pel ref. picture area to be used for motion estimation
+  imgpel **   p_curr_img;                    //!< current int-pel ref. picture area to be used for motion estimation
+  imgpel **** p_curr_img_sub;                //!< current sub-pel ref. picture area to be used for motion estimation
 
 } StorablePicture;
 

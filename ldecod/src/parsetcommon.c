@@ -34,8 +34,7 @@ pic_parameter_set_rbsp_t *AllocPPS ()
 
    if ((p=calloc (sizeof (pic_parameter_set_rbsp_t), 1)) == NULL)
      no_mem_exit ("AllocPPS: PPS");
-   if ((p->slice_group_id = calloc (SIZEslice_group_id, 1)) == NULL)
-     no_mem_exit ("AllocPPS: slice_group_id");
+   p->slice_group_id = NULL;
    return p;
  }
 
@@ -73,7 +72,8 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  void FreePPS (pic_parameter_set_rbsp_t *pps)
  {
    assert (pps != NULL);
-   if (pps->slice_group_id != NULL) free (pps->slice_group_id);
+   if (pps->slice_group_id != NULL) 
+     free (pps->slice_group_id);
    free (pps);
  }
 
@@ -214,8 +214,10 @@ int pps_is_equal(pic_parameter_set_rbsp_t *pps1, pic_parameter_set_rbsp_t *pps2)
   equal &= (pps1->constrained_intra_pred_flag == pps2->constrained_intra_pred_flag);
   equal &= (pps1->redundant_pic_cnt_present_flag == pps2->redundant_pic_cnt_present_flag);
 
+  if (!equal) return equal;
+
   //Fidelity Range Extensions Stuff
-  //It is inialized to zero, so should be ok to check all the time.
+  //It is initialized to zero, so should be ok to check all the time.
   equal &= (pps1->transform_8x8_mode_flag == pps2->transform_8x8_mode_flag);
   equal &= (pps1->pic_scaling_matrix_present_flag == pps2->transform_8x8_mode_flag);
   if(pps1->pic_scaling_matrix_present_flag)
@@ -239,7 +241,6 @@ int pps_is_equal(pic_parameter_set_rbsp_t *pps1, pic_parameter_set_rbsp_t *pps2)
     }
   }
   equal &= (pps1->second_chroma_qp_index_offset == pps2->second_chroma_qp_index_offset);
-
 
   return equal;
 }

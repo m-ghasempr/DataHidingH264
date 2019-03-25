@@ -23,6 +23,7 @@
 #include "global.h"
 #include "image.h"
 #include "img_luma.h"
+#include "memalloc.h"
 
 const int ONE_FOURTH_TAP[2][3] =
 {
@@ -43,35 +44,8 @@ const int ONE_FOURTH_TAP[2][3] =
  */
 void getSubImagesLuma( StorablePicture *s )
 {
-  int i, j;
-  int jj, jpad;
-
-  imgpel  **imgY = s->imgY;
-  int size_x_minus1 = s->size_x - 1;
-  int size_y_minus1 = s->size_y - 1;
-
-  imgpel *wBufDst, *wBufSrc;
-
-  if( IS_INDEPENDENT(input) )
-  {
-    switch( s->colour_plane_id ){
-    default:
-    case    0:
-      imgY = s->imgY;
-      break;
-    case    1:
-      imgY = s->imgUV[0];
-      break;
-    case    2:
-      imgY = s->imgUV[1];
-      break;
-	}
- 	s->curr_imgY_sub = s->p_imgY_sub[s->colour_plane_id];
-  }
-  else
-  {
-    s->curr_imgY_sub = s->imgY_sub;
-  }
+  imgpel  **p_curr_img = s->p_curr_img;
+  imgpel ****cImgSub   = s->p_curr_img_sub;
 
   //  0  1  2  3
   //  4  5  6  7
@@ -82,71 +56,114 @@ void getSubImagesLuma( StorablePicture *s )
 
   // sub-image 0 [0][0]
   // simply copy the integer pels
-  for (j = -IMG_PAD_SIZE; j < s->size_y + IMG_PAD_SIZE; j++)
-  {
-    jj = iClip3(0, size_y_minus1, j);
-    jpad = j + IMG_PAD_SIZE;
-    wBufDst = &( s->curr_imgY_sub[0][0][jpad][IMG_PAD_SIZE] ); // 4:4:4 independent mode
-    wBufSrc = imgY[jj];
-    // left IMG_PAD_SIZE
-    for (i = -IMG_PAD_SIZE; i < 0; i++)
-    {
-      wBufDst[i] = wBufSrc[0];
-    }
-    // right IMG_PAD_SIZE
-    for (i = s->size_x; i < s->size_x + IMG_PAD_SIZE; i++)
-    {
-      wBufDst[i] = wBufSrc[size_x_minus1];
-    }
-    // center 0-(s->size_x)
-    memcpy(wBufDst, wBufSrc, s->size_x * sizeof(imgpel));
-  }
+  getSubImageInteger( s, cImgSub[0][0], p_curr_img);
 
   //// HALF-PEL POSITIONS: SIX-TAP FILTER ////
 
   // sub-image 2 [0][2]
   // HOR interpolate (six-tap) sub-image [0][0]
-  getHorSubImageSixTap( s, 0, 2, 0, 0 );
+  getHorSubImageSixTap( s, cImgSub[0][2], cImgSub[0][0] );
 
   // sub-image 8 [2][0]
   // VER interpolate (six-tap) sub-image [0][0]
-  getVerSubImageSixTap( s, 2, 0, 0, 0, 0 );
+  getVerSubImageSixTap( s, cImgSub[2][0], cImgSub[0][0]);
 
   // sub-image 10 [2][2]
   // VER interpolate (six-tap) sub-image [0][2]
-  getVerSubImageSixTap( s, 2, 2, 0, 2, 1 );
+  getVerSubImageSixTapTmp( s, cImgSub[2][2], cImgSub[0][2]);
 
   //// QUARTER-PEL POSITIONS: BI-LINEAR INTERPOLATION ////
 
   // sub-image 1 [0][1]
-  getHorSubImageBiLinear( s, 0, 1, 0, 0, 0, 2,  0 );
-  // sub-image 3 [0][3]
-  getHorSubImageBiLinear( s, 0, 3, 0, 2, 0, 0,  1 );
-  // sub-image 9 [2][1]
-  getHorSubImageBiLinear( s, 2, 1, 2, 0, 2, 2,  0 );
-  // sub-image 11 [0][3]
-  getHorSubImageBiLinear( s, 2, 3, 2, 2, 2, 0,  1 );
-
+  getSubImageBiLinear    ( s, cImgSub[0][1], cImgSub[0][0], cImgSub[0][2]);
   // sub-image 4 [1][0]
-  getVerSubImageBiLinear( s, 1, 0, 0, 0, 2, 0,  0 );
+  getSubImageBiLinear    ( s, cImgSub[1][0], cImgSub[0][0], cImgSub[2][0]);
+  // sub-image 5 [1][1]
+  getSubImageBiLinear    ( s, cImgSub[1][1], cImgSub[0][2], cImgSub[2][0]);
   // sub-image 6 [1][2]
-  getVerSubImageBiLinear( s, 1, 2, 0, 2, 2, 2,  0 );
+  getSubImageBiLinear    ( s, cImgSub[1][2], cImgSub[0][2], cImgSub[2][2]);
+  // sub-image 9 [2][1]
+  getSubImageBiLinear    ( s, cImgSub[2][1], cImgSub[2][0], cImgSub[2][2]);
+
+  // sub-image 3  [0][3]
+  getHorSubImageBiLinear ( s, cImgSub[0][3], cImgSub[0][2], cImgSub[0][0]);
+  // sub-image 7  [1][3]
+  getHorSubImageBiLinear ( s, cImgSub[1][3], cImgSub[0][2], cImgSub[2][0]);
+  // sub-image 11 [2][3]
+  getHorSubImageBiLinear ( s, cImgSub[2][3], cImgSub[2][2], cImgSub[2][0]);
 
   // sub-image 12 [3][0]
-  getVerSubImageBiLinear( s, 3, 0, 2, 0, 0, 0,  1 );
-  // sub-image 14 [3][2]
-  getVerSubImageBiLinear( s, 3, 2, 2, 2, 0, 2,  1 );
-
-  // sub-image 5 [1][1]
-  getDiagSubImageBiLinear( s, 1, 1, 0, 2, 2, 0,  0, 0, 0, 0 );
-  // sub-image 7 [1][3]
-  getDiagSubImageBiLinear( s, 1, 3, 0, 2, 2, 0,  0, 0, 0, 1 );
+  getVerSubImageBiLinear ( s, cImgSub[3][0], cImgSub[2][0], cImgSub[0][0]);
   // sub-image 13 [3][1]
-  getDiagSubImageBiLinear( s, 3, 1, 2, 0, 0, 2,  0, 0, 1, 0 );
+  getVerSubImageBiLinear ( s, cImgSub[3][1], cImgSub[2][0], cImgSub[0][2]);
+  // sub-image 14 [3][2]
+  getVerSubImageBiLinear ( s, cImgSub[3][2], cImgSub[2][2], cImgSub[0][2]);
+
   // sub-image 15 [3][3]
-  getDiagSubImageBiLinear( s, 3, 3, 0, 2, 2, 0,  1, 0, 0, 1 );
+  getDiagSubImageBiLinear( s, cImgSub[3][3], cImgSub[0][2], cImgSub[2][0]);
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Copy Integer Samples to image [0][0]
+ *
+ * \param s
+ *    pointer to StorablePicture structure
+ * \param dstImg
+ *    destination image
+ * \param srcImg
+ *    source image
+ ************************************************************************
+ */
+void getSubImageInteger( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
+{
+  int i, j;
+  int size_x_minus1 = s->size_x - 1;
+
+  static imgpel *wBufSrc, *wBufDst;
+
+  // Copy top line
+  wBufDst = &( dstImg[0][0] ); 
+  wBufSrc = srcImg[0];
+  // left IMG_PAD_SIZE
+  for (i = 0; i < IMG_PAD_SIZE; i++)
+    *(wBufDst++) = wBufSrc[0];
+  // center 0-(s->size_x)
+  memcpy(wBufDst, wBufSrc, s->size_x * sizeof(imgpel));
+  wBufDst += s->size_x;
+  // right IMG_PAD_SIZE
+  for (i = 0; i < IMG_PAD_SIZE; i++)
+    *(wBufDst++) = wBufSrc[size_x_minus1];
+
+  // Now copy remaining pad lines
+  for (j = 1; j < IMG_PAD_SIZE + 1; j++)
+  {
+    memcpy(dstImg[j], dstImg[j - 1], s->size_x_padded * sizeof(imgpel));
+  }
+
+  for (j = 1; j < s->size_y; j++)
+  {    
+    wBufDst = &( dstImg[j + IMG_PAD_SIZE][0] ); // 4:4:4 independent mode
+    wBufSrc = srcImg[j];
+    // left IMG_PAD_SIZE
+    for (i = 0; i < IMG_PAD_SIZE; i++)
+      *(wBufDst++) = wBufSrc[0];
+    // center 0-(s->size_x)
+    memcpy(wBufDst, wBufSrc, s->size_x * sizeof(imgpel));
+    wBufDst += s->size_x;
+    // right IMG_PAD_SIZE
+    for (i = 0; i < IMG_PAD_SIZE; i++)
+      *(wBufDst++) = wBufSrc[size_x_minus1];
+  }
+
+  // Replicate bottom pad lines
+  for (j = s->size_y + IMG_PAD_SIZE; j < s->size_y_padded; j++)
+  {    
+    memcpy(dstImg[j], dstImg[j - 1], s->size_x_padded * sizeof(imgpel));
+  }
+}
 
 /*!
  ************************************************************************
@@ -155,70 +172,100 @@ void getSubImagesLuma( StorablePicture *s )
  *
  * \param s
  *    pointer to StorablePicture structure
- * \param dst_y
- *    vertical index to sub-image being generated
- * \param dst_x
- *    horizontal index to sub-image being generated
- * \param src_y
- *    vertical index to source sub-image
- * \param src_x
- *    horizontal index to source sub-image
+ * \param dstImg
+ *    destination image
+ * \param srcImg
+ *    source image
  ************************************************************************
  */
-void getHorSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, int src_x )
+void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
 {
-  int is;
-  int jpad;
-  int ipad;
-  int ypadded_size = s->size_y + 2 * IMG_PAD_SIZE;
-  int xpadded_size = s->size_x + 2 * IMG_PAD_SIZE;
-  int maxx = xpadded_size - 1;
+  int is, jpad, ipad;
+  int ypadded_size = s->size_y_padded;
+  int xpadded_size = s->size_x_padded;
 
-  imgpel *wBufSrc, *wBufDst;
-  int *iBufDst;
-  int tap0 = ONE_FOURTH_TAP[0][0];
-  int tap1 = ONE_FOURTH_TAP[0][1];
-  int tap2 = ONE_FOURTH_TAP[0][2];
+  static imgpel *wBufSrc, *wBufDst;
+  static imgpel *srcImgA, *srcImgB, *srcImgC, *srcImgD, *srcImgE, *srcImgF;
+  static int *iBufDst;
+  const int tap0 = ONE_FOURTH_TAP[0][0];
+  const int tap1 = ONE_FOURTH_TAP[0][1];
+  const int tap2 = ONE_FOURTH_TAP[0][2];
 
   for (jpad = 0; jpad < ypadded_size; jpad++)
   {
-    wBufSrc = s->curr_imgY_sub[src_y][src_x][jpad];	// 4:4:4 independent mode
-    wBufDst = s->curr_imgY_sub[dst_y][dst_x][jpad]; // 4:4:4 independent mode
+    wBufSrc = srcImg[jpad];     // 4:4:4 independent mode
+    wBufDst = dstImg[jpad];     // 4:4:4 independent mode
     iBufDst = imgY_sub_tmp[jpad];
 
+    srcImgA = &wBufSrc[0];
+    srcImgB = &wBufSrc[0];      
+    srcImgC = &wBufSrc[0];
+    srcImgD = &wBufSrc[1];
+    srcImgE = &wBufSrc[2];
+    srcImgF = &wBufSrc[3];
+
     // left padded area
-    for (ipad = 0; ipad < 2; ipad++)
-    {
-      is =
-        (tap0 * (wBufSrc[ipad]               + wBufSrc[ipad + 1]) +
-        tap1  * (wBufSrc[imax (0, ipad - 1)] + wBufSrc[ipad + 2]) +
-        tap2  * (wBufSrc[imax (0, ipad - 2)] + wBufSrc[ipad + 3]));
+    is =
+      (tap0 * (*srcImgA++ + *srcImgD++) +
+      tap1 *  (*srcImgB   + *srcImgE++) +
+      tap2 *  (*srcImgC   + *srcImgF++));
 
-      wBufDst[ipad] = (imgpel) iClip3 (0, img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
-      iBufDst[ipad] =  is;
-    }
+    *iBufDst++ =  is;
+    *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+
+    is =
+      (tap0 * (*srcImgA++ + *srcImgD++) +
+      tap1 *  (*srcImgB++ + *srcImgE++) +
+      tap2 *  (*srcImgC   + *srcImgF++));
+
+    *iBufDst++ =  is;
+    *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+
     // center
-    for (ipad = 2; ipad < xpadded_size - 3; ipad++)
+    for (ipad = 2; ipad < xpadded_size - 4; ipad++)
     {
       is =
-        (tap0 * (wBufSrc[ipad]     + wBufSrc[ipad + 1]) +
-        tap1  * (wBufSrc[ipad - 1] + wBufSrc[ipad + 2]) +
-        tap2  * (wBufSrc[ipad - 2] + wBufSrc[ipad + 3]));
+        (tap0 * (*srcImgA++ + *srcImgD++) +
+        tap1 *  (*srcImgB++ + *srcImgE++) +
+        tap2 *  (*srcImgC++ + *srcImgF++));
 
-      wBufDst[ipad] = (imgpel) iClip3 (0, img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
-      iBufDst[ipad] =  is;
+      *iBufDst++ =  is;
+      *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
     }
+
+    is = (
+      tap0 * (*srcImgA++ + *srcImgD++) +
+      tap1 * (*srcImgB++ + *srcImgE++) +
+      tap2 * (*srcImgC++ + *srcImgF  ));
+
+    *iBufDst++ =  is;
+    *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+
     // right padded area
-    for (ipad = xpadded_size - 3; ipad < xpadded_size; ipad++)
-    {
-      is =
-        (tap0 * (wBufSrc[ipad]     + wBufSrc[imin (maxx, ipad + 1)]) +
-        tap1  * (wBufSrc[ipad - 1] + wBufSrc[imin (maxx, ipad + 2)]) +
-        tap2  * (wBufSrc[ipad - 2] + wBufSrc[imin (maxx, ipad + 3)]));
+    is = (
+      tap0 * (*srcImgA++ + *srcImgD++) +
+      tap1 * (*srcImgB++ + *srcImgE) +
+      tap2 * (*srcImgC++ + *srcImgF));
 
-      wBufDst[ipad] = (imgpel) iClip3 (0, img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
-      iBufDst[ipad] =  is;
-    }
+    *iBufDst++ =  is;
+    *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+
+    is = (
+      tap0 * (*srcImgA++ + *srcImgD) +
+      tap1 * (*srcImgB++ + *srcImgE) +
+      tap2 * (*srcImgC++ + *srcImgF));
+
+    *iBufDst++ =  is;
+    *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+
+    is = (
+      tap0 * (*srcImgA + *srcImgD) +
+      tap1 * (*srcImgB + *srcImgE) +
+      tap2 * (*srcImgC + *srcImgF));
+
+    *iBufDst =  is;
+    *wBufDst = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+
   }
 }
 
@@ -243,148 +290,214 @@ void getHorSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, 
  *    increased fidelity during application of the six tap filter
  ************************************************************************
  */
-void getVerSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, int src_x, int use_stored_int )
+void getVerSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
 {
-  int is;
-  int jpad;
-  int jlow1, jlow2, jhigh1, jhigh2, jhigh3;
-  int ipad;
-  int ypadded_size = s->size_y + 2 * IMG_PAD_SIZE;
-  int xpadded_size = s->size_x + 2 * IMG_PAD_SIZE;
+  int is, jpad, ipad;
+  int ypadded_size = s->size_y_padded;
+  int xpadded_size = s->size_x_padded;
   int maxy = ypadded_size - 1;
 
-  imgpel **wxBufSrc, **wxBufDst, *wxLineDst;
-  int tap0 = ONE_FOURTH_TAP[0][0];
-  int tap1 = ONE_FOURTH_TAP[0][1];
-  int tap2 = ONE_FOURTH_TAP[0][2];
+  static imgpel *wxLineDst;
+  static imgpel *srcImgA, *srcImgB, *srcImgC, *srcImgD, *srcImgE, *srcImgF;
+  const int tap0 = ONE_FOURTH_TAP[0][0];
+  const int tap1 = ONE_FOURTH_TAP[0][1];
+  const int tap2 = ONE_FOURTH_TAP[0][2];
 
-  wxBufSrc = s->curr_imgY_sub[src_y][src_x]; // 4:4:4 independent mode
-  wxBufDst = s->curr_imgY_sub[dst_y][dst_x]; // 4:4:4 independent mode
-
-  if ( !use_stored_int ) { // causes code expansion but is better since we avoid too many
-    // branches within the j loop
-    // top
-    for (jpad = 0; jpad < 2; jpad++)
+  // branches within the j loop
+  // top
+  for (jpad = 0; jpad < 2; jpad++)
+  {
+    wxLineDst = dstImg[jpad];
+    srcImgA = srcImg[jpad ];
+    srcImgB = srcImg[0];      
+    srcImgC = srcImg[0];
+    srcImgD = srcImg[jpad + 1];
+    srcImgE = srcImg[jpad + 2];
+    srcImgF = srcImg[jpad + 3];
+    for (ipad = 0; ipad < xpadded_size; ipad++)
     {
-      wxLineDst = wxBufDst[jpad];
-      jlow1  = imax (0, jpad - 1);
-      jlow2  = imax (0, jpad - 2);
-      jhigh1 = jpad + 1;
-      jhigh2 = jpad + 2;
-      jhigh3 = jpad + 3;
-      for (ipad = 0; ipad < xpadded_size; ipad++)
-      {
-        is =
-          (tap0 * (wxBufSrc[jpad ][ipad] + wxBufSrc[jhigh1][ipad]) +
-          tap1 *  (wxBufSrc[jlow1][ipad] + wxBufSrc[jhigh2][ipad]) +
-          tap2 *  (wxBufSrc[jlow2][ipad] + wxBufSrc[jhigh3][ipad]));
+      is =
+        (tap0 * (*srcImgA++ + *srcImgD++) +
+        tap1 *  (*srcImgB++ + *srcImgE++) +
+        tap2 *  (*srcImgC++ + *srcImgF++));
 
-        wxLineDst[ipad] = (imgpel) iClip3 (0, img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
-      }
-    }
-    // center
-    for (jpad = 2; jpad < ypadded_size - 3; jpad++)
-    {
-      wxLineDst = wxBufDst[jpad];
-      jlow1  = jpad - 1;
-      jlow2  = jpad - 2;
-      jhigh1 = jpad + 1;
-      jhigh2 = jpad + 2;
-      jhigh3 = jpad + 3;
-      for (ipad = 0; ipad < xpadded_size; ipad++)
-      {
-        is =
-          (tap0 * (wxBufSrc[jpad ][ipad] + wxBufSrc[jhigh1][ipad]) +
-          tap1 *  (wxBufSrc[jlow1][ipad] + wxBufSrc[jhigh2][ipad]) +
-          tap2 *  (wxBufSrc[jlow2][ipad] + wxBufSrc[jhigh3][ipad]));
-
-        wxLineDst[ipad] = (imgpel) iClip3 (0, img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
-      }
-    }
-
-    // bottom
-    for (jpad = ypadded_size - 3; jpad < ypadded_size; jpad++)
-    {
-      wxLineDst = wxBufDst[jpad];
-      jlow1  = jpad - 1;
-      jlow2  = jpad - 2;
-      jhigh1 = imin (maxy, jpad + 1);
-      jhigh2 = imin (maxy, jpad + 2);
-      jhigh3 = imin (maxy, jpad + 3);
-      for (ipad = 0; ipad < xpadded_size; ipad++)
-      {
-        is =
-          (tap0 * (wxBufSrc[jpad ][ipad] + wxBufSrc[jhigh1][ipad]) +
-          tap1 *  (wxBufSrc[jlow1][ipad] + wxBufSrc[jhigh2][ipad]) +
-          tap2 *  (wxBufSrc[jlow2][ipad] + wxBufSrc[jhigh3][ipad]));
-
-        wxLineDst[ipad] = (imgpel) iClip3 (0, img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
-      }
+      wxLineDst[ipad] = (imgpel) iClip1 (img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
     }
   }
-  else
+  // center
+  for (jpad = 2; jpad < ypadded_size - 3; jpad++)
   {
-    // top
-    for (jpad = 0; jpad < 2; jpad++)
+    wxLineDst = dstImg[jpad];
+    srcImgA = srcImg[jpad ];
+    srcImgB = srcImg[jpad - 1];      
+    srcImgC = srcImg[jpad - 2];
+    srcImgD = srcImg[jpad + 1];
+    srcImgE = srcImg[jpad + 2];
+    srcImgF = srcImg[jpad + 3];
+    for (ipad = 0; ipad < xpadded_size; ipad++)
     {
-      wxLineDst = wxBufDst[jpad];
-      jlow1  = imax (0, jpad - 1);
-      jlow2  = imax (0, jpad - 2);
-      jhigh1 = jpad + 1;
-      jhigh2 = jpad + 2;
-      jhigh3 = jpad + 3;
+      is =
+        (tap0 * (*srcImgA++ + *srcImgD++) +
+        tap1 *  (*srcImgB++ + *srcImgE++) +
+        tap2 *  (*srcImgC++ + *srcImgF++));
 
-      for (ipad = 0; ipad < xpadded_size; ipad++)
-      {
-        is =
-          (tap0 * (imgY_sub_tmp[jpad ][ipad] + imgY_sub_tmp[jhigh1][ipad]) +
-          tap1 *  (imgY_sub_tmp[jlow1][ipad] + imgY_sub_tmp[jhigh2][ipad]) +
-          tap2 *  (imgY_sub_tmp[jlow2][ipad] + imgY_sub_tmp[jhigh3][ipad]));
-
-        wxLineDst[ipad] = (imgpel) iClip3 (0, img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
-      }
+      wxLineDst[ipad] = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
     }
+  }
 
-    // center
-    for (jpad = 2; jpad < ypadded_size - 3; jpad++)
+  // bottom
+  for (jpad = ypadded_size - 3; jpad < ypadded_size; jpad++)
+  {
+    wxLineDst = dstImg[jpad];
+    srcImgA = srcImg[jpad ];
+    srcImgB = srcImg[jpad - 1];      
+    srcImgC = srcImg[jpad - 2];
+    srcImgD = srcImg[imin (maxy, jpad + 1)];
+    srcImgE = srcImg[maxy];
+    srcImgF = srcImg[maxy];
+    for (ipad = 0; ipad < xpadded_size; ipad++)
     {
-      wxLineDst = wxBufDst[jpad];
-      jlow1  = jpad - 1;
-      jlow2  = jpad - 2;
-      jhigh1 = jpad + 1;
-      jhigh2 = jpad + 2;
-      jhigh3 = jpad + 3;
-      for (ipad = 0; ipad < xpadded_size; ipad++)
-      {
-        is =
-          (tap0 * (imgY_sub_tmp[jpad ][ipad] + imgY_sub_tmp[jhigh1][ipad]) +
-          tap1 *  (imgY_sub_tmp[jlow1][ipad] + imgY_sub_tmp[jhigh2][ipad]) +
-          tap2 *  (imgY_sub_tmp[jlow2][ipad] + imgY_sub_tmp[jhigh3][ipad]));
+      is =
+        (tap0 * (*srcImgA++ + *srcImgD++) +
+        tap1 *  (*srcImgB++ + *srcImgE++) +
+        tap2 *  (*srcImgC++ + *srcImgF++));
 
-        wxLineDst[ipad] = (imgpel) iClip3 (0, img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
-      }
+      wxLineDst[ipad] = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
     }
+  }
+}
 
-    // bottom
-    for (jpad = ypadded_size - 3; jpad < ypadded_size; jpad++)
+/*!
+ ************************************************************************
+ * \brief
+ *    Does _vertical_ interpolation using the SIX TAP filters
+ *
+ * \param s
+ *    pointer to StorablePicture structure
+ * \param dst_y
+ *    vertical index to sub-image being generated
+ * \param dst_x
+ *    horizontal index to sub-image being generated
+ * \param src_y
+ *    vertical index to source sub-image
+ * \param src_x
+ *    horizontal index to source sub-image
+ * \param use_stored_int
+ *    use stored shifted integer version of picture to temporary array for
+ *    increased fidelity during application of the six tap filter
+ ************************************************************************
+ */
+void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
+{
+  int is, jpad, ipad;
+  int ypadded_size = s->size_y_padded;
+  int xpadded_size = s->size_x_padded;
+  int maxy = ypadded_size - 1;
+
+  static imgpel *wxLineDst;
+  static int *srcImgA, *srcImgB, *srcImgC, *srcImgD, *srcImgE, *srcImgF;
+  const int tap0 = ONE_FOURTH_TAP[0][0];
+  const int tap1 = ONE_FOURTH_TAP[0][1];
+  const int tap2 = ONE_FOURTH_TAP[0][2];
+
+  // top
+  for (jpad = 0; jpad < 2; jpad++)
+  {
+    wxLineDst = dstImg[jpad];
+    srcImgA = imgY_sub_tmp[jpad ];
+    srcImgB = imgY_sub_tmp[0];      
+    srcImgC = imgY_sub_tmp[0];
+    srcImgD = imgY_sub_tmp[jpad + 1];
+    srcImgE = imgY_sub_tmp[jpad + 2];
+    srcImgF = imgY_sub_tmp[jpad + 3];
+
+    for (ipad = 0; ipad < xpadded_size; ipad++)
     {
-      wxLineDst = wxBufDst[jpad];
-      jlow1  = jpad - 1;
-      jlow2  = jpad - 2;
-      jhigh1 = imin (maxy, jpad + 1);
-      jhigh2 = imin (maxy, jpad + 2);
-      jhigh3 = imin (maxy, jpad + 3);
-      for (ipad = 0; ipad < xpadded_size; ipad++)
-      {
-        is =
-          (tap0 * (imgY_sub_tmp[jpad ][ipad] + imgY_sub_tmp[jhigh1][ipad]) +
-          tap1 *  (imgY_sub_tmp[jlow1][ipad] + imgY_sub_tmp[jhigh2][ipad]) +
-          tap2 *  (imgY_sub_tmp[jlow2][ipad] + imgY_sub_tmp[jhigh3][ipad]));
+      is =
+        (tap0 * (*srcImgA++ + *srcImgD++) +
+        tap1 *  (*srcImgB++ + *srcImgE++) +
+        tap2 *  (*srcImgC++ + *srcImgF++));
 
-        wxLineDst[ipad] = (imgpel) iClip3 (0, img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
-      }
+      wxLineDst[ipad] = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
     }
+  }
 
+  // center
+  for (jpad = 2; jpad < ypadded_size - 3; jpad++)
+  {
+    wxLineDst = dstImg[jpad];
+    srcImgA = imgY_sub_tmp[jpad ];
+    srcImgB = imgY_sub_tmp[jpad - 1];      
+    srcImgC = imgY_sub_tmp[jpad - 2];
+    srcImgD = imgY_sub_tmp[jpad + 1];
+    srcImgE = imgY_sub_tmp[jpad + 2];
+    srcImgF = imgY_sub_tmp[jpad + 3];
+    for (ipad = 0; ipad < xpadded_size; ipad++)
+    {
+      is =
+        (tap0 * (*srcImgA++ + *srcImgD++) +
+        tap1 *  (*srcImgB++ + *srcImgE++) +
+        tap2 *  (*srcImgC++ + *srcImgF++));
+
+      wxLineDst[ipad] = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
+    }
+  }
+
+  // bottom
+  for (jpad = ypadded_size - 3; jpad < ypadded_size; jpad++)
+  {
+    wxLineDst = dstImg[jpad];
+    srcImgA = imgY_sub_tmp[jpad ];
+    srcImgB = imgY_sub_tmp[jpad - 1];      
+    srcImgC = imgY_sub_tmp[jpad - 2];
+    srcImgD = imgY_sub_tmp[imin (maxy, jpad + 1)];
+    srcImgE = imgY_sub_tmp[maxy];
+    srcImgF = imgY_sub_tmp[maxy];
+    for (ipad = 0; ipad < xpadded_size; ipad++)
+    {
+      is =
+        (tap0 * (*srcImgA++ + *srcImgD++) +
+        tap1 *  (*srcImgB++ + *srcImgE++) +
+        tap2 *  (*srcImgC++ + *srcImgF++));
+
+      wxLineDst[ipad] = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
+    }
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Does _horizontal_ interpolation using the BiLinear filter
+ *
+ * \param s
+ *    pointer to StorablePicture structure
+ * \param dstImg
+ *    destination Image
+ * \param srcImgL
+ *    source left image
+ * \param srcImgR
+ *    source right image 
+ ************************************************************************
+ */
+void getSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR)
+{
+  int jpad, ipad;
+  int ypadded_size = s->size_y_padded;
+  int xpadded_size = s->size_x_padded;
+
+  static imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
+
+  for (jpad = 0; jpad < ypadded_size; jpad++)
+  {
+    wBufSrcL = srcImgL[jpad]; // 4:4:4 independent mode
+    wBufSrcR = srcImgR[jpad]; // 4:4:4 independent mode
+    wBufDst  = dstImg[jpad];  // 4:4:4 independent mode
+
+    for (ipad = 0; ipad < xpadded_size; ipad++)
+    {
+      *wBufDst++ = (imgpel) rshift_rnd_sf( *wBufSrcL++ + *wBufSrcR++, 1 );
+    }
   }
 }
 
@@ -396,51 +509,35 @@ void getVerSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, 
  *
  * \param s
  *    pointer to StorablePicture structure
- * \param dst_y
- *    vertical index to sub-image being generated
- * \param dst_x
- *    horizontal index to sub-image being generated
- * \param src_y_l
- *    vertical index to "LEFT" source sub-image
- * \param src_x_l
- *    horizontal index to "LEFT" source sub-image
- * \param src_y_r
- *    vertical index to "RIGHT" source sub-image
- * \param src_x_r
- *    horizontal index to "RIGHT" source sub-image
- * \param offset
- *    offset (either +0 or +1) for RIGHT sub-image HOR coordinate
+ * \param dstImg
+ *    destination Image
+ * \param srcImgL
+ *    source left image
+ * \param srcImgR
+ *    source right image 
  ************************************************************************
  */
-void getHorSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y_l, int src_x_l, int src_y_r, int src_x_r, int offset )
+void getHorSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR)
 {
-  int jpad;
-  int ipad;
-  int ypadded_size = s->size_y + 2 * IMG_PAD_SIZE;
-  int xpadded_size = s->size_x + 2 * IMG_PAD_SIZE;
-  int maxx = xpadded_size - 1;
+  int jpad, ipad;
+  int ypadded_size = s->size_y_padded;
+  int xpadded_size = s->size_x_padded - 1;
 
-  imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
-  int xpadded_size_left = maxx - offset;
+  static imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
 
   for (jpad = 0; jpad < ypadded_size; jpad++)
   {
-    wBufSrcL = s->curr_imgY_sub[src_y_l][src_x_l][jpad]; // 4:4:4 independent mode
-    wBufSrcR = s->curr_imgY_sub[src_y_r][src_x_r][jpad]; // 4:4:4 independent mode
-    wBufDst = s->curr_imgY_sub[dst_y][dst_x][jpad];      // 4:4:4 independent mode
+    wBufSrcL = srcImgL[jpad]; // 4:4:4 independent mode
+    wBufSrcR = &srcImgR[jpad][1]; // 4:4:4 independent mode
+    wBufDst  = dstImg[jpad];     // 4:4:4 independent mode
 
     // left padded area + center
-    for (ipad = 0; ipad < xpadded_size_left; ipad++)
+    for (ipad = 0; ipad < xpadded_size; ipad++)
     {
-      wBufDst[ipad] = (imgpel)
-        rshift_rnd_sf( wBufSrcL[ipad] + wBufSrcR[ipad + offset], 1 );
+      *wBufDst++ = (imgpel) rshift_rnd_sf( *wBufSrcL++ + *wBufSrcR++, 1 );
     }
     // right padded area
-    for (ipad = xpadded_size_left; ipad < xpadded_size; ipad++)
-    {
-      wBufDst[ipad] = (imgpel)
-        rshift_rnd_sf( wBufSrcL[ipad] + wBufSrcR[maxx], 1 );
-    }
+      *wBufDst++ = (imgpel) rshift_rnd_sf( *wBufSrcL++ + wBufSrcR[-1], 1 );
   }
 }
 
@@ -452,58 +549,42 @@ void getHorSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y
  *
  * \param s
  *    pointer to StorablePicture structure
- * \param dst_x
- *    horizontal index to sub-image being generated
- * \param dst_y
- *    vertical index to sub-image being generated
- * \param src_x_l
- *    horizontal index to "TOP" source sub-image
- * \param src_y_l
- *    vertical index to "TOP" source sub-image
- * \param src_x_r
- *    horizontal index to "BOTTOM" source sub-image
- * \param src_y_r
- *    vertical index to "BOTTOM" source sub-image
- * \param offset
- *    offset (either +0 or +1) for BOTTOM sub-image VER coordinate
+ * \param dstImg
+ *    destination Image
+ * \param srcImgT
+ *    source top image
+ * \param srcImgB
+ *    source bottom image 
  ************************************************************************
  */
-void getVerSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y_l, int src_x_l, int src_y_r, int src_x_r, int offset )
+void getVerSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB)
 {
-  int jpad;
-  int ipad;
-  int ypadded_size = s->size_y + 2 * IMG_PAD_SIZE;
-  int xpadded_size = s->size_x + 2 * IMG_PAD_SIZE;
-  int maxy = ypadded_size - 1;
+  int jpad, ipad;
+  int ypadded_size = s->size_y_padded - 1;
+  int xpadded_size = s->size_x_padded;  
 
-  imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
-  int ypadded_size_top = maxy - offset;
+  static imgpel *wBufSrcT, *wBufSrcB, *wBufDst;
 
   // top
-  for (jpad = 0; jpad < ypadded_size_top; jpad++)
+  for (jpad = 0; jpad < ypadded_size; jpad++)
   {
-    wBufSrcL = s->curr_imgY_sub[src_y_l][src_x_l][jpad];          // 4:4:4 independent mode
-    wBufDst  = s->curr_imgY_sub[dst_y][dst_x][jpad];              // 4:4:4 independent mode
-    wBufSrcR = s->curr_imgY_sub[src_y_r][src_x_r][jpad + offset]; // 4:4:4 independent mode
+    wBufSrcT = srcImgT[jpad];           // 4:4:4 independent mode
+    wBufDst  = dstImg[jpad];            // 4:4:4 independent mode
+    wBufSrcB = srcImgB[jpad + 1];  // 4:4:4 independent mode
 
     for (ipad = 0; ipad < xpadded_size; ipad++)
     {
-      wBufDst[ipad] = (imgpel)
-        rshift_rnd_sf(wBufSrcL[ipad] + wBufSrcR[ipad], 1);
+      *wBufDst++ = (imgpel) rshift_rnd_sf(*wBufSrcT++ + *wBufSrcB++, 1);
     }
   }
   // bottom
-  for (jpad = ypadded_size_top; jpad < ypadded_size; jpad++)
-  {
-    wBufSrcL = s->curr_imgY_sub[src_y_l][src_x_l][jpad];          // 4:4:4 independent mode
-    wBufDst  = s->curr_imgY_sub[dst_y  ][dst_x  ][jpad];          // 4:4:4 independent mode
-    wBufSrcR = s->curr_imgY_sub[src_y_r][src_x_r][maxy];          // 4:4:4 independent mode
+  wBufSrcT = srcImgT[ypadded_size];           // 4:4:4 independent mode
+  wBufDst  = dstImg[ypadded_size];            // 4:4:4 independent mode
+  wBufSrcB = srcImgB[ypadded_size];           // 4:4:4 independent mode
 
-    for (ipad = 0; ipad < xpadded_size; ipad++)
-    {
-      wBufDst[ipad] = (imgpel)
-        rshift_rnd_sf(wBufSrcL[ipad] + wBufSrcR[ipad], 1);
-    }
+  for (ipad = 0; ipad < xpadded_size; ipad++)
+  {
+    *wBufDst++ = (imgpel) rshift_rnd_sf(*wBufSrcT++ + *wBufSrcB++, 1);
   }
 }
 
@@ -515,67 +596,46 @@ void getVerSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y
  *
  * \param s
  *    pointer to StorablePicture structure
- * \param dst_x
- *    horizontal index to sub-image being generated
- * \param dst_y
- *    vertical index to sub-image being generated
- * \param src_x_l
- *    horizontal index to "TOP" source sub-image
- * \param src_y_l
- *    vertical index to "TOP" source sub-image
- * \param src_x_r
- *    horizontal index to "BOTTOM" source sub-image
- * \param src_y_r
- *    vertical index to "BOTTOM" source sub-image
- * \param offset_y_l
- *    Y offset (either +0 or +1) for TOP sub-image coordinate
- * \param offset_x_l
- *    X offset (either +0 or +1) for TOP sub-image coordinate
- * \param offset_y_r
- *    Y offset (either +0 or +1) for BOTTOM sub-image coordinate
- * \param offset_x_r
- *    X offset (either +0 or +1) for BOTTOM sub-image coordinate
+ * \param dstImg
+ *    destination Image
+ * \param srcImgT
+ *    source top/left image
+ * \param srcImgB
+ *    source bottom/right image 
  ************************************************************************
  */
-void getDiagSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y_l, int src_x_l, int src_y_r, int src_x_r, int offset_y_l, int offset_x_l,
-                             int offset_y_r, int offset_x_r )
+void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB )
 {
-  int jpad;
-  int ipad;
-  int ypadded_size = s->size_y + 2 * IMG_PAD_SIZE;
-  int xpadded_size = s->size_x + 2 * IMG_PAD_SIZE;
-  int maxx = xpadded_size - 1;
-  int maxy = ypadded_size - 1;
+  int jpad, ipad;
+  int maxx = s->size_x_padded - 1;
+  int maxy = s->size_y_padded - 1;
 
-  imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
-  // -1 explanation: offsets can be maximally one so let's assume the worst and avoid too many checks
-  int ypadded_size_top = ypadded_size - IMG_PAD_SIZE - 1;
+  static imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
 
-  for (jpad = 0; jpad < ypadded_size_top; jpad++)
+  for (jpad = 0; jpad < maxy; jpad++)
   {
-    wBufSrcL = s->curr_imgY_sub[src_y_l][src_x_l][jpad + offset_y_l]; // 4:4:4 independent mode
-    wBufSrcR = s->curr_imgY_sub[src_y_r][src_x_r][jpad + offset_y_r]; // 4:4:4 independent mode
-    wBufDst = s->curr_imgY_sub[dst_y][dst_x][jpad];                   // 4:4:4 independent mode
+    wBufSrcL = srcImgT[jpad + 1]; // 4:4:4 independent mode
+    wBufSrcR = &srcImgB[jpad][1]; // 4:4:4 independent mode
+    wBufDst  = dstImg[jpad];      // 4:4:4 independent mode
 
-    for (ipad = 0; ipad < xpadded_size; ipad++)
+    for (ipad = 0; ipad < maxx; ipad++)
     {
-      wBufDst[ipad] = (imgpel)
-        rshift_rnd_sf(wBufSrcL[imin (maxx, ipad + offset_x_l)] +
-        wBufSrcR[imin (maxx, ipad + offset_x_r)], 1);
+      *wBufDst++ = (imgpel) rshift_rnd_sf(*wBufSrcL++ + *wBufSrcR++, 1);
     }
+
+    *wBufDst++ = (imgpel) rshift_rnd_sf(*wBufSrcL++ +  wBufSrcR[-1], 1);
   }
-  for (jpad = ypadded_size_top; jpad < ypadded_size; jpad++)
+
+  wBufSrcL = srcImgT[maxy];     // 4:4:4 independent mode
+  wBufSrcR = &srcImgB[maxy][1]; // 4:4:4 independent mode
+  wBufDst = dstImg[maxy];       // 4:4:4 independent mode
+
+  for (ipad = 0; ipad < maxx; ipad++)
   {
-    wBufSrcL = s->curr_imgY_sub[src_y_l][src_x_l][imin (maxy, jpad + offset_y_l)]; // 4:4:4 independent mode
-    wBufSrcR = s->curr_imgY_sub[src_y_r][src_x_r][imin (maxy, jpad + offset_y_r)]; // 4:4:4 independent mode
-    wBufDst = s->curr_imgY_sub[dst_y][dst_x][jpad];                                // 4:4:4 independent mode
-
-    for (ipad = 0; ipad < xpadded_size; ipad++)
-    {
-      wBufDst[ipad] = (imgpel)
-        rshift_rnd_sf(wBufSrcL[imin (maxx, ipad + offset_x_l)] +
-        wBufSrcR[imin (maxx, ipad + offset_x_r)], 1);
-    }
+    *wBufDst++ = (imgpel) rshift_rnd_sf(*wBufSrcL++ + *wBufSrcR++, 1);
   }
+
+    *wBufDst++ = (imgpel) rshift_rnd_sf(*wBufSrcL++ + wBufSrcR[-1], 1);
 }
+
 

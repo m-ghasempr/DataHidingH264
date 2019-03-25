@@ -53,29 +53,33 @@ typedef struct {
 
 // macroblock activity
 int    diffy[16][16];
-int    qp_mbaff[2][2], qp_mbaff[2][2];
+int    qp_mbaff[2][2],       qp_mbaff[2][2];
 int    delta_qp_mbaff[2][2], delta_qp_mbaff[2][2];
 
 // generic functions
-int    Qstep2QP( double Qstep );
-double QP2Qstep( int QP );
-int    calc_MAD( void );
-double ComputeFrameMAD( void );
-void   update_rc(Macroblock *currMB, short best_mode);
-void   handle_qp(Macroblock *currMB, short best_mode);
+int    Qstep2QP          ( double Qstep );
+double QP2Qstep          ( int QP );
+int    ComputeMBMAD      ( void );
+double ComputeFrameMAD   ( void );
+void   rc_store_mad      (Macroblock *currMB);
+void   update_qp_cbp     (Macroblock *currMB, short best_mode);
+void   update_qp_cbp_tmp (Macroblock *currMB, int cbp, int best_mode);
 
 // rate control functions
 // init/copy
-void generic_alloc( rc_generic **prc );
-void generic_free( rc_generic **prc );
-void copy_rc_generic( rc_generic *dst, rc_generic *src );
-void init_GOP_rc(void);
-void init_frame_rc(int FrameNumberInFile);
+void  rc_alloc_generic           ( rc_generic **prc );
+void  rc_free_generic            ( rc_generic **prc );
+void  rc_copy_generic            ( rc_generic *dst, rc_generic *src );
+void  rc_init_gop_params         (void);
+void  rc_init_frame              (int FrameNumberInFile);
+void  rc_init_sequence           (void);
+void  rc_store_slice_header_bits (int len);
+
 
 // rate control CURRENT pointers
 rc_generic   *generic_RC;
 // rate control object pointers for RDPictureDecision buffering...
-rc_generic   *generic_RC_init,   *generic_RC_best;
+rc_generic   *generic_RC_init, *generic_RC_best;
 
 
 #endif

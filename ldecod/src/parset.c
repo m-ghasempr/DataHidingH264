@@ -384,8 +384,9 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
         NumberBitsPerSliceGroupId = 2;
       else
         NumberBitsPerSliceGroupId = 1;
-      //! JVT-F078, exlicitly signal number of MBs in the map
       pps->num_slice_group_map_units_minus1      = ue_v ("PPS: num_slice_group_map_units_minus1"               , s);
+      if ((pps->slice_group_id = calloc (pps->num_slice_group_map_units_minus1+1, 1)) == NULL)
+        no_mem_exit ("InterpretPPS: slice_group_id");
       for (i=0; i<=pps->num_slice_group_map_units_minus1; i++)
         pps->slice_group_id[i] = u_v (NumberBitsPerSliceGroupId, "slice_group_id[i]", s);
     }

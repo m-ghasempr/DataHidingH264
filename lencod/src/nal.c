@@ -106,7 +106,7 @@ int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_n
     streamBuffer[j+1] = 0x00;
     streamBuffer[j+2] = 0x03;
     j += 3;
-    stats->bit_use_stuffingBits[img->type]+=16;
+    stats->bit_use_stuffingBits[img->type]+=24;
   }
   return j;
 }

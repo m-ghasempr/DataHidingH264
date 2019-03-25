@@ -268,6 +268,9 @@ int RestOfSliceHeader()
       error ("slice_qs_delta makes slice_qs_y out of range", 500);
   }
 
+  if ( !HI_INTRA_ONLY_PROFILE || (HI_INTRA_ONLY_PROFILE && (input->loopfilter_bitstream==1) ))
+  //then read flags and parameters from bistream
+  {
   if (active_pps->deblocking_filter_control_present_flag)
   {
     currSlice->LFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", currStream);
@@ -286,6 +289,25 @@ int RestOfSliceHeader()
   {
     currSlice->LFDisableIdc = currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
   }
+  }
+  else //By default the Loop Filter is Off
+  { //444_TEMP_NOTE: change made below. 08/07/07
+    //still need to parse the SEs (read flags and parameters from bistream) but will ignore
+    if (active_pps->deblocking_filter_control_present_flag)
+    {
+      currSlice->LFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", currStream);
+
+      if (currSlice->LFDisableIdc!=1)
+      {
+        currSlice->LFAlphaC0Offset = 2 * se_v("SH: slice_alpha_c0_offset_div2", currStream);
+        currSlice->LFBetaOffset = 2 * se_v("SH: slice_beta_offset_div2", currStream);
+      }
+    }//444_TEMP_NOTE. the end of change. 08/07/07
+    //Ignore the SEs, by default the Loop Filter is Off
+    currSlice->LFDisableIdc =1;
+    currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
+  }
+
 
   if (active_pps->num_slice_groups_minus1>0 && active_pps->slice_group_map_type>=3 &&
       active_pps->slice_group_map_type<=5)

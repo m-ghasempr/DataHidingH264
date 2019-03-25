@@ -336,7 +336,7 @@ int HadamardSAD8x8 (int* diff)
     m2[7][i] = m1[6][i] - m1[7][i];
   }
   for (j=0; j < 8; j++)
-    for (i=0; i < 8; i++)
+    for (i=0; i < 8; i++) 
       sad += iabs (m2[j][i]);
 
   return ((sad+2)>>2);
@@ -356,14 +356,14 @@ int computeSAD(imgpel* src_pic,
                int cand_y)
 {
   int mcost = 0;
-  int y,x4;
+  int y,x;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line = src_pic;
   ref_line = get_line[ref_access_method] (ref_pic_sub.luma, cand_y, cand_x);
   for (y=0; y<blocksize_y; y++)
   {
-    for (x4 = 0; x4 < blocksize_x; x4+=4)
+    for (x = 0; x < blocksize_x; x+=4)
     {
       mcost += byte_abs[ *src_line++ - *ref_line++ ];
       mcost += byte_abs[ *src_line++ - *ref_line++ ];
@@ -379,22 +379,25 @@ int computeSAD(imgpel* src_pic,
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
     int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
-    
+    int mcr_cost = 0; // chroma me cost
+
     for (k=0; k < 2; k++)
     {
       src_line = src_pic + (256 << k);
       ref_line = get_crline[ref_access_method] ( ref_pic_sub.crcb[k], cand_y, cand_x);
+      mcr_cost = 0;
 
       for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
+        for (x = 0; x < blocksize_x_cr; x += 2)
         {
-          mcost += byte_abs[ *src_line++ - *ref_line++ ];
-          mcost += byte_abs[ *src_line++ - *ref_line++ ];
+          mcr_cost += byte_abs[ *src_line++ - *ref_line++ ];
+          mcr_cost += byte_abs[ *src_line++ - *ref_line++ ];
         }
-        if (mcost >= min_mcost) return mcost;
         ref_line += cr_pad_size_x;
       }
+      mcost += input->ChromaMEWeight * mcr_cost;
+      if (mcost >= min_mcost) return mcost;
     }
   }
 
@@ -415,7 +418,7 @@ int computeSADWP(imgpel* src_pic,
                int cand_y)
 {
   int mcost = 0;
-  int y,x4;
+  int y,x;
   int weighted_pel;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
@@ -423,7 +426,7 @@ int computeSADWP(imgpel* src_pic,
   ref_line = get_line[ref_access_method] (ref_pic_sub.luma, cand_y, cand_x);
   for (y=0; y<blocksize_y; y++)
   {
-    for (x4 = 0; x4 < blocksize_x; x4+=4)
+    for (x = 0; x < blocksize_x; x+=4)
     {
       weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
       mcost += byte_abs[ *src_line++ -  weighted_pel ];
@@ -443,23 +446,27 @@ int computeSADWP(imgpel* src_pic,
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
     int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
+    int mcr_cost = 0;
+    int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
 
     for (k=0; k < 2; k++)
     {
+      mcr_cost = 0;
       src_line = src_pic + (256 << k);
       ref_line = get_crline[ref_access_method] ( ref_pic_sub.crcb[k], cand_y, cand_x);
       for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
+        for (x = 0; x < blocksize_x_cr; x+=2)
         {
-          weighted_pel = iClip1( img->max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-          mcost += byte_abs[ *src_line++ -  weighted_pel ];
-          weighted_pel = iClip1( img->max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-          mcost += byte_abs[ *src_line++ -  weighted_pel ];
+          weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
+          mcr_cost += byte_abs[ *src_line++ -  weighted_pel ];
+          weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
+          mcr_cost += byte_abs[ *src_line++ -  weighted_pel ];
         }
-        if (mcost >= min_mcost) return mcost;
         ref_line += cr_pad_size_x;
       }
+      mcost += input->ChromaMEWeight * mcr_cost;
+      if (mcost >= min_mcost) return mcost;
     }
   }
 
@@ -481,7 +488,7 @@ int computeBiPredSAD1(imgpel* src_pic,
 {
   int mcost = 0;
   int bi_diff;
-  int y,x4;
+  int y,x;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line   = src_pic;
@@ -490,7 +497,7 @@ int computeBiPredSAD1(imgpel* src_pic,
 
   for (y = 0; y < blocksize_y; y++)
   {
-    for (x4 = 0; x4 < blocksize_x; x4+=4)
+    for (x = 0; x < blocksize_x; x+=4)
     {
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
       mcost += byte_abs[bi_diff];
@@ -512,27 +519,29 @@ int computeBiPredSAD1(imgpel* src_pic,
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
     int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
+    int mcr_cost = 0;
 
     for (k=0; k<2; k++)
     {
+      mcr_cost = 0;
       src_line = src_pic + (256 << k);
       ref2_line = get_crline[bipred2_access_method] ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
-      ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
+      ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);      
 
       for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
+        for (x = 0; x < blocksize_x_cr; x+=2)
         {
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-          mcost += byte_abs[bi_diff];
+          mcr_cost += byte_abs[bi_diff];
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-          mcost += byte_abs[bi_diff];
-        }
-
-        if (mcost >= min_mcost) return mcost;
+          mcr_cost += byte_abs[bi_diff];
+        }        
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
+      mcost += input->ChromaMEWeight * mcr_cost;
+      if (mcost >= min_mcost) return mcost;
     }
   }
   return mcost;
@@ -555,7 +564,7 @@ int computeBiPredSAD2(imgpel* src_pic,
   int bi_diff;
   int denom = luma_log_weight_denom + 1;
   int lround = 2 * wp_luma_round;
-  int y,x4;
+  int y,x;
   int weighted_pel, pixel1, pixel2;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
@@ -565,7 +574,7 @@ int computeBiPredSAD2(imgpel* src_pic,
 
   for (y=0; y<blocksize_y; y++)
   {
-    for (x4 = 0; x4 < blocksize_x; x4+=4)
+    for (x = 0; x < blocksize_x; x+=4)
     {
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
@@ -602,33 +611,38 @@ int computeBiPredSAD2(imgpel* src_pic,
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
     int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
+    int mcr_cost = 0;
+    int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
 
     for (k=0; k<2; k++)
     {
+      mcr_cost = 0;
       src_line = src_pic + (256 << k);
       ref2_line = get_crline[bipred2_access_method] ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
       ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
 
       for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
+        for (x = 0; x < blocksize_x_cr; x+=2)
         {
           pixel1 = weight1_cr[k] * (*ref1_line++);
           pixel2 = weight2_cr[k] * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
+          weighted_pel =  iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
           bi_diff = (*src_line++) - weighted_pel;
-          mcost += byte_abs[bi_diff];
+          mcr_cost += byte_abs[bi_diff];
 
           pixel1 = weight1_cr[k] * (*ref1_line++);
           pixel2 = weight2_cr[k] * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
+          weighted_pel =  iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
           bi_diff = (*src_line++) - weighted_pel;
-          mcost += byte_abs[bi_diff];
-        }
-        if (mcost >= min_mcost) return mcost;
+          mcr_cost += byte_abs[bi_diff];
+        }        
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
+      mcost += input->ChromaMEWeight * mcr_cost;
+      if (mcost >= min_mcost) return mcost;
+      
     }
   }
   return mcost;
@@ -680,16 +694,16 @@ int computeSATD(imgpel* src_pic,
   }
   else
   { // 8x8 TRANSFORM
-    src_size_x = (blocksize_x - BLOCK_SIZE8x8);
-    src_size_mul = blocksize_x * BLOCK_SIZE8x8;
-    for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE8x8_SP) )
+    src_size_x = (blocksize_x - BLOCK_SIZE_8x8);
+    src_size_mul = blocksize_x * BLOCK_SIZE_8x8;
+    for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE_8x8_SP) )
     {
-      for (x=0; x<blocksize_x; x += BLOCK_SIZE8x8 )
+      for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
         ref_line  = get_line[ref_access_method] (ref_pic_sub.luma, y, cand_x + (x<<2));
         src_line = src_tmp + x;
-        for (y4 = 0; y4 < BLOCK_SIZE8x8; y4++ )
+        for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
           *d++ = *src_line++ - *ref_line++ ;
           *d++ = *src_line++ - *ref_line++ ;
@@ -762,16 +776,16 @@ int computeSATDWP(imgpel* src_pic,
   }
   else
   { // 8x8 TRANSFORM
-    src_size_x = (blocksize_x - BLOCK_SIZE8x8);
-    src_size_mul = blocksize_x * BLOCK_SIZE8x8;
-    for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE8x8_SP) )
+    src_size_x = (blocksize_x - BLOCK_SIZE_8x8);
+    src_size_mul = blocksize_x * BLOCK_SIZE_8x8;
+    for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE_8x8_SP) )
     {
-      for (x=0; x<blocksize_x; x += BLOCK_SIZE8x8 )
+      for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
         ref_line  = get_line[ref_access_method] (ref_pic_sub.luma, y, cand_x + (x<<2));
         src_line = src_tmp + x;
-        for (y4 = 0; y4 < BLOCK_SIZE8x8; y4++ )
+        for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
           weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
           *d++ = *src_line++ - weighted_pel;
@@ -849,19 +863,19 @@ int computeBiPredSATD1(imgpel* src_pic,
   }
   else
   { // 8x8 TRANSFORM
-    src_size_x = (blocksize_x - BLOCK_SIZE8x8);
-    src_size_mul = blocksize_x * BLOCK_SIZE8x8;
-    for (y=0; y<blocksize_y; y += BLOCK_SIZE8x8 )
+    src_size_x = (blocksize_x - BLOCK_SIZE_8x8);
+    src_size_mul = blocksize_x * BLOCK_SIZE_8x8;
+    for (y=0; y<blocksize_y; y += BLOCK_SIZE_8x8 )
     {
       int y_pos2 = cand_y2 + (y<<2);
       int y_pos1 = cand_y1 + (y<<2);
-      for (x=0; x<blocksize_x; x += BLOCK_SIZE8x8 )
+      for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
         src_line   = src_tmp + x;
         ref2_line  = get_line[bipred2_access_method] (ref_pic2_sub.luma, y_pos2, cand_x2 + (x<<2));
         ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, y_pos1, cand_x1 + (x<<2));
-        for (y4 = 0; y4 < BLOCK_SIZE8x8; y4++ )
+        for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
@@ -951,19 +965,19 @@ int computeBiPredSATD2(imgpel* src_pic,
   }
   else
   { // 8x8 TRANSFORM
-    src_size_x = (blocksize_x - BLOCK_SIZE8x8);
-    src_size_mul = blocksize_x * BLOCK_SIZE8x8;
-    for (y=0; y<blocksize_y; y += BLOCK_SIZE8x8 )
+    src_size_x = (blocksize_x - BLOCK_SIZE_8x8);
+    src_size_mul = blocksize_x * BLOCK_SIZE_8x8;
+    for (y=0; y<blocksize_y; y += BLOCK_SIZE_8x8 )
     {
       int y_pos2 = cand_y2 + (y<<2);
       int y_pos1 = cand_y1 + (y<<2);
-      for (x=0; x<blocksize_x; x += BLOCK_SIZE8x8 )
+      for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
         src_line   = src_tmp + x;
         ref2_line  = get_line[bipred2_access_method] (ref_pic2_sub.luma, y_pos2, cand_x2 + (x<<2));
         ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, y_pos1, cand_x1 + (x<<2));
-        for (y4 = 0; y4 < BLOCK_SIZE8x8; y4++ )
+        for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
           // 0
           pixel1 = weight1 * (*ref1_line++);
@@ -1033,7 +1047,7 @@ int computeSSE(imgpel* src_pic,
                int cand_y)
 {
   int mcost = 0;
-  int y,x4;
+  int y,x;
   int *byte_sse = img->quad;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
@@ -1041,7 +1055,7 @@ int computeSSE(imgpel* src_pic,
   ref_line = get_line[ref_access_method] (ref_pic_sub.luma, cand_y, cand_x);
   for (y=0; y<blocksize_y; y++)
   {
-    for (x4 = 0; x4 < blocksize_x; x4+=4)
+    for (x = 0; x < blocksize_x; x+=4)
     {
       mcost += byte_sse[ *src_line++ - *ref_line++ ];
       mcost += byte_sse[ *src_line++ - *ref_line++ ];
@@ -1058,21 +1072,24 @@ int computeSSE(imgpel* src_pic,
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
     int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
+    int mcr_cost = 0;
 
     for (k=0; k<2; k++)
     {
+      mcr_cost = 0;
       src_line = src_pic + (256 << k);
       ref_line = get_crline[ref_access_method] ( ref_pic_sub.crcb[k], cand_y, cand_x);
       for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
+        for (x = 0; x < blocksize_x_cr; x+=2)
         {
-          mcost += byte_sse[ *src_line++ - *ref_line++ ];
-          mcost += byte_sse[ *src_line++ - *ref_line++ ];
+          mcr_cost += byte_sse[ *src_line++ - *ref_line++ ];
+          mcr_cost += byte_sse[ *src_line++ - *ref_line++ ];
         }
-        if (mcost >= min_mcost) return mcost;
         ref_line += cr_pad_size_x;
       }
+      mcost += input->ChromaMEWeight * mcr_cost;
+      if (mcost >= min_mcost) return mcost;
     }
   }
 
@@ -1095,7 +1112,7 @@ int computeSSEWP(imgpel* src_pic,
                int cand_y)
 {
   int mcost = 0;
-  int y,x4;
+  int y,x;
   int weighted_pel;
   int *byte_sse = img->quad;
   int pad_size_x = img_padded_size_x - blocksize_x;
@@ -1104,7 +1121,7 @@ int computeSSEWP(imgpel* src_pic,
   ref_line = get_line[ref_access_method] (ref_pic_sub.luma, cand_y, cand_x);
   for (y=0; y<blocksize_y; y++)
   {
-    for (x4 = 0; x4 < blocksize_x; x4+=4)
+    for (x = 0; x < blocksize_x; x+=4)
     {
       weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
       mcost += byte_sse[ *src_line++ - weighted_pel ];
@@ -1126,24 +1143,28 @@ int computeSSEWP(imgpel* src_pic,
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
     int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
+    int mcr_cost = 0;
+    int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
 
     for (k=0; k<2; k++)
     {
+      mcr_cost = 0;
       src_line = src_pic + (256 << k);
       ref_line = get_crline[ref_access_method] ( ref_pic_sub.crcb[k], cand_y, cand_x);
       for (y=0; y<blocksize_y_cr; y++)
       {
 
-        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
+        for (x = 0; x < blocksize_x_cr; x+=2)
         {
-          weighted_pel = iClip1( img->max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-          mcost += byte_sse[ *src_line++ - weighted_pel ];
-          weighted_pel = iClip1( img->max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-          mcost += byte_sse[ *src_line++ - weighted_pel ];
-        }
-        if (mcost >= min_mcost) return mcost;
+          weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
+          mcr_cost += byte_sse[ *src_line++ - weighted_pel ];
+          weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
+          mcr_cost += byte_sse[ *src_line++ - weighted_pel ];
+        }        
         ref_line += cr_pad_size_x;
       }
+      mcost += input->ChromaMEWeight * mcr_cost;
+      if (mcost >= min_mcost) return mcost;
     }
   }
 
@@ -1165,7 +1186,7 @@ int computeBiPredSSE1(imgpel* src_pic,
 {
   int mcost = 0;
   int bi_diff;
-  int y,x4;
+  int y,x;
   int *byte_sse = img->quad;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
@@ -1175,7 +1196,7 @@ int computeBiPredSSE1(imgpel* src_pic,
 
   for (y = 0; y < blocksize_y; y++)
   {
-    for (x4 = 0; x4 < blocksize_x; x4+=4)
+    for (x = 0; x < blocksize_x; x+=4)
     {
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
       mcost += byte_sse[bi_diff];
@@ -1198,26 +1219,29 @@ int computeBiPredSSE1(imgpel* src_pic,
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
     int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
+    int mcr_cost = 0;
 
     for (k=0; k<2; k++)
     {
+      mcr_cost = 0;
       src_line = src_pic + (256 << k);
       ref2_line = get_crline[bipred2_access_method] ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
       ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
 
       for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
+        for (x = 0; x < blocksize_x_cr; x+=2)
         {
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-          mcost += byte_sse[bi_diff];
+          mcr_cost += byte_sse[bi_diff];
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-          mcost += byte_sse[bi_diff];
-        }
-        if (mcost >= min_mcost) return mcost;
+          mcr_cost += byte_sse[bi_diff];
+        }        
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
+      mcost += input->ChromaMEWeight * mcr_cost;
+      if (mcost >= min_mcost) return mcost;
     }
   }
 
@@ -1242,7 +1266,7 @@ int computeBiPredSSE2(imgpel* src_pic,
   int bi_diff;
   int denom = luma_log_weight_denom + 1;
   int lround = 2 * wp_luma_round;
-  int y,x4;
+  int y,x;
   int weighted_pel, pixel1, pixel2;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
@@ -1251,7 +1275,7 @@ int computeBiPredSSE2(imgpel* src_pic,
   ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, cand_y1, cand_x1);
   for (y=0; y<blocksize_y; y++)
   {
-    for (x4 = 0; x4 < blocksize_x; x4+=4)
+    for (x = 0; x < blocksize_x; x+=4)
     {
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
@@ -1288,33 +1312,37 @@ int computeBiPredSSE2(imgpel* src_pic,
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
     int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
+    int mcr_cost = 0;
+    int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
 
     for (k=0; k<2; k++)
     {
+      mcr_cost = 0;
       src_line = src_pic + (256 << k);
       ref2_line = get_crline[bipred2_access_method] ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
       ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
 
       for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
+        for (x = 0; x < blocksize_x_cr; x+=2)
         {
           pixel1 = weight1_cr[k] * (*ref1_line++);
           pixel2 = weight2_cr[k] * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
+          weighted_pel =  iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
           bi_diff = (*src_line++) - weighted_pel;
-          mcost += bi_diff * bi_diff;
+          mcr_cost += bi_diff * bi_diff;
 
           pixel1 = weight1_cr[k] * (*ref1_line++);
           pixel2 = weight2_cr[k] * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
+          weighted_pel =  iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
           bi_diff = (*src_line++) - weighted_pel;
-          mcost += bi_diff * bi_diff;
-        }
-        if (mcost >= min_mcost) return mcost;
+          mcr_cost += bi_diff * bi_diff;
+        }        
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
+      mcost += input->ChromaMEWeight * mcr_cost;
+      if (mcost >= min_mcost) return mcost;
     }
   }
 

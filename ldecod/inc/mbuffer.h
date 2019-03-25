@@ -63,14 +63,11 @@ typedef struct storable_picture
   imgpel ***    imgUV;        //!< U and V picture components
 
   byte  *      mb_field;      //!< field macroblock indicator
-
   short **     slice_id;      //!< reference picture   [mb_x][mb_y]
-
   char  ***    ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
 
   int64 ***    ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
                               //   (not  simply index)
-
   int64 ***    ref_id;        //!< reference picture identifier [list][subblock_y][subblock_x]
                               //   (not  simply index)
 

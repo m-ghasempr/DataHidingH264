@@ -65,6 +65,7 @@
 #include <sys/stat.h>
 
 #include "global.h"
+#include "win32.h"
 #include "configfile.h"
 #include "fmo.h"
 
@@ -78,6 +79,8 @@ static void PatchInp (void);
 static void ProfileCheck(void);
 static void LevelCheck(void);
 
+static int mb_width_cr[4] = {0,8, 8,16};
+static int mb_height_cr[4]= {0,8,16,16};
 
 #define MAX_ITEMS_TO_PARSE  10000
 
@@ -115,6 +118,43 @@ void JMHelpExit (void)
     "   lencod  -f curenc1.cfg -p FramesToBeEncoded=30 -p QPISlice=28 -p QPPSlice=28 -p QPBSlice=30\n");
 
   exit(-1);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Reads Input File Size 
+ *
+ ************************************************************************
+ */
+int64 getVideoFileSize(void)
+{
+   int64 fsize;   
+
+   lseek(p_in, 0, SEEK_END); 
+   fsize = tell((int) p_in); 
+   lseek(p_in, 0, SEEK_SET); 
+
+   return fsize;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Updates the number of frames to encode based on the file size
+ *
+ ************************************************************************
+ */
+static void getNumberOfFrames (void)
+{
+  int64 fsize = getVideoFileSize();
+  int64 isize = input->img_width * input->img_height + 2 * (input->img_width_cr * input->img_height_cr);
+  if ((input->BitDepthLuma > input->BitDepthChroma) || (input->yuv_format == YUV400))
+    isize <<= (input->BitDepthLuma > 8)? 1 : 0;
+  else
+    isize <<= (input->BitDepthChroma > 8)? 1 : 0;
+
+  input->no_frames = (int) (((fsize - input->infile_header)/ isize) - input->start_frame - 1) / (1 + input->jumpd) + 1;
 }
 
 /*!
@@ -814,6 +854,12 @@ static void PatchInp (void)
     error (errortext, 500);
   }
 
+  if (input->idr_period && input->intra_delay && input->adaptive_idr_period)
+  {
+    snprintf(errortext, ET_SIZE, " IntraDelay can not be used with AdaptiveIDRPeriod.");
+    error (errortext, 500);
+  }
+
   storedBplus1 = (input->BRefPictures ) ? input->successive_Bframe + 1: 1;
   
   if (input->Log2MaxFNumMinus4 == -1)
@@ -857,23 +903,8 @@ static void PatchInp (void)
   if (input->PicInterlace>0 || input->MbInterlace>0)
   {
     if (input->directInferenceFlag==0)
-      printf("\nDirectInferenceFlag set to 1 due to interlace coding.");
+      printf("\nWarning: DirectInferenceFlag set to 1 due to interlace coding.");
     input->directInferenceFlag = 1;
-  }
-
-  if (input->PicInterlace>0)
-  {
-    if (input->IntraBottom!=0 && input->IntraBottom!=1)
-    {
-      snprintf(errortext, ET_SIZE, "Incorrect value %d for IntraBottom. Use 0 (disable) or 1 (enable).", input->IntraBottom);
-      error (errortext, 400);
-    }
-  }
-  // Cabac/UVLC consistency check
-  if (input->symbol_mode != UVLC && input->symbol_mode != CABAC)
-  {
-    snprintf (errortext, ET_SIZE, "Unsupported symbol mode=%d, use UVLC=0 or CABAC=1",input->symbol_mode);
-    error (errortext, 400);
   }
 
   // Open Files
@@ -882,6 +913,29 @@ static void PatchInp (void)
     snprintf(errortext, ET_SIZE, "Input file %s does not exist",input->infile);
     error (errortext, 500);
   }
+
+  if (input->yuv_format != YUV400)
+  {
+    input->img_width_cr  = (input->img_width  * mb_width_cr [input->yuv_format]) >> 4;
+    input->img_height_cr = (input->img_height * mb_height_cr[input->yuv_format]) >> 4;
+  }
+  else
+  {
+    input->img_width_cr  = 0;
+    input->img_height_cr = 0;
+  }
+
+  if (input->no_frames == -1)
+  {
+    getNumberOfFrames();
+  }
+
+  if (input->no_frames < 1)
+  {      
+    snprintf(errortext, ET_SIZE, "Not enough frames to encode (%d)", input->no_frames);
+    error (errortext, 500);
+  }
+
 
   if (strlen (input->ReconFile) > 0 && (p_dec=open(input->ReconFile, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1)
   {
@@ -1001,7 +1055,7 @@ static void PatchInp (void)
   // check RDoptimization mode and profile. FMD does not support Frex Profiles.
   if (input->rdopt==2 && ( input->ProfileIDC>=FREXT_HP || input->ProfileIDC==FREXT_CAVLC444 ))
   {
-    snprintf(errortext, ET_SIZE, "Fast Mode Decision methods does not support FREX Profiles");
+    snprintf(errortext, ET_SIZE, "Fast Mode Decision methods not supported in FREX Profiles");
     error (errortext, 500);
   }
 
@@ -1062,33 +1116,36 @@ static void PatchInp (void)
   // Rate control
   if(input->RCEnable)
   {
-    if ( ((input->img_height+img->auto_crop_bottom)*(input->img_width+img->auto_crop_right)/256)%input->basicunit!=0)
+    if ( ((input->img_height+img->auto_crop_bottom)*(input->img_width+img->auto_crop_right)/256) % input->basicunit != 0)
     {
       snprintf(errortext, ET_SIZE, "Frame size in macroblocks must be a multiple of BasicUnit.");
       error (errortext, 500);
     }
+    // input basicunit represents the number of BUs in a frame
+    // internal basicunit is the number of MBs in a BU
+    input->basicunit = ((input->img_height+img->auto_crop_bottom)*(input->img_width+img->auto_crop_right)/256) / input->basicunit;
 
-    if ( (input->successive_Bframe || input->jumpd) && input->RCUpdateMode == RC_MODE_1 )
+    if ( input->RCEnable && (input->successive_Bframe || input->jumpd) && input->RCUpdateMode == RC_MODE_1 )
     {
-      snprintf(errortext, ET_SIZE, "Use RC_MODE_1 only for all-intra coding.");
+      snprintf(errortext, ET_SIZE, "Use RCUpdateMode = 1 only for all intra or all B-slice coding.");
       error (errortext, 500);
     }
 
-    if ( input->BRefPictures == 2 && input->intra_period == 0 && input->RCUpdateMode != RC_MODE_1 )
+    if ( input->RCEnable && input->BRefPictures == 2 && input->intra_period == 0 && input->RCUpdateMode != RC_MODE_1 )
     {
-      snprintf(errortext, ET_SIZE, "Use RCUpdateMode=1 for all-B_SLICE coding.");
+      snprintf(errortext, ET_SIZE, "Use RCUpdateMode = 1 for all B-slice coding.");
       error (errortext, 500);
     }
 
-    if ( input->HierarchicalCoding && input->RCUpdateMode != RC_MODE_2 && input->RCUpdateMode != RC_MODE_3 )
+    if ( input->RCEnable && input->HierarchicalCoding && input->RCUpdateMode != RC_MODE_2 && input->RCUpdateMode != RC_MODE_3 )
     {
-      snprintf(errortext, ET_SIZE, "Use RCUpdateMode=2 or 3 for hierarchical B-picture coding.");
+      snprintf(errortext, ET_SIZE, "Use RCUpdateMode = 2 or 3 for hierarchical B-picture coding.");
       error (errortext, 500);
     }
 
-    if ( (input->RCUpdateMode != RC_MODE_1) && (input->intra_period == 1) )
+    if ( input->RCEnable && (input->RCUpdateMode != RC_MODE_1) && (input->intra_period == 1) )
     {
-      snprintf(errortext, ET_SIZE, "Use RCUpdateMode=1 for all-I_SLICE coding.");
+      snprintf(errortext, ET_SIZE, "Use RCUpdateMode = 1 for all intra coding.");
       error (errortext, 500);
     }
   }
@@ -1156,6 +1213,8 @@ static void PatchInp (void)
   if (input->EnableOpenGOP)
     input->ReferenceReorder = 1;
 
+  input->EPZSGrid = input->EPZSSubPelGrid << 1;
+
   if (input->redundant_pic_flag)
   {
     if (input->PicInterlace || input->MbInterlace)
@@ -1222,7 +1281,8 @@ static void ProfileCheck(void)
      (input->ProfileIDC != FREXT_Hi444 ) &&
      (input->ProfileIDC != FREXT_CAVLC444 ))
   {
-    snprintf(errortext, ET_SIZE, "Profile must be baseline(66)/main(77)/extended(88) or FRExt (%d to %d).", FREXT_HP,FREXT_Hi444);
+    snprintf(errortext, ET_SIZE, "Profile must be in\n\n  66 (Baseline),\n  77 (Main),\n  88 (Extended),\n 100 (High),\n 110 (High 10 or High 10 Intra)\n"
+      " 122 (High 4:2:2 or High 4:2:2 Intra),\n 244 (High 4:4:4 predictive or High 4:4:4 Intra),\n  44 (CAVLC 4:4:4 Intra)\n");
     error (errortext, 500);
   }
 
@@ -1236,7 +1296,7 @@ static void ProfileCheck(void)
   {
     if (input->ProfileIDC != 66)
     {
-      snprintf(errortext, ET_SIZE, "Redundant pictures are only allowed in Baseline profile.");
+      snprintf(errortext, ET_SIZE, "Redundant pictures are only allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
   }
@@ -1245,17 +1305,21 @@ static void ProfileCheck(void)
   {
     if (input->ProfileIDC != 88)
     {
-      snprintf(errortext, ET_SIZE, "Data partitioning is only allowed in extended profile.");
+      snprintf(errortext, ET_SIZE, "Data partitioning is only allowed in Extended profile (ProfileIDC = 88).");
       error (errortext, 500);
     }
   }
 
   if (input->ChromaIntraDisable && input->FastCrIntraDecision)
   {
-    fprintf( stderr, "\n----------------------------------------------------------------------------------\n");
     fprintf( stderr, "\n Warning: ChromaIntraDisable and FastCrIntraDecision cannot be combined together.\n Using only Chroma Intra DC mode.\n");
-    fprintf( stderr, "\n----------------------------------------------------------------------------------\n");
     input->FastCrIntraDecision=0;
+  }
+
+  if ((input->sp_periodicity) && (input->ProfileIDC != 88 ))
+  {
+    snprintf(errortext, ET_SIZE, "SP pictures are only allowed in Extended profile (ProfileIDC = 88).");
+    error (errortext, 500);
   }
 
   // baseline
@@ -1263,27 +1327,22 @@ static void ProfileCheck(void)
   {
     if ((input->successive_Bframe || input->BRefPictures==2) && input->PReplaceBSlice == 0)
     {
-      snprintf(errortext, ET_SIZE, "B slices are not allowed in baseline.");
-      error (errortext, 500);
-    }
-    if (input->sp_periodicity)
-    {
-      snprintf(errortext, ET_SIZE, "SP pictures are not allowed in baseline.");
+      snprintf(errortext, ET_SIZE, "B slices are not allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
     if (input->WeightedPrediction)
     {
-      snprintf(errortext, ET_SIZE, "Weighted prediction is not allowed in baseline.");
+      snprintf(errortext, ET_SIZE, "Weighted prediction is not allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
     if (input->WeightedBiprediction)
     {
-      snprintf(errortext, ET_SIZE, "Weighted prediction is not allowed in baseline.");
+      snprintf(errortext, ET_SIZE, "Weighted prediction is not allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
     if (input->symbol_mode == CABAC)
     {
-      snprintf(errortext, ET_SIZE, "CABAC is not allowed in baseline.");
+      snprintf(errortext, ET_SIZE, "CABAC is not allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
   }
@@ -1291,14 +1350,9 @@ static void ProfileCheck(void)
   // main
   if (input->ProfileIDC == 77 )
   {
-    if (input->sp_periodicity)
-    {
-      snprintf(errortext, ET_SIZE, "SP pictures are not allowed in main.");
-      error (errortext, 500);
-    }
     if (input->num_slice_groups_minus1)
     {
-      snprintf(errortext, ET_SIZE, "num_slice_groups_minus1>0 (FMO) is not allowed in main.");
+      snprintf(errortext, ET_SIZE, "num_slice_groups_minus1>0 (FMO) is not allowed in Main profile (ProfileIDC = 77).");
       error (errortext, 500);
     }
   }
@@ -1308,75 +1362,77 @@ static void ProfileCheck(void)
   {
     if (!input->directInferenceFlag)
     {
-      snprintf(errortext, ET_SIZE, "direct_8x8_inference flag must be equal to 1 in extended.");
+      snprintf(errortext, ET_SIZE, "direct_8x8_inference flag must be equal to 1 in Extended profile (ProfileIDC = 88).");
       error (errortext, 500);
     }
 
     if (input->symbol_mode == CABAC)
     {
-      snprintf(errortext, ET_SIZE, "CABAC is not allowed in extended.");
+      snprintf(errortext, ET_SIZE, "CABAC is not allowed in Extended profile (ProfileIDC = 88).");
       error (errortext, 500);
     }
   }
 
   //FRExt
+  if ( input->separate_colour_plane_flag )
+  {
+    if( input->yuv_format!=3 )
+    {
+      fprintf( stderr, "\nWarning: SeparateColourPlane has only effect in 4:4:4 chroma mode (YUVFormat=3),\n         disabling SeparateColourPlane.");
+      input->separate_colour_plane_flag = 0;
+    }
+
+    if ( input->ChromaMEEnable )
+    {
+      snprintf(errortext, ET_SIZE, "\nChromaMEEnable is not allowed when SeparateColourPlane is enabled.");
+      error (errortext, 500);
+    }
+  }
+
+  // CAVLC 4:4:4 Intra
+  if ( input->ProfileIDC == FREXT_CAVLC444 )
+  {
+    if ( input->symbol_mode != CAVLC )
+    {
+      snprintf(errortext, ET_SIZE, "\nCABAC is not allowed in CAVLC 4:4:4 Intra profile (ProfileIDC = 44).");
+      error (errortext, 500);
+    }
+    if ( !input->IntraProfile )
+    {
+      fprintf (stderr, "\nWarning: ProfileIDC equal to 44 implies an Intra only profile, setting IntraProfile = 1.");
+      input->IntraProfile = 1;
+    }
+  }
+
+  // Intra only profiles
   if (input->IntraProfile && ( input->ProfileIDC<FREXT_HP && input->ProfileIDC!=FREXT_CAVLC444 ))
   {
-    snprintf(errortext, ET_SIZE, "\nAllIntraProfile is allowed only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
+    snprintf(errortext, ET_SIZE, "\nIntraProfile is allowed only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
     error (errortext, 500);
   }
 
   if (input->IntraProfile && !input->idr_period) 
   {
-    snprintf(errortext, ET_SIZE, "\nAllIntraProfile requires IDRPeriod >= 1.");
+    snprintf(errortext, ET_SIZE, "\nIntraProfile requires IDRPeriod >= 1.");
     error (errortext, 500);
   }
 
   if (input->IntraProfile && input->intra_period != 1) 
   {
-    snprintf(errortext, ET_SIZE, "\nAllIntraProfile requires IntraPeriod equal 1.");
+    snprintf(errortext, ET_SIZE, "\nIntraProfile requires IntraPeriod equal 1.");
     error (errortext, 500);
   }
 
   if (input->IntraProfile && input->num_ref_frames) 
   {
-    fprintf( stderr, "\nWarning: Setting NumberReferenceFrames to 0 in IntraProfile.\n\n");
-      input->num_ref_frames = 0;
+    fprintf( stderr, "\nWarning: Setting NumberReferenceFrames to 0 in IntraProfile.");
+    input->num_ref_frames = 0;
   }
 
   if (input->IntraProfile == 0 && input->num_ref_frames == 0) 
   {
     snprintf(errortext, ET_SIZE, "\nProfiles other than IntraProfile require NumberReferenceFrames > 0.");
     error (errortext, 500);
-  }
-
-  if ( input->separate_colour_plane_flag )
-  {
-    if( ( input->ProfileIDC != FREXT_Hi444 ) && ( input->ProfileIDC != FREXT_CAVLC444 ) )
-    {
-      snprintf(errortext, ET_SIZE, "\nseparate_colour_plane_flag is allowed in FREXT_CAVLC444/FREXT_Hi444.");
-      error (errortext, 500);
-    }
-
-    if ( input->ChromaMEEnable )
-    {
-      snprintf(errortext, ET_SIZE, "\nChromaMEEnable is not allowed in Frext4:4:4Independent_mode.");
-      error (errortext, 500);
-    }
-  }
-
-  if ( input->ProfileIDC == FREXT_CAVLC444 )
-  {
-    if ( input->symbol_mode != UVLC )
-    {
-      snprintf(errortext, ET_SIZE, "\nUVLC is not allowed in FREXT_CAVLC444.");
-      error (errortext, 500);
-    }
-    if ( !input->IntraProfile )
-    {
-      snprintf(errortext, ET_SIZE, "\nFREXT_CAVLC444 must be IntraProfile.");
-      error (errortext, 500);
-    }
   }
 }
 

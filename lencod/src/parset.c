@@ -422,7 +422,7 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
 
   pps->seq_parameter_set_id = sps->seq_parameter_set_id;
   pps->pic_parameter_set_id = PPS_id;
-  pps->entropy_coding_mode_flag = (input->symbol_mode==UVLC ? FALSE : TRUE);
+  pps->entropy_coding_mode_flag = (input->symbol_mode == CAVLC ? FALSE : TRUE);
 
   // Fidelity Range Extensions stuff
   if(frext_profile)

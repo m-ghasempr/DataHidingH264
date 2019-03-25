@@ -25,7 +25,7 @@
 
 #include "global.h"
 #include "ratectl.h"
-#include "rc_quadratic.h"
+
 
 static const float THETA = 1.3636F;
 static const float OMEGA = 0.9F;
@@ -37,7 +37,7 @@ static const float MINVALUE = 4.0F;
  *
  *************************************************************************************
  */
-void rc_alloc( rc_quadratic **prc )
+void rc_alloc_quadratic( rc_quadratic **prc )
 {
   int rcBufSize = img->FrameSizeInMbs / input->basicunit;
   rc_quadratic *lprc;
@@ -52,7 +52,6 @@ void rc_alloc( rc_quadratic **prc )
   lprc->PreviousFrameMAD = 1.0;
   lprc->CurrentFrameMAD = 1.0;
   lprc->Pprev_bits = 0;
-  lprc->Iprev_bits = 0;
   lprc->Target = 0;
   lprc->TargetField = 0;
   lprc->LowerBound = 0;
@@ -68,33 +67,33 @@ void rc_alloc( rc_quadratic **prc )
   lprc->PAverageQp    = lprc->PAveFrameQP;
   lprc->MyInitialQp   = lprc->PAveFrameQP;
 
-  lprc->RC_MAX_QUANT = input->RCMaxQP;
-  lprc->RC_MIN_QUANT = input->RCMinQP; //-img->bitdepth_luma_qp_scale;//clipping
+  lprc->RC_MAX_QUANT = img->RCMaxQP;
+  lprc->RC_MIN_QUANT = img->RCMinQP; //-img->bitdepth_luma_qp_scale;//clipping
 
   lprc->AveWb = 0.0;
 
   lprc->BUPFMAD = (double*) calloc ((rcBufSize), sizeof (double));
   if (NULL==lprc->BUPFMAD)
   {
-    no_mem_exit("rc_alloc: lprc->BUPFMAD");
+    no_mem_exit("rc_alloc_quadratic: lprc->BUPFMAD");
   }
 
   lprc->BUCFMAD = (double*) calloc ((rcBufSize), sizeof (double));
   if (NULL==lprc->BUCFMAD)
   {
-    no_mem_exit("rc_alloc: lprc->BUCFMAD");
+    no_mem_exit("rc_alloc_quadratic: lprc->BUCFMAD");
   }
 
   lprc->FCBUCFMAD = (double*) calloc ((rcBufSize), sizeof (double));
   if (NULL==lprc->FCBUCFMAD)
   {
-    no_mem_exit("rc_alloc: lprc->FCBUCFMAD");
+    no_mem_exit("rc_alloc_quadratic: lprc->FCBUCFMAD");
   }
 
   lprc->FCBUPFMAD = (double*) calloc ((rcBufSize), sizeof (double));
   if (NULL==lprc->FCBUPFMAD)
   {
-    no_mem_exit("rc_alloc: lprc->FCBUPFMAD");
+    no_mem_exit("rc_alloc_quadratic: lprc->FCBUPFMAD");
   }
 }
 
@@ -105,7 +104,7 @@ void rc_alloc( rc_quadratic **prc )
  *
  *************************************************************************************
  */
-void copy_rc_jvt( rc_quadratic *dst, rc_quadratic *src )
+void rc_copy_quadratic( rc_quadratic *dst, rc_quadratic *src )
 {
   int rcBufSize = img->FrameSizeInMbs / input->basicunit;
   /* buffer original addresses for which memory has been allocated */
@@ -137,7 +136,7 @@ void copy_rc_jvt( rc_quadratic *dst, rc_quadratic *src )
  *
  *************************************************************************************
 */
-void rc_free(rc_quadratic **prc)
+void rc_free_quadratic(rc_quadratic **prc)
 {
   if (NULL!=(*prc)->BUPFMAD)
   {
@@ -197,6 +196,10 @@ void rc_init_seq(rc_quadratic *prc)
     updateQP = updateQPRC0;
     break;
   }
+  // set function pointers
+  rc_update_pict_frame_ptr = rc_update_pict_frame;
+  rc_update_picture_ptr    = rc_update_picture;
+  rc_init_pict_ptr         = rc_init_pict;
 
   prc->Xp=0;
   prc->Xb=0;
@@ -255,7 +258,7 @@ void rc_init_seq(rc_quadratic *prc)
   }
 
   //Define the largest variation of quantization parameters
-  prc->PMaxQpChange=2;
+  prc->PMaxQpChange = input->RCMaxQPChange;
 
   /*basic unit layer rate control*/
   prc->PAveHeaderBits1 = 0;
@@ -313,7 +316,8 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
 {
   Boolean Overum=FALSE;
   int OverBits, OverDuantQp;
-  int AllocatedBits, GOPDquant;
+  int GOPDquant;
+  int64 AllocatedBits;
 
   // bit allocation for RC_MODE_3
   switch( input->RCUpdateMode )
@@ -420,7 +424,7 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
   prc->UpperBound1 = (int)(generic_RC->RemainingBits + (prc->bit_rate * 2.048));
 
   /*compute the total number of bits for the current GOP*/
-  AllocatedBits = (int) floor((1 + np + nb) * prc->bit_rate / prc->frame_rate + 0.5);
+  AllocatedBits = (int64) floor((1 + np + nb) * prc->bit_rate / prc->frame_rate + 0.5);
   generic_RC->RemainingBits += AllocatedBits;
   prc->Np = np;
   prc->Nb = nb;
@@ -748,15 +752,38 @@ void rc_init_pict(rc_quadratic *prc, int fieldpic,int topfield,int targetcomputa
 void rc_update_pict(rc_quadratic *prc, int nbits)
 {
   int delta_bits = (nbits - (int)floor(prc->bit_rate / prc->frame_rate + 0.5F) );
-  generic_RC->RemainingBits -= nbits; /* remaining # of bits in GOP */
+  // remaining # of bits in GOP
+  generic_RC->RemainingBits -= nbits; 
   generic_RC->CurrentBufferFullness += delta_bits;
 
-  /*update the lower bound and the upper bound for the target bits of each frame, HRD consideration*/
+  // update the lower bound and the upper bound for the target bits of each frame, HRD consideration
   prc->LowerBound  -= (int) delta_bits;
   prc->UpperBound1 -= (int) delta_bits;
   prc->UpperBound2  = (int)(OMEGA * prc->UpperBound1);
 
-  return;
+  // update the parameters of quadratic R-D model
+  if( img->type==P_SLICE || (input->RCUpdateMode == RC_MODE_1 && img->frm_number) )
+  {
+    updateRCModel(prc);
+    if ( input->RCUpdateMode == RC_MODE_3 )
+      prc->PreviousWholeFrameMAD = ComputeFrameMAD();
+  }
+}
+
+/*!
+ *************************************************************************************
+ * \brief
+ *    update one picture after coding
+ *
+ * \param nbits
+ *    number of bits used for picture
+ *
+ *************************************************************************************
+*/
+
+void rc_update_picture( int bits )
+{
+  rc_update_pict(quadratic_RC, bits);
 }
 
 int updateComplexity( rc_quadratic *prc, Boolean is_updated, int nbits )
@@ -1633,8 +1660,6 @@ int updateQPRC1(rc_quadratic *prc, int topfield)
   return prc->m_Qc;
 }
 
-
-
 /*!
  *************************************************************************************
  * \brief
@@ -1847,9 +1872,6 @@ int updateQPRC2(rc_quadratic *prc, int topfield)
   return prc->m_Qc;
 }
 
-
-
-
 /*!
  *************************************************************************************
  * \brief
@@ -2036,6 +2058,13 @@ int updateQPRC3(rc_quadratic *prc, int topfield)
   return prc->m_Qc;
 }
 
+/*!
+ *************************************************************************************
+ * \brief
+ *    Save previous QP values for interlaced coding
+ *
+ *************************************************************************************
+*/
 void updateQPInterlace( rc_quadratic *prc )
 {
   if(generic_RC->FieldControl==0)
@@ -2055,6 +2084,13 @@ void updateQPInterlace( rc_quadratic *prc )
   }
 }
 
+/*!
+ *************************************************************************************
+ * \brief
+ *    Save previous QP values for the case of non-PicAFF
+ *
+ *************************************************************************************
+*/
 void updateQPNonPicAFF( rc_quadratic *prc )
 {
   if(active_sps->frame_mbs_only_flag)
@@ -2069,6 +2105,12 @@ void updateQPNonPicAFF( rc_quadratic *prc )
     prc->FrameQPBuffer=prc->m_Qc;
 }
 
+/*!
+ *************************************************************************************
+ * \brief
+ *    Update QP values for bottom filed in field coding
+ *************************************************************************************
+*/
 void updateBottomField( rc_quadratic *prc )
 {
   /*field coding*/
@@ -2367,4 +2409,289 @@ void updateModelQPFrame( rc_quadratic *prc, int m_Bits )
     m_Qstep = (float) ((2 * prc->m_X2 * prc->CurrentFrameMAD) / (sqrt (dtmp) - prc->m_X1 * prc->CurrentFrameMAD));
 
   prc->m_Qc = Qstep2QP(m_Qstep);
+}
+
+void rc_handle_mb( int prev_mb, Macroblock *currMB, Slice *curr_slice )
+{
+  int  dq;
+  Macroblock *prevMB = NULL;
+
+  if (prev_mb > -1)
+  {
+    prevMB = &img->mb_data[prev_mb];
+
+    if ( input->MbInterlace == ADAPTIVE_CODING && !img->bot_MB && currMB->mb_field )
+      currMB->qp = img->qp = prevMB->qp;
+    currMB->prev_qp = prevMB->qp;
+
+    currMB->prev_dqp = (prevMB->slice_nr == img->current_slice_nr) ? prevMB->delta_qp : 0;
+  }
+  else
+  {
+    currMB->prev_qp  = curr_slice->qp;
+    currMB->prev_dqp = 0;
+  }
+  // frame layer rate control
+  if (input->basicunit == img->FrameSizeInMbs)
+  {
+    currMB->delta_qp = 0;
+    currMB->qp       = img->qp;
+  }
+  else   // basic unit layer rate control
+  {
+    // each I or B frame has only one QP
+    if ( ((img->type == I_SLICE || img->type == B_SLICE) && input->RCUpdateMode != RC_MODE_1 ) || !(img->number) )
+    {
+      currMB->delta_qp = 0;
+      currMB->qp       = img->qp;
+    }
+    else if ( img->type == P_SLICE || input->RCUpdateMode == RC_MODE_1 )
+    {
+      if (!img->write_macroblock) //write macroblock
+      {
+        if (prev_mb < 0) //first macroblock (of slice)
+        {
+          // Initialize delta qp change from last macroblock. Feature may be used for future rate control
+          currMB->delta_qp = 0;
+          currMB->qp       = img->qp;
+          delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
+          qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
+        }
+        else
+        {         
+          if (!((input->MbInterlace) && img->bot_MB)) //top macroblock
+          {
+            prevMB = &img->mb_data[prev_mb];
+            if (prevMB->prev_cbp == 1)
+            {
+              currMB->delta_qp = 0;
+              currMB->qp       = img->qp;
+            }
+            else
+            {
+              currMB->qp = img->qp = prevMB->prev_qp;
+              currMB->delta_qp = currMB->qp - prevMB->qp;
+            }
+            delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
+            qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
+          }
+          else //bottom macroblock
+          {
+            // Initialize delta qp change from last macroblock. Feature may be used for future rate control
+            currMB->delta_qp = 0;
+            currMB->qp       = img->qp;       // needed in loop filter (even if constant QP is used)
+          }
+        }
+      }
+      else
+      {
+        if (!img->bot_MB) //write top macroblock
+        {
+          if (img->write_mbaff_frame)
+          {
+            currMB->delta_qp = delta_qp_mbaff[0][img->bot_MB];
+            currMB->qp = img->qp =   qp_mbaff[0][img->bot_MB];
+          }
+          else
+          {
+            if (prev_mb < 0) //first macroblock (of slice)
+            {
+              // Initialize delta qp change from last macroblock. Feature may be used for future rate control
+              currMB->delta_qp = 0;
+              currMB->qp       = img->qp;
+              delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
+              qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
+            }
+            else
+            {
+              currMB->delta_qp = delta_qp_mbaff[1][img->bot_MB];
+              currMB->qp = img->qp =   qp_mbaff[1][img->bot_MB];
+            }
+          }
+        }
+        else //write bottom macroblock
+        {
+          currMB->delta_qp = 0;
+          currMB->qp       = img->qp;          
+        }
+      }
+
+      // compute the quantization parameter for each basic unit of P frame
+      if (!img->write_macroblock)
+      {
+        if(!((input->MbInterlace) && img->bot_MB))
+        {
+          if(input->RCUpdateMode <= MAX_RC_MODE && (img->NumberofCodedMacroBlocks > 0) && (img->NumberofCodedMacroBlocks % img->BasicUnit == 0))
+          {
+            // frame coding
+            if(active_sps->frame_mbs_only_flag)
+            {
+              updateRCModel(quadratic_RC);
+              img->BasicUnitQP=updateQP(quadratic_RC, generic_RC->TopFieldFlag);
+            }
+            // picture adaptive field/frame coding
+            else if((input->PicInterlace!=FRAME_CODING)&&(!input->MbInterlace)&&(generic_RC->NoGranularFieldRC==0))
+            {
+              updateRCModel(quadratic_RC);
+              img->BasicUnitQP = updateQP(quadratic_RC, generic_RC->TopFieldFlag);
+            }
+            // mb adaptive f/f coding, field coding
+            else if((input->MbInterlace))
+            {
+              updateRCModel(quadratic_RC);
+              img->BasicUnitQP = updateQP(quadratic_RC, generic_RC->TopFieldFlag);
+            }
+          }
+
+          if(img->current_mb_nr==0)
+            img->BasicUnitQP=img->qp;
+          currMB->predict_qp = iClip3(currMB->qp - img->min_qp_delta, currMB->qp + img->max_qp_delta, img->BasicUnitQP);
+
+          dq = currMB->delta_qp + currMB->predict_qp - currMB->qp;          
+          dq = iClip3(-img->min_qp_delta, img->max_qp_delta, dq);
+          currMB->predict_error = dq - currMB->delta_qp;
+          img->qp   += currMB->predict_error; 
+          currMB->qp =  img->qp;
+          currMB->delta_qp = dq;          
+
+          if (input->MbInterlace)
+          {
+            delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
+            qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
+          }          
+        }
+        else
+          currMB->prev_qp = img->qp;
+      }
+    }
+  }
+  set_chroma_qp(currMB);
+  currMB->qp_scaled[0] = currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP;
+  currMB->qp_scaled[1] = currMB->qpc[0] + img->bitdepth_chroma_qp_scale;
+  currMB->qp_scaled[2] = currMB->qpc[1] + img->bitdepth_chroma_qp_scale;
+
+  select_dct(currMB);
+}
+
+void rc_init_top_field ( void )
+{
+  img->BasicUnit = input->basicunit;
+  generic_RC->TopFieldFlag = 1;
+  rc_init_pict_ptr(quadratic_RC, 0, 1, (input->PicInterlace == FIELD_CODING), 1.0F); 
+  img->qp = updateQP(quadratic_RC, 1);  
+}
+
+void rc_init_bottom_field ( int TopFieldBits )
+{
+  quadratic_RC->bits_topfield = TopFieldBits;
+  generic_RC->TopFieldFlag = 0;
+  rc_init_pict_ptr(quadratic_RC, 0,0,0, 1.0F); 
+  img->qp  = updateQP(quadratic_RC, 0); 
+}
+
+void rc_init_frame_rdpic( float rateRatio )
+{
+  switch (input->RCUpdateMode)
+  {
+  case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
+    // re-store the initial RC model
+    rc_copy_quadratic( quadratic_RC, quadratic_RC_init );
+    rc_copy_generic( generic_RC, generic_RC_init );
+    rc_init_pict_ptr(quadratic_RC, 1,0,1, rateRatio );
+    img->qp  = updateQP(quadratic_RC, 0);
+    break;
+  default:
+    break;
+  }
+}
+
+void rc_allocate_memory( void )
+{
+  switch (input->RCUpdateMode)
+  {
+  case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
+    rc_alloc_generic( &generic_RC );
+    rc_alloc_quadratic( &quadratic_RC );
+    if ( input->RDPictureDecision || input->MbInterlace == ADAPTIVE_CODING )
+    {
+      rc_alloc_generic( &generic_RC_init );
+      rc_alloc_quadratic( &quadratic_RC_init );
+      rc_alloc_generic( &generic_RC_best );
+      rc_alloc_quadratic( &quadratic_RC_best );
+    }
+    break;
+  default:
+    break;
+  }
+}
+
+void rc_free_memory( void )
+{
+  switch (input->RCUpdateMode)
+  {
+  case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
+    rc_free_generic( &generic_RC );
+    rc_free_quadratic( &quadratic_RC );
+
+    if ( input->RDPictureDecision || input->MbInterlace == ADAPTIVE_CODING )
+    {
+      rc_free_generic( &generic_RC_init );
+      rc_free_quadratic( &quadratic_RC_init );
+      rc_free_generic( &generic_RC_best );
+      rc_free_quadratic( &quadratic_RC_best );
+    }
+    break;
+  default:
+    break;
+  }
+}
+
+void rc_update_mb_stats( Macroblock *currMB, int *bitCount )
+{
+  // Rate control
+  img->NumberofMBHeaderBits= bitCount[BITS_MB_MODE] + bitCount[BITS_INTER_MB]
+                           + bitCount[BITS_CBP_MB ] + bitCount[BITS_DELTA_QUANT_MB];
+  img->NumberofMBTextureBits= bitCount[BITS_COEFF_Y_MB]+ bitCount[BITS_COEFF_UV_MB];
+
+  switch (input->RCUpdateMode)
+  {
+  case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
+    generic_RC->NumberofTextureBits +=img->NumberofMBTextureBits;
+    generic_RC->NumberofHeaderBits +=img->NumberofMBHeaderBits;
+    // basic unit layer rate control
+    if(img->BasicUnit < img->FrameSizeInMbs)
+    {
+      generic_RC->NumberofBasicUnitHeaderBits  += img->NumberofMBHeaderBits;
+      generic_RC->NumberofBasicUnitTextureBits += img->NumberofMBTextureBits;
+    }
+    break;
+  default:
+    break;
+  }
+}
+
+void rc_save_state( void )
+{
+  switch (input->RCUpdateMode)
+  {
+  case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
+    rc_copy_quadratic( quadratic_RC_best, quadratic_RC );
+    rc_copy_generic( generic_RC_best, generic_RC );
+    break;
+  default:
+    break;
+  }
+}
+
+void rc_restore_state( void )
+{
+  switch (input->RCUpdateMode)
+  {
+  case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
+    rc_copy_quadratic( quadratic_RC, quadratic_RC_best );
+    rc_copy_generic( generic_RC, generic_RC_best );
+    break;
+  default:
+    break;
+  }
 }

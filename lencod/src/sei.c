@@ -1692,12 +1692,12 @@ int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
     return 1;
   }
 
-  //read the tone mapping config file	
+  //read the tone mapping config file
   while (fscanf(fp, "%s", buf)!=EOF) 
   {
     if (strcmp(buf, "tone_map_id")==0) 
     {
-      fscanf(fp, " = %ud\n", &(pSeiToneMapping->tone_map_id));							
+      fscanf(fp, " = %ud\n", &(pSeiToneMapping->tone_map_id));
     }
     else if (strcmp(buf, "tone_map_cancel_flag")==0) 
     {
@@ -1707,7 +1707,7 @@ int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
     else if (strcmp(buf, "tone_map_repetition_period")==0) 
     {
       fscanf(fp, " = %ud\n", &(pSeiToneMapping->tone_map_repetition_period));
-    }				
+    }
     else if (strcmp(buf, "coded_data_bit_depth")==0) 
     {
       fscanf(fp, " = %ud\n", &tmp);
@@ -1730,7 +1730,7 @@ int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
     else if (strcmp(buf, "max_value")==0) 
     {
       fscanf(fp, " = %d\n", &(pSeiToneMapping->max_value));
-    }		
+    }
     //(model_id == 1)
     else if (strcmp(buf, "sigmoid_midpoint")==0) 
     {
@@ -1739,7 +1739,7 @@ int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
     else if (strcmp(buf, "sigmoid_width")==0) 
     {
       fscanf(fp, " = %d\n", &(pSeiToneMapping->sigmoid_width));
-    }		 
+    }
     // (model_id == 2) 
     else if (strcmp(buf, "start_of_coded_interval")==0) 
     {
@@ -1747,7 +1747,7 @@ int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
       fscanf(fp, " = ");
       for (i=0; i < max_output_num; i++)
         fscanf(fp, "%d\n", &(pSeiToneMapping->start_of_coded_interval[i]));
-    }		 
+    }
     //(model_id == 3)
     else if (strcmp(buf, "num_pivots")==0) 
     {
@@ -1765,7 +1765,7 @@ int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
       fscanf(fp, " = ");
       for (i=0; i < pSeiToneMapping->num_pivots; i++)
         fscanf(fp, "%d\n", &(pSeiToneMapping->sei_pivot_value[i]));
-    }		
+    }
     else
     {
       // read till the line end 
@@ -1807,8 +1807,8 @@ void FinalizeToneMapping()
   Bitstream *bitstream = seiToneMapping.data;  
   int i;
 
-  ue_v("SEI: tone_map_id"						, seiToneMapping.tone_map_id,				bitstream);
-  u_1("SEI: tone_map_cancel_flag"				, seiToneMapping.tone_map_cancel_flag,		bitstream);
+  ue_v("SEI: tone_map_id"               , seiToneMapping.tone_map_id,             bitstream);
+  u_1("SEI: tone_map_cancel_flag"       , seiToneMapping.tone_map_cancel_flag,    bitstream);
 
 #ifdef PRINT_TONE_MAPPING
   printf("frame %d: Tone-mapping SEI message\n", img->frame_num);
@@ -1830,16 +1830,16 @@ void FinalizeToneMapping()
 #endif
     if (seiToneMapping.model_id == 0) 
     { // linear mapping
-      u_v (32,"SEI: min_value", seiToneMapping.min_value,	bitstream);
-      u_v (32,"SEI: min_value", seiToneMapping.max_value,	bitstream);
+      u_v (32,"SEI: min_value", seiToneMapping.min_value, bitstream);
+      u_v (32,"SEI: min_value", seiToneMapping.max_value, bitstream);
 #ifdef PRINT_TONE_MAPPING
       printf("min_value = %d, max_value = %d\n", seiToneMapping.min_value, seiToneMapping.max_value);
 #endif
     }
     else if (seiToneMapping.model_id == 1) 
     { // sigmoidal mapping
-      u_v (32,"SEI: sigmoid_midpoint", seiToneMapping.sigmoid_midpoint,			bitstream);
-      u_v (32,"SEI: sigmoid_width", seiToneMapping.sigmoid_width,					bitstream);
+      u_v (32,"SEI: sigmoid_midpoint", seiToneMapping.sigmoid_midpoint,   bitstream);
+      u_v (32,"SEI: sigmoid_width", seiToneMapping.sigmoid_width,         bitstream);
 #ifdef PRINT_TONE_MAPPING
       printf("sigmoid_midpoint = %d, sigmoid_width = %d\n", seiToneMapping.sigmoid_midpoint, seiToneMapping.sigmoid_width);
 #endif
@@ -1849,10 +1849,10 @@ void FinalizeToneMapping()
       int bit_depth_val = 1<<seiToneMapping.sei_bit_depth;
       for (i=0; i<bit_depth_val; i++) 
       {
-        u_v((((seiToneMapping.coded_data_bit_depth+7)>>3)<<3), "SEI: start_of_coded_interval", seiToneMapping.start_of_coded_interval[i],	bitstream);
+        u_v((((seiToneMapping.coded_data_bit_depth+7)>>3)<<3), "SEI: start_of_coded_interval", seiToneMapping.start_of_coded_interval[i], bitstream);
 #ifdef PRINT_TONE_MAPPING
         //printf("start_of_coded_interval[%d] = %d\n", i, seiToneMapping.start_of_coded_interval[i]);
-#endif			
+#endif
       }
     }
     else if (seiToneMapping.model_id == 3) 
@@ -1863,8 +1863,8 @@ void FinalizeToneMapping()
 #endif
       for (i=0; i < seiToneMapping.num_pivots; i++) 
       {
-        u_v( (((seiToneMapping.coded_data_bit_depth+7)>>3)<<3), "SEI: coded_pivot_value",	seiToneMapping.coded_pivot_value[i],	bitstream);
-        u_v( (((seiToneMapping.sei_bit_depth+7)>>3)<<3), "SEI: sei_pivot_value",			seiToneMapping.sei_pivot_value[i],		bitstream);
+        u_v( (((seiToneMapping.coded_data_bit_depth+7)>>3)<<3), "SEI: coded_pivot_value",  seiToneMapping.coded_pivot_value[i], bitstream);
+        u_v( (((seiToneMapping.sei_bit_depth+7)>>3)<<3), "SEI: sei_pivot_value",           seiToneMapping.sei_pivot_value[i],   bitstream);
 #ifdef PRINT_TONE_MAPPING
         printf("coded_pivot_value[%d] = %d, sei_pivot_value[%d] = %d\n", i, seiToneMapping.coded_pivot_value[i], i, seiToneMapping.sei_pivot_value[i]);
 #endif
@@ -1914,7 +1914,7 @@ void CloseToneMapping()
     free(seiToneMapping.data->streamBuffer);
     free(seiToneMapping.data);
   }
-  seiToneMapping.data = NULL;	
+  seiToneMapping.data = NULL;
   seiHasTone_mapping = FALSE;
 }
 
@@ -1962,7 +1962,7 @@ void UpdatePostFilterHints()
   for (color_component = 0; color_component < 3; color_component ++)
     for (cy = 0; cy < seiPostFilterHints.filter_hint_size_y; cy ++)
       for (cx = 0; cx < seiPostFilterHints.filter_hint_size_x; cx ++)
-		seiPostFilterHints.filter_hint[color_component][cy][cx] = 1; //define filter_hint here
+        seiPostFilterHints.filter_hint[color_component][cy][cx] = 1; //define filter_hint here
 
   seiPostFilterHints.additional_extension_flag = 0;
 }
@@ -1979,7 +1979,7 @@ void FinalizePostFilterHints()
   for (color_component = 0; color_component < 3; color_component ++)
     for (cy = 0; cy < seiPostFilterHints.filter_hint_size_y; cy ++)
       for (cx = 0; cx < seiPostFilterHints.filter_hint_size_x; cx ++)
-		se_v("SEI: post_filter_hints", seiPostFilterHints.filter_hint[color_component][cy][cx], bitstream);
+        se_v("SEI: post_filter_hints", seiPostFilterHints.filter_hint[color_component][cy][cx], bitstream);
 
   u_1 ("SEI: post_filter_additional_extension_flag", seiPostFilterHints.additional_extension_flag, bitstream);
 
@@ -1991,7 +1991,7 @@ void FinalizePostFilterHints()
   for (color_component = 0; color_component < 3; color_component ++)
     for (cy = 0; cy < seiPostFilterHints.filter_hint_size_y; cy ++)
       for (cx = 0; cx < seiPostFilterHints.filter_hint_size_x; cx ++)
-		printf(" post_filter_hint[%d][%d][%d] %d \n", color_component, cy, cx, filter_hint[color_component][cy][cx]);
+        printf(" post_filter_hint[%d][%d][%d] %d \n", color_component, cy, cx, filter_hint[color_component][cy][cx]);
 
   printf(" additional_extension_flag %d \n", seiPostFilterHints.additional_extension_flag);
 

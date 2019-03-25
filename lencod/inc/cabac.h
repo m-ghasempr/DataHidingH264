@@ -44,7 +44,7 @@ void writeIntraPredMode_CABAC(SyntaxElement *se, DataPartition *dp);
 void writeB8_typeInfo_CABAC(SyntaxElement *se, DataPartition *dp);
 void writeRefFrame_CABAC(SyntaxElement *se, DataPartition *dp);
 void writeMVD_CABAC(SyntaxElement *se, DataPartition *dp);
-void writeCBP_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeCBP_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp);
 void writeDquant_CABAC(SyntaxElement *se, DataPartition *dp);
 void writeRunLevel_CABAC(SyntaxElement *se, DataPartition *dp);
 void writeCIPredMode_CABAC(SyntaxElement *se, DataPartition *dp);
@@ -53,7 +53,7 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, DataPartition *dp);
 void writeFieldModeInfo_CABAC(SyntaxElement *se, DataPartition *dp); //GB
 void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter, EncodingEnvironmentPtr eep_dp);
 void cabac_new_slice(void);
-void CheckAvailabilityOfNeighborsCABAC(void);
+void CheckAvailabilityOfNeighborsCABAC(Macroblock* currMB);
 
 void writeMB_transform_size_CABAC(SyntaxElement *se, DataPartition *dp);
 

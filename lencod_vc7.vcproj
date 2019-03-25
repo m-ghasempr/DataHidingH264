@@ -209,6 +209,9 @@
 				RelativePath=".\lencod\src\mbuffer.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\md_distortion.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\md_high.c">
 			</File>
 			<File
@@ -300,6 +303,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\symbol.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\transform.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\transform8x8.c">
@@ -454,6 +460,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\symbol.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\transform.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\transform8x8.h">

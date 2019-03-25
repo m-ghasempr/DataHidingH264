@@ -25,6 +25,8 @@
       RealNetworks, Inc., USA
       Thomson, Inc., USA
       Dolby Laboratories, Inc., USA
+      Sejong Univ., Digital Media System Lab., Korea
+
    \endverbatim
    \par Full Contact Information
    \verbatim
@@ -160,9 +162,15 @@
 
       Jill Boyce                      <jill.boyce@thomson.net>
       Cristina Gomila                 <cristina.gomila@thomson.net>
-      Thomson
+      Thomson Inc
       2 Independence Way
       Princeton, NJ 08540
+
+      Haoping Yu
+      Corporate Research
+      Thomson Inc
+      101 West 103rd Street
+      Indianapolis, IN 46290  
 
       Siwei Ma                        <swma@jdl.ac.cn>
       Institute of Computing Technology
@@ -194,6 +202,12 @@
       Information Technology R&D Center, 
       Mitsubishi Electric Corporation
       5-1-1, Ofuna, Kamakura, Japan
+
+      Yung-Lyul Lee                   <yllee@sejong.ac.kr>
+      Ki-Hun Han                      <khhan@dms.sejong.ac.kr>
+      Department of Computer Engineering, 
+      Sejong University
+      98 Kunja-Dong, Kwangjin-Gu, Seoul 143-747, Korea
 
    \endverbatim
  */

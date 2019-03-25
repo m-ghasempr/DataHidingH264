@@ -299,7 +299,10 @@ void se_linfo(int se, int dummy, int *len,int *info)
  */
 void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
 {
-  ue_linfo(NCBP[img->ChromaArrayType ? 1 : 0][cbp][0], dummy, len, info);
+  if ((img->yuv_format==0)||(img->yuv_format==3))
+    ue_linfo(NCBP[0][cbp][0], dummy, len, info);
+  else
+    ue_linfo(NCBP[1][cbp][0], dummy, len, info);
 }
 
 
@@ -313,7 +316,10 @@ void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
  */
 void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
 {
-  ue_linfo(NCBP[img->ChromaArrayType ? 1 : 0][cbp][1], dummy, len, info);
+  if ((img->yuv_format==0)||(img->yuv_format==3))
+    ue_linfo(NCBP[0][cbp][1], dummy, len, info);
+  else
+    ue_linfo(NCBP[1][cbp][1], dummy, len, info);
 }
 
 
@@ -497,9 +503,8 @@ void writeSE_SVLC(SyntaxElement *se, DataPartition *dp)
 *    generates UVLC code and passes the codeword to the buffer
 ************************************************************************
 */
-void writeCBP_VLC(SyntaxElement *se, DataPartition *dp)
+void writeCBP_VLC(Macroblock* currMB, SyntaxElement *se, DataPartition *dp)
 {
-  Macroblock*     currMB    = &img->mb_data[img->current_mb_nr];
   if (IS_OLDINTRA (currMB) || currMB->mb_type == SI4MB ||  currMB->mb_type == I8MB)
   {
     cbp_linfo_intra (se->value1,se->value2,&(se->len),&(se->inf));
@@ -591,10 +596,10 @@ int writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffer 
  */
 void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
 {
-
-  int i;
   unsigned int mask = 1 << (se->len - 1);
-  assert ((se->len-1) < 32);
+  int i;  
+  //byte *streamBuffer = &currStream->streamBuffer[currStream->byte_pos];
+  //assert ((se->len-1) < 32);
 
   // Add the new bits to the bitstream.
   // Write out a byte if it is full
@@ -605,14 +610,15 @@ void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
     if (se->bitpattern & mask)
       currStream->byte_buf |= 1;
 
-    currStream->bits_to_go--;
     mask >>= 1;
     
-    if (currStream->bits_to_go==0)
+    if ((--currStream->bits_to_go) == 0)
     {
-      currStream->bits_to_go = 8;
-      currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
-      currStream->byte_buf = 0;
+      currStream->bits_to_go = 8;      
+      currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
+      //currStream->byte_pos++;
+      //*(streamBuffer++) = currStream->byte_buf;
+      currStream->byte_buf = 0;      
     }
   }
 }
@@ -701,12 +707,12 @@ void writeSE_Dummy(SyntaxElement *se, DataPartition *dp )
 *  Tian Dong
 ************************************************************************
 */
-void writeSE_Fix(SyntaxElement *se, DataPartition *dp )
+void writeSE_Fix(SyntaxElement *se, Bitstream *bitstream )
 {
-  writeUVLC2buffer(se, dp->bitstream );
+  writeUVLC2buffer(se, bitstream);
 
 #if TRACE
-  if(dp->bitstream->trace_enabled)
+  if(bitstream->trace_enabled)
     trace2out (se);
 #endif
 }
@@ -1256,35 +1262,33 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *dp, int prof
  ************************************************************************
  */
 int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *dp, int profile_idc)
-{
-  int addbit, offset;
+{  
   int iCodeword;
   int iLength;
 
   int level = se->value1;
-
-  int levabs = iabs(level);
   int sign = (level < 0 ? 1 : 0);
+  int levabs = iabs(level) - 1;  
 
-  int shift = vlc - 1;
-  int escape = (15<<shift)+1;
-
-  int numPrefix = (levabs-1)>>shift;
-
-  int sufmask = ~((0xffffffff)<<shift);
-  int suffix = (levabs-1)&sufmask;
+  int shift = vlc - 1;        
+  int escape = (15<<shift);
 
   if (levabs < escape)
   {
+    int sufmask = ~((0xffffffff)<<shift);
+    int suffix = (levabs)&sufmask;
+    int numPrefix = (levabs)>>shift;
+
     iLength = numPrefix + vlc + 1;
     iCodeword = (1<<(shift+1))|(suffix<<1)|sign;
   }
   else
   {
+    int addbit, offset;
     int levabsesc = levabs - escape;
+    int numPrefix = 15;
 
-    iLength = 28;
-    numPrefix = 15;
+    iLength = 28;    
 
     if ((levabsesc) > 2048)
     {

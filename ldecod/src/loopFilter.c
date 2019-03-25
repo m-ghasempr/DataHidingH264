@@ -70,15 +70,16 @@ static const int pelnum_cr[2][4] =  {{0,8,16,16}, {0,8, 8,16}};  //[dir:0=vert, 
 void (*GetStrength)(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int edge, int mvlimit,StorablePicture *p);
 void GetStrengthNormal(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int edge, int mvlimit,StorablePicture *p);
 void GetStrengthMBAff(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int edge, int mvlimit,StorablePicture *p);
-void (*EdgeLoopLuma)(imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset, int dir, int edge, int width, StorablePicture *p);
-void EdgeLoopLumaNormal(imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset, int dir, int edge, int width, StorablePicture *p);
-void EdgeLoopLumaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset, int dir, int edge, int width, StorablePicture *p);
+void (*EdgeLoopLuma)(ColorPlane pl, imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset, int dir, int edge, int width, StorablePicture *p);
+void EdgeLoopLumaNormal(ColorPlane pl, imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset, int dir, int edge, int width, StorablePicture *p);
+void EdgeLoopLumaMBAff(ColorPlane pl, imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset, int dir, int edge, int width, StorablePicture *p);
 void (*EdgeLoopChroma)(imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset, int dir, int edge, int width, int uv, StorablePicture *p);
 void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset, int dir, int edge, int width, int uv, StorablePicture *p);
 void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset, int dir, int edge, int width, int uv, StorablePicture *p);
 void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr);
 int compute_deblock_strength(char **list0_refIdxArr, char **list1_refIdxArr, int64 **list0_refPicIdArr, int64 **list1_refPicIdArr, 
                              short  ***list0_mv, short  ***list1_mv, int blk_y, int blk_x, int blk_y2, int blk_x2, int mvlimit);
+
 /*!
  *****************************************************************************************
  * \brief
@@ -122,7 +123,7 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
   int           dir, edge;
   byte          Strength[16];
   int           mb_x, mb_y;
-
+  
   int           filterNon8x8LumaEdgesFlag[4] = {1,1,1,1};
   int           filterLeftMbEdgeFlag;
   int           filterTopMbEdgeFlag;
@@ -132,36 +133,37 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
   Macroblock    *MbQ;
   imgpel **imgY   = p->imgY;
   imgpel ***imgUV = p->imgUV;
-
+  
   int           edge_cr;
-
+  
   img->DeblockCall = 1;
   get_mb_pos (MbQAddr, &mb_x, &mb_y, IS_LUMA);
-
+  
   filterLeftMbEdgeFlag = (mb_x != 0);
   filterTopMbEdgeFlag  = (mb_y != 0);
-
+  
   MbQ = &(img->mb_data[MbQAddr]) ; // current Mb
-
+  
   if (MbQ->mb_type == I8MB)
     assert(MbQ->luma_transform_size_8x8_flag);
-
+  
   filterNon8x8LumaEdgesFlag[1] =
-  filterNon8x8LumaEdgesFlag[3] = !(MbQ->luma_transform_size_8x8_flag);
-
+    filterNon8x8LumaEdgesFlag[3] = !(MbQ->luma_transform_size_8x8_flag);
+  
   if (p->MbaffFrameFlag && mb_y == MB_BLOCK_SIZE && MbQ->mb_field)
     filterTopMbEdgeFlag = 0;
-
+  
   fieldModeMbFlag = (p->structure!=FRAME) || (p->MbaffFrameFlag && MbQ->mb_field);
   if (fieldModeMbFlag)
     mvlimit = 2;
-
+  
   // return, if filter is disabled
-  if (MbQ->LFDisableIdc==1) {
+  if (MbQ->LFDisableIdc==1) 
+  {
     img->DeblockCall = 0;
     return;
   }
-
+  
   if (MbQ->LFDisableIdc==2)
   {
     // don't filter at slice boundaries
@@ -170,7 +172,7 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
     filterTopMbEdgeFlag  = (p->MbaffFrameFlag && !MbQ->mb_field && (MbQAddr & 0x01)) ? 1 : MbQ->mbAvailB;
   }
   img->current_mb_nr = MbQAddr;
-  CheckAvailabilityOfNeighbors();
+  CheckAvailabilityOfNeighbors(&img->mb_data[MbQAddr]);
 
   for( dir = 0 ; dir < 2 ; dir++ )                                                      // filter first vertical edges, followed by horizontal 
   {
@@ -191,17 +193,23 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
         if( StrengthSum )                      // only if one of the 16 Strength bytes is != 0
         {
           if (filterNon8x8LumaEdgesFlag[edge])
-            EdgeLoopLuma( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge << 2, p->size_x, p) ;
-          if( !IS_INDEPENDENT(img) )
           {
+            EdgeLoopLuma(PLANE_Y, imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge << 2, p->size_x, p) ;
+            if( active_sps->chroma_format_idc==YUV444 && !IS_INDEPENDENT(img) )
+            {
+              EdgeLoopLuma(PLANE_U, imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge << 2, p->size_x, p) ;
+              EdgeLoopLuma(PLANE_V, imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge << 2, p->size_x, p) ;
+            }
+          }
+          if (active_sps->chroma_format_idc==YUV420 || active_sps->chroma_format_idc==YUV422)
             if( (imgUV != NULL) && (edge_cr >= 0))
             {
               EdgeLoopChroma( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge_cr, p->size_x_cr, 0, p) ;
               EdgeLoopChroma( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge_cr, p->size_x_cr, 1, p) ;
+              
             }
-          }
         }
-
+        
         if (dir && !edge && !MbQ->mb_field && mixedModeEdgeFlag) {
           // this is the extra horizontal edge between a frame macroblock pair and a field above it
           img->DeblockCall = 2;
@@ -209,22 +217,27 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
           //if( *((int*)Strength) )                           // only if one of the 4 Strength bytes is != 0
           {
             if (filterNon8x8LumaEdgesFlag[edge])
-              EdgeLoopLuma( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 16, p->size_x, p) ;
-            if( !IS_INDEPENDENT(img) )
             {
+              EdgeLoopLuma(PLANE_Y, imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 16, p->size_x, p) ;
+              if( active_sps->chroma_format_idc==YUV444 && !IS_INDEPENDENT(img) )
+              {
+                EdgeLoopLuma(PLANE_U, imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge << 2, p->size_x, p) ;
+                EdgeLoopLuma(PLANE_V, imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge << 2, p->size_x, p) ;
+              }
+            }
+            if (active_sps->chroma_format_idc==YUV420 || active_sps->chroma_format_idc==YUV422) 
               if( (imgUV != NULL) && (edge_cr >= 0))
               {
                 EdgeLoopChroma( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, MB_BLOCK_SIZE, p->size_x_cr, 0, p) ;
                 EdgeLoopChroma( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, MB_BLOCK_SIZE, p->size_x_cr, 1, p) ;
               }
-            }
           }
           img->DeblockCall = 1;
         }
       }
     }//end edge
   }//end loop dir
-
+  
   img->DeblockCall = 0;
 }
 
@@ -239,21 +252,14 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
 
 void GetStrengthNormal(byte Strength[MB_BLOCK_SIZE], struct img_par *img, int MbQAddr, int dir, int edge, int mvlimit, StorablePicture *p)
 {
-  int    blkP, blkQ, idx;
-  int    blk_x, blk_x2, blk_y, blk_y2 ;
-  short  ***list0_mv = p->mv[LIST_0];
-  short  ***list1_mv = p->mv[LIST_1];
-  char   **list0_refIdxArr = p->ref_idx[LIST_0];
-  char   **list1_refIdxArr = p->ref_idx[LIST_1];
-  int64  **list0_refPicIdArr = p->ref_pic_id[LIST_0];
-  int64  **list1_refPicIdArr = p->ref_pic_id[LIST_1];
-  int64    ref_p0,ref_p1,ref_q0,ref_q1;
-  int      xQ, yQ;
-  int      mb_x, mb_y;
-  Macroblock *MbQ = &(img->mb_data[MbQAddr]);
-  Macroblock *MbP;
-  PixelPos pixP, pixMB;
-  byte StrValue;
+  static int64  ref_p0,ref_p1,ref_q0,ref_q1;
+  static int    blkP, blkQ, idx;
+  static int    blk_x, blk_x2, blk_y, blk_y2 ;  
+  static int    mb_x, mb_y;
+  static Macroblock *MbP, *MbQ;
+  
+  static PixelPos pixP, pixMB;
+  static byte StrValue;
 
   if ((p->slice_type==SP_SLICE)||(p->slice_type==SI_SLICE) )
   { 
@@ -262,24 +268,31 @@ void GetStrengthNormal(byte Strength[MB_BLOCK_SIZE], struct img_par *img, int Mb
     memset(&Strength[0], (byte) StrValue, MB_BLOCK_SIZE * sizeof(byte));
   }
   else
-  {
-    get_mb_block_pos (MbQAddr, &mb_x, &mb_y);
-    mb_x <<= 2;
-    mb_y <<= 2;
-    
-    xQ = dir ? 0 : edge - 1;
-    yQ = dir ? (edge < 16 ? edge - 1: 0) : 0;
+  {    
+    int xQ = dir ? 0 : edge - 1;
+    int yQ = dir ? (edge < 16 ? edge - 1: 0) : 0;
 
-    getNeighbour(MbQAddr, xQ, yQ, IS_LUMA, &pixMB);
+    MbQ = &(img->mb_data[MbQAddr]);
+    getNeighbour(MbQ, xQ, yQ, IS_LUMA, &pixMB);
     pixP = pixMB;
     MbP = &(img->mb_data[pixP.mb_addr]);
-    if (dir)
-      yQ ++;
-    else
-      xQ ++;
 
     if (!ANY_INTRA)
     {
+      int64  **list0_refPicIdArr = p->ref_pic_id[LIST_0];
+      int64  **list1_refPicIdArr = p->ref_pic_id[LIST_1];
+      short  ***list0_mv = p->mv[LIST_0];
+      short  ***list1_mv = p->mv[LIST_1];
+      char   **list0_refIdxArr = p->ref_idx[LIST_0];
+      char   **list1_refIdxArr = p->ref_idx[LIST_1];
+
+      get_mb_block_pos (MbQAddr, &mb_x, &mb_y);
+      mb_x <<= 2;
+      mb_y <<= 2;
+
+      yQ += dir;
+      xQ += (1 - dir);
+
       for( idx = 0 ; idx < MB_BLOCK_SIZE ; idx += BLOCK_SIZE )
       {
         if (dir)
@@ -294,6 +307,7 @@ void GetStrengthNormal(byte Strength[MB_BLOCK_SIZE], struct img_par *img, int Mb
           pixP.y = pixMB.y + idx;
           pixP.pos_y = pixMB.pos_y + idx;
         }
+
         blkQ = ((yQ >> 2) << 2) + (xQ >> 2);
         blkP = ((pixP.y >> 2) << 2) + (pixP.x >> 2);
 
@@ -309,55 +323,66 @@ void GetStrengthNormal(byte Strength[MB_BLOCK_SIZE], struct img_par *img, int Mb
           blk_y2 = pixP.pos_y >> 2;
           blk_x2 = pixP.pos_x >> 2;
 
+          ref_p0 = list0_refIdxArr[blk_y ][blk_x ]< 0 ? INT64_MIN : list0_refPicIdArr[blk_y ][blk_x ];
+          ref_q0 = list0_refIdxArr[blk_y2][blk_x2]< 0 ? INT64_MIN : list0_refPicIdArr[blk_y2][blk_x2];
+          ref_p1 = list1_refIdxArr[blk_y ][blk_x ]< 0 ? INT64_MIN : list1_refPicIdArr[blk_y ][blk_x ];
+          ref_q1 = list1_refIdxArr[blk_y2][blk_x2]< 0 ? INT64_MIN : list1_refPicIdArr[blk_y2][blk_x2];
+          if ( ((ref_p0==ref_q0) && (ref_p1==ref_q1)) || ((ref_p0==ref_q1) && (ref_p1==ref_q0)))
           {
-            ref_p0 = list0_refIdxArr[blk_y] [blk_x] <0 ? INT64_MIN : list0_refPicIdArr[blk_y] [blk_x];
-            ref_q0 = list0_refIdxArr[blk_y2][blk_x2]<0 ? INT64_MIN : list0_refPicIdArr[blk_y2][blk_x2];
-            ref_p1 = list1_refIdxArr[blk_y] [blk_x] <0 ? INT64_MIN : list1_refPicIdArr[blk_y] [blk_x];
-            ref_q1 = list1_refIdxArr[blk_y2][blk_x2]<0 ? INT64_MIN : list1_refPicIdArr[blk_y2][blk_x2];
-            if ( ((ref_p0==ref_q0) && (ref_p1==ref_q1)) ||
-              ((ref_p0==ref_q1) && (ref_p1==ref_q0)))
+            // L0 and L1 reference pictures of p0 are different; q0 as well
+            if (ref_p0 != ref_p1)
             {
-              // L0 and L1 reference pictures of p0 are different; q0 as well
-              if (ref_p0 != ref_p1)
+              // compare MV for the same reference picture
+              if (ref_p0 == ref_q0)
               {
-                // compare MV for the same reference picture
-                if (ref_p0 == ref_q0)
+                if (ref_p0 == INT64_MIN)
                 {
                   StrValue =  (byte) (
-                    (iabs( list0_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) |
-                    (iabs( list0_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit) |
-                    (iabs( list1_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) |
-                    (iabs( list1_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit));                  
+                    (iabs( list1_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) ||
+                    (iabs( list1_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit));
+                }
+                else if (ref_p1 == INT64_MIN)
+                {
+                  StrValue =  (byte) (
+                    (iabs( list0_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) ||
+                    (iabs( list0_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit));
                 }
                 else
                 {
                   StrValue =  (byte) (
-                    (iabs( list0_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) |
-                    (iabs( list0_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit) |
-                    (iabs( list1_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) |
-                    (iabs( list1_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit));
+                    (iabs( list0_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) ||
+                    (iabs( list0_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit) ||
+                    (iabs( list1_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) ||
+                    (iabs( list1_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit));
                 }
               }
               else
-              { // L0 and L1 reference pictures of p0 are the same; q0 as well
-
-                StrValue = (byte) (
-                  ((iabs( list0_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) |
-                  (iabs( list0_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit ) |
-                  (iabs( list1_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) |
-                  (iabs( list1_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit))
-                  &&
-                  ((iabs( list0_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) |
-                  (iabs( list0_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit) |
-                  (iabs( list1_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) |
-                  (iabs( list1_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit)));
+              {
+                StrValue =  (byte) ( 
+                  (iabs( list0_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) ||
+                  (iabs( list0_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit) ||
+                  (iabs( list1_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) ||
+                  (iabs( list1_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit));
               }
             }
             else
-            {
-              StrValue = 1;
+            { // L0 and L1 reference pictures of p0 are the same; q0 as well
+              StrValue = (byte) (
+                ((iabs( list0_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) ||
+                (iabs( list0_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit ) ||
+                (iabs( list1_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) ||
+                (iabs( list1_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit))
+                &&
+                ((iabs( list0_mv[blk_y][blk_x][0] - list1_mv[blk_y2][blk_x2][0]) >= 4) ||
+                (iabs( list0_mv[blk_y][blk_x][1] - list1_mv[blk_y2][blk_x2][1]) >= mvlimit) ||
+                (iabs( list1_mv[blk_y][blk_x][0] - list0_mv[blk_y2][blk_x2][0]) >= 4) ||
+                (iabs( list1_mv[blk_y][blk_x][1] - list0_mv[blk_y2][blk_x2][1]) >= mvlimit)));
             }
-          }        
+          }
+          else
+          {
+            StrValue = 1;
+          }                  
         }
         memset(&Strength[idx], (byte) StrValue, BLOCK_SIZE * sizeof(byte));
       }
@@ -399,7 +424,7 @@ void GetStrengthMBAff(byte Strength[16], struct img_par *img, int MbQAddr, int d
   {
     xQ = dir ? idx : edge;
     yQ = dir ? (edge < MB_BLOCK_SIZE ? edge : 1) : idx;
-    getNeighbour(MbQAddr, xQ - dir_m1, yQ - dir, IS_LUMA, &pixP);
+    getNeighbour(MbQ, xQ - dir_m1, yQ - dir, IS_LUMA, &pixP);
     blkQ = ((yQ >> 2) << 2) + (xQ >> 2);
     blkP = ((pixP.y >> 2)<<2) + (pixP.x >> 2);
 
@@ -503,47 +528,42 @@ void GetStrengthMBAff(byte Strength[16], struct img_par *img, int MbQAddr, int d
  *    Filters 16 pel block edge of Frame or Field coded MBs 
  *****************************************************************************************
  */
-void EdgeLoopLumaNormal(imgpel** Img, byte Strength[16], struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset,
+void EdgeLoopLumaNormal(ColorPlane pl, imgpel** Img, byte Strength[16], struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset,
               int dir, int edge, int width, StorablePicture *p)
 {
-  int      pel, ap = 0, aq = 0, Strng ;
-  int      incQ    = dir ? width : 1;
-  int      incP    = dir ? width : 1;
-
-  int      C0, c0, Delta, dif, AbsDelta ;
-  imgpel   L2 = 0, L1, L0, R0, R1, R2 = 0, L3, R3;
-  int      RL0;
-  int      Alpha = 0, Beta = 0 ;
-  const byte* ClipTab = NULL;
-  int      small_gap;
-  int      indexA, indexB;
-  imgpel   *SrcPtrP, *SrcPtrQ;
-  int      QP;
-  int      xQ, yQ;
+  static imgpel   *SrcPtrP, *SrcPtrQ;
+  static imgpel   L2, L1, L0, R0, R1, R2, L3, R3;  
+  static PixelPos pixP, pixQ, pixMB1, pixMB2;
+  static int      C0, c0, dif, RL0;
+  static int      pel, ap, aq, Strng ;
+  static int      Alpha, Beta, small_gap;
+  static int      indexA, indexB;
+  static int      QP;
+  static const byte* ClipTab;
+  int      xQ = dir ? 0 : edge - 1;
+  int      yQ = dir ? (edge < MB_BLOCK_SIZE ? edge - 1: 0) : 0; 
   Macroblock *MbQ = &(img->mb_data[MbQAddr]);
-  Macroblock *MbP;
-  PixelPos pixP, pixQ, pixMB1, pixMB2;
-  int      bitdepth_scale = img->bitdepth_scale[IS_LUMA];
 
-  xQ = dir ? 0 : edge - 1;
-  yQ = dir ? (edge < MB_BLOCK_SIZE ? edge - 1: 0) : 0;
 
-  getNeighbour(MbQAddr, xQ, yQ, IS_LUMA, &pixMB1);
+  getNeighbour(MbQ, xQ, yQ, IS_LUMA, &pixMB1); 
 
   if (pixMB1.available || (MbQ->LFDisableIdc== 0))
-  {
-    pixP = pixMB1;
-    MbP = &(img->mb_data[pixP.mb_addr]);
-    if (dir)
-      yQ ++;
-    else
-      xQ ++;
+  {    
+    Macroblock *MbP = &(img->mb_data[pixMB1.mb_addr]);
+    int      bitdepth_scale = pl? img->bitdepth_scale[IS_CHROMA] : img->bitdepth_scale[IS_LUMA];
+    int      max_imgpel_value = img->max_imgpel_value_comp[pl];
+    int      incQ = dir ? width : 1;
+    int      incP = incQ;
 
-    getNeighbour(MbQAddr, xQ, yQ, IS_LUMA, &pixMB2);
+    pixP = pixMB1;
+
+    yQ += dir;
+    xQ += (1 - dir);
+    getNeighbour(MbQ, xQ, yQ, IS_LUMA, &pixMB2);
     pixQ = pixMB2;
 
     // Average QP of the two blocks
-    QP = (MbP->qp + MbQ->qp + 1) >> 1;
+    QP = pl? ((MbP->qpc[pl-1] + MbQ->qpc[pl-1] + 1) >> 1) : (MbP->qp + MbQ->qp + 1) >> 1;
 
     indexA = iClip3(0, MAX_QP, QP + AlphaC0Offset);
     indexB = iClip3(0, MAX_QP, QP + BetaOffset);
@@ -554,92 +574,92 @@ void EdgeLoopLumaNormal(imgpel** Img, byte Strength[16], struct img_par *img, in
 
     for( pel = 0 ; pel < MB_BLOCK_SIZE ; pel++ )
     {
-      if (dir)
-      {
-        xQ         = pel;
-        pixP.x     = pixMB1.x + pel;
-        pixP.pos_x = pixMB1.pos_x + pel;
-        pixQ.x     = pixMB2.x + pel;
-        pixQ.pos_x = pixMB2.pos_x + pel;
-      }
-      else
-      {
-        yQ         = pel;
-        pixP.y     = pixMB1.y + pel;
-        pixP.pos_y = pixMB1.pos_y + pel;
-        pixQ.y     = pixMB2.y + pel;
-        pixQ.pos_y = pixMB2.pos_y + pel;
-      }
-
       if( (Strng = Strength[pel]) != 0)
-      {        
+      {
+        if (dir)
+        {
+          xQ         = pel;
+          pixP.x     = pixMB1.x + pel;
+          pixP.pos_x = pixMB1.pos_x + pel;
+          pixQ.x     = pixMB2.x + pel;
+          pixQ.pos_x = pixMB2.pos_x + pel;
+        }
+        else
+        {
+          yQ         = pel;
+          pixP.y     = pixMB1.y + pel;
+          pixP.pos_y = pixMB1.pos_y + pel;
+          pixQ.y     = pixMB2.y + pel;
+          pixQ.pos_y = pixMB2.pos_y + pel;
+        }
+
         SrcPtrQ = &(Img[pixQ.pos_y][pixQ.pos_x]);
         SrcPtrP = &(Img[pixP.pos_y][pixP.pos_x]);
 
-        L3  = SrcPtrP[-incP*3];
-        L2  = SrcPtrP[-incP*2];
-        L1  = SrcPtrP[-incP];
-        L0  = SrcPtrP[0] ;
-        R0  = SrcPtrQ[0] ;      
-        R1  = SrcPtrQ[ incQ];      
-        R2  = SrcPtrQ[ incQ*2];
-        R3  = SrcPtrQ[ incQ*3];
+        L3 = SrcPtrP[-incP*3];
+        L2 = SrcPtrP[-incP*2];
+        L1 = SrcPtrP[-incP];
+        L0 = SrcPtrP[ 0];
+        R0 = SrcPtrQ[ 0];      
+        R1 = SrcPtrQ[ incQ];      
+        R2 = SrcPtrQ[ incQ*2];
+        R3 = SrcPtrQ[ incQ*3];               
 
-        AbsDelta  = iabs( Delta = (R0 - L0) );
-
-        if( AbsDelta < Alpha )
+        if( iabs( R0 - L0 ) < Alpha )
         {
-          if( ((iabs( R0 - R1) - Beta ) < 0)  && ((iabs(L0 - L1) - Beta )) < 0  )
+          if ((iabs( R0 - R1) < Beta)  && (iabs(L0 - L1)  < Beta))
           {
             if(Strng == 4 )    // INTRA strong filtering
             {
               RL0 = L0 + R0;
-              small_gap = (AbsDelta < ((Alpha >> 2) + 2));
-              aq  = ( iabs( R0 - R2) < Beta ) & small_gap;               
+              small_gap = (iabs( R0 - L0 ) < ((Alpha >> 2) + 2));
+              aq  = ( iabs( R0 - R2) < Beta ) & small_gap;
               ap  = ( iabs( L0 - L2) < Beta ) & small_gap;
 
               if (ap)
               {
-                SrcPtrP[-incP * 2] = (imgpel) ((((L3 + L2) <<1) + L2 + L1 + RL0 + 4) >> 3);
-                SrcPtrP[-incP    ] = (imgpel) (( L2 + L1 + L0 + R0 + 2) >> 2);
-                SrcPtrP[    0    ] = (imgpel) (( R1 + ((L1 + RL0) << 1) +  L2 + 4) >> 3);
+                SrcPtrP[-incP*2] = (imgpel) ((((L3 + L2) <<1) + L2 + L1 + RL0 + 4) >> 3);
+                SrcPtrP[-incP  ] = (imgpel)  (( L2 + L1 + L0 + R0 + 2) >> 2);
+                SrcPtrP[0      ] = (imgpel)  (( R1 + ((L1 + RL0) << 1) +  L2 + 4) >> 3);
               }
               else
               {
-                SrcPtrP[ -incP * 2 ] = L2;
-                SrcPtrP[ -incP     ] = L1;
-                SrcPtrP[ 0         ] = (imgpel) (((L1 << 1) + L0 + R1 + 2) >> 2) ;
+                SrcPtrP[-incP*2] = L2;
+                SrcPtrP[-incP  ] = L1;
+                SrcPtrP[0      ] = (imgpel) (((L1 << 1) + L0 + R1 + 2) >> 2) ;                
               }
 
               if (aq)
               {
-                SrcPtrQ[ 0        ] = (imgpel) (( L1 + ((R1 + RL0) << 1) +  R2 + 4) >> 3);
-                SrcPtrQ[ incQ     ] = (imgpel) (( R2 + R0 + R1 + L0 + 2) >> 2);
-                SrcPtrQ[ incQ * 2 ] = (imgpel) ((((R3 + R2) <<1) + R2 + R1 + RL0 + 4) >> 3);
+                SrcPtrQ[0       ] = (imgpel) (( L1 + ((R1 + RL0) << 1) +  R2 + 4) >> 3);
+                SrcPtrQ[incQ    ] = (imgpel) (( R2 + R0 + R1 + L0 + 2) >> 2);
+                SrcPtrQ[incQ * 2] = (imgpel) ((((R3 + R2) <<1) + R2 + R1 + RL0 + 4) >> 3);
               }
               else
               {
-                SrcPtrQ[ 0        ] = (imgpel) (((R1 << 1) + R0 + L1 + 2) >> 2);
-                SrcPtrQ[ incQ     ] = R1;
-                SrcPtrQ[ incQ * 2 ] = R2;
+                SrcPtrQ[0       ] = (imgpel) (((R1 << 1) + R0 + L1 + 2) >> 2);
+                SrcPtrQ[incQ    ] = R1;
+                SrcPtrQ[incQ * 2] = R2;
               }
             }
             else   // normal filtering
-            {
-              C0  = ClipTab[ Strng ] * bitdepth_scale;
+            {              
               RL0 = (L0 + R0 + 1) >> 1;
               aq  = (iabs(R0 - R2) < Beta);
               ap  = (iabs(L0 - L2) < Beta);
 
+              C0  = ClipTab[ Strng ] * bitdepth_scale;
               c0  = (C0 + ap + aq) ;
-              dif = iClip3( -c0, c0, ((Delta << 2) + (L1 - R1) + 4) >> 3 );
+              dif = iClip3( -c0, c0, (((R0 - L0) << 2) + (L1 - R1) + 4) >> 3 );
 
               if( ap )
                 SrcPtrP[-incP] += iClip3( -C0,  C0, (L2 + RL0 - (L1<<1)) >> 1 );
-              SrcPtrP[0]  = (imgpel) iClip3(0, img->max_imgpel_value, L0 + dif);
-              SrcPtrQ[0]  = (imgpel) iClip3(0, img->max_imgpel_value, R0 - dif);
+
+              SrcPtrP[0] = (imgpel) iClip3(0, max_imgpel_value, L0 + dif);
+              SrcPtrQ[0] = (imgpel) iClip3(0, max_imgpel_value, R0 - dif);
+
               if( aq  )
-                SrcPtrQ[ incQ] += iClip3( -C0,  C0, (R2 + RL0 - (R1<<1)) >> 1 );
+                SrcPtrQ[incQ] += iClip3( -C0,  C0, (R2 + RL0 - (R1<<1)) >> 1 );
             }            
           }
         }
@@ -654,19 +674,20 @@ void EdgeLoopLumaNormal(imgpel** Img, byte Strength[16], struct img_par *img, in
  *    Filters 16 pel block edge of Super MB Frame coded MBs
  *****************************************************************************************
  */
-void EdgeLoopLumaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset,
+void EdgeLoopLumaMBAff(ColorPlane pl, imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset,
               int dir, int edge, int width, StorablePicture *p)
 {
   int      pel, ap = 0, aq = 0, Strng ;
   int      incP, incQ;
-  int      C0, c0, Delta, dif, AbsDelta ;
+  int      C0, c0, dif;
   imgpel   L2 = 0, L1, L0, R0, R1, R2 = 0, L3, R3;
   int      RL0;
   int      Alpha = 0, Beta = 0 ;
   const byte* ClipTab = NULL;
   int      small_gap;
   int      indexA, indexB;
-  int      PelNum  = MB_BLOCK_SIZE;
+  int      PelNum = pl? pelnum_cr[dir][p->chroma_format_idc] : MB_BLOCK_SIZE;
+
   imgpel   *SrcPtrP, *SrcPtrQ;
   int      QP;
   int      xQ, yQ;
@@ -674,20 +695,21 @@ void EdgeLoopLumaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, int 
   Macroblock *MbP;
   PixelPos pixP, pixQ;
   int      dir_m1 = (1 - dir);
-  int      bitdepth_scale = img->bitdepth_scale[IS_LUMA];
+  int      bitdepth_scale = pl? img->bitdepth_scale[IS_CHROMA] : img->bitdepth_scale[IS_LUMA];
+  int      max_imgpel_value = img->max_imgpel_value_comp[pl];
 
   for( pel = 0 ; pel < PelNum ; pel++ )
   {
     xQ = dir ? pel : edge;
-    yQ = dir ? (edge < 16 ? edge : 1) : pel;    
-    getNeighbour(MbQAddr, xQ - (dir_m1), yQ - dir, IS_LUMA, &pixP);
-    
+    yQ = dir ? (edge < 16 ? edge : 1) : pel;
+    getNeighbour(MbQ, xQ - (dir_m1), yQ - dir, IS_LUMA, &pixP);     
+
     if (pixP.available || (MbQ->LFDisableIdc== 0))
     {
       if( (Strng = Strength[pel]) != 0)
       {
-        getNeighbour(MbQAddr, xQ, yQ, IS_LUMA, &pixQ);
-        
+        getNeighbour(MbQ, xQ, yQ, IS_LUMA, &pixQ);
+
         MbP = &(img->mb_data[pixP.mb_addr]);
         fieldModeFilteringFlag = (byte) (MbQ->mb_field || MbP->mb_field);
 
@@ -697,7 +719,7 @@ void EdgeLoopLumaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, int 
         SrcPtrP = &(Img[pixP.pos_y][pixP.pos_x]);
 
         // Average QP of the two blocks
-        QP = (MbP->qp + MbQ->qp + 1) >> 1;
+        QP = pl? ((MbP->qpc[pl-1] + MbQ->qpc[pl-1] + 1) >> 1) : (MbP->qp + MbQ->qp + 1) >> 1;
 
         indexA = iClip3(0, MAX_QP, QP + AlphaC0Offset);
         indexB = iClip3(0, MAX_QP, QP + BetaOffset);
@@ -715,16 +737,14 @@ void EdgeLoopLumaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, int 
         R2  = SrcPtrQ[ incQ*2];
         R3  = SrcPtrQ[ incQ*3];
 
-        AbsDelta  = iabs( Delta = (R0 - L0) );
-
-        if( AbsDelta < Alpha )
+        if( iabs( R0 - L0 ) < Alpha )
         {          
           if( ((iabs( R0 - R1) - Beta ) < 0)  && ((iabs(L0 - L1) - Beta )) < 0  )
           {
             if(Strng == 4 )    // INTRA strong filtering
             {
               RL0 = L0 + R0;
-              small_gap = (AbsDelta < ((Alpha >> 2) + 2));
+              small_gap = (iabs( R0 - L0 ) < ((Alpha >> 2) + 2));
               aq  = ( iabs( R0 - R2) < Beta ) & small_gap;               
               ap  = ( iabs( L0 - L2) < Beta ) & small_gap;
 
@@ -762,13 +782,13 @@ void EdgeLoopLumaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, int 
               ap  = (iabs( L0 - L2) < Beta);
 
               c0  = (C0 + ap + aq) ;
-              dif = iClip3( -c0, c0, ((Delta << 2) + (L1 - R1) + 4) >> 3) ;
+              dif = iClip3( -c0, c0, (((R0 - L0) << 2) + (L1 - R1) + 4) >> 3) ;
 
               if( ap )
                 SrcPtrP[-incP] += iClip3( -C0,  C0, ( L2 + RL0 - (L1 << 1)) >> 1 ) ;
 
-              SrcPtrP[0]  = (imgpel) iClip3(0, img->max_imgpel_value, L0 + dif) ;
-              SrcPtrQ[0]  = (imgpel) iClip3(0, img->max_imgpel_value, R0 - dif) ;
+              SrcPtrP[0]  = (imgpel) iClip3(0, max_imgpel_value, L0 + dif);
+              SrcPtrQ[0]  = (imgpel) iClip3(0, max_imgpel_value, R0 - dif);
 
               if( aq  )
                 SrcPtrQ[ incQ] += iClip3( -C0,  C0, ( R2 + RL0 - (R1 << 1)) >> 1 ) ;
@@ -790,8 +810,9 @@ void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16],struct img_par *img, i
               int dir, int edge, int width, int uv, StorablePicture *p)
 {
   int      pel, Strng ;
-  int      incP, incQ;
-  int      C0, c0, Delta, dif, AbsDelta;
+  int      incQ = dir ? width : 1;
+  int      incP = incQ;
+  int      c0, dif;
   imgpel   L1, L0, R0, R1;
   int      Alpha = 0, Beta = 0;
   const byte* ClipTab = NULL;
@@ -800,16 +821,15 @@ void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16],struct img_par *img, i
   int      StrengthIdx;
   imgpel   *SrcPtrP, *SrcPtrQ;
   int      QP;
-  int      xQ, yQ;
   Macroblock *MbQ = &(img->mb_data[MbQAddr]);
   Macroblock *MbP;
   PixelPos pixP, pixQ, pixMB1, pixMB2;
   int      bitdepth_scale = img->bitdepth_scale[IS_CHROMA];
 
-  xQ = dir ? 0 : edge - 1;
-  yQ = dir ? (edge < 16 ? edge - 1: 0) : 0;
+  int xQ = dir ? 0 : edge - 1;
+  int yQ = dir ? (edge < 16 ? edge - 1: 0) : 0;
 
-  getNeighbour(MbQAddr, xQ, yQ, IS_CHROMA, &pixMB1);
+  getNeighbour(MbQ, xQ, yQ, IS_CHROMA, &pixMB1);
 
   if (pixMB1.available || (MbQ->LFDisableIdc == 0))
   {
@@ -820,7 +840,7 @@ void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16],struct img_par *img, i
     else
       xQ ++;
 
-    getNeighbour(MbQAddr, xQ, yQ, IS_CHROMA, &pixMB2);
+    getNeighbour(MbQ, xQ, yQ, IS_CHROMA, &pixMB2);
     pixQ = pixMB2;
 
     // Average QP of the two blocks
@@ -835,57 +855,48 @@ void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16],struct img_par *img, i
 
     for( pel = 0 ; pel < PelNum ; pel++ )
     {
-      if (dir)
-      {
-        xQ         = pel;
-        pixP.x     = pixMB1.x + pel;
-        pixP.pos_x = pixMB1.pos_x + pel;
-        pixQ.x     = pixMB2.x + pel;
-        pixQ.pos_x = pixMB2.pos_x + pel;
-      }
-      else
-      {
-        yQ         = pel;
-        pixP.y     = pixMB1.y + pel;
-        pixP.pos_y = pixMB1.pos_y + pel;
-        pixQ.y     = pixMB2.y + pel;
-        pixQ.pos_y = pixMB2.pos_y + pel;
-      }
-
       StrengthIdx = (PelNum == 8) ? (((pel >> 1) << 2) + (pel & 0x01)) : pel;
 
       if( (Strng = Strength[StrengthIdx]) != 0)
       {
-        incQ = dir ? width : 1;
-        incP = dir ? width : 1;
-        SrcPtrQ = &(Img[pixQ.pos_y][pixQ.pos_x]);
-        SrcPtrP = &(Img[pixP.pos_y][pixP.pos_x]);
+        if (dir)
+        {
+          xQ         = pel;
+          pixP.x     = pixMB1.x + pel;
+          pixP.pos_x = pixMB1.pos_x + pel;
+          pixQ.x     = pixMB2.x + pel;
+          pixQ.pos_x = pixMB2.pos_x + pel;
+        }
+        else
+        {
+          yQ         = pel;
+          pixP.y     = pixMB1.y + pel;
+          pixP.pos_y = pixMB1.pos_y + pel;
+          pixQ.y     = pixMB2.y + pel;
+          pixQ.pos_y = pixMB2.pos_y + pel;
+        }
 
+        SrcPtrP = &(Img[pixP.pos_y][pixP.pos_x]);
         L1  = SrcPtrP[-incP];
         L0  = SrcPtrP[0] ;
+        SrcPtrQ = &(Img[pixQ.pos_y][pixQ.pos_x]);
         R0  = SrcPtrQ[0] ;      
-        R1  = SrcPtrQ[ incQ];      
+        R1  = SrcPtrQ[ incQ];              
 
-        AbsDelta  = iabs( Delta = (R0 - L0) );
-
-        if( AbsDelta < Alpha )
-        {          
-          if( ((iabs( R0 - R1) - Beta ) < 0)  && ((iabs(L0 - L1) - Beta )) < 0  )
+        if (( iabs( R0 - L0 ) < Alpha ) && ( iabs(R0 - R1) < Beta )  && ( iabs(L0 - L1) < Beta )  )
+        {
+          if( Strng == 4 )    // INTRA strong filtering
           {
-            if( Strng == 4 )    // INTRA strong filtering
-            {
-              SrcPtrQ[0] = (imgpel) ( ((R1 << 1) + R0 + L1 + 2) >> 2 );
-              SrcPtrP[0] = (imgpel) ( ((L1 << 1) + L0 + R1 + 2) >> 2 );
-            }
-            else
-            {
-              C0  = ClipTab[ Strng ] * bitdepth_scale;
-              c0  = (C0 + 1);
-              dif = iClip3( -c0, c0, ( (Delta << 2) + (L1 - R1) + 4) >> 3 ) ;
+            SrcPtrP[0] = (imgpel) ( ((L1 << 1) + L0 + R1 + 2) >> 2 );
+            SrcPtrQ[0] = (imgpel) ( ((R1 << 1) + R0 + L1 + 2) >> 2 );              
+          }
+          else
+          {
+            c0  = ClipTab[ Strng ] * bitdepth_scale + 1;
+            dif = iClip3( -c0, c0, ( ((R0 - L0) << 2) + (L1 - R1) + 4) >> 3 ) ;
 
-              SrcPtrP[0] = (imgpel) iClip3(0, img->max_imgpel_value_uv, L0 + dif) ;
-              SrcPtrQ[0] = (imgpel) iClip3(0, img->max_imgpel_value_uv, R0 - dif) ;
-            }
+            SrcPtrP[0] = (imgpel) iClip1 ( img->max_imgpel_value_uv, L0 + dif) ;
+            SrcPtrQ[0] = (imgpel) iClip1 ( img->max_imgpel_value_uv, R0 - dif) ;
           }
         }
       }
@@ -904,7 +915,7 @@ void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, in
 {
   int      pel, Strng ;
   int      incP, incQ;
-  int      C0, c0, Delta, dif, AbsDelta;
+  int      C0, c0, dif;
   imgpel   L1, L0, R0, R1;
   int      Alpha = 0, Beta = 0;
   const byte* ClipTab = NULL;
@@ -924,8 +935,8 @@ void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, in
   {
     xQ = dir ? pel : edge;
     yQ = dir ? (edge < 16? edge : 1) : pel;
-    getNeighbour(MbQAddr, xQ, yQ, IS_CHROMA, &pixQ);
-    getNeighbour(MbQAddr, xQ - (dir_m1), yQ - dir, IS_CHROMA, &pixP);    
+    getNeighbour(MbQ, xQ, yQ, IS_CHROMA, &pixQ);
+    getNeighbour(MbQ, xQ - (dir_m1), yQ - dir, IS_CHROMA, &pixP);    
     MbP = &(img->mb_data[pixP.mb_addr]);    
     StrengthIdx = (PelNum == 8) ? ((MbQ->mb_field && !MbP->mb_field) ? pel << 1 :((pel >> 1) << 2) + (pel & 0x01)) : pel;
 
@@ -954,9 +965,7 @@ void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, in
         R0  = SrcPtrQ[0] ;      
         R1  = SrcPtrQ[ incQ];      
 
-        AbsDelta  = iabs( Delta = (R0 - L0) );
-
-        if( AbsDelta < Alpha )
+        if( iabs( R0 - L0 ) < Alpha )
         {
           C0  = ClipTab[ Strng ] * bitdepth_scale;
           if( ((iabs( R0 - R1) - Beta )  & (iabs(L0 - L1) - Beta )) < 0  )
@@ -969,10 +978,10 @@ void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, in
             else
             {
               c0  = (C0 + 1);
-              dif = iClip3( -c0, c0, ( (Delta << 2) + (L1 - R1) + 4) >> 3 ) ;
+              dif = iClip3( -c0, c0, ( ((R0 - L0) << 2) + (L1 - R1) + 4) >> 3 ) ;
 
-              SrcPtrP[0] = (imgpel) iClip3(0, img->max_imgpel_value_uv, L0 + dif) ;
-              SrcPtrQ[0] = (imgpel) iClip3(0, img->max_imgpel_value_uv, R0 - dif) ;
+              SrcPtrP[0] = (imgpel) iClip1 ( img->max_imgpel_value_uv, L0 + dif) ;
+              SrcPtrQ[0] = (imgpel) iClip1 ( img->max_imgpel_value_uv, R0 - dif) ;
             }
           }
         }

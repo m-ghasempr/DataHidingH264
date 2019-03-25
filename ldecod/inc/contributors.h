@@ -25,6 +25,7 @@
       Apple Computer, Inc.
       RealNetworks, Inc., USA
       Thomson, Inc., USA
+      Sejong Univ., Digital Media System Lab., Korea
   \endverbatim
   \par Full Contact Information
   \verbatim
@@ -210,6 +211,12 @@
       Information Technology R&D Center, 
       Mitsubishi Electric Corporation
       5-1-1, Ofuna, Kamakura, Japan
+
+      Yung-Lyul Lee                   <yllee@sejong.ac.kr>
+      Ki-Hun Han                      <khhan@dms.sejong.ac.kr>
+      Department of Computer Engineering, 
+      Sejong University
+      98 Kunja-Dong, Kwangjin-Gu, Seoul 143-747, Korea
 
   \endverbatim
 */

@@ -45,14 +45,22 @@
 #define YUV444 3
 
 #define ZEROSNR 0
+#define MAX_REFERENCE_PICTURES 32               //!< H.264 allows 32 fields
 
 // CAVLC
 #define LUMA              0
 #define LUMA_INTRA16x16DC 1
 #define LUMA_INTRA16x16AC 2
+#define CB                3
+#define CB_INTRA16x16DC   4
+#define CB_INTRA16x16AC   5
+#define CR                8
+#define CR_INTRA16x16DC   9
+#define CR_INTRA16x16AC   10
 
-#define TOTRUN_NUM    15
-#define RUNBEFORE_NUM  7
+#define TOTRUN_NUM       15
+#define RUNBEFORE_NUM     7
+#define RUNBEFORE_NUM_M1  6
 
 
 //--- block types for CABAC ----
@@ -66,31 +74,41 @@
 #define CHROMA_AC       7
 #define CHROMA_DC_2x4   8
 #define CHROMA_DC_4x4   9
-#define NUM_BLOCK_TYPES 10
-
+#define CB_16DC         10
+#define CB_16AC         11
+#define CB_8x8          12
+#define CB_8x4          13
+#define CB_4x8          14
+#define CB_4x4          15
+#define CR_16DC         16
+#define CR_16AC         17
+#define CR_8x8          18
+#define CR_8x4          19
+#define CR_4x8          20
+#define CR_4x4          21 
+#define NUM_BLOCK_TYPES 22  
 
 #define MAX_CODED_FRAME_SIZE 8000000         //!< bytes for one frame
 
 //#define _LEAKYBUCKET_
 
-#define PSKIP   0
+#define PSKIP          0
 #define BSKIP_DIRECT   0
-#define P16x16  1
-#define P16x8   2
-#define P8x16   3
-#define SMB8x8  4
-#define SMB8x4  5
-#define SMB4x8  6
-#define SMB4x4  7
-
-#define P8x8    8
-#define I4MB    9
-#define I16MB   10
-#define IBLOCK  11
-#define SI4MB   12
-#define I8MB    13
-#define IPCM    14
-#define MAXMODE 15
+#define P16x16         1
+#define P16x8          2
+#define P8x16          3
+#define SMB8x8         4
+#define SMB8x4         5
+#define SMB4x8         6
+#define SMB4x4         7
+#define P8x8           8
+#define I4MB           9
+#define I16MB         10
+#define IBLOCK        11
+#define SI4MB         12
+#define I8MB          13
+#define IPCM          14
+#define MAXMODE       15
 
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB ||(MB)->mb_type==IPCM || (MB)->mb_type==I8MB || (MB)->mb_type==SI4MB)
 #define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB  || (MB)->mb_type==IPCM)
@@ -109,54 +127,67 @@
 #define MAX_QP          51
 
 #define BLOCK_SIZE      4
+#define BLOCK_SIZE_8x8  8
 #define SMB_BLOCK_SIZE  8
 #define BLOCK_PIXELS    16
 #define BLOCK_SHIFT     2
 #define MB_BLOCK_SIZE   16
-#define MB_BLOCK_PIXELS 256    // MB_BLOCK_SIZE * MB_BLOCK_SIZE
+#define MB_PIXELS       256    // MB_BLOCK_SIZE * MB_BLOCK_SIZE
 #define BLOCK_MULTIPLE  4      // (MB_BLOCK_SIZE/BLOCK_SIZE)
 
 #define NO_INTRA_PMODE  9      //!< number of intra prediction modes
 
 // 4x4 intra prediction modes 
-#define VERT_PRED             0
-#define HOR_PRED              1
-#define DC_PRED               2
-#define DIAG_DOWN_LEFT_PRED   3
-#define DIAG_DOWN_RIGHT_PRED  4
-#define VERT_RIGHT_PRED       5
-#define HOR_DOWN_PRED         6
-#define VERT_LEFT_PRED        7
-#define HOR_UP_PRED           8
+enum {
+  VERT_PRED            = 0,
+  HOR_PRED             = 1,
+  DC_PRED              = 2,
+  DIAG_DOWN_LEFT_PRED  = 3,
+  DIAG_DOWN_RIGHT_PRED = 4,
+  VERT_RIGHT_PRED      = 5,
+  HOR_DOWN_PRED        = 6,
+  VERT_LEFT_PRED       = 7,
+  HOR_UP_PRED          = 8
+};
 
 // 16x16 intra prediction modes
-#define VERT_PRED_16    0
-#define HOR_PRED_16     1
-#define DC_PRED_16      2
-#define PLANE_16        3
+enum {
+  VERT_PRED_16 = 0,
+  HOR_PRED_16  = 1,
+  DC_PRED_16   = 2,
+  PLANE_16     = 3
+};
 
 // 8x8 chroma intra prediction modes
-#define DC_PRED_8       0
-#define HOR_PRED_8      1
-#define VERT_PRED_8     2
-#define PLANE_8         3
+enum {
+  DC_PRED_8   = 0,
+  HOR_PRED_8  = 1,
+  VERT_PRED_8 = 2,
+  PLANE_8     = 3
+};
 
-#define EOS             1                       //!< End Of Sequence
-#define SOP             2                       //!< Start Of Picture
-#define SOS             3                       //!< Start Of Slice
+// MV Prediction types
+enum {
+  MVPRED_MEDIAN   = 0,
+  MVPRED_L        = 1,
+  MVPRED_U        = 2,
+  MVPRED_UR       = 3
+};
 
-#define DECODING_OK     0
-#define SEARCH_SYNC     1
-#define PICTURE_DECODED 2
+enum {
+  EOS = 1,    //!< End Of Sequence
+  SOP = 2,    //!< Start Of Picture
+  SOS = 3     //!< Start Of Slice
+};
 
-#define MAX_REFERENCE_PICTURES 32               //!< H.264 allows 32 fields
+enum {
+   DECODING_OK     = 0,
+   SEARCH_SYNC     = 1,
+   PICTURE_DECODED = 2
+};
 
 #define INVALIDINDEX  (-135792468)
 
-#define MVPRED_MEDIAN   0
-#define MVPRED_L        1
-#define MVPRED_U        2
-#define MVPRED_UR       3
 
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
@@ -167,6 +198,6 @@
 #define MAX_PLANE   3
 #define IS_INDEPENDENT(IMG) ((IMG)->separate_colour_plane_flag)
 #define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
-
+#define HI_INTRA_ONLY_PROFILE (((active_sps->profile_idc>=FREXT_Hi10P)&&(active_sps->constrained_set3_flag))||(active_sps->profile_idc==FREXT_CAVLC444)) 
 #endif
 

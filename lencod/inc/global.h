@@ -35,7 +35,6 @@
 #include "parsetcommon.h"
 #include "q_matrix.h"
 #include "q_offsets.h"
-#include "minmax.h"
 #include "ifunctions.h"
 
 /***********************************************************************
@@ -57,6 +56,19 @@ enum {
   YUV422 = 2,
   YUV444 = 3
 } color_formats;
+
+typedef enum
+{
+  // YUV
+  PLANE_Y = 0,  // PLANE_Y
+  PLANE_U = 1,  // PLANE_Cb
+  PLANE_V = 2,  // PLANE_Cr
+  // RGB
+  PLANE_G = 0,
+  PLANE_B = 1,
+  PLANE_R = 2,
+} ColorPlane;
+
 
 enum {
   LIST_0 = 0,
@@ -80,10 +92,7 @@ enum {
 };
 
 enum {
-  DISTORTION_MSE = 0,
-  DISTORTION_WEIGHTED_MSE = 1,
-  DISTORTION_OVERLAP_TRANSFORM = 2,
-  DISTORTION_EDGE_MSE = 3
+  DISTORTION_MSE = 0
 };
 
 //! Data Partitioning Modes
@@ -152,7 +161,10 @@ typedef enum
   BITS_CBP_MB,
   BITS_COEFF_Y_MB,
   BITS_COEFF_UV_MB,
+  BITS_COEFF_CB_MB,  
+  BITS_COEFF_CR_MB,
   BITS_DELTA_QUANT_MB,
+  BITS_STUFFING,
   MAX_BITCOUNTER_MB
 } BitCountType;
 
@@ -168,7 +180,7 @@ typedef enum
 
 typedef enum
 {
-  UVLC,
+  CAVLC,
   CABAC
 } SymbolMode;
 
@@ -250,9 +262,9 @@ typedef EncodingEnvironment *EncodingEnvironmentPtr;
 //! struct for context management
 typedef struct
 {
-  unsigned short state;         // index into state-table CP
-  unsigned char  MPS;           // Least Probable Symbol 0/1 CP
   unsigned long  count;
+  unsigned short state;         // index into state-table CP
+  unsigned char  MPS;           // Least Probable Symbol 0/1 CP  
 } BiContextType;
 
 typedef BiContextType *BiContextTypePtr;
@@ -301,12 +313,15 @@ typedef struct
   BiContextType  cipr_contexts[NUM_CIPR_CTX];
   BiContextType  cbp_contexts [3][NUM_CBP_CTX];
   BiContextType  bcbp_contexts[NUM_BLOCK_TYPES][NUM_BCBP_CTX];
-  BiContextType  map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
-  BiContextType  last_contexts[NUM_BLOCK_TYPES][NUM_LAST_CTX];
+#if ENABLE_FIELD_CTX
+  BiContextType  map_contexts [3][NUM_BLOCK_TYPES][NUM_MAP_CTX];
+  BiContextType  last_contexts[3][NUM_BLOCK_TYPES][NUM_LAST_CTX];
+#else
+  BiContextType  map_contexts [1][NUM_BLOCK_TYPES][NUM_MAP_CTX];
+  BiContextType  last_contexts[1][NUM_BLOCK_TYPES][NUM_LAST_CTX];
+#endif
   BiContextType  one_contexts [NUM_BLOCK_TYPES][NUM_ONE_CTX];
   BiContextType  abs_contexts [NUM_BLOCK_TYPES][NUM_ABS_CTX];
-  BiContextType  fld_map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
-  BiContextType  fld_last_contexts[NUM_BLOCK_TYPES][NUM_LAST_CTX];
 } TextureInfoContexts;
 
 //*********************** end of data type definition for CABAC *******************
@@ -359,24 +374,17 @@ typedef struct macroblock
 {
   int                 slice_nr;
   int                 delta_qp;
-  int                 qp;                         //!< QP luma
+  int                 qp;                         //!< QP luma  
   int                 qpc[2];                     //!< QP chroma
+  int                 qp_scaled[MAX_PLANE];       //!< QP scaled for all comps.
   int                 qpsp ;
   int                 bitcounter[MAX_BITCOUNTER_MB];
 
-  struct macroblock   *mb_available_up;   //!< pointer to neighboring MB (CABAC)
-  struct macroblock   *mb_available_left; //!< pointer to neighboring MB (CABAC)
-
   int                 mb_type;
   int                 mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];          //!< indices correspond to [list][block_y][block_x][x,y]
-  char                intra_pred_modes[MB_BLOCK_PARTITIONS];
-  char                intra_pred_modes8x8[MB_BLOCK_PARTITIONS];           //!< four 8x8 blocks in a macroblock
   int                 cbp ;
-  int64               cbp_blk ;    //!< 1 bit set for every 4x4 block with coefs (not implemented for INTRA)
   int                 b8mode[4];
   int                 b8pdir[4];
-  int64               cbp_bits;
-
   int                 c_ipred_mode;      //!< chroma intra prediction mode
   int                 IntraChromaPredModeFlag;
 
@@ -384,28 +392,38 @@ typedef struct macroblock
   int                 is_field_mode;
   int                 list_offset;
 
-  int                 mbAddrA, mbAddrB, mbAddrC, mbAddrD;
+  int                 mbAddrA, mbAddrB, mbAddrC, mbAddrD, mbAddrX;
   int                 mbAvailA, mbAvailB, mbAvailC, mbAvailD;
 
   int                 all_blk_8x8;
   int                 luma_transform_size_8x8_flag;
   int                 NoMbPartLessThan8x8Flag;
+  int                 LFDisableIdc;
+  int                 LFAlphaC0Offset;
+  int                 LFBetaOffset;
+
+  int                 skip_flag;
+
+  char                intra_pred_modes[MB_BLOCK_PARTITIONS];
+  char                intra_pred_modes8x8[MB_BLOCK_PARTITIONS];           //!< four 8x8 blocks in a macroblock
+
+  int64               cbp_blk ;    //!< 1 bit set for every 4x4 block with coefs (not implemented for INTRA)
+  int64               cbp_bits[3];
+  int64               cbp_bits_8x8[3];
 
   short               bi_pred_me;
 
   // rate control
   double              actj;               // macroblock activity measure for macroblock j
   int                 prev_qp;
-  int                 prev_delta_qp;
+  int                 prev_dqp;
   int                 prev_cbp;
   int                 predict_qp;
   int                 predict_error;
 
-  int                 LFDisableIdc;
-  int                 LFAlphaC0Offset;
-  int                 LFBetaOffset;
+  struct macroblock   *mb_available_up;   //!< pointer to neighboring MB (CABAC)
+  struct macroblock   *mb_available_left; //!< pointer to neighboring MB (CABAC)
 
-  int                 skip_flag;
 } Macroblock;
 
 
@@ -415,17 +433,17 @@ typedef struct
 {
   int             byte_pos;           //!< current position in bitstream;
   int             bits_to_go;         //!< current bitcounter
-  byte            byte_buf;           //!< current buffer for last written byte
+  
   int             stored_byte_pos;    //!< storage for position in bitstream;
   int             stored_bits_to_go;  //!< storage for bitcounter
-  byte            stored_byte_buf;    //!< storage for buffer of last written byte
-
-  byte            byte_buf_skip;      //!< current buffer for last written byte
   int             byte_pos_skip;      //!< storage for position in bitstream;
   int             bits_to_go_skip;    //!< storage for bitcounter
-
-  byte            *streamBuffer;      //!< actual buffer for written bytes
   int             write_flag;         //!< Bitstream contains data and needs to be written
+
+  byte            byte_buf;           //!< current buffer for last written byte
+  byte            stored_byte_buf;    //!< storage for buffer of last written byte
+  byte            byte_buf_skip;      //!< current buffer for last written byte
+  byte            *streamBuffer;      //!< actual buffer for written bytes
 
 #if TRACE
   Boolean             trace_enabled;
@@ -451,9 +469,6 @@ typedef struct
   int                 start_mb_nr;
   int                 max_part_nr;  //!< number of different partitions
   int                 num_mb;       //!< number of MBs in the slice
-  DataPartition       *partArr;     //!< array of partitions
-  MotionInfoContexts  *mot_ctx;     //!< pointer to struct of context models for use in CABAC
-  TextureInfoContexts *tex_ctx;     //!< pointer to struct of context models for use in CABAC
 
   int                 ref_pic_list_reordering_flag_l0;
   int                 *reordering_of_pic_nums_idc_l0;
@@ -463,10 +478,13 @@ typedef struct
   int                 *reordering_of_pic_nums_idc_l1;
   int                 *abs_diff_pic_num_minus1_l1;
   int                 *long_term_pic_idx_l1;
+  int                 field_ctx[3][2]; //GB
 
   Boolean             (*slice_too_big)(int bits_slice); //!< for use of callback functions
 
-  int                 field_ctx[3][2]; //GB
+  DataPartition       *partArr;     //!< array of partitions
+  MotionInfoContexts  *mot_ctx;     //!< pointer to struct of context models for use in CABAC
+  TextureInfoContexts *tex_ctx;     //!< pointer to struct of context models for use in CABAC
 
 } Slice;
 
@@ -477,8 +495,9 @@ typedef struct
 {
   int   no_slices;
   int   idr_flag;
-  Slice *slices[MAXSLICEPERPICTURE];
   int bits_per_picture;
+  Slice *slices[MAXSLICEPERPICTURE];
+
   float distortion_y;
   float distortion_u;
   float distortion_v;
@@ -494,7 +513,8 @@ long *Bit_Buffer;
 #endif
 
 // global picture format dependend buffers, mem allocation in image.c
-imgpel **imgY_org;           //!< Reference luma image
+imgpel **pImgOrg[MAX_PLANE];
+imgpel **pCurImg;            //!< Reference image. Luma for other profiles, can be any component for 4:4:4
 imgpel ***imgUV_org;         //!< Reference chroma image
 int    **imgY_sub_tmp;       //!< Y picture temporary component (Quarter pel)
 
@@ -761,14 +781,9 @@ typedef struct
   int of_mode;                       //!< Specifies the mode of the output file
   int partition_mode;                //!< Specifies the mode of data partitioning
 
-  int InterSearch16x16;
-  int InterSearch16x8;
-  int InterSearch8x16;
-  int InterSearch8x8;
-  int InterSearch8x4;
-  int InterSearch4x8;
-  int InterSearch4x4;
+  int InterSearch[2][8];
 
+  int DisableIntraInInter;
   int IntraDisableInterOnly;
   int Intra4x4ParDisable;
   int Intra4x4DiagDisable;
@@ -790,6 +805,7 @@ typedef struct
   int EPZSMaxThresScale;
   int EPZSMedThresScale;
   int EPZSSubPelGrid;
+  int EPZSGrid;
   int EPZSSubPelME;
   int EPZSSubPelMEBiPred;
   int EPZSSubPelThresScale;
@@ -875,8 +891,9 @@ typedef struct
   double RCBoverPRatio;
   double RCISliceBitRatio;
   double RCBSliceBitRatio[RC_MAX_TEMPORAL_LEVELS];
-  int RCMinQP;
-  int RCMaxQP;
+  int    RCMinQP[5];
+  int    RCMaxQP[5];
+  int    RCMaxQPChange;
 
   int ScalingMatrixPresentFlag;
   int ScalingListPresentFlag[12];
@@ -927,6 +944,7 @@ typedef struct
   // Chroma interpolation and buffering
   int ChromaMCBuffer;
   int ChromaMEEnable;
+  int ChromaMEWeight;
   int MEErrorMetric[3];
   int ModeDecisionMetric;
 
@@ -935,6 +953,10 @@ typedef struct
   char ToneMappingFile[FILE_NAME_SIZE];    //!< ToneMapping SEI message cfg file
 
   int separate_colour_plane_flag;
+  double WeightY;
+  double WeightCb;
+  double WeightCr;
+  
   int EnableVUISupport;
   // VUI parameters
   VUIParameters VUI;
@@ -961,7 +983,10 @@ typedef struct
   int max_num_references;      //!< maximum number of reference pictures that may occur
   int qp;                      //!< quant for the current frame
   int qpsp;                    //!< quant for the prediction frame of SP-frame
-  int qp_scaled;
+
+  int RCMinQP;
+  int RCMaxQP;
+
   float framerate;
   int width;                   //!< Number of pels
   int width_padded;            //!< Width in pels of padded picture
@@ -1002,14 +1027,15 @@ typedef struct
   int opix_c_y;                 //!< current original picture pixel chroma vertical
 
 
-  // some temporal buffers
-  imgpel mprr[9][16][16];      //!< all 9 prediction modes? // enlarged from 4 to 16 for ABT (is that neccessary?)
+  // prediction/residual buffers   
+  imgpel mpr_4x4  [MAX_PLANE][9][16][16]; //!< prediction samples for   4x4 intra prediction modes
+  imgpel mpr_8x8  [MAX_PLANE][9][16][16]; //!< prediction samples for   8x8 intra prediction modes
+  imgpel mpr_16x16[MAX_PLANE][5][16][16]; //!< prediction samples for 16x16 intra prediction modes (and chroma)
+  imgpel mpr      [MAX_PLANE][16][16];    //!< current best prediction mode
+  int    m7       [MAX_PLANE][16][16];    //!< the diff pixel values between the original macroblock/block and its prediction
 
-  imgpel mprr_2[5][16][16];    //!< all 4 new intra prediction modes
-  imgpel mprr_3[9][8][8];      //!< all 9 prediction modes for 8x8 transformation
-  imgpel mprr_c[2][4][16][16]; //!< chroma intra prediction modes
-  imgpel mpr[16][16];          //!< current best prediction mode
-  int m7[16][16];              //!< the diff pixel values between orginal image and prediction
+  int    (*curr_res)[16];                 //!< pointer to current residual
+  imgpel (*curr_prd)[16];                 //!< pointer to current prediction
 
   int ****cofAC;               //!< AC coefficients [8x8block][4x4block][level/run][scan_pos]
   int ***cofDC;                //!< DC coefficients [yuv][level/run][scan_pos]
@@ -1158,10 +1184,10 @@ typedef struct
 
   double **lambda_mf_factor; //!< Motion Estimation Lamda Scale Factor
 
-  unsigned int dc_pred_value_luma;   //!< luma value for DC prediction (depends on luma pel bit depth)
-  unsigned int dc_pred_value_chroma; //!< chroma value for DC prediction (depends on chroma pel bit depth)
+  unsigned int dc_pred_value_comp[MAX_PLANE]; //!< component value for DC prediction (depends on component pel bit depth)
+  unsigned int dc_pred_value;                 //!< DC prediction value for current component
+  int max_imgpel_value_comp[MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
   int max_imgpel_value;              //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
-  int max_imgpel_value_uv;
 
   int num_blk8x8_uv;
   int num_cdc_coeff;
@@ -1169,7 +1195,7 @@ typedef struct
   int lossless_qpprime_flag;
   int mb_cr_size_x;
   int mb_cr_size_y;
-  int mb_size[3][2];
+  int mb_size[MAX_PLANE][2];
 
   int chroma_qp_offset[2];      //!< offset for qp for chroma [0-Cb, 1-Cr]
 
@@ -1188,7 +1214,6 @@ typedef struct
   Macroblock    *mb_data_JV[MAX_PLANE];  //!< mb_data to be used during 4:4:4 independent mode encoding
   int colour_plane_id;    //!< colour_plane_id of the current coded slice (valid only when separate_colour_plane_flag is 1)
 
-  int lastIDR;
   int lastIDRnumber;
   int lastIntraNumber;
   int lastINTRA;
@@ -1210,17 +1235,16 @@ typedef struct
   int   stored_bit_slice;            //!< keep number of bits in current slice (to restore status in case of MB re-encoding)
   int   bit_ctr_emulationprevention; //!< stored bits needed to prevent start code emulation
   int   b8_mode_0_use[NUM_PIC_TYPE][2];
-  int   mode_use_transform_8x8[NUM_PIC_TYPE][MAXMODE];
-  int   mode_use_transform_4x4[NUM_PIC_TYPE][MAXMODE];
+  int   mode_use_transform[2][NUM_PIC_TYPE][MAXMODE];
   int   intra_chroma_mode[4];
 
   // B pictures
   int   successive_Bframe;
   int   *mode_use_Bframe;
   int   *bit_use_mode_Bframe;
-  int64   bit_ctr_I;
-  int64   bit_ctr_P;
-  int64   bit_ctr_B;
+  int64 bit_ctr_I;
+  int64 bit_ctr_P;
+  int64 bit_ctr_B;
   float bitrate_I;
   float bitrate_P;
   float bitrate_B;
@@ -1231,8 +1255,8 @@ typedef struct
   int64   bit_use_mb_type     [NUM_PIC_TYPE];
   int64   bit_use_header      [NUM_PIC_TYPE];
   int64   tmp_bit_use_cbp     [NUM_PIC_TYPE];
-  int64   bit_use_coeffY      [NUM_PIC_TYPE];
   int64   bit_use_coeffC      [NUM_PIC_TYPE];
+  int64   bit_use_coeff    [3][NUM_PIC_TYPE];  
   int64   bit_use_delta_quant [NUM_PIC_TYPE];
 
   int   em_prev_bits_frm;
@@ -1253,29 +1277,30 @@ typedef struct
   int    ****cofAC;
   int    ***cofDC;
   int    mb_type;
-  short  bi_pred_me;
-
   int    b8mode[4], b8pdir[4];
-  char   **ipredmode;
-  char   intra_pred_modes[16];
-  char   intra_pred_modes8x8[16];
   int    cbp;
-  int64  cbp_blk;
   int    mode;
-  short  ******pred_mv;        //!< predicted motion vectors
-  short  ******all_mv;         //!< all modes motion vectors
-  char   refar[2][4][4];       //!< reference frame array [list][y][x]
   int    i16offset;
   int    c_ipred_mode;
-
   int    luma_transform_size_8x8_flag;
   int    NoMbPartLessThan8x8Flag;
 
   int    qp;
+  int    qp_scaled[MAX_PLANE];
   int    prev_qp;
-  int    prev_delta_qp;
+  int    prev_dqp;
   int    delta_qp;
   int    prev_cbp;
+  
+  int64  cbp_blk;
+  short  bi_pred_me;
+  short  ******pred_mv;        //!< predicted motion vectors
+  short  ******all_mv;         //!< all modes motion vectors
+
+  char   intra_pred_modes[16];
+  char   intra_pred_modes8x8[16];
+  char   **ipredmode;
+  char   refar[2][4][4];       //!< reference frame array [list][y][x]
 } RD_DATA;
 
 
@@ -1295,13 +1320,17 @@ typedef struct
 typedef struct
 {
   int cost8x8;
+  int lrec[16][16]; // transform and quantized coefficients will be stored here for SP frames
   short part8x8mode[4];
   char  part8x8pdir[4];
   char  part8x8l0ref[4];
   char  part8x8l1ref[4];
   imgpel rec_mbY8x8[16][16];
   imgpel mpr8x8[16][16];
-  int lrec[16][16]; // transform and quantized coefficients will be stored here for SP frames
+  imgpel mpr8x8CbCr[2][16][16];
+  imgpel rec_mbU8x8[16][16];
+  imgpel rec_mbV8x8[16][16];
+
 } RD_8x8DATA;
 
 typedef struct
@@ -1309,12 +1338,11 @@ typedef struct
   double lambda_md;        //!< Mode decision Lambda
   double lambda_me[3];     //!< Motion Estimation Lambda
   int    lambda_mf[3];     //!< Integer formatted Motion Estimation Lambda
+  int    best_mcost[2];
 
   short  valid[MAXMODE];
   short  list_offset[2];
   short  curr_mb_field;
-  short  best_ref[2];
-  int    best_mcost[2];
 } RD_PARAMS;
 
 GOP_DATA *gop_structure;
@@ -1335,21 +1363,38 @@ FILE *p_trace;                   //!< Trace file
 int  p_in;                       //!< original YUV file handle
 int  p_dec;                      //!< decoded image file handle
 
+int coeff_cost_cr[MAX_PLANE];
+int cmp_cbp[3], i16x16mode, curr_cbp[2];
+int64 cur_cbp_blk[MAX_PLANE];
+int CbCr_predmode_8x8[4]; 
+
 /***********************************************************************
  * P r o t o t y p e s   f o r    T M L
  ***********************************************************************
  */
 
-void intrapred_luma(int CurrPixX,int CurrPixY, int *left_available, int *up_available, int *all_available);
-int  dct_luma(int pos_mb1,int pos_mb2,int *cnt_nonz, int intra);
-int  dct_luma_sp(int pos_mb1,int pos_mb2,int *cnt_nonz);
-void copyblock_sp(int pos_mb1,int pos_mb2);
-int  dct_chroma(int uv,int i11);
-int  dct_chroma_sp(int uv,int i11);
+void intrapred_4x4   (Macroblock *currMB, ColorPlane pl, int CurrPixX,int CurrPixY, int *left_available, int *up_available, int *all_available);
+int (*pDCT_4x4)      (Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra);
+int  dct_4x4         (Macroblock *currMB, ColorPlane pl, int pos_mb1,int pos_mb2,int *cnt_nonz, int intra);
+int  dct_16x16       (Macroblock *currMB, ColorPlane pl, int);
+int  dct_4x4_qpprime (Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra);
+int  dct_4x4_sp      (Macroblock *currMB, ColorPlane pl, int pos_mb1,int pos_mb2,int *cnt_nonz, int intra);
+int  dct_4x4_sp2     (Macroblock *currMB, ColorPlane pl, int pos_mb1,int pos_mb2,int *cnt_nonz, int intra);
+void copyblock_sp    (Macroblock *currMB, ColorPlane pl, int pos_mb1,int pos_mb2);
+int  (*dct_cr_4x4)   (Macroblock *currMB, int uv,int i11);
+int  dct_chroma      (Macroblock *currMB, int uv,int i11);
+int  dct_chroma_sp   (Macroblock *currMB, int uv,int i11);
+int  dct_chroma_sp2  (Macroblock *currMB, int uv,int i11);
 
-void intrapred_luma_16x16(void);
+//For residual DPCM
+int Residual_DPCM_4x4(int ipmode, ColorPlane pl, int block_y, int block_x);  
+int Residual_DPCM_4x4_for_Intra16x16(int ipmode);  
+int Inv_Residual_DPCM_4x4_for_Intra16x16(int ipmode);  
+int Residual_DPCM_8x8(int ipmode, ColorPlane pl, int block_y, int block_x);  
+int Inv_Residual_DPCM_4x4(ColorPlane pl, int block_y, int block_x);  
+int Inv_Residual_DPCM_8x8(ColorPlane pl, int block_y, int block_x);  
 
-int dct_luma_16x16(int);
+void intrapred_16x16 (Macroblock *currMB, ColorPlane pl);
 
 void init_poc(void);
 
@@ -1365,9 +1410,9 @@ extern int*   refbits;
 extern int**** motion_cost;
 double *mb16x16_cost_frame;
 
-void  Get_Direct_Motion_Vectors (void);
-void  PartitionMotionSearch     (int, int, int*);
-int   BIDPartitionCost          (int, int, short, short, int);
+void  Get_Direct_Motion_Vectors (Macroblock *currMB);
+void  PartitionMotionSearch     (Macroblock *currMB, int, int, int*);
+int   BIDPartitionCost          (Macroblock *currMB, int, int, short, short, int);
 int   writeAbpCoeffIndex        (int, int, int, int);
 
 void estimate_weighting_factor_B_slice(void);
@@ -1379,14 +1424,14 @@ int  picture_coding_decision (Picture *picture1, Picture *picture2, int qp);
 
 unsigned CeilLog2( unsigned uiVal);
 
-int  GetDirectCost8x8 (int, int*);
+int  GetDirectCost8x8 (Macroblock *currMB, int, int*);
 
-int   BPredPartitionCost  (int, int, short, short, int, int);
+int  BPredPartitionCost (Macroblock *currMB, int, int, short, short, int, int);
 
-int  GetDirectCostMB  (void);
+int  GetDirectCostMB  (Macroblock *currMB, int bslice);
 
-int  GetSkipCostMB (void);
-void FindSkipModeMotionVector (void);
+int  GetSkipCostMB (Macroblock *currMB);
+void FindSkipModeMotionVector (Macroblock *currMB);
 
 
 // dynamic mem allocation
@@ -1430,34 +1475,16 @@ int  terminate_slice(int);
 int  write_PPS(int, int);
 
 // B pictures
-int  get_fwMV(int *min_fw_sad, int tot_intra_sad);
-void get_bwMV(int *min_bw_sad);
-void get_bid(int *bid_sad, int fw_predframe_no);
-void get_dir(int *dir_sad);
-void compare_sad(int tot_intra_sad, int fw_sad, int bw_sad, int bid_sad, int dir_sad, int);
-int  BlkSize2CodeNumber(int blc_size_h, int blc_size_v);
-
 void InitMotionVectorSearchModule(void);
 
-int  field_flag_inference(void);
+int  field_flag_inference(Macroblock  *currMB);
 
-void set_mbaff_parameters(void);  // For MB AFF
+void set_mbaff_parameters(Macroblock  *currMB);  // For MB AFF
 void writeVlcByteAlign(Bitstream* currStream);
-
-
-int   writeMB_bits_for_4x4_luma   (int, int, int);
-int   writeMB_bits_for_16x16_luma (void);
-int   writeMB_bits_for_luma       (int);
-int   writeMB_bits_for_DC_chroma  (int);
-int   writeMB_bits_for_AC_chroma  (int);
-int   writeMB_bits_for_CBP        (void);
-
-int   SingleUnifiedMotionSearch   (int, int, int**, int***, int*****, int, int*****, double);
 
 //============= rate-distortion optimization ===================
 void  clear_rdopt      (void);
 void  init_rdopt       (void);
-void  RD_Mode_Decision (void);
 //============= rate-distortion opt with packet losses ===========
 void decode_one_macroblock(void);
 void decode_one_mb (int, Macroblock*);
@@ -1499,28 +1526,28 @@ void SODBtoRBSP(Bitstream *currStream);
 int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_num_bytes);
 int Bytes_After_Header;
 
-// Fast ME enable
-int BlockMotionSearch (short,int,int,int,int,int, int*);
-void low_complexity_encode_md (void);
-void encode_one_macroblock_low (void);
-void encode_one_macroblock_high (void);
-void encode_one_macroblock_highfast (void);
-void encode_one_macroblock_highloss (void);
-void (*encode_one_macroblock) (void);
+void reset_valid_modes(RD_PARAMS *enc_mb);
 
+// Fast ME enable
+int BlockMotionSearch (Macroblock *currMB, short,int,int,int,int,int, int*);
+void low_complexity_encode_md (void);
+void encode_one_macroblock_low (Macroblock *currMB);
+void encode_one_macroblock_high (Macroblock *currMB);
+void encode_one_macroblock_highfast (Macroblock *currMB);
+void encode_one_macroblock_highloss (Macroblock *currMB);
+void (*encode_one_macroblock) (Macroblock *currMB);
 
 void set_chroma_qp(Macroblock *currMB);
+void select_plane (ColorPlane color_plane);
+void select_dct   (Macroblock *currMB);
 
-
-void store_coding_state_cs_cm(void);
-void reset_coding_state_cs_cm(void);
+void store_coding_state_cs_cm(Macroblock *currMB);
+void reset_coding_state_cs_cm(Macroblock *currMB);
 
 int writeIPCMBytes(Bitstream *currStream);
 int writePCMByteAlign(Bitstream *currStream);
 
-
-int  dct_luma_sp2(int pos_mb1,int pos_mb2,int *cnt_nonz);
-int  dct_chroma_sp2(int ,int);
+void set_slice_type(int slice_type);
 
 int check_for_SI16(void);
 int **lrec ;
@@ -1565,6 +1592,7 @@ int img_padded_size_x_m8;
 int img_padded_size_x_m8x8;
 int img_padded_size_x_m4x4;
 int img_cr_padded_size_x;
+int img_cr_padded_size_x_m8;
 int img_cr_padded_size_x2;
 int img_cr_padded_size_x4;
 
@@ -1577,9 +1605,13 @@ typedef struct {
 int start_me_refinement_hp; // if set then recheck the center position when doing half-pel motion refinement
 int start_me_refinement_qp; // if set then recheck the center position when doing quarter-pel motion refinement
 
+//For residual DPCM
+int ipmode_DPCM;
+int lossless_res[4][4];
+
 // For 4:4:4 independent mode
 void change_plane_JV( int nplane );
-void make_frame_picture_JV();
+void make_frame_picture_JV(void);
 
 #endif
 

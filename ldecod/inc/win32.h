@@ -30,7 +30,7 @@
 # define  write    _write
 # define  lseek    _lseeki64
 # define  fsync    _commit
-# define  tell     _tell
+# define  tell     _telli64
 # define  TIMEB    _timeb
 # define  ftime    _ftime
 # define  OPENFLAGS_WRITE _O_WRONLY|_O_CREAT|_O_BINARY|_O_TRUNC
@@ -39,6 +39,7 @@
 # define  inline   _inline
 #else
 # include <unistd.h>
+# define  tell(fd) lseek(fd, 0, SEEK_CUR)
 # define  TIMEB    timeb
 # define  OPENFLAGS_WRITE O_WRONLY|O_CREAT|O_TRUNC
 # define  OPENFLAGS_READ  O_RDONLY

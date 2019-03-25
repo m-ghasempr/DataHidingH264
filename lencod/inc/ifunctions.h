@@ -141,6 +141,16 @@ static inline int RSD(int x)
  return ((x&2)?(x|1):(x&(~1)));
 }
 
+static inline int power2(int x) 
+{
+  return 1 << (x);
+}
+
+static inline int float2int (float x)
+{
+  return (int)((x < 0) ? (x - 0.5f) : (x + 0.5f));
+}
+
 # else
 
 #  define imin(a, b)                  (((a) < (b)) ? (a) : (b))
@@ -165,7 +175,9 @@ static inline int RSD(int x)
 #  define iClip3(low, high, x)        (imax( imin(x, high), low))
 #  define dClip3(low, high, x)        (dmax( dmin(x, high), low))
 #  define RSD(x)                      (((x)&2)?((x)|1):((x)&(~1)))
+#  define power2(x)                   (1 << (x))
 #  define weighted_cost(factor, bits) (((factor)*(bits))>>LAMBDA_ACCURACY_BITS)
+#  define float2int(x)                ((int)(((x) < 0)   ? ((x) - 0.5f) : ((x) + 0.5f)))
 
 # endif
 #endif

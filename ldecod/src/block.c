@@ -23,7 +23,7 @@
 #include "block.h"
 #include "image.h"
 #include "mb_access.h"
-
+#include "transform.h"
 
 #define Q_BITS          15
 
@@ -135,8 +135,9 @@ int quant8_org[64] = { //to be use if no q matrix is chosen
  *    SEARCH_SYNC   search next sync element as errors while decoding occured
  ***********************************************************************
  */
-
-int intrapred( struct img_par *img,  //!< image parameters
+int intrapred( Macroblock *currMB, 
+               ColorPlane pl,
+               struct img_par *img,  //!< image parameters
                int ioff,             //!< pixel offset X within MB
                int joff,             //!< pixel offset Y within MB
                int img_block_x,      //!< location of block X, multiples of 4
@@ -146,8 +147,8 @@ int intrapred( struct img_par *img,  //!< image parameters
   int s0;
   int img_y,img_x;
   imgpel PredPel[13];  // array of predictor pels
-
-  imgpel **imgY = dec_picture->imgY;
+  int uv = pl-1;
+  imgpel **imgY = (pl) ? dec_picture->imgUV[uv] : dec_picture->imgY;
 
   PixelPos pix_a[4];
   PixelPos pix_b, pix_c, pix_d;
@@ -157,12 +158,12 @@ int intrapred( struct img_par *img,  //!< image parameters
   int block_available_up_left;
   int block_available_up_right;
 
-  int mb_nr=img->current_mb_nr;
-
   byte predmode = img->ipredmode[img_block_y][img_block_x];
   int jpos0 = joff, jpos1 = joff + 1, jpos2 = joff + 2, jpos3 = joff + 3;
   int ipos0 = ioff, ipos1 = ioff + 1, ipos2 = ioff + 2, ipos3 = ioff + 3;
-  imgpel *predrow, prediction, (*mpr)[16] = img->mpr[LumaComp];
+  imgpel *predrow, prediction, (*mpr)[16] = img->mpr[pl];
+
+  ipmode_DPCM = predmode; //For residual DPCM
 
 
   img_x=img_block_x*4;
@@ -170,12 +171,12 @@ int intrapred( struct img_par *img,  //!< image parameters
 
   for (i=0;i<4;i++)
   {
-    getNeighbour(mb_nr, ioff -1 , joff +i , IS_LUMA, &pix_a[i]);
+    getNeighbour(currMB, ioff -1 , joff +i , IS_LUMA, &pix_a[i]);
   }
 
-  getNeighbour(mb_nr, ioff    , joff -1 , IS_LUMA, &pix_b);
-  getNeighbour(mb_nr, ioff +4 , joff -1 , IS_LUMA, &pix_c);
-  getNeighbour(mb_nr, ioff -1 , joff -1 , IS_LUMA, &pix_d);
+  getNeighbour(currMB, ioff    , joff -1 , IS_LUMA, &pix_b);
+  getNeighbour(currMB, ioff +4 , joff -1 , IS_LUMA, &pix_c);
+  getNeighbour(currMB, ioff -1 , joff -1 , IS_LUMA, &pix_d);
 
   pix_c.available = pix_c.available && !((ioff==4) && ((joff==4)||(joff==12)));
 
@@ -206,7 +207,7 @@ int intrapred( struct img_par *img,  //!< image parameters
   }
   else
   {
-    P_A = P_B = P_C = P_D = img->dc_pred_value_luma;
+    P_A = P_B = P_C = P_D = img->dc_pred_value_comp[pl];
   }
 
   if (block_available_up_right)
@@ -230,7 +231,7 @@ int intrapred( struct img_par *img,  //!< image parameters
   }
   else
   {
-    P_I = P_J = P_K = P_L = img->dc_pred_value_luma;
+    P_I = P_J = P_K = P_L = img->dc_pred_value_comp[pl];
   }
 
   if (block_available_up_left)
@@ -239,7 +240,7 @@ int intrapred( struct img_par *img,  //!< image parameters
   }
   else
   {
-    P_X = img->dc_pred_value_luma;
+    P_X = img->dc_pred_value_comp[pl];
   }
 
 
@@ -251,22 +252,22 @@ int intrapred( struct img_par *img,  //!< image parameters
     if (block_available_up && block_available_left)
     {
       // no edge
-      s0 = (P_A + P_B + P_C + P_D + P_I + P_J + P_K + P_L + 4)/(2*BLOCK_SIZE);
+      s0 = (P_A + P_B + P_C + P_D + P_I + P_J + P_K + P_L + 4)>>3;
     }
     else if (!block_available_up && block_available_left)
     {
       // upper edge
-      s0 = (P_I + P_J + P_K + P_L + 2)/BLOCK_SIZE;
+      s0 = (P_I + P_J + P_K + P_L + 2)>>2;
     }
     else if (block_available_up && !block_available_left)
     {
       // left edge
-      s0 = (P_A + P_B + P_C + P_D + 2)/BLOCK_SIZE;
+      s0 = (P_A + P_B + P_C + P_D + 2)>>2;
     }
     else //if (!block_available_up && !block_available_left)
     {
       // top left corner, nothing to predict from
-      s0 = img->dc_pred_value_luma;
+      s0 = img->dc_pred_value_comp[pl];
     }
 
     for (j=joff; j < joff + BLOCK_SIZE; j++)
@@ -447,22 +448,24 @@ int intrapred( struct img_par *img,  //!< image parameters
  * \return
  *    best SAD
  ***********************************************************************
- */
-int intrapred_luma_16x16(struct img_par *img, //!< image parameters
+ */ 
+int intrapred_luma_16x16(Macroblock *currMB,  //!< Current Macroblock
+                         ColorPlane pl,       //!< Current colorplane (for 4:4:4)
+                         struct img_par *img, //!< image parameters
                          int predmode)        //!< prediction mode
 {
-  int s0=0,s1,s2;
+  int s0 = 0, s1, s2;
 
   int i,j;
 
   int ih,iv;
   int ib,ic,iaa;
 
-  imgpel **imgY=dec_picture->imgY;
-  imgpel (*mpr)[16] = img->mpr[LumaComp];
+  int uv = pl-1;
+  imgpel **imgY = (pl) ? dec_picture->imgUV[uv] : dec_picture->imgY;
+  imgpel (*mpr)[16] = img->mpr[pl]; 
+  imgpel *mpr_line;
   imgpel prediction;
-
-  int mb_nr=img->current_mb_nr;
 
   PixelPos up;          //!< pixel position p(0,-1)
   PixelPos left[17];    //!< pixel positions p(-1, -1..15)
@@ -473,9 +476,9 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
 
   for (i=0;i<17;i++)
   {
-    getNeighbour(mb_nr, -1 ,  i-1 , IS_LUMA, &left[i]);
+    getNeighbour(currMB, -1 ,  i-1 , IS_LUMA, &left[i]);
   }
-  getNeighbour(mb_nr, 0     ,  -1 , IS_LUMA, &up);
+  getNeighbour(currMB, 0     ,  -1 , IS_LUMA, &up);
 
   if (!active_pps->constrained_intra_pred_flag)
   {
@@ -519,13 +522,13 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
         s2 += imgY[left[i+1].pos_y][left[i+1].pos_x];    // sum vert pix
     }
     if (up_avail && left_avail)
-      s0=(s1+s2+16)>>5;       // no edge
+      s0 = (s1+s2+16)>>5;       // no edge
     if (!up_avail && left_avail)
-      s0=(s2+8)>>4;              // upper edge
+      s0 = (s2+8)>>4;              // upper edge
     if (up_avail && !left_avail)
-      s0=(s1+8)>>4;              // left edge
+      s0 = (s1+8)>>4;              // left edge
     if (!up_avail && !left_avail)
-      s0=img->dc_pred_value_luma;                            // top left corner, nothing to predict from
+      s0 = img->dc_pred_value_comp[pl];                            // top left corner, nothing to predict from
 
     for(j=0;j<MB_BLOCK_SIZE;j++)
       for(i=0;i<MB_BLOCK_SIZE;i++)
@@ -540,19 +543,21 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
 
     ih=0;
     iv=0;
+
+    mpr_line = &imgY[up.pos_y][up.pos_x+7];
     for (i = 1; i < 8; i++)
     {
-      ih += i*(imgY[up.pos_y][up.pos_x+7+i] - imgY[up.pos_y][up.pos_x+7-i]);
+      ih += i*(mpr_line[i] - mpr_line[-i]);
       iv += i*(imgY[left[8+i].pos_y][left[8+i].pos_x] - imgY[left[8-i].pos_y][left[8-i].pos_x]);
     }
 
-    ih += 8*(imgY[up.pos_y][up.pos_x+15] - imgY[left[0].pos_y][left[0].pos_x]);
+    ih += 8*(mpr_line[8] - imgY[left[0].pos_y][left[0].pos_x]);
     iv += 8*(imgY[left[16].pos_y][left[16].pos_x] - imgY[left[0].pos_y][left[0].pos_x]);
 
     ib=(5*ih+32)>>6;
     ic=(5*iv+32)>>6;
 
-    iaa=16*(imgY[up.pos_y][up.pos_x+15]+imgY[left[16].pos_y][left[16].pos_x]);
+    iaa=16*(mpr_line[8] + imgY[left[16].pos_y][left[16].pos_x]);
     for (j=0;j< MB_BLOCK_SIZE;j++)
     {
       for (i=0;i< MB_BLOCK_SIZE;i++)
@@ -573,7 +578,7 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
 }
 
 
-void intrapred_chroma(struct img_par *img, int uv)
+void intrapred_chroma(Macroblock *currMB, struct img_par *img, int uv)
 {
   int i,j, ii, jj, ioff, joff;
 
@@ -596,9 +601,6 @@ void intrapred_chroma(struct img_par *img, int uv)
   };
   int      s0, s1, s2, s3;
 
-  int mb_nr=img->current_mb_nr;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-
   PixelPos up;        //!< pixel position  p(0,-1)
   PixelPos left[17];  //!< pixel positions p(-1, -1..16)
 
@@ -609,10 +611,10 @@ void intrapred_chroma(struct img_par *img, int uv)
 
   for (i=0; i < cr_MB_y + 1 ; i++)
   {
-    getNeighbour(mb_nr, -1, i-1, IS_CHROMA, &left[i]);
+    getNeighbour(currMB, -1, i-1, IS_CHROMA, &left[i]);
   }
 
-  getNeighbour(mb_nr, 0, -1, IS_CHROMA, &up);
+  getNeighbour(currMB, 0, -1, IS_CHROMA, &up);
 
   if (!active_pps->constrained_intra_pred_flag)
   {
@@ -642,7 +644,7 @@ void intrapred_chroma(struct img_par *img, int uv)
         blk_x = subblk_offset_x[yuv][b8][b4];
 
         s0=s1=s2=s3=0;
-        js[b8][b4]=img->dc_pred_value_chroma;
+        js[b8][b4] = img->dc_pred_value_comp[1];
 
         //===== get prediction value =====
         switch (block_pos[yuv][b8][b4])
@@ -779,69 +781,228 @@ void intrapred_chroma(struct img_par *img, int uv)
  *    Inverse 4x4 transformation, transforms cof to m7
  ***********************************************************************
  */
-void itrans(struct img_par *img, //!< image parameters
+void itrans4x4(struct img_par *img, //!< image parameters
             int ioff,            //!< index to 4x4 block
             int joff,            //!<
-            int i0,              //!<
-            int j0,
-            int chroma,
             int yuv)
 {
   int i,j;
-  int ipos;
-  static int m5[4], m6[4];
-  int *m7;
 
   Boolean lossless_qpprime = (Boolean) (((img->qp + img->bitdepth_luma_qp_scale) == 0) && (img->lossless_qpprime_flag == 1));
-  int max_imgpel_value = chroma ? img->max_imgpel_value_uv : img->max_imgpel_value;
+  int max_imgpel_value = yuv ? img->max_imgpel_value_uv : img->max_imgpel_value;
+
   imgpel (*mpr)[16] = img->mpr[yuv];
+  int (*m7)[16] = img->m7[yuv];
 
   if (!lossless_qpprime)
   {
-    // horizontal
+    // We need to clean this up but for the time being memcpy works fine
     for (j = 0; j < BLOCK_SIZE; j++)
     {
-      memcpy(&m5[0],&img->cof[i0][j0][j][0], BLOCK_SIZE * sizeof(int));
-      m7 = &(img->m7[j][0]);
-
-      m6[0] =  m5[0] + m5[2];
-      m6[1] =  m5[0] - m5[2];
-      m6[2] = (m5[1] >> 1) - m5[3];
-      m6[3] =  m5[1] + (m5[3] >> 1);
-
-      m7[0] = m6[0] + m6[3];
-      m7[1] = m6[1] + m6[2];
-      m7[2] = m6[1] - m6[2];
-      m7[3] = m6[0] - m6[3];      
+      memcpy(&m7[j + joff][ioff],&img->cof[yuv][j + joff][ioff], BLOCK_SIZE * sizeof(int));
     }
 
-    // vertical
-    for (i = 0; i < BLOCK_SIZE; i++)
-    {
-      ipos = i + ioff;
+    inverse4x4(m7,m7,joff,ioff);
 
-      m5[0]=img->m7[0][i];
-      m5[1]=img->m7[1][i];
-      m5[2]=img->m7[2][i];
-      m5[3]=img->m7[3][i];
-
-      m6[0] =  m5[0] + m5[2];
-      m6[1] =  m5[0] - m5[2];
-      m6[2] = (m5[1] >> 1) - m5[3];
-      m6[3] =  m5[1] + (m5[3] >> 1);
-
-      img->m7[0][i] = iClip1(max_imgpel_value, rshift_rnd_sf((m6[0] + m6[3] + ((long)mpr[    joff][ipos] << DQ_BITS)), DQ_BITS));
-      img->m7[1][i] = iClip1(max_imgpel_value, rshift_rnd_sf((m6[1] + m6[2] + ((long)mpr[1 + joff][ipos] << DQ_BITS)), DQ_BITS));
-      img->m7[2][i] = iClip1(max_imgpel_value, rshift_rnd_sf((m6[1] - m6[2] + ((long)mpr[2 + joff][ipos] << DQ_BITS)), DQ_BITS));
-      img->m7[3][i] = iClip1(max_imgpel_value, rshift_rnd_sf((m6[0] - m6[3] + ((long)mpr[3 + joff][ipos] << DQ_BITS)), DQ_BITS));
+    for (j = joff; j < joff + BLOCK_SIZE; j++)
+    for (i = ioff; i < ioff + BLOCK_SIZE; i++)
+    {      
+      m7[j][i] = iClip1(max_imgpel_value, rshift_rnd_sf((m7[j][i] + ((long)mpr[j][i] << DQ_BITS)), DQ_BITS));
     }
+
   }
   else
   {
       for (j = 0; j < BLOCK_SIZE; j++)
         for (i = 0; i < BLOCK_SIZE; i++)
-        img->m7[j][i] = iClip1(max_imgpel_value, (img->cof[i0][j0][j][i] + (long)mpr[j + joff][i + ioff]));
+        m7[j + joff][i + ioff] = iClip1(max_imgpel_value, (img->cof[yuv][j + joff][i + ioff] + (long)mpr[j + joff][i + ioff]));
   }
+}
+
+/*!
+************************************************************************
+* \brief
+*    Inverse residual DPCM for Intra lossless coding
+*
+* \par Input:
+*    ioff_x,joff_y: Block position inside a macro block (0,4,8,12).
+************************************************************************
+*/  //For residual DPCM
+int Inv_Residual_trans_4x4(struct img_par *img, //!< image parameters
+                           int ioff,            //!< index to 4x4 block
+                           int joff,
+                           int i0,
+                           int j0,
+                           int chroma,
+                           int yuv)
+{
+  int i,j;
+  int temp[4][4];
+  imgpel (*mpr)[16] = img->mpr[yuv];
+
+  for (j = 0; j < BLOCK_SIZE; j++)
+    for (i = 0; i < BLOCK_SIZE; i++)
+      img->m7[yuv][joff+j][ioff+i] = img->cof[yuv][joff+j][ioff+i];
+
+  if(ipmode_DPCM==VERT_PRED)
+  {
+    for(i=0; i<4; i++)
+    {
+      temp[1][i]=img->m7[yuv][joff+0][ioff+i]+img->m7[yuv][joff+1][ioff+i];
+      temp[2][i]=img->m7[yuv][joff+0][ioff+i]+img->m7[yuv][joff+1][ioff+i]+img->m7[yuv][joff+2][ioff+i];
+      temp[3][i]=img->m7[yuv][joff+0][ioff+i]+img->m7[yuv][joff+1][ioff+i]+img->m7[yuv][joff+2][ioff+i]+img->m7[yuv][joff+3][ioff+i];
+    }
+    for(i=0; i<4; i++)
+    {
+      img->m7[yuv][joff+1][ioff+i]=temp[1][i];
+      img->m7[yuv][joff+2][ioff+i]=temp[2][i];
+      img->m7[yuv][joff+3][ioff+i]=temp[3][i];
+    }
+  }
+  else if(ipmode_DPCM==HOR_PRED)
+  {
+    for(j=0; j<4; j++)
+    {
+      temp[j][1]=img->m7[yuv][joff+j][ioff+0]+img->m7[yuv][joff+j][ioff+1];
+      temp[j][2]=img->m7[yuv][joff+j][ioff+0]+img->m7[yuv][joff+j][ioff+1]+img->m7[yuv][joff+j][ioff+2];
+      temp[j][3]=img->m7[yuv][joff+j][ioff+0]+img->m7[yuv][joff+j][ioff+1]+img->m7[yuv][joff+j][ioff+2]+img->m7[yuv][joff+j][ioff+3];    
+    }
+    for(j=0; j<4; j++)
+    {
+      img->m7[yuv][joff+j][ioff+1]=temp[j][1];
+      img->m7[yuv][joff+j][ioff+2]=temp[j][2];
+      img->m7[yuv][joff+j][ioff+3]=temp[j][3];
+    }
+  }
+
+  for (j = 0; j < BLOCK_SIZE; j++)
+    for (i = 0; i < BLOCK_SIZE; i++)
+      img->m7[yuv][joff+j][ioff+i] =  img->m7[yuv][joff+j][ioff+i] + (long)mpr[joff+j][ioff+i];
+
+  return 0;
+}
+
+/*!
+************************************************************************
+* \brief
+*    Inverse residual DPCM for Intra lossless coding
+*
+* \par Input:
+*    ioff_x,joff_y: Block position inside a macro block (0,8).
+************************************************************************
+*/
+//For residual DPCM
+int Inv_Residual_trans_8x8(ColorPlane pl, struct img_par *img, int ioff,int joff)
+{
+  int i, j;
+  int temp[8][8];
+  imgpel (*mpr)[16] = img->mpr[pl];
+
+  if(!pl)  //luma
+  {
+    if(ipmode_DPCM==VERT_PRED)
+    {
+      for(i=0; i<8; i++)
+      {
+        temp[1][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i];
+        temp[2][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i];
+        temp[3][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i]+img->m7[pl][joff+3][ioff+i];
+        temp[4][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i]+img->m7[pl][joff+3][ioff+i]+img->m7[pl][joff+4][ioff+i];
+        temp[5][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i]+img->m7[pl][joff+3][ioff+i]+img->m7[pl][joff+4][ioff+i]+img->m7[pl][joff+5][ioff+i];
+        temp[6][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i]+img->m7[pl][joff+3][ioff+i]+img->m7[pl][joff+4][ioff+i]+img->m7[pl][joff+5][ioff+i]+img->m7[pl][joff+6][ioff+i];
+        temp[7][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i]+img->m7[pl][joff+3][ioff+i]+img->m7[pl][joff+4][ioff+i]+img->m7[pl][joff+5][ioff+i]+img->m7[pl][joff+6][ioff+i]+img->m7[pl][joff+7][ioff+i];
+      }
+      for(i=0; i<8; i++)
+      {
+        img->m7[pl][joff+1][ioff+i]=temp[1][i];
+        img->m7[pl][joff+2][ioff+i]=temp[2][i];
+        img->m7[pl][joff+3][ioff+i]=temp[3][i];
+        img->m7[pl][joff+4][ioff+i]=temp[4][i];
+        img->m7[pl][joff+5][ioff+i]=temp[5][i];
+        img->m7[pl][joff+6][ioff+i]=temp[6][i];
+        img->m7[pl][joff+7][ioff+i]=temp[7][i];
+      }
+    }
+    else if(ipmode_DPCM==HOR_PRED)//HOR_PRED
+    {
+      for(i=0; i<8; i++)
+      {
+        temp[i][1]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1];
+        temp[i][2]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2];
+        temp[i][3]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2]+img->m7[pl][joff+i][ioff+3];
+        temp[i][4]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2]+img->m7[pl][joff+i][ioff+3]+img->m7[pl][joff+i][ioff+4];
+        temp[i][5]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2]+img->m7[pl][joff+i][ioff+3]+img->m7[pl][joff+i][ioff+4]+img->m7[pl][joff+i][ioff+5];
+        temp[i][6]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2]+img->m7[pl][joff+i][ioff+3]+img->m7[pl][joff+i][ioff+4]+img->m7[pl][joff+i][ioff+5]+img->m7[pl][joff+i][ioff+6];
+        temp[i][7]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2]+img->m7[pl][joff+i][ioff+3]+img->m7[pl][joff+i][ioff+4]+img->m7[pl][joff+i][ioff+5]+img->m7[pl][joff+i][ioff+6]+img->m7[pl][joff+i][ioff+7];
+      }
+      for(i=0; i<8; i++)
+      {
+        img->m7[pl][joff+i][ioff+1]=temp[i][1];
+        img->m7[pl][joff+i][ioff+2]=temp[i][2];
+        img->m7[pl][joff+i][ioff+3]=temp[i][3];
+        img->m7[pl][joff+i][ioff+4]=temp[i][4];
+        img->m7[pl][joff+i][ioff+5]=temp[i][5];
+        img->m7[pl][joff+i][ioff+6]=temp[i][6];
+        img->m7[pl][joff+i][ioff+7]=temp[i][7];
+      }
+    }
+    for (j = 0; j < BLOCK_SIZE*2; j++)
+      for (i = 0; i < BLOCK_SIZE*2; i++)
+        img->m7[pl][j+joff][i+ioff] =  img->m7[pl][j+joff][i+ioff] + (long)mpr[j+joff][i+ioff];
+  }
+  else  //chroma
+  {
+    if(ipmode_DPCM==VERT_PRED)
+    {
+      for(i=0; i<8; i++)
+      {
+        temp[1][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i];
+        temp[2][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i];
+        temp[3][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i]+img->m7[pl][joff+3][ioff+i];
+        temp[4][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i]+img->m7[pl][joff+3][ioff+i]+img->m7[pl][joff+4][ioff+i];
+        temp[5][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i]+img->m7[pl][joff+3][ioff+i]+img->m7[pl][joff+4][ioff+i]+img->m7[pl][joff+5][ioff+i];
+        temp[6][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i]+img->m7[pl][joff+3][ioff+i]+img->m7[pl][joff+4][ioff+i]+img->m7[pl][joff+5][ioff+i]+img->m7[pl][joff+6][ioff+i];
+        temp[7][i]=img->m7[pl][joff+0][ioff+i]+img->m7[pl][joff+1][ioff+i]+img->m7[pl][joff+2][ioff+i]+img->m7[pl][joff+3][ioff+i]+img->m7[pl][joff+4][ioff+i]+img->m7[pl][joff+5][ioff+i]+img->m7[pl][joff+6][ioff+i]+img->m7[pl][joff+7][ioff+i];
+      }
+      for(i=0; i<8; i++)
+      {
+        img->m7[pl][joff+1][ioff+i]=temp[1][i];
+        img->m7[pl][joff+2][ioff+i]=temp[2][i];
+        img->m7[pl][joff+3][ioff+i]=temp[3][i];
+        img->m7[pl][joff+4][ioff+i]=temp[4][i];
+        img->m7[pl][joff+5][ioff+i]=temp[5][i];
+        img->m7[pl][joff+6][ioff+i]=temp[6][i];
+        img->m7[pl][joff+7][ioff+i]=temp[7][i];
+      }
+    }
+    else if(ipmode_DPCM==HOR_PRED)//HOR_PRED
+    {
+      for(i=0; i<8; i++)
+      {
+        temp[i][1]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1];
+        temp[i][2]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2];
+        temp[i][3]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2]+img->m7[pl][joff+i][ioff+3];
+        temp[i][4]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2]+img->m7[pl][joff+i][ioff+3]+img->m7[pl][joff+i][ioff+4];
+        temp[i][5]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2]+img->m7[pl][joff+i][ioff+3]+img->m7[pl][joff+i][ioff+4]+img->m7[pl][joff+i][ioff+5];
+        temp[i][6]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2]+img->m7[pl][joff+i][ioff+3]+img->m7[pl][joff+i][ioff+4]+img->m7[pl][joff+i][ioff+5]+img->m7[pl][joff+i][ioff+6];
+        temp[i][7]=img->m7[pl][joff+i][ioff+0]+img->m7[pl][joff+i][ioff+1]+img->m7[pl][joff+i][ioff+2]+img->m7[pl][joff+i][ioff+3]+img->m7[pl][joff+i][ioff+4]+img->m7[pl][joff+i][ioff+5]+img->m7[pl][joff+i][ioff+6]+img->m7[pl][joff+i][ioff+7];
+      }
+      for(i=0; i<8; i++)
+      {
+        img->m7[pl][joff+i][ioff+1]=temp[i][1];
+        img->m7[pl][joff+i][ioff+2]=temp[i][2];
+        img->m7[pl][joff+i][ioff+3]=temp[i][3];
+        img->m7[pl][joff+i][ioff+4]=temp[i][4];
+        img->m7[pl][joff+i][ioff+5]=temp[i][5];
+        img->m7[pl][joff+i][ioff+6]=temp[i][6];
+        img->m7[pl][joff+i][ioff+7]=temp[i][7];
+      }
+    }
+    for (j = 0; j < BLOCK_SIZE*2; j++)
+      for (i = 0; i < BLOCK_SIZE*2; i++)
+        img->m7[pl][j+joff][i+ioff] =  img->m7[pl][j+joff][i+ioff] + (long)mpr[j+joff][i+ioff];
+  }
+  return 0;
 }
 
 /*!
@@ -877,8 +1038,10 @@ void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* s
         {
           if(!sps->seq_scaling_list_present_flag[i]) // fall-back rule A
           {
-            if((i==0) || (i==3))
-              qmatrix[i] = (i==0) ? quant_intra_default:quant_inter_default;
+            if(i==0)
+              qmatrix[i] = quant_intra_default;
+            else if(i==3)
+              qmatrix[i] = quant_inter_default;
             else
               qmatrix[i] = qmatrix[i-1];
           }
@@ -894,8 +1057,10 @@ void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* s
         {
           if(!sps->seq_scaling_list_present_flag[i]) // fall-back rule A
           {
-            if((i==6) || (i==7))
-              qmatrix[i] = (i==6) ? quant8_intra_default:quant8_inter_default;
+            if(i==6)
+              qmatrix[i] = quant8_intra_default;
+            else if(i==7)
+              qmatrix[i] = quant8_inter_default;
             else
               qmatrix[i] = qmatrix[i-2];
           }
@@ -918,10 +1083,15 @@ void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* s
         {
           if(!pps->pic_scaling_list_present_flag[i]) // fall-back rule B
           {
-            if((i==0) || (i==3))
+            if (i==0)
             {
               if(!sps->seq_scaling_matrix_present_flag)
-                qmatrix[i] = (i==0) ? quant_intra_default:quant_inter_default;
+                qmatrix[i] = quant_intra_default;
+            }
+            else if (i==3)
+            {
+              if(!sps->seq_scaling_matrix_present_flag)
+                qmatrix[i] = quant_inter_default;
             }
             else
               qmatrix[i] = qmatrix[i-1];
@@ -938,10 +1108,15 @@ void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* s
         {
           if(!pps->pic_scaling_list_present_flag[i]) // fall-back rule B
           {
-            if((i==6) || (i==7))
+            if (i==6)
             {
               if(!sps->seq_scaling_matrix_present_flag)
-                qmatrix[i] = (i==6) ? quant8_intra_default:quant8_inter_default;
+                qmatrix[i] = quant8_intra_default;
+            }
+            else if(i==7)
+            {
+              if(!sps->seq_scaling_matrix_present_flag)
+                qmatrix[i] = quant8_inter_default;
             }
             else  
               qmatrix[i] = qmatrix[i-2];
@@ -994,54 +1169,50 @@ void CalculateQuantParam()
  * \brief
  *    Luma DC inverse transform
  ***********************************************************************
- */
-void itrans_2(struct img_par *img) //!< image parameters
+ */ 
+void itrans_2(ColorPlane pl, struct img_par *img) //!< image parameters
 {
+  static int invLevelScale;
+  static int M4[4][4];
   int i,j;
-  int M5[4];
-  int M6[4];
 
-  int qp_per = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6;
-  int qp_rem = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6;
+  int qp, qp_c;
+  int qp_per, qp_rem;
+
+  if (pl)
+  {
+    int uv = pl - 1;
+    qp = img->qp + dec_picture->chroma_qp_offset[uv];
+    qp = iClip3(-(img->bitdepth_chroma_qp_scale), 51, qp); 
+    qp_c   = (qp < 0)? qp : QP_SCALE_CR[qp-MIN_QP];
+    qp_per = (qp_c + img->bitdepth_chroma_qp_scale)/6;
+    qp_rem = (qp_c + img->bitdepth_chroma_qp_scale)%6;
+    invLevelScale = InvLevelScale4x4Chroma_Intra[uv][qp_rem][0][0];
+  }
+  else
+  {
+    qp_per = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6;
+    qp_rem = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6;
+    invLevelScale = InvLevelScale4x4Luma_Intra[qp_rem][0][0];
+  }
 
   // horizontal
-  for (j=0;j<4;j++)
+  for (j=0; j < 4;j++) 
+    for (i=0; i < 4;i++) 
   {
-    M5[0]=img->cof[0][j][0][0];
-    M5[1]=img->cof[1][j][0][0];
-    M5[2]=img->cof[2][j][0][0];
-    M5[3]=img->cof[3][j][0][0];
-
-    M6[0]=M5[0]+M5[2];
-    M6[1]=M5[0]-M5[2];
-    M6[2]=M5[1]-M5[3];
-    M6[3]=M5[1]+M5[3];
-
-    img->cof[0][j][0][0] = M6[0]+M6[3];
-    img->cof[1][j][0][0] = M6[1]+M6[2];
-    img->cof[2][j][0][0] = M6[1]-M6[2];
-    img->cof[3][j][0][0] = M6[0]-M6[3];
+    M4[j][i]=img->cof[pl][j<<2][i<<2];
   }
 
+  ihadamard4x4(M4, M4);
   // vertical
-  for (i=0;i<4;i++)
+
+  for (j=0; j < 4;j++) 
+    for (i=0; i < 4;i++) 
   {
-    M5[0]=img->cof[i][0][0][0];
-    M5[1]=img->cof[i][1][0][0];
-    M5[2]=img->cof[i][2][0][0];
-    M5[3]=img->cof[i][3][0][0];
-
-    M6[0]=M5[0]+M5[2];
-    M6[1]=M5[0]-M5[2];
-    M6[2]=M5[1]-M5[3];
-    M6[3]=M5[1]+M5[3];
-
-    img->cof[i][0][0][0] = rshift_rnd((((M6[0]+M6[3])*InvLevelScale4x4Luma_Intra[qp_rem][0][0]) << qp_per), 6);
-    img->cof[i][1][0][0] = rshift_rnd((((M6[1]+M6[2])*InvLevelScale4x4Luma_Intra[qp_rem][0][0]) << qp_per), 6);
-    img->cof[i][2][0][0] = rshift_rnd((((M6[1]-M6[2])*InvLevelScale4x4Luma_Intra[qp_rem][0][0]) << qp_per), 6);
-    img->cof[i][3][0][0] = rshift_rnd((((M6[0]-M6[3])*InvLevelScale4x4Luma_Intra[qp_rem][0][0]) << qp_per), 6);
+    img->cof[pl][j<<2][i<<2] = rshift_rnd((( M4[j][i]*invLevelScale) << qp_per), 6);
   }
 }
+
 
 
 void itrans_sp(struct img_par *img,  //!< image parameters
@@ -1064,6 +1235,8 @@ void itrans_sp(struct img_par *img,  //!< image parameters
   int q_bits_sp = Q_BITS+qp_per_sp;
   int qp_const2 = (1<<q_bits_sp)/2;  //sp_pred
   imgpel (*mpr)[16] = img->mpr[LumaComp];
+  int    (*m7) [16] = img->m7[LumaComp];
+
   if (img->type == SI_SLICE) //ES modified
   {
     qp_per = (img->qpsp-MIN_QP)/6;
@@ -1108,17 +1281,17 @@ void itrans_sp(struct img_par *img,  //!< image parameters
   for (i=0;i<BLOCK_SIZE;i++)
   {
     // recovering coefficient since they are already dequantized earlier
-    img->cof[i0][j0][j][i]=(img->cof[i0][j0][j][i] >> qp_per) / dequant_coef[qp_rem][i][j];
+    img->cof[0][(j0<<2) + j][(i0<<2) + i]=(img->cof[0][(j0<<2) + j][(i0<<2) + i] >> qp_per) / dequant_coef[qp_rem][i][j];
     if(img->sp_switch || img->type==SI_SLICE)  //M.W. patched for SI
     {
       ilev=(iabs(predicted_block[i][j]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp; //ES added
-      ilev= isignab(ilev,predicted_block[i][j])+ img->cof[i0][j0][j][i];                           //ES added
-      img->cof[i0][j0][j][i] = isignab(iabs(ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp ,ilev) ; //ES added
+      ilev= isignab(ilev,predicted_block[i][j])+ img->cof[0][(j0<<2) + j][(i0<<2) + i];                           //ES added
+      img->cof[0][(j0<<2) + j][(i0<<2) + i] = isignab(iabs(ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp ,ilev) ; //ES added      
     }                                                                                             //ES added
     else
     {                                                                                          //ES added
-      ilev=((img->cof[i0][j0][j][i]*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6)+predicted_block[i][j] ;
-      img->cof[i0][j0][j][i]=isignab((iabs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp, ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
+      ilev=((img->cof[0][(j0<<2) + j][(i0<<2) + i]*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6)+predicted_block[i][j] ;
+      img->cof[0][(j0<<2) + j][(i0<<2) + i]=isignab((iabs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp, ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
     }
   }
   // horizontal
@@ -1126,7 +1299,7 @@ void itrans_sp(struct img_par *img,  //!< image parameters
   {
     for (i=0;i<BLOCK_SIZE;i++)
     {
-      m5[i]=img->cof[i0][j0][j][i];
+      m5[i]=img->cof[0][(j0<<2) + j][(i0<<2) + i];
     }
     m6[0]=(m5[0]+m5[2]);
     m6[1]=(m5[0]-m5[2]);
@@ -1136,15 +1309,15 @@ void itrans_sp(struct img_par *img,  //!< image parameters
     for (i=0;i<2;i++)
     {
       i1=3-i;
-      img->m7[j][i]=m6[i]+m6[i1];
-      img->m7[j][i1]=m6[i]-m6[i1];
+      m7[j][i]=m6[i]+m6[i1];
+      m7[j][i1]=m6[i]-m6[i1];
     }
   }
   // vertical
   for (i=0;i<BLOCK_SIZE;i++)
   {
     for (j=0;j<BLOCK_SIZE;j++)
-      m5[j]=img->m7[j][i];
+      m5[j]=m7[j][i];
 
     m6[0]=(m5[0]+m5[2]);
     m6[1]=(m5[0]-m5[2]);
@@ -1154,8 +1327,8 @@ void itrans_sp(struct img_par *img,  //!< image parameters
     for (j=0;j<2;j++)
     {
       j1=3-j;
-      img->m7[j][i] =iClip1(img->max_imgpel_value,rshift_rnd_sf((m6[j]+m6[j1]),DQ_BITS));
-      img->m7[j1][i]=iClip1(img->max_imgpel_value,rshift_rnd_sf((m6[j]-m6[j1]),DQ_BITS));
+      m7[j][i] =iClip1(img->max_imgpel_value,rshift_rnd_sf((m6[j]+m6[j1]),DQ_BITS));
+      m7[j1][i]=iClip1(img->max_imgpel_value,rshift_rnd_sf((m6[j]-m6[j1]),DQ_BITS));
     }
   }
 }
@@ -1185,6 +1358,7 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
   int q_bits    = Q_BITS+qp_per;
   int qp_const2=(1<<q_bits)/2;  //sp_pred
   imgpel (*mpr)[16] = img->mpr[LumaComp];
+  int    (*m7) [16] = img->m7[LumaComp];
 
 
   //  Horizontal transform
@@ -1225,7 +1399,7 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
   // Quant
   for (j=0;j < BLOCK_SIZE; j++)
   for (i=0; i < BLOCK_SIZE; i++)
-    img->m7[j][i]=isignab((iabs(predicted_block[i][j])* quant_coef[qp_rem][i][j]+qp_const2)>> q_bits,predicted_block[i][j])*dequant_coef[qp_rem][i][j]<<qp_per;
+    m7[j][i]=isignab((iabs(predicted_block[i][j])* quant_coef[qp_rem][i][j]+qp_const2)>> q_bits,predicted_block[i][j])*dequant_coef[qp_rem][i][j]<<qp_per;
 
   //     IDCT.
   //     horizontal
@@ -1234,7 +1408,7 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
   {
     for (i=0;i<BLOCK_SIZE;i++)
     {
-      m5[i]=img->m7[j][i];
+      m5[i]=m7[j][i];
     }
     m6[0]=(m5[0]+m5[2]);
     m6[1]=(m5[0]-m5[2]);
@@ -1244,15 +1418,15 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
     for (i=0;i<2;i++)
     {
       i1=3-i;
-      img->m7[j][i]=m6[i]+m6[i1];
-      img->m7[j][i1]=m6[i]-m6[i1];
+      m7[j][i]=m6[i]+m6[i1];
+      m7[j][i1]=m6[i]-m6[i1];
     }
   }
   // vertical
   for (i=0;i<BLOCK_SIZE;i++)
   {
     for (j=0;j<BLOCK_SIZE;j++)
-      m5[j]=img->m7[j][i];
+      m5[j]=m7[j][i];
 
     m6[0]=(m5[0]+m5[2]);
     m6[1]=(m5[0]-m5[2]);
@@ -1262,8 +1436,8 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
     for (j=0;j<2;j++)
     {
       j1=3-j;
-      img->m7[j][i] =iClip1(img->max_imgpel_value,rshift_rnd_sf((m6[j]+m6[j1]),DQ_BITS));
-      img->m7[j1][i]=iClip1(img->max_imgpel_value,rshift_rnd_sf((m6[j]-m6[j1]),DQ_BITS));
+      m7[j][i] =iClip1(img->max_imgpel_value,rshift_rnd_sf((m6[j]+m6[j1]),DQ_BITS));
+      m7[j1][i]=iClip1(img->max_imgpel_value,rshift_rnd_sf((m6[j]-m6[j1]),DQ_BITS));
     }
   }
 
@@ -1271,13 +1445,12 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
 
   for (j=0; j < BLOCK_SIZE; j++)
     for (i=0; i < BLOCK_SIZE; i++)
-      dec_picture->imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=(imgpel) img->m7[j][i];
+      dec_picture->imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=(imgpel) m7[j][i];
 
 }
 
 void itrans_sp_cr(struct img_par *img, int uv)
 {
-  int ll = uv << 1;
   int i,j,i1,j2,ilev,n2,n1,j1,mb_y;
   int m5[BLOCK_SIZE];
   int predicted_chroma_block[MB_BLOCK_SIZE/2][MB_BLOCK_SIZE/2],mp1[BLOCK_SIZE];
@@ -1360,13 +1533,13 @@ void itrans_sp_cr(struct img_par *img, int uv)
       //quantization fo predicted block
       ilev=(iabs (mp1[n1+n2*2]) * quant_coef[qp_rem_sp][0][0] + 2 * qp_const2) >> (q_bits_sp + 1);
       //addition
-      ilev=img->cof[n1+ll][4+n2][0][0]+isignab(ilev,mp1[n1+n2*2]);
+      ilev=img->cof[uv + 1][n2<<2][n1<<2]+isignab(ilev,mp1[n1+n2*2]);
       //dequantization
       mp1[n1+n2*2] =ilev*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
     }
     else
     {
-      ilev=((img->cof[n1+ll][4+n2][0][0]*dequant_coef[qp_rem][0][0]*A[0][0]<< qp_per) >>5)+mp1[n1+n2*2] ;
+      ilev=((img->cof[uv + 1][n2<<2][n1<<2]*dequant_coef[qp_rem][0][0]*A[0][0]<< qp_per) >>5)+mp1[n1+n2*2];
       mp1[n1+n2*2]=isignab((iabs(ilev)* quant_coef[qp_rem_sp][0][0]+ 2 * qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
     }
   }
@@ -1378,38 +1551,45 @@ void itrans_sp_cr(struct img_par *img, int uv)
   for (j=0;j< BLOCK_SIZE; j++)
   {
   // recovering coefficient since they are already dequantized earlier
-    img->cof[n1+ll][4+n2][j][i] = (img->cof[n1+ll][4+n2][j][i] >> qp_per) / dequant_coef[qp_rem][i][j];
+    img->cof[uv + 1][(n2<<2) + j][(n1<<2) + i] = (img->cof[uv + 1][(n2<<2) + j][(n1<<2) + i] >> qp_per) / dequant_coef[qp_rem][i][j];
 
     if (img->sp_switch || img->type==SI_SLICE)  //M.W. patched for SI
     {
       //quantization of the predicted block
       ilev =  (iabs(predicted_chroma_block[n1*BLOCK_SIZE+i][n2*BLOCK_SIZE+j]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp;
       //addition of the residual
-      ilev = isignab(ilev,predicted_chroma_block[n1*BLOCK_SIZE+i][n2*BLOCK_SIZE+j]) + img->cof[n1+ll][4+n2][j][i];
+      ilev = isignab(ilev,predicted_chroma_block[n1*BLOCK_SIZE+i][n2*BLOCK_SIZE+j]) + img->cof[uv + 1][(n2<<2) + j][(n1<<2) + i];
       // Inverse quantization
-      img->cof[n1+ll][4+n2][j][i] = ilev * dequant_coef[qp_rem_sp][i][j] << qp_per_sp  ;
+      img->cof[uv + 1][(n2<<2) + j][(n1<<2) + i] = ilev * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
     }
     else
     {
-      //dequantization and addition of the predicted block
-      ilev=((img->cof[n1+ll][4+n2][j][i]*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6)+predicted_chroma_block[n1*BLOCK_SIZE+i][n2*BLOCK_SIZE+j] ;
-      //quantization and dequantization
-      img->cof[n1+ll][4+n2][j][i] = isignab((iabs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2)>> q_bits_sp,ilev)*dequant_coef[qp_rem_sp][i][j]<<qp_per_sp;
+      //dequantization and addition of the predicted block      
+      ilev=((img->cof[uv + 1][(n2<<2) + j][(n1<<2) + i]*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6)+predicted_chroma_block[n1*BLOCK_SIZE+i][n2*BLOCK_SIZE+j] ;
+      //quantization and dequantization            
+      img->cof[uv + 1][(n2<<2) + j][(n1<<2) + i] = isignab((iabs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2)>> q_bits_sp,ilev)*dequant_coef[qp_rem_sp][i][j]<<qp_per_sp;
     }
   }
-  img->cof[0+ll][4][0][0] = (mp1[0] + mp1[1] + mp1[2] + mp1[3]) >> 1;
-  img->cof[0+ll][5][0][0] = (mp1[0] + mp1[1] - mp1[2] - mp1[3]) >> 1;
-  img->cof[1+ll][4][0][0] = (mp1[0] - mp1[1] + mp1[2] - mp1[3]) >> 1;
-  img->cof[1+ll][5][0][0] = (mp1[0] - mp1[1] - mp1[2] + mp1[3]) >> 1;
+  img->cof[uv+1][0][0] = (mp1[0] + mp1[1] + mp1[2] + mp1[3]) >> 1;
+  img->cof[uv+1][0][4] = (mp1[0] + mp1[1] - mp1[2] - mp1[3]) >> 1;
+  img->cof[uv+1][4][0] = (mp1[0] - mp1[1] + mp1[2] - mp1[3]) >> 1;
+  img->cof[uv+1][4][4] = (mp1[0] - mp1[1] - mp1[2] + mp1[3]) >> 1;
 }
 
 static const byte decode_block_scan[16] = {0, 1, 4, 5, 2, 3, 6, 7, 8, 9, 12, 13, 10, 11, 14, 15};
 
-void iMBtrans4x4(struct img_par *img, int smb)
+void iMBtrans4x4(ColorPlane pl, struct img_par *img, int smb)
 {
   int j_pos, i_pos;
+  int jj, ii;
   int block8x8;
   int i, j, k;  
+  int    (*m7) [16] = img->m7[pl];
+  imgpel **curr_img = pl ? dec_picture->imgUV[pl - 1]: dec_picture->imgY;
+
+  //For residual DPCM
+  Boolean lossless_qpprime = (Boolean) (((img->qp + img->bitdepth_luma_qp_scale) == 0) && (img->lossless_qpprime_flag == 1));  
+
   // =============== 4x4 itrans ================
   // -------------------------------------------
   for (block8x8=0; block8x8 < MB_BLOCK_SIZE; block8x8 += 4)
@@ -1424,22 +1604,32 @@ void iMBtrans4x4(struct img_par *img, int smb)
 
       if(smb) 
         itrans_sp(img, (i << BLOCK_SHIFT), (j << BLOCK_SHIFT), i, j);
+      else 
+      {
+     //   itrans4x4(img, (i << BLOCK_SHIFT), (j << BLOCK_SHIFT), pl);   // use DCT transform and make 4x4 block m7 from prediction block mpr
+      if(!lossless_qpprime)
+         itrans4x4(img, (i << BLOCK_SHIFT), (j << BLOCK_SHIFT), pl);   // use DCT transform and make 4x4 block m7 from prediction block mpr
       else
-        itrans   (img, (i << BLOCK_SHIFT), (j << BLOCK_SHIFT), i, j, 0, LumaComp);      // use DCT transform and make 4x4 block m7 from prediction block mpr
-
+         Inv_Residual_trans_4x4(img, (i << BLOCK_SHIFT), (j << BLOCK_SHIFT), i, j+4*(pl), 1, pl);    
+      }
+      
+      jj = j << BLOCK_SHIFT;
+      ii = i << BLOCK_SHIFT;
       for(j = 0; j < BLOCK_SIZE; j++)
       {
         for(i = 0; i < BLOCK_SIZE; i++)
         {
-          dec_picture->imgY[j_pos + j][i_pos + i] = img->m7[j][i]; // construct picture from 4x4 blocks
+          curr_img[j_pos + j][i_pos + i] = m7[j + jj][i + ii]; // construct picture from 4x4 blocks
         }
-      }            
+      }
     }
   }
 }
 
-void iMBtrans8x8(struct img_par *img)
+void iMBtrans8x8(ColorPlane pl, struct img_par *img)
 {
+  imgpel **curr_img = pl ? dec_picture->imgUV[pl - 1]: dec_picture->imgY;
+  int    (*m7)[16] = img->m7[pl];
   int block8x8;
   int i,j;
   int ioff, joff;
@@ -1451,72 +1641,76 @@ void iMBtrans8x8(struct img_par *img)
     ioff = 8 * (block8x8 & 0x01);
     joff = 8 * (block8x8 >> 1);
 
-    itrans8x8(img, ioff, joff);      // use DCT transform and make 8x8 block m7 from prediction block mpr
+    itrans8x8(pl, img, ioff, joff);      // use DCT transform and make 8x8 block m7 from prediction block mpr
 
     for(j = joff; j < joff + 8; j++)
     {
       for(i = ioff; i < ioff + 8; i++)
       {
-        dec_picture->imgY[img->pix_y + j][img->pix_x + i] = img->m7[j][i]; // construct picture from 4x4 blocks
+        curr_img[img->pix_y + j][img->pix_x + i] = m7[j][i];
       }
     }
   }
 }
 
-void iTransform(struct img_par *img, Macroblock *currMB, int need_4x4_transform, int smb, int yuv)
+void iTransform(Macroblock *currMB, ColorPlane pl, struct img_par *img,  int need_4x4_transform, int smb, int yuv)
 {
   static imgpel (*mpr) [16];
-  int i, j, uv;
-  
+  static imgpel **curr_img;
+  int j, uv = pl-1; 
+
   if ((currMB->cbp & 15) != 0 || smb)
   {
-    if(need_4x4_transform)// 4x4 inverse transform
-    {      
-      iMBtrans4x4(img, smb);
+    if(need_4x4_transform) // 4x4 inverse transform
+    {
+      iMBtrans4x4(pl, img, smb); 
     }
     else // 8x8 inverse transform
-    {
-      iMBtrans8x8(img);
+    {  
+      iMBtrans8x8(pl, img);    
     }
   }
   else
   {
-    mpr = img->mpr[LumaComp];
+    mpr = img->mpr[pl]; 
+    curr_img = pl ? dec_picture->imgUV[uv] : dec_picture->imgY;
     for(j = 0; j < MB_BLOCK_SIZE; j++)
-    {
-      memcpy(&(dec_picture->imgY[img->pix_y + j][img->pix_x]), &(mpr[j][0]), MB_BLOCK_SIZE * sizeof(imgpel));
+    { 
+      memcpy(&(curr_img[img->pix_y + j][img->pix_x]), &(mpr[j][0]), MB_BLOCK_SIZE * sizeof(imgpel));
     }
   }
 
-  if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
+  if ((dec_picture->chroma_format_idc != YUV400) && (dec_picture->chroma_format_idc != YUV444)) 
   {
-    imgpel **curUV;
-    int b4, b8;
-    int ioff, joff, i4, j4, ii, jj;
-    int uv_shift;    
+    static imgpel **curUV, *cur_line;
+    static int b4, b8;
+    static int ioff, joff, ii, jj;
+    static int (*m7UV)[16], *m7;
 
     for(uv=0;uv<2;uv++)
     {
-      curUV = dec_picture->imgUV[uv]; 
+      curUV = &dec_picture->imgUV[uv][img->pix_c_y]; 
+      m7UV  = img->m7[uv+1];
 
       if (!smb && (currMB->cbp>>4))
       {
-        uv_shift = uv * (img->num_uv_blocks);
-
         for (b8 = 0; b8 < (img->num_uv_blocks); b8++)
         {
           for(b4 = 0; b4 < 4; b4++)
           {
             joff = subblk_offset_y[yuv][b8][b4];
-            j4   = img->pix_c_y + joff;
             ioff = subblk_offset_x[yuv][b8][b4];
-            i4   = img->pix_c_x + ioff;
 
-            itrans(img,ioff,joff, cofuv_blk_x[yuv][b8+uv_shift][b4], cofuv_blk_y[yuv][b8+uv_shift][b4], 1, uv + 1);
-            for(jj=0;jj<4;jj++)
+            itrans4x4(img, ioff, joff, uv + 1);
+
+            for(jj=joff;jj<joff + 4;jj++)
+            {
+              cur_line = &curUV[jj][img->pix_c_x + ioff];
+              m7 = &m7UV[jj][ioff];
               for(ii=0;ii<4;ii++)
               {
-                curUV[j4+jj][i4+ii]=img->m7[jj][ii];
+                *(cur_line++) = *(m7++);
+              }
               }
           }
         }
@@ -1525,20 +1719,16 @@ void iTransform(struct img_par *img, Macroblock *currMB, int need_4x4_transform,
       {
         itrans_sp_cr(img, uv);
 
-        for (j=4;j<6;j++)
+        for (joff=0;joff<8;joff+=4)
         {
-          joff=(j-4)*4;
-          j4=img->pix_c_y+joff;
-          for(i=0;i<2;i++)
+          for(ioff=0;ioff<8;ioff+=4)
           {
-            ioff=i*4;
-            i4=img->pix_c_x+ioff;
-            itrans(img, ioff, joff, 2*uv+i, j, 1, uv + 1);
+            itrans4x4(img, ioff, joff, uv + 1);
 
-            for(jj=0;jj<4;jj++)
-              for(ii=0;ii<4;ii++)
+            for(jj=joff;jj<joff + 4;jj++)
+              for(ii=ioff;ii<ioff + 4;ii++)
               {
-                curUV[j4+jj][i4+ii]=img->m7[jj][ii];
+                curUV[jj][img->pix_c_x+ii]=m7UV[jj][ii];
               }
           }
         }
@@ -1547,9 +1737,8 @@ void iTransform(struct img_par *img, Macroblock *currMB, int need_4x4_transform,
       {
         mpr = img->mpr[uv + 1];
         for(jj = 0; jj < img->mb_size[1][1]; jj++)
-          memcpy(&(curUV[img->pix_c_y + jj][img->pix_c_x]), &(mpr[jj][0]), img->mb_size[1][0] * sizeof(imgpel));
+          memcpy(&(curUV[jj][img->pix_c_x]), &(mpr[jj][0]), img->mb_size[1][0] * sizeof(imgpel));
       }
-
     }
   }
 }

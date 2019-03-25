@@ -36,7 +36,8 @@ typedef struct {
 
   // elements of current macroblock
   int                   mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];
-  int64                 cbp_bits;
+  int64                 cbp_bits[3];
+  int64                 cbp_bits_8x8[3];
 } CSobj;
 typedef CSobj* CSptr;
 
@@ -44,8 +45,8 @@ typedef CSobj* CSptr;
 void  delete_coding_state  (CSptr);  //!< delete structure
 CSptr create_coding_state  (void);       //!< create structure
 
-void  store_coding_state   (CSptr);  //!< store parameters
-void  reset_coding_state   (CSptr);  //!< restore parameters
+void  store_coding_state   (Macroblock *currMB, CSptr);  //!< store parameters
+void  reset_coding_state   (Macroblock *currMB, CSptr);  //!< restore parameters
 
 
 #endif

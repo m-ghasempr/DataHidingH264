@@ -285,7 +285,11 @@ void linfo_cbp_intra(int len,int info,int *cbp, int *dummy)
   int cbp_idx;
 
   linfo_ue(len, info, &cbp_idx, dummy);
-  *cbp = NCBP[img->ChromaArrayType ? 1 : 0][cbp_idx][0];
+  if((active_sps->chroma_format_idc==0)||(active_sps->chroma_format_idc==3))
+    *cbp=NCBP[0][cbp_idx][0];
+  else
+    *cbp=NCBP[1][cbp_idx][0];
+
 }
 
 /*!
@@ -302,7 +306,10 @@ void linfo_cbp_inter(int len,int info,int *cbp, int *dummy)
   int cbp_idx;
 
   linfo_ue(len, info, &cbp_idx, dummy);
-  *cbp = NCBP[img->ChromaArrayType ? 1 : 0][cbp_idx][1];
+  if((active_sps->chroma_format_idc==0)||(active_sps->chroma_format_idc==3))
+    *cbp=NCBP[0][cbp_idx][1];
+  else
+    *cbp=NCBP[1][cbp_idx][1];
 }
 
 /*!
@@ -1042,7 +1049,7 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  Bitstream *currStream)
 
   if (retval)
   {
-    printf("ERROR: failed to find Total Zeros\n");
+    printf("ERROR: failed to find Total Zeros !cdc\n");
     exit(-1);
   }
 

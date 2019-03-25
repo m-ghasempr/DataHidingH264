@@ -36,7 +36,7 @@
 *    Mode Decision for a macroblock with error resilience
 *************************************************************************************
 */
-void encode_one_macroblock_highloss ()
+void encode_one_macroblock_highloss (Macroblock *currMB)
 {
   int         max_index = 9;
   int         rerun, block, index, mode, i, j, ctr16x16;
@@ -61,9 +61,9 @@ void encode_one_macroblock_highloss ()
   int         lambda_mf[3];
   short       runs        = (short) (input->RestrictRef==1 && (pslice  || (bslice && img->nal_reference_idc>0)) ? 2 : 1);
 
-  Macroblock* currMB      = &img->mb_data[img->current_mb_nr];
   int         prev_mb_nr  = FmoGetPreviousMBNr(img->current_mb_nr);
   Macroblock* prevMB      = (prev_mb_nr >= 0) ? &img->mb_data[prev_mb_nr]:NULL ;
+  imgpel  (*curr_mpr)[16] = img->mpr[0];
 
   short   min_chroma_pred_mode, max_chroma_pred_mode;
 
@@ -95,7 +95,7 @@ void encode_one_macroblock_highloss ()
 
     //=====   S T O R E   C O D I N G   S T A T E   =====
     //---------------------------------------------------
-    store_coding_state (cs_cm);
+    store_coding_state (currMB, cs_cm);
 
     if (!intra)
     {
@@ -103,12 +103,12 @@ void encode_one_macroblock_highloss ()
       best_mode = 1;
       if (bslice)
       {
-        Get_Direct_Motion_Vectors ();
+        Get_Direct_Motion_Vectors (currMB);
       }
 
       if (input->CtxAdptLagrangeMult == 1)
       {
-        get_initial_mb16x16_cost();
+        get_initial_mb16x16_cost(currMB);
       }
 
       //===== MOTION ESTIMATION FOR 16x16, 16x8, 8x16 BLOCKS =====
@@ -121,7 +121,7 @@ void encode_one_macroblock_highloss ()
           for (cost=0, block=0; block<(mode==1?1:2); block++)
           {
             update_lambda_costs(&enc_mb, lambda_mf);
-            PartitionMotionSearch (mode, block, lambda_mf);
+            PartitionMotionSearch (currMB, mode, block, lambda_mf);
 
             //--- set 4x4 block indizes (for getting MV) ---
             j = (block==1 && mode==2 ? 2 : 0);
@@ -129,22 +129,22 @@ void encode_one_macroblock_highloss ()
 
             //--- get cost and reference frame for List 0 prediction ---
             bmcost[LIST_0] = INT_MAX;
-            list_prediction_cost(LIST_0, block, mode, enc_mb, bmcost, best_ref);
+            list_prediction_cost(currMB, LIST_0, block, mode, enc_mb, bmcost, best_ref);
 
             if (bslice)
             {
               //--- get cost and reference frame for List 1 prediction ---
               bmcost[LIST_1] = INT_MAX;
-              list_prediction_cost(LIST_1, block, mode, enc_mb, bmcost, best_ref);
+              list_prediction_cost(currMB, LIST_1, block, mode, enc_mb, bmcost, best_ref);
 
               // Compute bipredictive cost between best list 0 and best list 1 references
-              list_prediction_cost(BI_PRED, block, mode, enc_mb, bmcost, best_ref);
+              list_prediction_cost(currMB, BI_PRED, block, mode, enc_mb, bmcost, best_ref);
 
               // Finally, if mode 16x16, compute cost for bipredictive ME vectore
               if (input->BiPredMotionEstimation && mode == 1)
               {
-                list_prediction_cost(BI_PRED_L0, block, mode, enc_mb, bmcost, 0);
-                list_prediction_cost(BI_PRED_L1, block, mode, enc_mb, bmcost, 0);
+                list_prediction_cost(currMB, BI_PRED_L0, block, mode, enc_mb, bmcost, 0);
+                list_prediction_cost(currMB, BI_PRED_L1, block, mode, enc_mb, bmcost, 0);
               }
               else
               {
@@ -185,7 +185,7 @@ void encode_one_macroblock_highloss ()
 
             //--- set reference frames and motion vectors ---
             if (mode>1 && block==0)
-              SetRefAndMotionVectors (block, mode, best_pdir, best_ref[LIST_0], best_ref[LIST_1]);
+              SetRefAndMotionVectors (currMB, block, mode, best_pdir, best_ref[LIST_0], best_ref[LIST_1]);
           } // for (block=0; block<(mode==1?1:2); block++)
 
           if (cost < min_cost)
@@ -207,7 +207,7 @@ void encode_one_macroblock_highloss ()
         tr8x8.cost8x8 = INT_MAX;
         tr4x4.cost8x8 = INT_MAX;
         //===== store coding state of macroblock =====
-        store_coding_state (cs_mb);
+        store_coding_state (currMB, cs_mb);
 
         currMB->all_blk_8x8 = -1;
 
@@ -220,7 +220,7 @@ void encode_one_macroblock_highloss ()
           //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
           for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
           {
-            submacroblock_mode_decision(enc_mb, &tr8x8, currMB, cofAC_8x8ts[block],
+            submacroblock_mode_decision(enc_mb, &tr8x8, currMB, cofAC8x8ts[0][block], cofAC8x8ts[1][block], cofAC8x8ts[2][block],
               &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1);
             best8x8mode       [block] = tr8x8.part8x8mode [block];
             best8x8pdir [P8x8][block] = tr8x8.part8x8pdir [block];
@@ -235,7 +235,7 @@ void encode_one_macroblock_highloss ()
           currMB->luma_transform_size_8x8_flag = 0; //switch to 4x4 transform size
 
           //--- re-set coding state (as it was before 8x8 block coding) ---
-          //reset_coding_state (cs_mb);
+          //reset_coding_state (currMB, cs_mb);
         }// if (input->Transform8x8Mode)
 
 
@@ -248,7 +248,7 @@ void encode_one_macroblock_highloss ()
           //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
           for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
           {
-            submacroblock_mode_decision(enc_mb, &tr4x4, currMB, cofAC8x8[block],
+            submacroblock_mode_decision(enc_mb, &tr4x4, currMB, cofAC8x8[block], cofAC8x8CbCr[0][block], cofAC8x8CbCr[1][block],
               &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 0);
 
             best8x8mode       [block] = tr4x4.part8x8mode [block];
@@ -257,16 +257,15 @@ void encode_one_macroblock_highloss ()
             best8x8l1ref[P8x8][block] = tr4x4.part8x8l1ref[block];
           }
           //--- re-set coding state (as it was before 8x8 block coding) ---
-          // reset_coding_state (cs_mb);
+          // reset_coding_state (currMB, cs_mb);
         }// if (input->Transform8x8Mode != 2)
 
         //--- re-set coding state (as it was before 8x8 block coding) ---
-        reset_coding_state (cs_mb);
-
+        reset_coding_state (currMB, cs_mb);
 
         // This is not enabled yet since mpr has reverse order.
         if (input->RCEnable)
-          rc_store_diff(img->opix_x,img->opix_y,img->mpr);
+          rc_store_diff(img->opix_x, img->opix_y, curr_mpr);
 
         //check cost for P8x8 for non-rdopt mode
         giRDOpt_B8OnlyFlag = 0;
@@ -278,7 +277,7 @@ void encode_one_macroblock_highloss ()
 
       // Find a motion vector for the Skip mode
     if(pslice)
-        FindSkipModeMotionVector ();
+        FindSkipModeMotionVector (currMB);
     }
     else // if (!intra)
     {
@@ -295,13 +294,13 @@ void encode_one_macroblock_highloss ()
      if ((img->yuv_format != YUV400) && !IS_INDEPENDENT(input))
      {
        // precompute all new chroma intra prediction modes
-       IntraChromaPrediction(&mb_available_up, &mb_available_left, &mb_available_up_left);
+       IntraChromaPrediction(currMB, &mb_available_up, &mb_available_left, &mb_available_up_left);
 
        if (input->FastCrIntraDecision )
        {
-         IntraChromaRDDecision(enc_mb);
-         min_chroma_pred_mode = currMB->c_ipred_mode;
-         max_chroma_pred_mode = currMB->c_ipred_mode;
+         IntraChromaRDDecision(currMB, enc_mb);
+      min_chroma_pred_mode = (short) currMB->c_ipred_mode;
+      max_chroma_pred_mode = (short) currMB->c_ipred_mode;
        }
        else
        {
@@ -347,12 +346,11 @@ void encode_one_macroblock_highloss ()
            ctr16x16++;
          }
 
-         // Skip intra modes in inter slices if best inter mode is
-         // a MB partition and cbp is 0.
-         if (input->SkipIntraInInterSlices && !intra && mode >= I16MB
-           && best_mode <=3 && currMB->cbp == 0)
+         // Skip intra modes in inter slices if best mode is inter <P8x8 with cbp equal to 0
+         if (input->SkipIntraInInterSlices && !intra && mode >= I4MB && best_mode <=3 && currMB->cbp == 0)
            continue;
 
+      // check if weights are in valid range for biprediction.
          if (bslice && active_pps->weighted_bipred_idc == 1 && mode < P8x8)
          {
            int cur_blk, cur_comp;
@@ -382,7 +380,7 @@ void encode_one_macroblock_highloss ()
            {
              if ((input->BiPredMotionEstimation) && ctr16x16 == 2
                && img->bi_pred_me[mode] < 2 && mode == 1)
-               img->bi_pred_me[mode] = img->bi_pred_me[mode] + 1;
+            img->bi_pred_me[mode] = (short) (img->bi_pred_me[mode] + 1); 
              continue;
            }
          }
@@ -392,7 +390,7 @@ void encode_one_macroblock_highloss ()
 
          if ((input->BiPredMotionEstimation) && (bslice) && ctr16x16 == 2
            && img->bi_pred_me[mode] < 2 && mode == 1 && best8x8pdir[1][0] == 2)
-           img->bi_pred_me[mode] = img->bi_pred_me[mode] + 1;
+        img->bi_pred_me[mode] = (short) (img->bi_pred_me[mode] + 1); 
        }// for (ctr16x16=0, index=0; index<max_index; index++)
      }// for (currMB->c_ipred_mode=DC_PRED_8; currMB->c_ipred_mode<=max_chroma_pred_mode; currMB->c_ipred_mode++)
 
@@ -410,22 +408,13 @@ void encode_one_macroblock_highloss ()
   //=====  S E T   F I N A L   M A C R O B L O C K   P A R A M E T E R S ======
   //---------------------------------------------------------------------------
 
-  if (((cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM) ))
-    currMB->prev_cbp = 1;
-  else if ((cbp==0 && !input->RCEnable) || (best_mode==IPCM))
-  {
-    currMB->delta_qp = 0;
-    currMB->qp       = currMB->prev_qp;
-    set_chroma_qp(currMB);
-    img->qp          = currMB->qp;
-    currMB->prev_cbp = 0;
-  }
-  set_stored_macroblock_parameters ();
+  update_qp_cbp_tmp(currMB, cbp, best_mode);
+  set_stored_macroblock_parameters (currMB);
 
   // Rate control
-  if(input->RCEnable)
-    update_rc(currMB, best_mode);
-  handle_qp(currMB, best_mode);
+  if(input->RCEnable && input->RCUpdateMode <= MAX_RC_MODE)
+    rc_store_mad(currMB);
+  update_qp_cbp(currMB, best_mode);
 
   rdopt->min_rdcost = min_rdcost;
 
@@ -433,7 +422,7 @@ void encode_one_macroblock_highloss ()
     && (img->current_mb_nr%2)
     && (currMB->mb_type ? 0:((bslice) ? !currMB->cbp:1))  // bottom is skip
     && (prevMB->mb_type ? 0:((bslice) ? !prevMB->cbp:1))
-    && !(field_flag_inference() == enc_mb.curr_mb_field)) // top is skip
+    && !(field_flag_inference(currMB) == enc_mb.curr_mb_field)) // top is skip
   {
     rdopt->min_rdcost = 1e30;  // don't allow coding of a MB pair as skip if wrong inference
   }

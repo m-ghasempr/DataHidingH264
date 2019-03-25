@@ -54,8 +54,7 @@ delete_coding_state (CSptr cs)
  *    create structure for storing coding state
  ************************************************************************
  */
-CSptr
-create_coding_state ()
+CSptr create_coding_state ()
 {
   CSptr cs;
 
@@ -101,14 +100,11 @@ create_coding_state ()
  ************************************************************************
  */
 void
-store_coding_state (CSptr cs)
+store_coding_state (Macroblock *currMB, CSptr cs)
 {
   int  i;
   int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;
   Slice *currSlice = img->currentSlice;
-
-  Macroblock *currMB  = &(img->mb_data [img->current_mb_nr]);
-
 
   if (!input->rdopt)  return;
 
@@ -118,8 +114,8 @@ store_coding_state (CSptr cs)
     //only one partition for IDR img
     for (i = 0; i < i_last; i++)
     {
-      cs->encenv[i] = currSlice->partArr[i].ee_cabac;;
-      cs->bitstream[i] = *currSlice->partArr[i].bitstream;;
+      cs->encenv[i] = currSlice->partArr[i].ee_cabac;
+      cs->bitstream[i] = *currSlice->partArr[i].bitstream;
     }
 
     //=== contexts for binary arithmetic coding ===
@@ -131,7 +127,7 @@ store_coding_state (CSptr cs)
     //=== important variables of data partition array ===
     for (i = 0; i < i_last; i++)
     {
-      cs->bitstream[i] = *currSlice->partArr[i].bitstream;;
+      cs->bitstream[i] = *currSlice->partArr[i].bitstream;
     }
   }
   //=== syntax element number and bitcounters ===
@@ -139,7 +135,8 @@ store_coding_state (CSptr cs)
 
   //=== elements of current macroblock ===
   memcpy (cs->mvd, currMB->mvd, BLOCK_CONTEXT * sizeof(int));
-  cs->cbp_bits = currMB->cbp_bits;
+  memcpy (cs->cbp_bits    , currMB->cbp_bits    , 3 * sizeof(int64));
+  memcpy (cs->cbp_bits_8x8, currMB->cbp_bits_8x8, 3 * sizeof(int64));
 }
 
 
@@ -149,13 +146,11 @@ store_coding_state (CSptr cs)
  *    restore coding state (for rd-optimized mode decision)
  ************************************************************************
  */
-void reset_coding_state (CSptr cs)
+void reset_coding_state (Macroblock *currMB, CSptr cs)
 {
   int  i;
   int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;
   Slice *currSlice = img->currentSlice;
-
-  Macroblock *currMB  = &(img->mb_data [img->current_mb_nr]);
 
   if (!input->rdopt)  return;
 
@@ -190,6 +185,7 @@ void reset_coding_state (CSptr cs)
 
   //=== elements of current macroblock ===
   memcpy (currMB->mvd, cs->mvd, BLOCK_CONTEXT * sizeof(int));
-  currMB->cbp_bits = cs->cbp_bits;
+  memcpy (currMB->cbp_bits    , cs->cbp_bits    , 3 * sizeof(int64));
+  memcpy (currMB->cbp_bits_8x8, cs->cbp_bits_8x8, 3 * sizeof(int64));
 }
 

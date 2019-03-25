@@ -530,7 +530,7 @@ static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize
       if ( srcCounter > 0 )
         block[ k + column ] = (byte)(tmp/srcCounter);
       else
-        block[ k + column ] = blockSize == 8 ? img->dc_pred_value_chroma : img->dc_pred_value_luma;
+        block[ k + column ] = blockSize == 8 ? img->dc_pred_value_comp[1] : img->dc_pred_value_comp[0];
     }
     k += frameWidth;
   }

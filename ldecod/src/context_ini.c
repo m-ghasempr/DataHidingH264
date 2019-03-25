@@ -23,19 +23,39 @@
 
 #define BIARI_CTX_INIT2(ii,jj,ctx,tab,num) \
 { \
+  if ((img->type==I_SLICE)||(img->type==SI_SLICE))  \
+  { \
   for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    if      ((img->type==I_SLICE)||(img->type==SI_SLICE))  biari_init_context (img, &(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
-    else                                                   biari_init_context (img, &(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
+    biari_init_context (img, &(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
   } \
-}
-#define BIARI_CTX_INIT1(jj,ctx,tab,num) \
-{ \
+  } \
+  else \
+  { \
+  for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    if   ((img->type==I_SLICE)||(img->type==SI_SLICE))  biari_init_context (img, &(ctx[j]), &(tab ## _I[num][0][j][0])); \
-    else                                                biari_init_context (img, &(ctx[j]), &(tab ## _P[num][0][j][0])); \
+    biari_init_context (img, &(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
+  } \
+  } \
+}
+
+#define BIARI_CTX_INIT1(jj,ctx,tab,num) \
+{ \
+  if ((img->type==I_SLICE)||(img->type==SI_SLICE))  \
+  { \
+  for (j=0; j<jj; j++) \
+  { \
+    biari_init_context (img, &(ctx[j]), &(tab ## _I[num][0][j][0])); \
+  } \
+  } \
+  else \
+  { \
+  for (j=0; j<jj; j++) \
+  { \
+    biari_init_context (img, &(ctx[j]), &(tab ## _P[num][0][j][0])); \
+  } \
   } \
 }
 
@@ -63,12 +83,12 @@ init_contexts (struct img_par* img)
   BIARI_CTX_INIT1 (                 NUM_IPR_CTX,  tc->ipr_contexts,     INIT_IPR,       img->model_number);
   BIARI_CTX_INIT1 (                 NUM_CIPR_CTX, tc->cipr_contexts,    INIT_CIPR,      img->model_number);
   BIARI_CTX_INIT2 (3,               NUM_CBP_CTX,  tc->cbp_contexts,     INIT_CBP,       img->model_number);
-  BIARI_CTX_INIT2 (8,               NUM_BCBP_CTX, tc->bcbp_contexts,    INIT_BCBP,      img->model_number);
-  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_MAP_CTX,  tc->map_contexts,     INIT_MAP,       img->model_number);
-  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_LAST_CTX, tc->last_contexts,    INIT_LAST,      img->model_number);
+  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_BCBP_CTX, tc->bcbp_contexts,    INIT_BCBP,      img->model_number);
+  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_MAP_CTX,  tc->map_contexts[0],  INIT_MAP,       img->model_number);
+  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_MAP_CTX,  tc->map_contexts[1],  INIT_FLD_MAP,   img->model_number);
+  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_LAST_CTX, tc->last_contexts[0], INIT_LAST,      img->model_number);
+  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_LAST_CTX, tc->last_contexts[1], INIT_FLD_LAST,  img->model_number);
   BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_ONE_CTX,  tc->one_contexts,     INIT_ONE,       img->model_number);
   BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_ABS_CTX,  tc->abs_contexts,     INIT_ABS,       img->model_number);
-  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_MAP_CTX,  tc->fld_map_contexts, INIT_FLD_MAP,   img->model_number);
-  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_LAST_CTX, tc->fld_last_contexts,INIT_FLD_LAST,  img->model_number);
 }
 

@@ -44,6 +44,7 @@ static const short search_point_hp[10][2] = {{0,0},{-2,0}, {0,2}, {2,0},  {0,-2}
 static const short search_point_qp[10][2] = {{0,0},{-1,0}, {0,1}, {1,0},  {0,-1}, {-1,1},  {1,1},  {1,-1}, {-1,-1}, {-1,1}};
 //static const int   next_subpel_pos_start[5][5] = {};
 //static const int   next_subpel_pos_end  [5][5] = {};
+static int (*computePred)(imgpel* , int , int , int , int , int );
 
 static short EPZSBlkCount;
 static int   searcharray;
@@ -332,22 +333,25 @@ int
 EPZSInit (void)
 {
   int pel_error_me = 1 << (img->bitdepth_luma - 8);
+  int pel_error_me_cr = 1 << (img->bitdepth_chroma - 8);
   int i, memory_size = 0;
+  double chroma_weight = input->ChromaMEEnable ? pel_error_me_cr * input->ChromaMEWeight * (double) (img->width_cr * img->height_cr) / (double) (img->width * img->height) : 0;
   int searchlevels = RoundLog2 (input->search_range) - 1;
-
-  searcharray = input->BiPredMotionEstimation? (2 * imax (input->search_range, input->BiPredMESearchRange) + 1) << (2 * input->EPZSSubPelGrid) : (2 * input->search_range + 1)<< (2 * input->EPZSSubPelGrid);
+  
+  searcharray = input->BiPredMotionEstimation? (2 * imax (input->search_range, input->BiPredMESearchRange) + 1) << (input->EPZSGrid) : (2 * input->search_range + 1)<< (input->EPZSGrid);
 
   mv_rescale = input->EPZSSubPelGrid ? 0 : 2;
+  
   //! In this implementation we keep threshold limits fixed.
   //! However one could adapt these limits based on lagrangian
   //! optimization considerations (i.e. qp), while also allow
   //! adaptation of the limits themselves based on content or complexity.
   for (i=0;i<8;i++)
   {
-    medthres[i] = input->EPZSMedThresScale * medthres_base[i] * pel_error_me;
-    maxthres[i] = input->EPZSMaxThresScale * maxthres_base[i] * pel_error_me;
-    minthres[i] = input->EPZSMinThresScale * minthres_base[i] * pel_error_me;
-    subthres[i] = input->EPZSSubPelThresScale * medthres_base[i] * pel_error_me;
+    medthres[i] = input->EPZSMedThresScale * (medthres_base[i] * pel_error_me + (int) (medthres_base[i] * chroma_weight + 0.5));
+    maxthres[i] = input->EPZSMaxThresScale * (maxthres_base[i] * pel_error_me + (int) (maxthres_base[i] * chroma_weight + 0.5));
+    minthres[i] = input->EPZSMinThresScale * (minthres_base[i] * pel_error_me + (int) (minthres_base[i] * chroma_weight + 0.5));
+    subthres[i] = input->EPZSSubPelThresScale * (medthres_base[i] * pel_error_me + (int) (medthres_base[i] * chroma_weight + 0.5));
   }
 
   //! Definition of pottential EPZS patterns.
@@ -1493,7 +1497,8 @@ static void EPZSWindowPredictors (short mv[2], EPZSStructure *predictor, int *pr
 ***********************************************************************
 */
 int                                           //  ==> minimum motion cost after search
-EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for the AxB block
+EPZSPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
+                          imgpel * cur_pic,   // <--  original pixel values for the AxB block
                           short ref,          // <--  reference picture
                           int list,           // <--  reference list
                           int list_offset,    // <--  offset for Mbaff
@@ -1523,8 +1528,8 @@ EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for t
 
   int   pred_x = (pic_pix_x << 2) + pred_mv[0];  // predicted position x (in sub-pel units)
   int   pred_y = (pic_pix_y << 2) + pred_mv[1];  // predicted position y (in sub-pel units)
-  int   center_x = (pic_pix_x << (2 - mv_rescale))+ mv[0]; // center position x (in pel units)
-  int   center_y = (pic_pix_y << (2 - mv_rescale))+ mv[1]; // center position y (in pel units)
+  int   center_x = (pic_pix_x << (input->EPZSGrid))+ mv[0]; // center position x (in pel units)
+  int   center_y = (pic_pix_y << (input->EPZSGrid))+ mv[1]; // center position y (in pel units)
   int   cand_x = center_x << mv_rescale;
   int   cand_y = center_y << mv_rescale;
   int   tempmv[2]  = {mv[0], mv[1]};
@@ -1532,18 +1537,20 @@ EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for t
   int   stopCriterion = medthres[blocktype];
   int   mapCenter_x = search_range - mv[0];
   int   mapCenter_y = search_range - mv[1];
-  int   second_mcost = INT_MAX;
-  short apply_weights = (active_pps->weighted_pred_flag > 0 || (active_pps->weighted_bipred_idc && (img->type == B_SLICE))) && input->UseWeightedReferenceME;
+  int   second_mcost = INT_MAX;  
   int   *prevSad = EPZSDistortion[list + list_offset][blocktype - 1];
-  short *motion=NULL;
-  int   dist_method = F_PEL + 3 * apply_weights;
+  short *motion=NULL;  
 
   short invalid_refs = 0;
   byte  checkMedian = FALSE;
   EPZSStructure *searchPatternF = searchPattern;
+  short apply_weights = (active_pps->weighted_pred_flag > 0 || (active_pps->weighted_bipred_idc && (img->type == B_SLICE))) && input->UseWeightedReferenceME;  
+
+  computePred = computeUniPred[F_PEL + 3 * apply_weights];
+
   EPZSBlkCount ++;
 
-  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
+  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
 
   img_width  = ref_picture->size_x;
   img_height = ref_picture->size_y;
@@ -1571,8 +1578,8 @@ EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for t
       offset_cr[1] = wp_offset[list + list_offset][ref][2];
     }
   }
-  pic_pix_x = (pic_pix_x << (2 - mv_rescale));
-  pic_pix_y = (pic_pix_y << (2 - mv_rescale));
+  pic_pix_x = (pic_pix_x << (input->EPZSGrid));
+  pic_pix_y = (pic_pix_y << (input->EPZSGrid));
 
   if (input->EPZSSpatialMem)
   {
@@ -1595,7 +1602,7 @@ EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for t
   min_mcost = MV_COST_SMP (lambda_factor, cand_x, cand_y, pred_x, pred_y);
 
   //--- add residual cost to motion cost ---
-  min_mcost += computeUniPred[dist_method](cur_pic, blocksize_y, blocksize_x,
+  min_mcost += computePred(cur_pic, blocksize_y, blocksize_x,
     INT_MAX, cand_x + IMG_PAD_SIZE_TIMES4, cand_y + IMG_PAD_SIZE_TIMES4);
 
   // Additional threshold for ref>0
@@ -1618,8 +1625,8 @@ EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for t
 
   //  if ((center_x > search_range) && (center_x < img_width  - search_range - blocksize_x) &&
   //(center_y > search_range) && (center_y < img_height - search_range - blocksize_y)   )
-  if ( (center_x > search_range) && (center_x < ((img_width  - blocksize_x) << (input->EPZSSubPelGrid * 2)) - search_range)
-    && (center_y > search_range) && (center_y < ((img_height - blocksize_y) << (input->EPZSSubPelGrid * 2)) - search_range))
+  if ( (center_x > search_range) && (center_x < ((img_width  - blocksize_x) << (input->EPZSGrid)) - search_range)
+    && (center_y > search_range) && (center_y < ((img_height - blocksize_y) << (input->EPZSGrid)) - search_range))
   {
     ref_access_method = FAST_ACCESS;
   }
@@ -1646,10 +1653,10 @@ EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for t
     int pos, mcost;
     PixelPos block_a, block_b, block_c, block_d;
 
-    getLuma4x4Neighbour (img->current_mb_nr, mb_x - 1, mb_y, &block_a);
-    getLuma4x4Neighbour (img->current_mb_nr, mb_x, mb_y - 1, &block_b);
-    getLuma4x4Neighbour (img->current_mb_nr, mb_x + blocksize_x, mb_y -1, &block_c);
-    getLuma4x4Neighbour (img->current_mb_nr, mb_x - 1, mb_y -1, &block_d);
+    getLuma4x4Neighbour (currMB, mb_x - 1, mb_y, &block_a);
+    getLuma4x4Neighbour (currMB, mb_x, mb_y - 1, &block_b);
+    getLuma4x4Neighbour (currMB, mb_x + blocksize_x, mb_y -1, &block_c);
+    getLuma4x4Neighbour (currMB, mb_x - 1, mb_y -1, &block_d);
 
     if (mb_y > 0)
     {
@@ -1764,7 +1771,7 @@ EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for t
 
       ref_access_method = CHECK_RANGE ? FAST_ACCESS : UMV_ACCESS;
 
-      mcost += computeUniPred[dist_method](cur_pic, blocksize_y,blocksize_x,
+      mcost += computePred(cur_pic, blocksize_y,blocksize_x,
         second_mcost - mcost, cand_x + IMG_PAD_SIZE_TIMES4,cand_y + IMG_PAD_SIZE_TIMES4);
 
       //--- check if motion cost is less than minimum cost ---
@@ -1847,7 +1854,7 @@ EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for t
               {
                 ref_access_method = CHECK_RANGE ? FAST_ACCESS : UMV_ACCESS;
 
-                mcost += computeUniPred[dist_method](cur_pic, blocksize_y,blocksize_x,
+                mcost += computePred(cur_pic, blocksize_y,blocksize_x,
                   min_mcost - mcost, cand_x + IMG_PAD_SIZE_TIMES4, cand_y + IMG_PAD_SIZE_TIMES4);
 
                 if (mcost < min_mcost)
@@ -1962,22 +1969,23 @@ EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for t
 ***********************************************************************
 */
 int                                               //  ==> minimum motion cost after search
-EPZSBiPredBlockMotionSearch (imgpel * cur_pic,   // <--  original pixel values for the AxB block
+EPZSBiPredBlockMotionSearch (Macroblock *currMB,  // <--  Current Macroblock
+                             imgpel * cur_pic,    // <--  original pixel values for the AxB block
                              short  ref,          // <--  reference picture
                              int    list,         // <--  reference list
                              int    list_offset,  // <--  offset for Mbaff
-                             char  ***refPic,    // <--  reference array
+                             char  ***refPic,     // <--  reference array
                              short  ****tmp_mv,   // <--  mv array
                              int    pic_pix_x,    // <--  absolute x-coordinate of regarded AxB block
                              int    pic_pix_y,    // <--  absolute y-coordinate of regarded AxB block
-                             int    blocktype,    //<--  block type (1-16x16 ... 7-4x4)
-                             short  *pred_mv1,   // <--  motion vector predictor (x) in sub-pel units
-                             short  *pred_mv2,   // <--  motion vector predictor (x) in sub-pel units
+                             int    blocktype,    // <--  block type (1-16x16 ... 7-4x4)
+                             short  *pred_mv1,    // <--  motion vector predictor (x) in sub-pel units
+                             short  *pred_mv2,    // <--  motion vector predictor (x) in sub-pel units
                              short  mv[2],        // <--> in: search center (x) / out: motion vector (x) - in pel units
                              short  s_mv[2],      // <--> in: search center (x) / out: motion vector (x) - in pel units
                              int    search_range, // <--  1-d search range in pel units
                              int    min_mcost,    // <--  minimum motion cost (cost for center or huge value)
-                             int    lambda_factor)        // <--  lagrangian parameter for determining motion cost
+                             int    lambda_factor)// <--  lagrangian parameter for determining motion cost
 {
   short blocksize_y = input->blc_size[blocktype][1];  // vertical block size
   short blocksize_x = input->blc_size[blocktype][0];  // horizontal block size
@@ -1987,10 +1995,10 @@ EPZSBiPredBlockMotionSearch (imgpel * cur_pic,   // <--  original pixel values f
   int   pred_y1 = (pic_pix_y << 2) + pred_mv1[1]; // predicted position y (in sub-pel units)
   int   pred_x2 = (pic_pix_x << 2) + pred_mv2[0]; // predicted position x (in sub-pel units)
   int   pred_y2 = (pic_pix_y << 2) + pred_mv2[1]; // predicted position y (in sub-pel units)
-  int   center2_x = (pic_pix_x << (input->EPZSSubPelGrid * 2))+ mv[0];    // center position x (in pel units)
-  int   center2_y = (pic_pix_y << (input->EPZSSubPelGrid * 2))+ mv[1];    // center position y (in pel units)
-  int   center1_x = (pic_pix_x << (input->EPZSSubPelGrid * 2))+ s_mv[0];  // center position x (in pel units)
-  int   center1_y = (pic_pix_y << (input->EPZSSubPelGrid * 2))+ s_mv[1];  // center position y (in pel units)
+  int   center2_x = (pic_pix_x << (input->EPZSGrid))+ mv[0];    // center position x (in pel units)
+  int   center2_y = (pic_pix_y << (input->EPZSGrid))+ mv[1];    // center position y (in pel units)
+  int   center1_x = (pic_pix_x << (input->EPZSGrid))+ s_mv[0];  // center position x (in pel units)
+  int   center1_y = (pic_pix_y << (input->EPZSGrid))+ s_mv[1];  // center position y (in pel units)
 
   int tempmv[2]  = {mv[0], mv[1]};
   int tempmv2[2] = {0, 0};
@@ -2015,11 +2023,11 @@ EPZSBiPredBlockMotionSearch (imgpel * cur_pic,   // <--  original pixel values f
   EPZSStructure *searchPatternF = searchPattern;
   EPZSBlkCount ++;
 
-  pic_pix_x = (pic_pix_x << (2 - mv_rescale));
-  pic_pix_y = (pic_pix_y << (2 - mv_rescale));
+  pic_pix_x = (pic_pix_x << (input->EPZSGrid));
+  pic_pix_y = (pic_pix_y << (input->EPZSGrid));
 
-  ref_pic1_sub.luma = ref_picture1->curr_imgY_sub;
-  ref_pic2_sub.luma = ref_picture2->curr_imgY_sub;
+  ref_pic1_sub.luma = ref_picture1->p_curr_img_sub;
+  ref_pic2_sub.luma = ref_picture2->p_curr_img_sub;
 
   img_width  = ref_picture1->size_x;
   img_height = ref_picture1->size_y;
@@ -2074,8 +2082,8 @@ EPZSBiPredBlockMotionSearch (imgpel * cur_pic,   // <--  original pixel values f
 
 
   //===== set function for getting reference picture lines from reference 1=====
-  if ( (center2_x > search_range) && (center2_x < ((img_width  - blocksize_x) << (input->EPZSSubPelGrid * 2)) - search_range)
-    && (center2_y > search_range) && (center2_y < ((img_height - blocksize_y) << (input->EPZSSubPelGrid * 2)) - search_range))
+  if ( (center2_x > search_range) && (center2_x < ((img_width  - blocksize_x) << (input->EPZSGrid)) - search_range)
+    && (center2_y > search_range) && (center2_y < ((img_height - blocksize_y) << (input->EPZSGrid)) - search_range))
   {
     bipred2_access_method = FAST_ACCESS;
   }
@@ -2085,8 +2093,8 @@ EPZSBiPredBlockMotionSearch (imgpel * cur_pic,   // <--  original pixel values f
   }
 
   //===== set function for getting reference picture lines from reference 2=====
-  if ( (center1_x > search_range) && (center1_x < ((img_width  - blocksize_x) << (input->EPZSSubPelGrid * 2)) - search_range)
-    && (center1_y > search_range) && (center1_y < ((img_height - blocksize_y) << (input->EPZSSubPelGrid * 2)) - search_range))
+  if ( (center1_x > search_range) && (center1_x < ((img_width  - blocksize_x) << (input->EPZSGrid)) - search_range)
+    && (center1_y > search_range) && (center1_y < ((img_height - blocksize_y) << (input->EPZSGrid)) - search_range))
   {
     bipred1_access_method = FAST_ACCESS;
   }
@@ -2123,10 +2131,10 @@ EPZSBiPredBlockMotionSearch (imgpel * cur_pic,   // <--  original pixel values f
     int pos, mcost;
     PixelPos block_a, block_b, block_c, block_d;
 
-    getLuma4x4Neighbour (img->current_mb_nr, mb_x - 1, mb_y, &block_a);
-    getLuma4x4Neighbour (img->current_mb_nr, mb_x, mb_y - 1, &block_b);
-    getLuma4x4Neighbour (img->current_mb_nr, mb_x + blocksize_x, mb_y -1, &block_c);
-    getLuma4x4Neighbour (img->current_mb_nr, mb_x - 1, mb_y -1, &block_d);
+    getLuma4x4Neighbour (currMB, mb_x - 1, mb_y, &block_a);
+    getLuma4x4Neighbour (currMB, mb_x, mb_y - 1, &block_b);
+    getLuma4x4Neighbour (currMB, mb_x + blocksize_x, mb_y -1, &block_c);
+    getLuma4x4Neighbour (currMB, mb_x - 1, mb_y -1, &block_d);
 
     if (mb_y > 0)
     {
@@ -2381,7 +2389,8 @@ EPZSOutputStats (FILE * stat, short stats_file)
  ***********************************************************************
  */
 int                                               //  ==> minimum motion cost after search
-EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel values for the AxB block
+EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  Current Macroblock 
+                             imgpel*   orig_pic,      // <--  original pixel values for the AxB block
                              short     ref,           // <--  reference frame (0... or -1 (backward))
                              int       list,          // <--  reference picture list
                              int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
@@ -2407,7 +2416,7 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
   int   pic4_pix_y      = ((pic_pix_y + IMG_PAD_SIZE)<< 2);
 
   int   max_pos2        = ( (!start_me_refinement_hp || !start_me_refinement_qp) ? imax(1,search_pos2) : search_pos2);
-  int   list_offset     = img->mb_data[img->current_mb_nr].list_offset;
+  int   list_offset     = currMB->list_offset;
   int   apply_weights   = ((active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE))) && input->UseWeightedReferenceME;
 
@@ -2415,11 +2424,11 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
 
   int max_pos_x4 = ((ref_picture->size_x - blocksize_x + 2*IMG_PAD_SIZE)<<2);
   int max_pos_y4 = ((ref_picture->size_y - blocksize_y + 2*IMG_PAD_SIZE)<<2);
-  int start_pos = 5, end_pos = max_pos2;
-  int dist_method = H_PEL + 3 * apply_weights;
+  int start_pos = 5, end_pos = max_pos2;  
   int lambda_factor = lambda[H_PEL];
+  computePred = computeUniPred[H_PEL + 3 * apply_weights];
 
-  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
+  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
   width_pad  = ref_picture->size_x_pad;
   height_pad = ref_picture->size_y_pad;
 
@@ -2470,7 +2479,7 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
 
     //----- set motion vector cost -----
     mcost = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred_mv[0], pred_mv[1]);
-    mcost += computeUniPred[dist_method]( orig_pic, blocksize_y, blocksize_x,
+    mcost += computePred( orig_pic, blocksize_y, blocksize_x,
       INT_MAX, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
 
     if (mcost < min_mcost)
@@ -2555,7 +2564,7 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
 
       if (mcost >= min_mcost) continue;
 
-      mcost += computeUniPred[dist_method]( orig_pic, blocksize_y, blocksize_x,
+      mcost += computePred( orig_pic, blocksize_y, blocksize_x,
         min_mcost - mcost, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
 
       if (mcost < min_mcost)
@@ -2591,7 +2600,7 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
     ref_access_method = UMV_ACCESS;
   }
 
-  dist_method = Q_PEL + 3 * apply_weights;
+  computePred = computeUniPred[Q_PEL + 3 * apply_weights];
   lambda_factor = lambda[Q_PEL];
   second_pos = 0;
   second_mcost = INT_MAX;
@@ -2603,7 +2612,7 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
 
     //----- set motion vector cost -----
     mcost = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred_mv[0], pred_mv[1]);
-    mcost += computeUniPred[dist_method]( orig_pic, blocksize_y, blocksize_x,
+    mcost += computePred( orig_pic, blocksize_y, blocksize_x,
       INT_MAX, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
 
     if (mcost < min_mcost)
@@ -2692,7 +2701,7 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
       mcost = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred_mv[0], pred_mv[1]);
 
       if (mcost >= min_mcost) continue;
-      mcost += computeUniPred[dist_method]( orig_pic, blocksize_y, blocksize_x,
+      mcost += computePred( orig_pic, blocksize_y, blocksize_x,
         min_mcost - mcost, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
 
       if (mcost < min_mcost)
@@ -2718,21 +2727,22 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
  *    Fast bipred sub pixel block motion search to support EPZS
  ***********************************************************************
  */
-int                                               //  ==> minimum motion cost after search
-EPZSSubPelBlockSearchBiPred (imgpel*   orig_pic,  // <--  original pixel values for the AxB block
-                         short     ref,           // <--  reference frame (0... or -1 (backward))
-                         int       list,          // <--  reference picture list
-                         int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                         int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                         int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                         short     *pred_mv1,     // <--  motion vector predictor (x) in sub-pel units
-                         short     *pred_mv2,     // <--  motion vector predictor (x) in sub-pel units
-                         short     mv[2],         // <--> in: search center (x) / out: motion vector (x) - in pel units
-                         short     s_mv[2],       // <--> in: search center (x) / out: motion vector (x) - in pel units
-                         int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
-                         int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
-                         int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                         int       *lambda        // <--  lagrangian parameter for determining motion cost
+int                                                 //  ==> minimum motion cost after search
+EPZSSubPelBlockSearchBiPred (Macroblock *currMB,    // <--  Current Macroblock
+                             imgpel*   orig_pic,    // <--  original pixel values for the AxB block
+                             short     ref,         // <--  reference frame (0... or -1 (backward))
+                             int       list,        // <--  reference picture list
+                             int       pic_pix_x,   // <--  absolute x-coordinate of regarded AxB block
+                             int       pic_pix_y,   // <--  absolute y-coordinate of regarded AxB block
+                             int       blocktype,   // <--  block type (1-16x16 ... 7-4x4)
+                             short     *pred_mv1,   // <--  motion vector predictor (x) in sub-pel units
+                             short     *pred_mv2,   // <--  motion vector predictor (x) in sub-pel units
+                             short     mv[2],       // <--> in: search center (x) / out: motion vector (x) - in pel units
+                             short     s_mv[2],     // <--> in: search center (x) / out: motion vector (x) - in pel units
+                             int       search_pos2, // <--  search positions for    half-pel search  (default: 9)
+                             int       search_pos4, // <--  search positions for quarter-pel search  (default: 9)
+                             int       min_mcost,   // <--  minimum motion cost (cost for center or huge value)
+                             int       *lambda      // <--  lagrangian parameter for determining motion cost
                          )
 {
   int   apply_weights =  (active_pps->weighted_bipred_idc );
@@ -2767,8 +2777,8 @@ EPZSSubPelBlockSearchBiPred (imgpel*   orig_pic,  // <--  original pixel values 
   int start_pos = 5, end_pos = max_pos2;
   int lambda_factor = lambda[H_PEL];
 
-  ref_pic1_sub.luma = ref_picture1->curr_imgY_sub;
-  ref_pic2_sub.luma = ref_picture2->curr_imgY_sub;
+  ref_pic1_sub.luma = ref_picture1->p_curr_img_sub;
+  ref_pic2_sub.luma = ref_picture2->p_curr_img_sub;
   img_width     = ref_picture1->size_x;
   img_height    = ref_picture1->size_y;
   width_pad    = ref_picture1->size_x_pad;

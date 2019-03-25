@@ -42,7 +42,7 @@ const byte FIELD_SCAN[16][2] =
 
 
 //! array used to find expencive coefficients
-const byte COEFF_COST[2][16] =
+const byte COEFF_COST4x4[2][16] =
 {
   {3,2,2,1,1,1,0,0,0,0,0,0,0,0,0,0},
   {9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9}

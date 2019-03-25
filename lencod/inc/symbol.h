@@ -19,7 +19,7 @@ extern void (*writeIntraPredMode)    (SyntaxElement *se, DataPartition *dP);
 extern void (*writeB8_typeInfo)      (SyntaxElement *se, DataPartition *dP);
 extern void (*writeRefFrame[6])      (SyntaxElement *se, DataPartition *dP);
 extern void (*writeMVD)              (SyntaxElement *se, DataPartition *dP);
-extern void (*writeCBP)              (SyntaxElement *se, DataPartition *dP);
+extern void (*writeCBP)              (Macroblock* currMB, SyntaxElement *se, DataPartition *dP);
 extern void (*writeDquant)           (SyntaxElement *se, DataPartition *dP);
 extern void (*writeCIPredMode)       (SyntaxElement *se, DataPartition *dP);
 extern void (*writeFieldModeInfo)    (SyntaxElement *se, DataPartition *dP);

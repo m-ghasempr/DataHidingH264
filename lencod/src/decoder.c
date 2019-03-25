@@ -394,13 +394,16 @@ void compute_residue_b8block (int b8block, int i16mode) // if not INTRA16x16 it 
   int i,j;
   int i0 = (b8block%2)<<3,   i1 = i0+8;
   int j0 = (b8block/2)<<3,   j1 = j0+8;
+  imgpel  (*curr_mpr_16x16)[16][16] = img->mpr_16x16[0];
+  imgpel  (*curr_mpr)[16]           = img->mpr[0];
+
 
   if (i16mode>=0)
   {
     for (i=i0; i<i1; i++)
     for (j=j0; j<j1; j++)
     {
-      decs->resY[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i] - img->mprr_2[i16mode][j][i];
+      decs->resY[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i] - curr_mpr_16x16[i16mode][j][i];
     }
   }
   else
@@ -408,7 +411,7 @@ void compute_residue_b8block (int b8block, int i16mode) // if not INTRA16x16 it 
     for (i=i0; i<i1; i++)
     for (j=j0; j<j1; j++)
     {
-      decs->resY[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i] - img->mpr[j][i];
+      decs->resY[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i] - curr_mpr[j][i];
     }
   }
 }

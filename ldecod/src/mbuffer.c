@@ -410,6 +410,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   get_mem2Dpel (&(s->imgY), size_y, size_x);
   if (active_sps->chroma_format_idc != YUV400)
     get_mem3Dpel (&(s->imgUV), 2, size_y_cr, size_x_cr);
+  
 
   s->mb_field = calloc (s->PicSizeInMbs, sizeof(int));
   if (NULL==s->mb_field)
@@ -457,9 +458,6 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   s->size_x_cr_m1 = size_x_cr - 1;
   s->size_y_cr_m1 = size_y_cr - 1;
 
-//  s->top_field    = NULL;
-//  s->bottom_field = NULL;
-//  s->frame        = NULL;
   s->top_field    = no_reference_picture;
   s->bottom_field = no_reference_picture;
   s->frame        = no_reference_picture;
@@ -534,11 +532,13 @@ void free_storable_picture(StorablePicture* p)
       free_mem3Dint64 (p->ref_pic_id, 6);
       p->ref_pic_id = NULL;
     }
+
     if (p->ref_id)
     {
       free_mem3Dint64 (p->ref_id, 6);
       p->ref_id = NULL;
     }
+
     if (p->mv)
     {
       free_mem4Dshort (p->mv, 2, p->size_y / BLOCK_SIZE);
@@ -553,8 +553,7 @@ void free_storable_picture(StorablePicture* p)
         {
           free_mem3D ((byte***)p->ref_idx_JV[nplane], 2);
           p->ref_idx_JV[nplane] = NULL;
-        }
-    
+        }    
         if (p->ref_pic_id_JV[nplane])
         {
           free_mem3Dint64 (p->ref_pic_id_JV[nplane], 6);
@@ -585,12 +584,12 @@ void free_storable_picture(StorablePicture* p)
       p->field_frame=NULL;
     }
 
-
     if (p->imgY)
     {
       free_mem2Dpel (p->imgY);
       p->imgY=NULL;
     }
+
     if (p->imgUV)
     {
       free_mem3Dpel (p->imgUV, 2);
@@ -823,6 +822,7 @@ static int compare_pic_by_poc_asc( const void *arg1, const void *arg2 )
 {
   if ( (*(StorablePicture**)arg1)->poc < (*(StorablePicture**)arg2)->poc)
     return -1;
+  
   if ( (*(StorablePicture**)arg1)->poc > (*(StorablePicture**)arg2)->poc)
     return 1;
   else
@@ -859,6 +859,7 @@ static int compare_fs_by_poc_asc( const void *arg1, const void *arg2 )
 {
   if ( (*(FrameStore**)arg1)->poc < (*(FrameStore**)arg2)->poc)
     return -1;
+  
   if ( (*(FrameStore**)arg1)->poc > (*(FrameStore**)arg2)->poc)
     return 1;
   else
@@ -1355,13 +1356,11 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
   // set the unused list entries to NULL
   for (i=listXsize[0]; i< (MAX_LIST_SIZE) ; i++)
   {
-//    listX[0][i] = NULL;
       listX[0][i] = no_reference_picture;
 
   }
   for (i=listXsize[1]; i< (MAX_LIST_SIZE) ; i++)
   {
-//    listX[1][i] = NULL;
       listX[1][i] = no_reference_picture;
   }
 }
@@ -1386,7 +1385,6 @@ void init_mbaff_lists()
   {
     for (j=0; j<MAX_LIST_SIZE; j++)
     {
-//      listX[i][j] = NULL;
       listX[i][j] = no_reference_picture;
     }
     listXsize[i]=0;
@@ -1394,19 +1392,19 @@ void init_mbaff_lists()
 
   for (i=0; i<listXsize[0]; i++)
   {
-    listX[2][2*i]  =listX[0][i]->top_field;
-    listX[2][2*i+1]=listX[0][i]->bottom_field;
-    listX[4][2*i]  =listX[0][i]->bottom_field;
-    listX[4][2*i+1]=listX[0][i]->top_field;
+    listX[2][2*i  ] = listX[0][i]->top_field;
+    listX[2][2*i+1] = listX[0][i]->bottom_field;
+    listX[4][2*i  ] = listX[0][i]->bottom_field;
+    listX[4][2*i+1] = listX[0][i]->top_field;
   }
   listXsize[2]=listXsize[4]=listXsize[0] * 2;
 
   for (i=0; i<listXsize[1]; i++)
   {
-    listX[3][2*i]  =listX[1][i]->top_field;
-    listX[3][2*i+1]=listX[1][i]->bottom_field;
-    listX[5][2*i]  =listX[1][i]->bottom_field;
-    listX[5][2*i+1]=listX[1][i]->top_field;
+    listX[3][2*i  ] = listX[1][i]->top_field;
+    listX[3][2*i+1] = listX[1][i]->bottom_field;
+    listX[5][2*i  ] = listX[1][i]->bottom_field;
+    listX[5][2*i+1] = listX[1][i]->top_field;
   }
   listXsize[3]=listXsize[5]=listXsize[1] * 2;
 }
@@ -2082,7 +2080,7 @@ static void mark_pic_long_term(StorablePicture* p, int long_term_frame_idx, int 
 
           dpb.fs_ref[i]->long_term_frame_idx = dpb.fs_ref[i]->bottom_field->long_term_frame_idx
                                              = long_term_frame_idx;
-          dpb.fs_ref[i]->bottom_field->long_term_pic_num = 2 * long_term_frame_idx + add_top;
+          dpb.fs_ref[i]->bottom_field->long_term_pic_num = 2 * long_term_frame_idx + add_bottom;
           dpb.fs_ref[i]->bottom_field->is_long_term = 1;
           dpb.fs_ref[i]->is_long_term |= 2;
           if (dpb.fs_ref[i]->is_long_term == 3)
@@ -2546,7 +2544,8 @@ static void insert_picture_in_dpb(FrameStore* fs, StorablePicture* p)
     {
       // generate frame view
       dpb_combine_field(fs);
-    } else
+    } 
+    else
     {
       fs->poc = p->poc;
       gen_field_ref_ids(p);
@@ -2917,8 +2916,8 @@ void dpb_split_field(FrameStore *fs)
   int i, j, ii, jj, jj4;
   int idiv,jdiv;
   int currentmb;
-  int dummylist0,dummylist1;
-  int twosz16 = 2*(fs->frame->size_x/16);
+  int dummylist0, dummylist1;
+  int twosz16 = 2 * (fs->frame->size_x >> 4);
 
   fs->poc = fs->frame->poc;
 
@@ -2983,18 +2982,10 @@ void dpb_split_field(FrameStore *fs)
     //store reference picture index
     for (j=0; j<=fs->frame->max_slice_id; j++)
     {
-      for (i=0;i<16;i++)
-      {
-        fs->top_field->ref_pic_num[j][LIST_1][2*i]     =fs->frame->ref_pic_num[j][2 + LIST_1][2*i];
-        fs->top_field->ref_pic_num[j][LIST_1][2*i + 1] =fs->frame->ref_pic_num[j][2 + LIST_1][2*i+1];
-        fs->bottom_field->ref_pic_num[j][LIST_1][2*i]  =fs->frame->ref_pic_num[j][4 + LIST_1][2*i];
-        fs->bottom_field->ref_pic_num[j][LIST_1][2*i+1]=fs->frame->ref_pic_num[j][4 + LIST_1][2*i+1] ;
-
-        fs->top_field->ref_pic_num[j][LIST_0][2*i]     =fs->frame->ref_pic_num[j][2 + LIST_0][2*i];
-        fs->top_field->ref_pic_num[j][LIST_0][2*i + 1] =fs->frame->ref_pic_num[j][2 + LIST_0][2*i+1];
-        fs->bottom_field->ref_pic_num[j][LIST_0][2*i]  =fs->frame->ref_pic_num[j][4 + LIST_0][2*i];
-        fs->bottom_field->ref_pic_num[j][LIST_0][2*i+1]=fs->frame->ref_pic_num[j][4 + LIST_0][2*i+1] ;
-      }
+      memcpy(&fs->top_field->ref_pic_num   [j][LIST_0][0], &fs->frame->ref_pic_num[j][2 + LIST_0][0], 66 * sizeof(int64));
+      memcpy(&fs->top_field->ref_pic_num   [j][LIST_1][0], &fs->frame->ref_pic_num[j][2 + LIST_1][0], 33 * sizeof(int64));            
+      memcpy(&fs->bottom_field->ref_pic_num[j][LIST_0][0], &fs->frame->ref_pic_num[j][4 + LIST_0][0], 33 * sizeof(int64));
+      memcpy(&fs->bottom_field->ref_pic_num[j][LIST_1][0], &fs->frame->ref_pic_num[j][4 + LIST_1][0], 33 * sizeof(int64));
     }
   }
   else
@@ -3007,7 +2998,7 @@ void dpb_split_field(FrameStore *fs)
 
   for (j = 0; (j < fs->frame->size_y >> 2) ; j++)
   {
-    jdiv=j/4;
+    jdiv = j >> 2;
     for (i = 0 ; i < (fs->frame->size_x >> 2) ; i++)
     {
       idiv = (i >> 2);
@@ -3226,11 +3217,11 @@ void dpb_combine_field(FrameStore *fs)
    //! Use inference flag to remap mvs/references
 
   //! Generate Frame parameters from field information.
-  for (j=0 ; j<fs->top_field->size_y/4 ; j++)
+  for (j=0 ; j < (fs->top_field->size_y >> 2) ; j++)
   {
-    jj = 8*(j/4) + (j%4);
+    jj = 8*(j >> 2) + (j & 0x03);
     jj4 = jj + 4;
-    for (i=0 ; i<fs->top_field->size_x/4 ; i++)
+    for (i=0 ; i< (fs->top_field->size_x >> 2) ; i++)
     {
       fs->frame->field_frame[jj][i]= fs->frame->field_frame[jj4][i]=1;
 
@@ -3434,7 +3425,7 @@ ColocatedParams* alloc_colocated(int size_x, int size_y, int mb_adaptive_frame_f
 
   get_mem3D      ((byte****)(&(s->ref_idx))   , 2, size_y / BLOCK_SIZE, size_x / BLOCK_SIZE);
   get_mem3Dint64 (&(s->ref_pic_id), 2, size_y / BLOCK_SIZE, size_x / BLOCK_SIZE);
-  get_mem4Dshort (&(s->mv)        , 2, size_y / BLOCK_SIZE, size_x / BLOCK_SIZE,2 );
+  get_mem4Dshort (&(s->mv)        , 2, size_y / BLOCK_SIZE, size_x / BLOCK_SIZE, 2);
 
   get_mem2D      (&(s->moving_block), size_y / BLOCK_SIZE, size_x / BLOCK_SIZE);
   get_mem2D      (&(s->field_frame) , size_y / BLOCK_SIZE, size_x / BLOCK_SIZE);
@@ -3558,59 +3549,75 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
 
   if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)
   {
-    for (j=0 ; j<fs->size_y/4 ; j++)
+    if (img->MbaffFrameFlag)
     {
-      jdiv = j/2;
-      jj = j/2 + 4 * (j/8);
-      for (i=0 ; i<fs->size_x/4 ; i++)
+      for (j=0 ; j < (fs->size_y>>2); j++)
       {
-
-        if (img->MbaffFrameFlag && fs->field_frame[j][i])
+        jdiv = (j>>1);
+        jj = jdiv + ((j>>3)<<1);
+        for (i=0 ; i < (fs->size_x >> 2) ; i++)
         {
-          //! Assign frame buffers for field MBs
-          //! Check whether we should use top or bottom field mvs.
-          //! Depending on the assigned poc values.
 
-          if (iabs(dec_picture->poc - fs_bottom->poc)> iabs(dec_picture->poc -fs_top->poc) )
+          if (fs->field_frame[j][i])
           {
-            p->mv[LIST_0][j][i][0]    = fs_top->mv[LIST_0][jdiv][i][0];
-            p->mv[LIST_0][j][i][1]    = fs_top->mv[LIST_0][jdiv][i][1] ;
-            p->mv[LIST_1][j][i][0]    = fs_top->mv[LIST_1][jdiv][i][0];
-            p->mv[LIST_1][j][i][1]    = fs_top->mv[LIST_1][jdiv][i][1] ;
-            p->ref_idx[LIST_0][j][i]  = fs_top->ref_idx[LIST_0][jdiv][i];
-            p->ref_idx[LIST_1][j][i]  = fs_top->ref_idx[LIST_1][jdiv][i];
-            p->ref_pic_id[LIST_0][j][i]   = fs->ref_id[LIST_0][jj][i];
-            p->ref_pic_id[LIST_1][j][i]   = fs->ref_id[LIST_1][jj][i];
+            //! Assign frame buffers for field MBs
+            //! Check whether we should use top or bottom field mvs.
+            //! Depending on the assigned poc values.
 
-            p->is_long_term             = fs_top->is_long_term;
+            if (iabs(dec_picture->poc - fs_bottom->poc)> iabs(dec_picture->poc -fs_top->poc) )
+            {
+              p->mv[LIST_0][j][i][0]      = fs_top->mv[LIST_0][jdiv][i][0];
+              p->mv[LIST_0][j][i][1]      = fs_top->mv[LIST_0][jdiv][i][1] ;
+              p->mv[LIST_1][j][i][0]      = fs_top->mv[LIST_1][jdiv][i][0];
+              p->mv[LIST_1][j][i][1]      = fs_top->mv[LIST_1][jdiv][i][1] ;
+              p->ref_idx[LIST_0][j][i]    = fs_top->ref_idx[LIST_0][jdiv][i];
+              p->ref_idx[LIST_1][j][i]    = fs_top->ref_idx[LIST_1][jdiv][i];
+              p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][jj][i];
+              p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][jj][i];
+
+              p->is_long_term             = fs_top->is_long_term;
+            }
+            else
+            {
+              p->mv[LIST_0][j][i][0]      = fs_bottom->mv[LIST_0][jdiv][i][0];
+              p->mv[LIST_0][j][i][1]      = fs_bottom->mv[LIST_0][jdiv][i][1] ;
+              p->mv[LIST_1][j][i][0]      = fs_bottom->mv[LIST_1][jdiv][i][0];
+              p->mv[LIST_1][j][i][1]      = fs_bottom->mv[LIST_1][jdiv][i][1] ;
+              p->ref_idx[LIST_0][j][i]    = fs_bottom->ref_idx[LIST_0][jdiv][i];
+              p->ref_idx[LIST_1][j][i]    = fs_bottom->ref_idx[LIST_1][jdiv][i];
+              p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][jj + 4][i];
+              p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][jj + 4][i];
+
+              p->is_long_term             = fs_bottom->is_long_term;
+            }
           }
           else
           {
-            p->mv[LIST_0][j][i][0]      = fs_bottom->mv[LIST_0][jdiv][i][0];
-            p->mv[LIST_0][j][i][1]      = fs_bottom->mv[LIST_0][jdiv][i][1] ;
-            p->mv[LIST_1][j][i][0]      = fs_bottom->mv[LIST_1][jdiv][i][0];
-            p->mv[LIST_1][j][i][1]      = fs_bottom->mv[LIST_1][jdiv][i][1] ;
-            p->ref_idx[LIST_0][j][i]    = fs_bottom->ref_idx[LIST_0][jdiv][i];
-            p->ref_idx[LIST_1][j][i]    = fs_bottom->ref_idx[LIST_1][jdiv][i];
-            p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][jj + 4][i];
-            p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][jj + 4][i];
+            p->mv[LIST_0][j][i][0]      = fs->mv[LIST_0][j][i][0];
+            p->mv[LIST_0][j][i][1]      = fs->mv[LIST_0][j][i][1] ;
+            p->mv[LIST_1][j][i][0]      = fs->mv[LIST_1][j][i][0];
+            p->mv[LIST_1][j][i][1]      = fs->mv[LIST_1][j][i][1] ;
+            p->ref_idx[LIST_0][j][i]    = fs->ref_idx[LIST_0][j][i];
+            p->ref_idx[LIST_1][j][i]    = fs->ref_idx[LIST_1][j][i];
+            p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][j][i];
+            p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][j][i];
 
-            p->is_long_term             = fs_bottom->is_long_term;
+            p->is_long_term             = fs->is_long_term;
           }
         }
-        else
-        {
-          p->mv[LIST_0][j][i][0]      = fs->mv[LIST_0][j][i][0];
-          p->mv[LIST_0][j][i][1]      = fs->mv[LIST_0][j][i][1] ;
-          p->mv[LIST_1][j][i][0]      = fs->mv[LIST_1][j][i][0];
-          p->mv[LIST_1][j][i][1]      = fs->mv[LIST_1][j][i][1] ;
-          p->ref_idx[LIST_0][j][i]    = fs->ref_idx[LIST_0][j][i];
-          p->ref_idx[LIST_1][j][i]    = fs->ref_idx[LIST_1][j][i];
-          p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][j][i];
-          p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][j][i];
-
-          p->is_long_term             = fs->is_long_term;
-        }
+      }
+    }
+    else
+    {      
+      p->is_long_term = fs->is_long_term;
+      for (j = 0; j < (fs->size_y >> 2); j++)
+      {
+        memcpy(p->ref_idx[LIST_0][j], fs->ref_idx[LIST_0][j], (fs->size_x>>2) * sizeof(char));
+        memcpy(p->ref_idx[LIST_1][j], fs->ref_idx[LIST_1][j], (fs->size_x>>2) * sizeof(char));
+        memcpy(p->ref_pic_id[LIST_0][j], fs->ref_pic_id[LIST_0][j], (fs->size_x>>2) * sizeof(int64));
+        memcpy(p->ref_pic_id[LIST_1][j], fs->ref_pic_id[LIST_1][j], (fs->size_x>>2) * sizeof(int64));
+        memcpy(&p->mv[LIST_0][j][0][0], &fs->mv[LIST_0][j][0][0], 2 * (fs->size_x>>2) * sizeof(short));
+        memcpy(&p->mv[LIST_1][j][0][0], &fs->mv[LIST_1][j][0][0], 2 * (fs->size_x>>2) * sizeof(short));
       }
     }
   }
@@ -3739,11 +3746,11 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
 
     if (!img->structure)
     {
-      for (j=0 ; j<fs->size_y/4 ; j++)
+      for (j=0 ; j < (fs->size_y >> 2); j++)
       {
-        jdiv = j/2;
-        jj = j/2 + 4*(j/8);
-        for (i=0 ; i<fs->size_x/4 ; i++)
+        jdiv = (j >> 1);
+        jj   = jdiv + ((j >> 3) << 2);
+        for (i = 0 ; i < (fs->size_x >> 2); i++)
         {
 
           if (fs->field_frame[j][i])
@@ -3755,11 +3762,11 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
               p->mv[LIST_1][j][i][0] = fs->top_field->mv[LIST_1][jdiv][i][0];
               p->mv[LIST_1][j][i][1] = fs->top_field->mv[LIST_1][jdiv][i][1] ;
 
-              p->ref_idx[LIST_0][j][i]  = fs->top_field->ref_idx[LIST_0][jdiv][i];
-              p->ref_idx[LIST_1][j][i]  = fs->top_field->ref_idx[LIST_1][jdiv][i];
-              p->ref_pic_id[LIST_0][j][i]   = fs->ref_id[LIST_0][jj][i];
-              p->ref_pic_id[LIST_1][j][i]   = fs->ref_id[LIST_1][jj][i];
-              p->is_long_term               = fs->top_field->is_long_term;
+              p->ref_idx[LIST_0][j][i]    = fs->top_field->ref_idx[LIST_0][jdiv][i];
+              p->ref_idx[LIST_1][j][i]    = fs->top_field->ref_idx[LIST_1][jdiv][i];
+              p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][jj][i];
+              p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][jj][i];
+              p->is_long_term             = fs->top_field->is_long_term;
             }
             else
             {
@@ -3785,25 +3792,25 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
 
   if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)
   {
-    for (j=0 ; j<fs->size_y/4 ; j++)
+    if (img->direct_spatial_mv_pred_flag == 1)
     {
-      jj = RSD(j);
-      for (i=0 ; i<fs->size_x/4 ; i++)
+      for (j=0 ; j < (fs->size_y>>2); j++)
       {
-        ii = RSD(i);
-
-        p->mv[LIST_0][j][i][0]=p->mv[LIST_0][jj][ii][0];
-        p->mv[LIST_0][j][i][1]=p->mv[LIST_0][jj][ii][1];
-        p->mv[LIST_1][j][i][0]=p->mv[LIST_1][jj][ii][0];
-        p->mv[LIST_1][j][i][1]=p->mv[LIST_1][jj][ii][1];
-
-        p->ref_idx[LIST_0][j][i]=p->ref_idx[LIST_0][jj][ii];
-        p->ref_idx[LIST_1][j][i]=p->ref_idx[LIST_1][jj][ii];
-        p->ref_pic_id[LIST_0][j][i] = p->ref_pic_id[LIST_0][jj][ii];
-        p->ref_pic_id[LIST_1][j][i] = p->ref_pic_id[LIST_1][jj][ii];
-
-        if (img->direct_spatial_mv_pred_flag == 1)
+        jj = RSD(j);
+        for (i=0 ; i < (fs->size_x>>2); i++)
         {
+          ii = RSD(i);
+
+          p->mv[LIST_0][j][i][0]=p->mv[LIST_0][jj][ii][0];
+          p->mv[LIST_0][j][i][1]=p->mv[LIST_0][jj][ii][1];
+          p->mv[LIST_1][j][i][0]=p->mv[LIST_1][jj][ii][0];
+          p->mv[LIST_1][j][i][1]=p->mv[LIST_1][jj][ii][1];
+
+          p->ref_idx[LIST_0][j][i]=p->ref_idx[LIST_0][jj][ii];
+          p->ref_idx[LIST_1][j][i]=p->ref_idx[LIST_1][jj][ii];
+          p->ref_pic_id[LIST_0][j][i] = p->ref_pic_id[LIST_0][jj][ii];
+          p->ref_pic_id[LIST_1][j][i] = p->ref_pic_id[LIST_1][jj][ii];
+
           p->moving_block[j][i]=
             !((!p->is_long_term
             && ((p->ref_idx[LIST_0][j][i] == 0)
@@ -3813,30 +3820,45 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
             &&  (p->ref_idx[LIST_1][j][i] == 0)
             &&  (iabs(p->mv[LIST_1][j][i][0])>>1 == 0)
             &&  (iabs(p->mv[LIST_1][j][i][1])>>1 == 0)));
+        }
+      }
+    }
+    else
+    {
+      for (j=0 ; j < (fs->size_y>>2); j++)
+      {
+        jj = RSD(j);
+        for (i=0 ; i < (fs->size_x>>2); i++)
+        {
+          ii = RSD(i);
+
+          p->mv[LIST_0][j][i][0]=p->mv[LIST_0][jj][ii][0];
+          p->mv[LIST_0][j][i][1]=p->mv[LIST_0][jj][ii][1];
+          p->mv[LIST_1][j][i][0]=p->mv[LIST_1][jj][ii][0];
+          p->mv[LIST_1][j][i][1]=p->mv[LIST_1][jj][ii][1];
+
+          p->ref_idx[LIST_0][j][i]=p->ref_idx[LIST_0][jj][ii];
+          p->ref_idx[LIST_1][j][i]=p->ref_idx[LIST_1][jj][ii];
+          p->ref_pic_id[LIST_0][j][i] = p->ref_pic_id[LIST_0][jj][ii];
+          p->ref_pic_id[LIST_1][j][i] = p->ref_pic_id[LIST_1][jj][ii];
         }
       }
     }
   }
   else
   {
-    for (j=0 ; j<fs->size_y/4 ; j++)
+    if (img->direct_spatial_mv_pred_flag == 1)
     {
-      jj = RSD(j);
-      for (i=0 ; i<fs->size_x/4 ; i++)
+      for (j=0 ; j < (fs->size_y >> 2); j++)
       {
-        ii = RSD(i);
-        //! Use inference flag to remap mvs/references
-        p->mv[LIST_0][j][i][0]=fs->mv[LIST_0][j][i][0];
-        p->mv[LIST_0][j][i][1]=fs->mv[LIST_0][j][i][1];
-        p->mv[LIST_1][j][i][0]=fs->mv[LIST_1][j][i][0];
-        p->mv[LIST_1][j][i][1]=fs->mv[LIST_1][j][i][1];
+        memcpy(&p->mv[LIST_0][j][0][0], &fs->mv[LIST_0][j][0][0], 2 * (fs->size_x >> 2) * sizeof(short));
+        memcpy(&p->mv[LIST_1][j][0][0], &fs->mv[LIST_1][j][0][0], 2 * (fs->size_x >> 2) * sizeof(short));
+        memcpy(p->ref_idx[LIST_0][j], fs->ref_idx[LIST_0][j], (fs->size_x >> 2) * sizeof(char));
+        memcpy(p->ref_idx[LIST_1][j], fs->ref_idx[LIST_1][j], (fs->size_x >> 2) * sizeof(char));
+        memcpy(p->ref_pic_id[LIST_0][j], fs->ref_id[LIST_0][j], (fs->size_x >> 2) * sizeof(int64));
+        memcpy(p->ref_pic_id[LIST_1][j], fs->ref_id[LIST_1][j], (fs->size_x >> 2) * sizeof(int64));
 
-        p->ref_idx[LIST_0][j][i]=fs->ref_idx[LIST_0][j][i];
-        p->ref_idx[LIST_1][j][i]=fs->ref_idx[LIST_1][j][i];
-        p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][j][i];
-        p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][j][i];
-
-        if (img->direct_spatial_mv_pred_flag == 1)
+        for (i=0 ; i < (fs->size_x >> 2); i++)
         {
           p->moving_block[j][i]=
             !((!p->is_long_term
@@ -3850,24 +3872,47 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
         }
       }
     }
+    else
+    {
+      for (j=0 ; j < (fs->size_y >> 2); j++)
+      {
+        memcpy(&p->mv[LIST_0][j][0][0], &fs->mv[LIST_0][j][0][0], 2 * (fs->size_x >> 2) * sizeof(short));
+        memcpy(&p->mv[LIST_1][j][0][0], &fs->mv[LIST_1][j][0][0], 2 * (fs->size_x >> 2) * sizeof(short));
+        memcpy(p->ref_idx[LIST_0][j], fs->ref_idx[LIST_0][j], (fs->size_x >> 2) * sizeof(char));
+        memcpy(p->ref_idx[LIST_1][j], fs->ref_idx[LIST_1][j], (fs->size_x >> 2) * sizeof(char));
+        memcpy(p->ref_pic_id[LIST_0][j], fs->ref_id[LIST_0][j], (fs->size_x >> 2) * sizeof(int64));
+        memcpy(p->ref_pic_id[LIST_1][j], fs->ref_id[LIST_1][j], (fs->size_x >> 2) * sizeof(int64));   
+      }
+    }
   }
 
-
-  if (img->direct_spatial_mv_pred_flag ==0)
-  {
-    for (j=0 ; j<fs->size_y/4 ; j++)
+  if (img->direct_spatial_mv_pred_flag == 0)
+  {    
+    if (img->MbaffFrameFlag || !img->structure)
     {
-      for (i=0 ; i<fs->size_x/4 ; i++)
+      for (j=0 ; j < (fs->size_y >> 2); j++)
       {
-        if ((!img->MbaffFrameFlag &&!img->structure && fs->field_frame[j][i]) || (img->MbaffFrameFlag && fs->field_frame[j][i]))
+        for (i=0 ; i < (fs->size_x >> 2) ; i++)
         {
-          p->mv[LIST_0][j][i][1] *= 2;
-          p->mv[LIST_1][j][i][1] *= 2;
+          if (fs->field_frame[j][i])
+          {
+            p->mv[LIST_0][j][i][1] *= 2;
+            p->mv[LIST_1][j][i][1] *= 2;
+          }
         }
-        else  if (img->structure && !fs->field_frame[j][i])
+      }
+    }
+    else  if (img->structure)
+    {
+      for (j=0 ; j < (fs->size_y >> 2); j++)
+      {
+        for (i=0 ; i < (fs->size_x >> 2) ; i++)
         {
-          p->mv[LIST_0][j][i][1] /= 2;
-          p->mv[LIST_1][j][i][1] /= 2;
+          if (!fs->field_frame[j][i])
+          {
+            p->mv[LIST_0][j][i][1] /= 2;
+            p->mv[LIST_1][j][i][1] /= 2;
+          }
         }
       }
     }

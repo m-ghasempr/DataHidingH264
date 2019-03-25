@@ -29,10 +29,10 @@
 #define FIXED               0
 
 
-int                     num_mb_per_slice;
-int                     number_of_slices;
-int***                  initialized;
-int***                  model_number;
+int    num_mb_per_slice;
+int    number_of_slices;
+int*** initialized;
+int*** model_number;
 
 
 double entropy    [128];
@@ -59,10 +59,11 @@ double probability[128] =
 
 
 
-void create_context_memory ()
+void create_context_memory (void)
 {
   int i, j, k;
-  int num_mb    = img->FrameSizeInMbs; // number of macroblocks for frame
+  int num_mb  = img->FrameSizeInMbs; // number of macroblocks for frame
+  double log2 = log(2.0);
 
   num_mb_per_slice  = (input->slice_mode == 1 ? input->slice_argument : num_mb);
   number_of_slices  = (num_mb + num_mb_per_slice - 1) / num_mb_per_slice;
@@ -116,15 +117,15 @@ void create_context_memory ()
   for( k=0; k<64; k++ )
   {
     probability[k] = 1.0 - probability[127-k];
-    entropy    [k] = log10(probability[    k])/log10(2.0);
-    entropy[127-k] = log10(probability[127-k])/log10(2.0);
+    entropy    [k] = log (probability[    k]) / log2;
+    entropy[127-k] = log (probability[127-k]) / log2;
   }
 }
 
 
 
 
-void free_context_memory ()
+void free_context_memory (void)
 {
   int i, k;
 
@@ -143,31 +144,37 @@ void free_context_memory ()
 }
 
 
-
-
-
-
 #define BIARI_CTX_INIT2(ii,jj,ctx,tab,num) \
 { \
+  if ((img->type==I_SLICE)||(img->type==SI_SLICE))  \
   for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==I_SLICE)  biari_init_context (&(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
-    else                            biari_init_context (&(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
+    biari_init_context (&(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
   } \
-}
-#define BIARI_CTX_INIT1(jj,ctx,tab,num) \
-{ \
+  else \
+  for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==I_SLICE)  biari_init_context (&(ctx[j]), &(tab ## _I[num][0][j][0])); \
-    else                            biari_init_context (&(ctx[j]), &(tab ## _P[num][0][j][0])); \
+    biari_init_context (&(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
   } \
 }
 
+#define BIARI_CTX_INIT1(jj,ctx,tab,num) \
+{ \
+  if ((img->type==I_SLICE)||(img->type==SI_SLICE))  \
+  for (j=0; j<jj; j++) \
+  { \
+    biari_init_context (&(ctx[j]), &(tab ## _I[num][0][j][0])); \
+  } \
+  else \
+  for (j=0; j<jj; j++) \
+  { \
+    biari_init_context (&(ctx[j]), &(tab ## _P[num][0][j][0])); \
+  } \
+}
 
-
-void SetCtxModelNumber ()
+void SetCtxModelNumber (void)
 {
   int frame_field = img->field_picture;
   int img_type    = img->type;
@@ -198,9 +205,7 @@ void SetCtxModelNumber ()
   }
 }
 
-
-
-void init_contexts ()
+void init_contexts (void)
 {
   MotionInfoContexts*  mc = img->currentSlice->mot_ctx;
   TextureInfoContexts* tc = img->currentSlice->tex_ctx;
@@ -219,17 +224,16 @@ void init_contexts ()
   BIARI_CTX_INIT1 (                 NUM_IPR_CTX,  tc->ipr_contexts,     INIT_IPR,       img->model_number);
   BIARI_CTX_INIT1 (                 NUM_CIPR_CTX, tc->cipr_contexts,    INIT_CIPR,      img->model_number);
   BIARI_CTX_INIT2 (3,               NUM_CBP_CTX,  tc->cbp_contexts,     INIT_CBP,       img->model_number);
-  BIARI_CTX_INIT2 (8,               NUM_BCBP_CTX, tc->bcbp_contexts,    INIT_BCBP,      img->model_number);
-  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_MAP_CTX,  tc->map_contexts,     INIT_MAP,       img->model_number);
-  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_LAST_CTX, tc->last_contexts,    INIT_LAST,      img->model_number);
+  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_BCBP_CTX, tc->bcbp_contexts,    INIT_BCBP,      img->model_number);
+  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_MAP_CTX,  tc->map_contexts[0],  INIT_MAP,       img->model_number);
+  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_LAST_CTX, tc->last_contexts[0], INIT_LAST,      img->model_number);  
+#if ENABLE_FIELD_CTX
+  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_MAP_CTX,  tc->map_contexts[1],  INIT_FLD_MAP,   img->model_number);
+  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_LAST_CTX, tc->last_contexts[1], INIT_FLD_LAST,  img->model_number);
+#endif
   BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_ONE_CTX,  tc->one_contexts,     INIT_ONE,       img->model_number);
   BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_ABS_CTX,  tc->abs_contexts,     INIT_ABS,       img->model_number);
-  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_MAP_CTX,  tc->fld_map_contexts, INIT_FLD_MAP,   img->model_number);
-  BIARI_CTX_INIT2 (NUM_BLOCK_TYPES, NUM_LAST_CTX, tc->fld_last_contexts,INIT_FLD_LAST,  img->model_number);
 }
-
-
-
 
 
 double XRate (BiContextTypePtr ctx, const int* model)
@@ -252,19 +256,31 @@ double XRate (BiContextTypePtr ctx, const int* model)
 
 #define ADD_XRATE2(ii,jj,ctx,tab,num) \
 { \
+  if      (img->type==I_SLICE)  \
   for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==I_SLICE)  xr += XRate (&(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
-    else                            xr += XRate (&(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
+    xr += XRate (&(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
   } \
-}
-#define ADD_XRATE1(jj,ctx,tab,num) \
-{ \
+  else \
+  for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==I_SLICE)  xr += XRate (&(ctx[j]), &(tab ## _I[num][0][j][0])); \
-    else                            xr += XRate (&(ctx[j]), &(tab ## _P[num][0][j][0])); \
+    xr += XRate (&(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
+  } \
+}
+
+#define ADD_XRATE1(jj,ctx,tab,num) \
+{ \
+  if      (img->type==I_SLICE)  \
+  for (j=0; j<jj; j++) \
+  { \
+    xr += XRate (&(ctx[j]), &(tab ## _I[num][0][j][0])); \
+  } \
+  else \
+  for (j=0; j<jj; j++) \
+  { \
+    xr += XRate (&(ctx[j]), &(tab ## _P[num][0][j][0])); \
   } \
 }
 
@@ -292,12 +308,14 @@ void GetCtxModelNumber (int* mnumber, MotionInfoContexts* mc, TextureInfoContext
     ADD_XRATE1 (                  NUM_CIPR_CTX, tc->cipr_contexts,      INIT_CIPR,      model);
     ADD_XRATE2 (3,                NUM_CBP_CTX,  tc->cbp_contexts,       INIT_CBP,       model);
     ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_BCBP_CTX, tc->bcbp_contexts,      INIT_BCBP,      model);
-    ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts,       INIT_MAP,       model);
-    ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts,      INIT_LAST,      model);
+    ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts[0],    INIT_MAP,       model);
+    ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts[0],   INIT_LAST,      model);
+#if ENABLE_FIELD_CTX
+    ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts[1],    INIT_FLD_MAP,   model);
+    ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts[1],   INIT_FLD_LAST,  model);
+#endif
     ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_ONE_CTX,  tc->one_contexts,       INIT_ONE,       model);
     ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_ABS_CTX,  tc->abs_contexts,       INIT_ABS,       model);
-    ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->fld_map_contexts,   INIT_FLD_MAP,   model);
-    ADD_XRATE2 (NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->fld_last_contexts,  INIT_FLD_LAST,  model);
 
     if (xr<min_xr)
     {
@@ -310,12 +328,7 @@ void GetCtxModelNumber (int* mnumber, MotionInfoContexts* mc, TextureInfoContext
 #undef ADD_XRATE2
 #undef ADD_XRATE1
 
-
-
-
-
-
-void store_contexts ()
+void store_contexts (void)
 {
   int frame_field = img->field_picture;
   int img_type    = img->type;

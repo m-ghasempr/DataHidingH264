@@ -1,3 +1,20 @@
+Changes in Version JM 13.0 (since JM 12.4)
+------------------------------------------
+Professional Profiles:
+- encoder/decoder: 4:4:4 combined color coding mode
+- encoder/decoder: lossless coding
+
+- encoder/decoder: remove MS Visual Studio 6 workspaces (KS)
+- encoder/decoder: various optimizations (AT/AL)
+- encoder/decoder: fix mbuffer.c copy and paste error (KS)
+- decoder: allow loss of single partitions (DA/KS)
+           Note: some loss pattern will require usage of RTP file.
+- decoder: indicate wrong emulation prevention (ZH)
+- decoder: make memory allocation for slice_group_id dynamic (KS)
+
+- add simple tool for pseudo-random RTP packet loss (KS)
+
+
 Changes in Version JM 12.4 (since JM 12.3)
 ------------------------------------------
 Professional Profiles:
@@ -1190,6 +1207,7 @@ CG      Cristina Gomila         GomilaC@tce.com
 CK      Christopher Kotchey     ckotchey@us.ibm.com
 CS      Christian Schmidt       schmidt@ece.ucsb.edu
 CZ      Chunbo Zhu              cbzhu@mail.ustc.edu.cn
+DA      D. Agrafiotis           d.agrafiotis@bristol.ac.uk
 DC      Doug Chin               dougchin@sandvideo.com
 DD      Dmitriy Demin           Dmitriy.Demin@Sun.COM
 DH      Dzung Hoang             dzung.hoang@conexant.com

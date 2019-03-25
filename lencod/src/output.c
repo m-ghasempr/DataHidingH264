@@ -155,11 +155,13 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
       }
 
       for(i=crop_top;i<size_y-crop_bottom;i++)
+      {
+        int i_pos = (i-crop_top)*(twidth) - crop_left;
         for(j=crop_left;j<size_x-crop_right;j++)
         {
-          memcpy(buf+((j-crop_left+((i-crop_top)*(twidth)))*symbol_size_in_bytes),&(imgX[i][j]), size);
+          memcpy(buf+((j + i_pos)*symbol_size_in_bytes),&(imgX[i][j]), size);
         }
-
+      }
     }
   }
 }
@@ -308,12 +310,36 @@ void clear_picture(StorablePicture *p)
 {
   int i;
 
-  for(i=0;i<p->size_y;i++)
-    memset(p->imgY[i], img->dc_pred_value_luma, p->size_x*sizeof(imgpel));
+  if (img->bitdepth_luma == 8)
+  {
+    for(i=0;i<p->size_y;i++)
+      memset(p->imgY[i], img->dc_pred_value_comp[0], p->size_x*sizeof(imgpel));
+  }
+  else
+  {
+    int j;
+    for(i=0;i < p->size_y; i++)
+    for(j=0;j < p->size_x; j++)
+      p->imgY[i][j] = img->dc_pred_value_comp[0];
+  }
+
+  if (img->bitdepth_chroma == 8)
+  {  
   for(i=0;i<p->size_y_cr;i++)
-    memset(p->imgUV[0][i], img->dc_pred_value_chroma, p->size_x_cr*sizeof(imgpel));
+    memset(p->imgUV[0][i], img->dc_pred_value_comp[1], p->size_x_cr*sizeof(imgpel));
   for(i=0;i<p->size_y_cr;i++)
-    memset(p->imgUV[1][i], img->dc_pred_value_chroma, p->size_x_cr*sizeof(imgpel));
+    memset(p->imgUV[1][i], img->dc_pred_value_comp[2], p->size_x_cr*sizeof(imgpel));
+  }
+  else
+  {  
+   int k, j;
+   for (k = 0; k < 2; k++)
+   {
+      for(i=0;i<p->size_y_cr;i++)
+      for(j=0;j < p->size_x_cr; j++)
+        p->imgUV[k][i][j] = img->dc_pred_value_comp[1];
+   }
+  }
 }
 
 /*!

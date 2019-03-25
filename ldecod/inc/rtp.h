@@ -28,9 +28,8 @@ typedef struct
                                 of RTP mixers */
   unsigned int m;          //!< Marker bit
   unsigned int pt;         //!< 7 bits, Payload Type, dynamically established
-  unsigned int seq;        /*!< RTP sequence number, incremented by one for
+  unsigned short seq;      /*!< RTP sequence number, incremented by one for
                                 each sent packet */
-  unsigned int old_seq;    //!< to detect wether packets were lost
   unsigned int timestamp;  //!< timestamp, 27 MHz for H.264
   unsigned int ssrc;       //!< Synchronization Source, chosen randomly
   byte *       payload;    //!< the payload including payload headers

@@ -71,17 +71,17 @@ extern int EPZSInit(void);
 extern void EPZSDelete (void);
 extern void EPZSOutputStats(FILE *stat,short stats_file);
 extern void EPZSSliceInit(EPZSColocParams* p, StorablePicture **listX[6]);
-extern int EPZSPelBlockMotionSearch (imgpel *, short, int, int, char ***, short ****,
+extern int EPZSPelBlockMotionSearch (Macroblock *, imgpel *, short, int, int, char ***, short ****,
                                      int, int, int, short[2], short[2], int, int, int);
 
-extern int EPZSBiPredBlockMotionSearch (imgpel *, short, int, int, char  ***, short  ****,
+extern int EPZSBiPredBlockMotionSearch (Macroblock *, imgpel *, short, int, int, char  ***, short  ****,
                                         int, int, int, short*, short *,
                                         short[2], short[2], int, int, int);
 
-extern int EPZSSubPelBlockMotionSearch (imgpel *, short, int, int, int, int, short[2],
+extern int EPZSSubPelBlockMotionSearch (Macroblock *, imgpel *, short, int, int, int, int, short[2],
                                         short[2], int, int, int, int*);
 
-extern int EPZSSubPelBlockSearchBiPred  (imgpel* orig_pic, short ref, int list, int pic_pix_x, int pic_pix_y,
+extern int EPZSSubPelBlockSearchBiPred  (Macroblock *,imgpel* orig_pic, short ref, int list, int pic_pix_x, int pic_pix_y,
                                          int blocktype, short *pred_mv1, short *pred_mv2,
                                          short mv1[2], short mv2[2],
                                          int search_pos2, int search_pos4, int min_mcost, int *lambda_factor);

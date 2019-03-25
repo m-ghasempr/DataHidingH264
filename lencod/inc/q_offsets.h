@@ -15,12 +15,11 @@
 #ifndef _Q_OFFSETS_H_
 #define _Q_OFFSETS_H_
 
-extern int ****LevelOffset4x4Luma;
-extern int *****LevelOffset4x4Chroma;
-extern int ****LevelOffset8x8Luma;
-extern int *****LevelOffset8x8Chroma;
+extern int *****LevelOffset4x4Comp;
+extern int *****LevelOffset8x8Comp;
 extern short ***OffsetList4x4;
 extern short ***OffsetList8x8;
+
 extern const int OffsetBits;
 
 extern int AdaptRndWeight;

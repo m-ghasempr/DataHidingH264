@@ -420,9 +420,9 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
           fwrite(&(Y[i][j]), symbol_size_in_bytes, 1, p_out);
 
       for (k=0; k < 2; k++)
-        for (i=0; i < img->height/2; i++)
-          for (j=0; j < img->width/2; j++)
-            fwrite(&(img->dc_pred_value_chroma), symbol_size_in_bytes, 1, p_out);
+        for (i=0; i < img->height>>1; i++)
+          for (j=0; j < img->width>>1; j++)
+            fwrite(&(img->dc_pred_value_comp[1]), symbol_size_in_bytes, 1, p_out);
     }
     fclose( fp );
     free_mem2Dpel( Y );
@@ -1912,8 +1912,8 @@ void interpret_tone_mapping( byte* payload, int size, ImageParameters *img )
 
     if (seiToneMappingTmp.model_id == 0) 
     { // linear mapping with clipping
-      seiToneMappingTmp.min_value		= u_v (32,"SEI: min_value", buf);
-      seiToneMappingTmp.max_value		= u_v (32,"SEI: min_value", buf);
+      seiToneMappingTmp.min_value   = u_v (32,"SEI: min_value", buf);
+      seiToneMappingTmp.max_value   = u_v (32,"SEI: min_value", buf);
 #ifdef PRINT_TONE_MAPPING
       printf("min_value = %d, max_value = %d\n", seiToneMappingTmp.min_value, seiToneMappingTmp.max_value);
 #endif
@@ -1921,7 +1921,7 @@ void interpret_tone_mapping( byte* payload, int size, ImageParameters *img )
     else if (seiToneMappingTmp.model_id == 1) 
     { // sigmoidal mapping
       seiToneMappingTmp.sigmoid_midpoint = u_v (32,"SEI: sigmoid_midpoint", buf);
-      seiToneMappingTmp.sigmoid_width	= u_v (32,"SEI: sigmoid_width", buf);
+      seiToneMappingTmp.sigmoid_width    = u_v (32,"SEI: sigmoid_width", buf);
 #ifdef PRINT_TONE_MAPPING
       printf("sigmoid_midpoint = %d, sigmoid_width = %d\n", seiToneMappingTmp.sigmoid_midpoint, seiToneMappingTmp.sigmoid_width);
 #endif
@@ -2112,7 +2112,7 @@ void interpret_post_filter_hints_info( byte* payload, int size, ImageParameters 
   for (color_component = 0; color_component < 3; color_component ++)
     for (cy = 0; cy < filter_hint_size_y; cy ++)
       for (cx = 0; cx < filter_hint_size_x; cx ++)
-		filter_hint[color_component][cy][cx] = se_v("SEI: filter_hint", buf); // interpret post-filter hint SEI here
+        filter_hint[color_component][cy][cx] = se_v("SEI: filter_hint", buf); // interpret post-filter hint SEI here
 
   additional_extension_flag = u_1("SEI: additional_extension_flag", buf); // interpret post-filter hint SEI here
 
@@ -2124,7 +2124,7 @@ void interpret_post_filter_hints_info( byte* payload, int size, ImageParameters 
   for (color_component = 0; color_component < 3; color_component ++)
     for (cy = 0; cy < filter_hint_size_y; cy ++)
       for (cx = 0; cx < filter_hint_size_x; cx ++)
-		printf(" post_filter_hint[%d][%d][%d] %d \n", color_component, cy, cx, filter_hint[color_component][cy][cx]);
+        printf(" post_filter_hint[%d][%d][%d] %d \n", color_component, cy, cx, filter_hint[color_component][cy][cx]);
 
   printf(" additional_extension_flag %d \n", additional_extension_flag);
 

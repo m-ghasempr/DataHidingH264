@@ -6,6 +6,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lencod", "lencod_vc8.vcproj
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rtpdump", "rtpdump\rtpdump_vc8.vcproj", "{BE2D5D97-BD3F-489B-A346-123834DDDBBD}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rtp_loss", "rtp_loss\rtp_loss.vcproj", "{50C36073-1189-4F75-B0BE-45186CF200A6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -24,6 +26,10 @@ Global
 		{BE2D5D97-BD3F-489B-A346-123834DDDBBD}.Debug|Win32.Build.0 = Debug|Win32
 		{BE2D5D97-BD3F-489B-A346-123834DDDBBD}.Release|Win32.ActiveCfg = Release|Win32
 		{BE2D5D97-BD3F-489B-A346-123834DDDBBD}.Release|Win32.Build.0 = Release|Win32
+		{50C36073-1189-4F75-B0BE-45186CF200A6}.Debug|Win32.ActiveCfg = Debug|Win32
+		{50C36073-1189-4F75-B0BE-45186CF200A6}.Debug|Win32.Build.0 = Debug|Win32
+		{50C36073-1189-4F75-B0BE-45186CF200A6}.Release|Win32.ActiveCfg = Release|Win32
+		{50C36073-1189-4F75-B0BE-45186CF200A6}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

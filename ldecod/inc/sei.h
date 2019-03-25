@@ -42,8 +42,8 @@ typedef enum {
 
 #define MAX_FN 256
 // tone mapping information
-#define MAX_CODED_BIT_DEPTH	12
-#define MAX_SEI_BIT_DEPTH   12
+#define MAX_CODED_BIT_DEPTH  12
+#define MAX_SEI_BIT_DEPTH    12
 #define MAX_NUM_PIVOTS     (1<<MAX_CODED_BIT_DEPTH)
 
 #ifdef ENABLE_OUTPUT_TONEMAPPING

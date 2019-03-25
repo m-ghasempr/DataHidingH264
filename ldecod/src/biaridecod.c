@@ -241,7 +241,7 @@ void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *code_buff
 
   Dvalue = getbyte(dep);
   Dvalue = (Dvalue<<16) | getword(dep); // lookahead of 2 bytes: always make sure that bitstream buffer
-										// contains 2 more bytes than actual bitstream
+                                        // contains 2 more bytes than actual bitstream
   DbitsLeft = 15;
 
   Drange = HALF-2;
@@ -286,7 +286,6 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
   register unsigned int range = Drange;
   register int renorm =1;
   register unsigned int rLPS  = rLPS_table_64x4[state][(range>>6) & 0x03];
-
 
   range -= rLPS;
 
@@ -415,9 +414,7 @@ unsigned int biari_decode_final(DecodingEnvironmentPtr dep)
  */
 void biari_init_context (struct img_par* img, BiContextTypePtr ctx, const int* ini)
 {
-  int pstate;
-
-  pstate = ((ini[0]* imax(0,img->qp) )>>4) + ini[1];
+  int pstate = ((ini[0]* imax(0,img->qp) )>>4) + ini[1];
   pstate = iClip3(1, 126, pstate);
 
   if ( pstate >= 64 )

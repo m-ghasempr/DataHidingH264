@@ -190,7 +190,7 @@ smpUMHEXIntegerPelBlockMotionSearch (
   ref_pic_ptr = listX[list+list_offset][ref];
 
   // Note that following seem to be universal for all functions and could be moved to a separate, clean public function in me_distortion.c
-  ref_pic_sub.luma = ref_pic_ptr->curr_imgY_sub;
+  ref_pic_sub.luma = ref_pic_ptr->p_curr_img_sub;
 
   img_width  = ref_pic_ptr->size_x;
   img_height = ref_pic_ptr->size_y;
@@ -459,7 +459,7 @@ smpUMHEXFullSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original p
 
   dist_method = Q_PEL + 3 * apply_weights;
 
-  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
+  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
 
   img_width  = ref_picture->size_x;
   img_height = ref_picture->size_y;
@@ -657,7 +657,7 @@ smpUMHEXSubPelBlockMotionSearch  (
 
   dist_method = Q_PEL + 3 * apply_weights;
 
-  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
+  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
 
   img_width  = ref_pic_ptr->size_x;
   img_height = ref_pic_ptr->size_y;
@@ -856,8 +856,8 @@ smpUMHEXBipredIntegerPelBlockMotionSearch (imgpel* cur_pic,  // <--  original pi
   short offset1 = (apply_weights ? (list == 0?  wp_offset[list_offset    ][ref][0]:  wp_offset[list_offset + 1][0  ][ref]) : 0);
   short offset2 = (apply_weights ? (list == 0?  wp_offset[list_offset + 1][ref][0]:  wp_offset[list_offset    ][0  ][ref]) : 0);
 
-  ref_pic1_sub.luma = listX[list + list_offset][ref]->curr_imgY_sub;
-  ref_pic2_sub.luma = listX[list == 0 ? 1 + list_offset: list_offset][ 0 ]->curr_imgY_sub;
+  ref_pic1_sub.luma = listX[list + list_offset][ref]->p_curr_img_sub;
+  ref_pic2_sub.luma = listX[list == 0 ? 1 + list_offset: list_offset][ 0 ]->p_curr_img_sub;
 
   img_width  = listX[list + list_offset][ref]->size_x;
   img_height = listX[list + list_offset][ref]->size_y;

@@ -15,15 +15,11 @@
 #ifndef _Q_MATRIX_H_
 #define _Q_MATRIX_H_
 
-extern int ****LevelScale4x4Luma;
-extern int *****LevelScale4x4Chroma;
-extern int ****LevelScale8x8Luma;
-extern int *****LevelScale8x8Chroma;
+extern int *****LevelScale4x4Comp;
+extern int *****LevelScale8x8Comp;
 
-extern int ****InvLevelScale4x4Luma;
-extern int *****InvLevelScale4x4Chroma;
-extern int ****InvLevelScale8x8Luma;
-extern int *****InvLevelScale8x8Chroma;
+extern int *****InvLevelScale4x4Comp;
+extern int *****InvLevelScale8x8Comp;
 
 extern short ScalingList4x4input[6][16];
 extern short ScalingList8x8input[6][64];

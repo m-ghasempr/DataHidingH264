@@ -363,13 +363,22 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   s->imgUV      = NULL;
   s->imgY_sub   = NULL;
   s->imgUV_sub  = NULL;
-  s->p_imgY_sub[0] = NULL;
-  s->p_imgY_sub[1] = NULL;
-  s->p_imgY_sub[2] = NULL;
+  
+  s->p_img_sub[0] = NULL;
+  s->p_img_sub[1] = NULL;
+  s->p_img_sub[2] = NULL;
 
   get_mem2Dpel (&(s->imgY), size_y, size_x);
+  s->p_img[0] = s->imgY;
+  s->p_curr_img = s->p_img[0];
   if (img->yuv_format != YUV400)
+  {
     get_mem3Dpel (&(s->imgUV), 2, size_y_cr, size_x_cr);
+    s->p_img[1] = s->imgUV[0];
+    s->p_img[2] = s->imgUV[1];
+  }
+    
+  s->p_curr_img_sub = s->p_img_sub[0];
 
   s->mb_field = calloc (img->PicSizeInMbs, sizeof(int));
   if (NULL==s->mb_field)
@@ -407,6 +416,8 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
 
   s->size_x = size_x;
   s->size_y = size_y;
+  s->size_x_padded = size_x + 2 * IMG_PAD_SIZE;
+  s->size_y_padded = size_y + 2 * IMG_PAD_SIZE;
   s->size_x_pad = size_x + 2 * IMG_PAD_SIZE - 1 - MB_BLOCK_SIZE;
   s->size_y_pad = size_y + 2 * IMG_PAD_SIZE - 1 - MB_BLOCK_SIZE;
   s->size_x_cr = size_x_cr;
@@ -535,10 +546,10 @@ void free_storable_picture(StorablePicture* p)
     }
 
     if (p->imgY)
-    {
+    {      
       free_mem2Dpel (p->imgY);
-      p->imgY=NULL;
-    }
+      p->imgY=NULL;      
+    }    
 
     if( IS_INDEPENDENT(input) )
     {
@@ -552,9 +563,14 @@ void free_storable_picture(StorablePicture* p)
         free_mem5Dpel (p->imgUV_sub, 2, 4, 4 );
         p->imgUV_sub = NULL;
       }
-      p->p_imgY_sub[0] = NULL;
-      p->p_imgY_sub[1] = NULL;
-      p->p_imgY_sub[2] = NULL;
+      p->p_curr_img     = NULL;
+      p->p_curr_img_sub = NULL;
+      p->p_img[0]       = NULL;
+      p->p_img[1]       = NULL;
+      p->p_img[2]       = NULL;
+      p->p_img_sub[0]   = NULL;
+      p->p_img_sub[1]   = NULL;
+      p->p_img_sub[2]   = NULL;
     }
     else
     {
@@ -2076,7 +2092,7 @@ static void mark_pic_long_term(StorablePicture* p, int long_term_frame_idx, int 
 
           dpb.fs_ref[i]->long_term_frame_idx = dpb.fs_ref[i]->bottom_field->long_term_frame_idx
                                              = long_term_frame_idx;
-          dpb.fs_ref[i]->bottom_field->long_term_pic_num = 2 * long_term_frame_idx + add_top;
+          dpb.fs_ref[i]->bottom_field->long_term_pic_num = 2 * long_term_frame_idx + add_bottom;
           dpb.fs_ref[i]->bottom_field->is_long_term = 1;
           dpb.fs_ref[i]->is_long_term |= 2;
           if (dpb.fs_ref[i]->is_long_term == 3)
@@ -3597,7 +3613,7 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
   {
     for (j=0 ; j<fs->size_y/4 ; j++)
     {
-      jdiv = j/2;
+      jdiv = j>>1;
       jj = j/2 + 4 * (j/8);
       for (i=0 ; i<fs->size_x/4 ; i++)
       {

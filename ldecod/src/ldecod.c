@@ -15,7 +15,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 12.4 (FRExt)
+ *     JM 13.0 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -74,8 +74,8 @@
 #include "sei.h"
 #include "erc_api.h"
 
-#define JM          "12 (FRExt)"
-#define VERSION     "12.4"
+#define JM          "13 (FRExt)"
+#define VERSION     "13.0"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -121,7 +121,8 @@ void JMDecHelpExit ()
     "   -o  :  Output file name. If not specified default output is set as test_dec.yuv\n\n"
     "   -r  :  Reference file name. If not specified default output is set as test_rec.yuv\n\n"
     "   -p  :  Poc Scale. \n"
-    "   -uv :  write chroma components for monochrome streams(4:2:0)\n\n"
+    "   -uv :  write chroma components for monochrome streams(4:2:0)\n"
+    "   -lp :  By default the loop filter for High Intra-Only profile is off \n\t  regardless of the flags in the bitstream. In the presence of\n\t  this option, the loop filter usage will then be determined \n\t  by the flags and parameters in the bitstream.\n\n" 
 
     "## Supported video file formats\n"
     "   Input : .264 -> H.264 bitstream files. \n"
@@ -151,6 +152,7 @@ void Configure(int ac, char *av[])
   input->ref_offset=0;
   input->poc_scale=2;
   input->silent = FALSE;
+  input->loopfilter_bitstream = 0;
 
 #ifdef _LEAKYBUCKET_
   input->R_decoder=500000;          //! Decoder rate
@@ -234,6 +236,11 @@ void Configure(int ac, char *av[])
       input->write_uv = 1;
       CLcount ++;
     }
+    else if (0 == strncmp (av[CLcount], "-lp", 3))  
+    {
+      input->loopfilter_bitstream = 1;
+      CLcount ++;
+    }
     else
     {
       //config_filename=av[CLcount];
@@ -243,7 +250,6 @@ void Configure(int ac, char *av[])
     }
   }
 
-
 #if TRACE
   if ((p_trace=fopen(TRACEFILE,"w"))==0)             // append new statistic at the end
   {
@@ -251,7 +257,6 @@ void Configure(int ac, char *av[])
     error(errortext,500);
   }
 #endif
-
 
   if ((p_out=open(input->outfile, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1)
   {
@@ -292,7 +297,7 @@ void Configure(int ac, char *av[])
   {
     fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
     fprintf(stdout,"--------------------------------------------------------------------------\n");
-    fprintf(stdout,"  Frame           POC   Pic#   QP   SnrY    SnrU    SnrV   Y:U:V  Time(ms)\n");
+    fprintf(stdout,"  Frame          POC  Pic#   QP    SnrY     SnrU     SnrV   Y:U:V Time(ms)\n");
     fprintf(stdout,"--------------------------------------------------------------------------\n");
   }
 
@@ -347,6 +352,7 @@ int main(int argc, char **argv)
 
   img->number=0;
   img->type = I_SLICE;
+
   img->dec_ref_pic_marking_buffer = NULL;
 
   // B pictures
@@ -448,15 +454,17 @@ void init_frext(struct img_par *img)  //!< image parameters
     img->pic_unit_bitsize_on_disk = (img->bitdepth_luma > 8)? 16:8;
   else
     img->pic_unit_bitsize_on_disk = (img->bitdepth_chroma > 8)? 16:8;
-  img->dc_pred_value_luma = 1<<(img->bitdepth_luma - 1);
+  img->dc_pred_value_comp[0] = 1<<(img->bitdepth_luma - 1);
   img->max_imgpel_value = (1<<img->bitdepth_luma) - 1;
+  img->max_imgpel_value_comp[0] = img->max_imgpel_value;
   img->mb_size[0][0] = img->mb_size[0][1] = MB_BLOCK_SIZE;
 
   if (active_sps->chroma_format_idc != YUV400)
   {
     //for chrominance part
     img->bitdepth_chroma_qp_scale = 6 * (img->bitdepth_chroma - 8);
-    img->dc_pred_value_chroma     = (1 << (img->bitdepth_chroma - 1));
+    img->dc_pred_value_comp[1]    = (1 << (img->bitdepth_chroma - 1));
+    img->dc_pred_value_comp[2]    = img->dc_pred_value_comp[1];
     img->max_imgpel_value_uv      = (1 << img->bitdepth_chroma) - 1;
     img->num_blk8x8_uv = (1 << active_sps->chroma_format_idc) & (~(0x1));
     img->num_uv_blocks = (img->num_blk8x8_uv >> 1);
@@ -474,6 +482,8 @@ void init_frext(struct img_par *img)  //!< image parameters
     img->mb_size[1][0] = img->mb_size[2][0] = img->mb_cr_size_x  = 0;
     img->mb_size[1][1] = img->mb_size[2][1] = img->mb_cr_size_y  = 0;
   }
+  img->max_imgpel_value_comp[1] = img->max_imgpel_value_uv;
+  img->max_imgpel_value_comp[2] = img->max_imgpel_value_uv;
   img->mb_size_blk[0][0] = img->mb_size_blk[0][1] = img->mb_size[0][0] >> 2;
   img->mb_size_blk[1][0] = img->mb_size_blk[2][0] = img->mb_size[1][0] >> 2;
   img->mb_size_blk[1][1] = img->mb_size_blk[2][1] = img->mb_size[1][1] >> 2;
@@ -937,8 +947,6 @@ int init_global_buffers()
     imgUV_ref=NULL;
 
   // allocate memory in structure img
-  if(((img->mb_data) = (Macroblock *) calloc(img->FrameSizeInMbs, sizeof(Macroblock))) == NULL)
-    no_mem_exit("init_global_buffers: img->mb_data");
   if( IS_INDEPENDENT(img) )
   {
     for( i=0; i<MAX_PLANE; i++ )
@@ -1025,5 +1033,4 @@ void free_global_buffers()
   global_init_done = 0;
 
 }
-
 

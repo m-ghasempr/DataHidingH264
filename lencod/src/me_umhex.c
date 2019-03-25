@@ -276,7 +276,7 @@ UMHEXIntegerPelBlockMotionSearch  (
 
   // Note that following seem to be universal for all functions and could be moved to a separate, clean public function in me_distortion.c
   
-  ref_pic_sub.luma = ref_pic_ptr->curr_imgY_sub;
+  ref_pic_sub.luma = ref_pic_ptr->p_curr_img_sub;
 
   img_width  = ref_pic_ptr->size_x;
   img_height = ref_pic_ptr->size_y;
@@ -609,7 +609,7 @@ UMHEXSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel va
     ref_access_method = UMV_ACCESS;
   }
 
-  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
+  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
 
   img_width  = ref_picture->size_x;
   img_height = ref_picture->size_y;
@@ -963,8 +963,8 @@ UMHEXBipredIntegerPelBlockMotionSearch (imgpel*   cur_pic,      // <--  original
   short offset1 = (apply_weights ? (list == 0?  wp_offset[list_offset    ][ref][0]:  wp_offset[list_offset + 1][0  ][ref]) : 0);
   short offset2 = (apply_weights ? (list == 0?  wp_offset[list_offset + 1][ref][0]:  wp_offset[list_offset    ][0  ][ref]) : 0);
 
-  ref_pic1_sub.luma = listX[list + list_offset][ref]->curr_imgY_sub;
-  ref_pic2_sub.luma = listX[list == 0 ? 1 + list_offset: list_offset][ 0 ]->curr_imgY_sub;
+  ref_pic1_sub.luma = listX[list + list_offset][ref]->p_curr_img_sub;
+  ref_pic2_sub.luma = listX[list == 0 ? 1 + list_offset: list_offset][ 0 ]->p_curr_img_sub;
 
   img_width  = listX[list + list_offset][ref]->size_x;
   img_height = listX[list + list_offset][ref]->size_y;
@@ -1295,20 +1295,20 @@ terminate_step:
  *    Set motion vector predictor
  ************************************************************************
  */
-void UMHEXSetMotionVectorPredictor (short  pmv[2],
-                               char   **refPic,
-                               short  ***tmp_mv,
-                               short  ref_frame,
-                               int    list,
-                               int    block_x,
-                               int    block_y,
-                               int    blockshape_x,
-                               int    blockshape_y,
-                               int    *search_range)
+void UMHEXSetMotionVectorPredictor (Macroblock *currMB, 
+                                    short  pmv[2],
+                                    char   **refPic,
+                                    short  ***tmp_mv,
+                                    short  ref_frame,
+                                    int    list,
+                                    int    block_x,
+                                    int    block_y,
+                                    int    blockshape_x,
+                                    int    blockshape_y,
+                                    int    *search_range)
 {
   int mb_x                 = 4*block_x;
   int mb_y                 = 4*block_y;
-  int mb_nr                = img->current_mb_nr;
 
   int mv_a, mv_b, mv_c, pred_vec=0;
   int mvPredType, rFrameL, rFrameU, rFrameUR;
@@ -1331,10 +1331,10 @@ void UMHEXSetMotionVectorPredictor (short  pmv[2],
   SAD_c=0;
   SAD_d=0;
 
-  getLuma4x4Neighbour(mb_nr, mb_x - 1, mb_y, &block_a);
-  getLuma4x4Neighbour(mb_nr, mb_x, mb_y -1, &block_b);
-  getLuma4x4Neighbour(mb_nr, mb_x + blockshape_x, mb_y-1, &block_c);
-  getLuma4x4Neighbour(mb_nr, mb_x -1, mb_y -1, &block_d);
+  getLuma4x4Neighbour(currMB, mb_x - 1, mb_y, &block_a);
+  getLuma4x4Neighbour(currMB, mb_x, mb_y -1, &block_b);
+  getLuma4x4Neighbour(currMB, mb_x + blockshape_x, mb_y-1, &block_c);
+  getLuma4x4Neighbour(currMB, mb_x -1, mb_y -1, &block_d);
 
   if (mb_y > 0)
   {

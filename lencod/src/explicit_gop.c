@@ -92,6 +92,11 @@ void create_hierarchy()
         gop_structure[i].hierarchy_layer  = j;
         gop_structure[i].reference_idc  = NALU_PRIORITY_LOW;
         gop_structure[i].slice_qp = imax(0, input->qpB + (input->HierarchyLevelQPEnable ? -j: input->qpBRSOffset));
+        //KHHan, for inter lossless code(refereced B picture)
+        //if(!input->lossless_qpprime_y_zero_flag)
+        //  gop_structure[i].slice_qp = imax(0, input->qpB + (input->HierarchyLevelQPEnable ? -j: input->qpBRSOffset));
+        //else
+        //  gop_structure[i].slice_qp = input->qpB;
       }
     }
 
@@ -300,7 +305,7 @@ void encode_enhancement_layer()
 
   if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0) && (input->EnableIDRGOP == 0 || img->idr_gop_number)) // B-frame(s) to encode
   {
-    img->type = ( input->PReplaceBSlice ) ? P_SLICE : B_SLICE;            // set slice type
+    set_slice_type( ( input->PReplaceBSlice ) ? P_SLICE : B_SLICE); // set slice type
     img->layer = (input->NumFramesInELSubSeq == 0) ? 0 : 1;
     img->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
 
@@ -309,7 +314,7 @@ void encode_enhancement_layer()
       for(img->b_frame_to_code = 1; img->b_frame_to_code <= input->successive_Bframe; img->b_frame_to_code++)
       {
         img->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
-        img->type = gop_structure[img->b_frame_to_code - 1].slice_type;
+        set_slice_type( gop_structure[img->b_frame_to_code - 1].slice_type);
 
         if (img->last_ref_idc == 1)
         {
@@ -325,7 +330,8 @@ void encode_enhancement_layer()
 
         if (IMG_NUMBER && (IMG_NUMBER <= input->intra_delay))
         {
-          if(input->idr_period && ( img->frm_number - img->lastIDRnumber ) % input->idr_period == 0)
+          if(input->idr_period && ((!input->adaptive_idr_period && ( img->frm_number - img->lastIDRnumber ) % input->idr_period == 0)
+            || (input->adaptive_idr_period == 1 && ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % input->idr_period == 0)) )
             img->toppoc = (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no));
           else
             img->toppoc = 2*((-img->frm_number + img->lastIDRnumber)*(input->jumpd + 1) 
@@ -335,16 +341,19 @@ void encode_enhancement_layer()
             img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (input->intra_delay - IMG_NUMBER)*((input->jumpd + 1)));
           else
             img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (input->intra_delay - IMG_NUMBER)*((input->jumpd + 1)) 
-            + (int) (2.0 *img->b_interval * (double) (1+ gop_structure[img->b_frame_to_code - 2].display_no)));
+            + (int) (2.0 *img->b_interval * (double) (1 + gop_structure[img->b_frame_to_code - 2].display_no)));
         }
         else
         {
-          if(input->idr_period)
+          if(input->idr_period && !input->adaptive_idr_period)
             img->toppoc = 2*((( ( img->frm_number - img->lastIDRnumber - input->intra_delay) % input->idr_period ) - 1)*(input->jumpd + 1) 
+            + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no)));
+          else if(input->idr_period && input->adaptive_idr_period == 1)
+            img->toppoc = 2*((( img->frm_number - img->lastIDRnumber - input->intra_delay ) - 1)*(input->jumpd + 1) 
             + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no)));
           else
             img->toppoc = 2*((img->frm_number - img->lastIDRnumber - 1 - input->intra_delay)*(input->jumpd + 1) 
-            + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code -1].display_no)));
+            + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no)));
 
           if (img->b_frame_to_code == 1)
             img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (img->frm_number - img->lastIDRnumber)*((input->jumpd + 1)));
@@ -388,7 +397,8 @@ void encode_enhancement_layer()
 
         if (IMG_NUMBER && (IMG_NUMBER <= input->intra_delay))
         { 
-          if(input->idr_period && ( img->frm_number - img->lastIDRnumber ) % input->idr_period == 0)
+          if(input->idr_period && ((!input->adaptive_idr_period && ( img->frm_number - img->lastIDRnumber ) % input->idr_period == 0)
+            || (input->adaptive_idr_period == 1 && ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % input->idr_period == 0)) )
             img->toppoc = (int) (img->b_interval * (double)img->b_frame_to_code);
           else
             img->toppoc = 2*((-img->frm_number + img->lastIDRnumber)*(input->jumpd + 1) 
@@ -396,8 +406,10 @@ void encode_enhancement_layer()
         }
         else
         {
-          if(input->idr_period)
+          if(input->idr_period && !input->adaptive_idr_period)
             img->toppoc = 2*((( ( img->frm_number - img->lastIDRnumber - input->intra_delay) % input->idr_period )-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
+          else if(input->idr_period && input->adaptive_idr_period == 1)
+            img->toppoc = 2*((( img->frm_number - img->lastIDRnumber - input->intra_delay )-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
           else
             img->toppoc = 2*((img->frm_number - img->lastIDRnumber - 1 - input->intra_delay)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
         }
