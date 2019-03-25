@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 12.1 (FRExt)
+ *     JM 12.2 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -28,7 +28,7 @@
  *     - Jani Lainema            <jani.lainema@nokia.com>
  *     - Sebastian Purreiter     <sebastian.purreiter@mch.siemens.de>
  *     - Byeong-Moon Jeon        <jeonbm@lge.com>
- *     - Gabi Blaettermann       <blaetter@hhi.de>
+ *     - Gabi Blaettermann
  *     - Ye-Kui Wang             <wyk@ieee.org>
  *     - Valeri George           <george@hhi.de>
  *     - Karsten Suehring        <suehring@hhi.de>
@@ -65,11 +65,11 @@
 #include "output.h"
 #include "cabac.h"
 #include "parset.h"
-
+#include "sei.h"
 #include "erc_api.h"
 
 #define JM          "12 (FRExt)"
-#define VERSION     "12.1"
+#define VERSION     "12.2"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -281,10 +281,13 @@ void Configure(int ac, char *av[])
   calc_buffer(input);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
 #endif
-  fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
-  fprintf(stdout,"--------------------------------------------------------------------------\n");
-  fprintf(stdout,"  Frame       POC   Pic#   QP   SnrY    SnrU    SnrV   Y:U:V  Time(ms)\n");
-  fprintf(stdout,"--------------------------------------------------------------------------\n");
+  if (!input->silent)
+  {
+    fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
+    fprintf(stdout,"--------------------------------------------------------------------------\n");
+    fprintf(stdout,"  Frame       POC   Pic#   QP   SnrY    SnrU    SnrV   Y:U:V  Time(ms)\n");
+    fprintf(stdout,"--------------------------------------------------------------------------\n");
+  }
 
 }
 
@@ -407,6 +410,10 @@ void init(struct img_par *img)  //!< image parameters
   img->recovery_point = 0;
   img->recovery_point_found = 0;
   img->recovery_poc = 0x7fffffff; /* set to a max value */
+
+#ifdef ENABLE_OUTPUT_TONEMAPPING
+  init_tone_mapping_sei();
+#endif
 }
 
 /*!
@@ -430,19 +437,21 @@ void init_frext(struct img_par *img)  //!< image parameters
   if (active_sps->chroma_format_idc != YUV400)
   {
     //for chrominance part
-    img->bitdepth_chroma_qp_scale = 6*(img->bitdepth_chroma - 8);
-    img->dc_pred_value_chroma     = 1<<(img->bitdepth_chroma - 1);
-    img->max_imgpel_value_uv      = (1<<img->bitdepth_chroma) - 1;
-    img->num_blk8x8_uv = (1<<active_sps->chroma_format_idc)&(~(0x1));
-    img->num_cdc_coeff = img->num_blk8x8_uv<<1;
-    img->mb_size[1][0] = img->mb_size[2][0] = img->mb_cr_size_x  = (active_sps->chroma_format_idc==YUV420 || active_sps->chroma_format_idc==YUV422)? 8:16;
-    img->mb_size[1][1] = img->mb_size[2][1] = img->mb_cr_size_y  = (active_sps->chroma_format_idc==YUV444 || active_sps->chroma_format_idc==YUV422)? 16:8;
+    img->bitdepth_chroma_qp_scale = 6 * (img->bitdepth_chroma - 8);
+    img->dc_pred_value_chroma     = (1 << (img->bitdepth_chroma - 1));
+    img->max_imgpel_value_uv      = (1 << img->bitdepth_chroma) - 1;
+    img->num_blk8x8_uv = (1 << active_sps->chroma_format_idc) & (~(0x1));
+    img->num_uv_blocks = (img->num_blk8x8_uv >> 1);
+    img->num_cdc_coeff = (img->num_blk8x8_uv << 1);
+    img->mb_size[1][0] = img->mb_size[2][0] = img->mb_cr_size_x  = (active_sps->chroma_format_idc==YUV420 || active_sps->chroma_format_idc==YUV422)?  8 : 16;
+    img->mb_size[1][1] = img->mb_size[2][1] = img->mb_cr_size_y  = (active_sps->chroma_format_idc==YUV444 || active_sps->chroma_format_idc==YUV422)? 16 :  8;
   }
   else
   {
     img->bitdepth_chroma_qp_scale = 0;
     img->max_imgpel_value_uv      = 0;
     img->num_blk8x8_uv = 0;
+    img->num_uv_blocks = 0;
     img->num_cdc_coeff = 0;
     img->mb_size[1][0] = img->mb_size[2][0] = img->mb_cr_size_x  = 0;
     img->mb_size[1][1] = img->mb_size[2][1] = img->mb_cr_size_y  = 0;
@@ -450,6 +459,10 @@ void init_frext(struct img_par *img)  //!< image parameters
   img->mb_size_blk[0][0] = img->mb_size_blk[0][1] = img->mb_size[0][0] >> 2;
   img->mb_size_blk[1][0] = img->mb_size_blk[2][0] = img->mb_size[1][0] >> 2;
   img->mb_size_blk[1][1] = img->mb_size_blk[2][1] = img->mb_size[1][1] >> 2;
+
+  img->mb_size_shift[0][0] = img->mb_size_shift[0][1] = CeilLog2_sf (img->mb_size[0][0]);
+  img->mb_size_shift[1][0] = img->mb_size_shift[2][0] = CeilLog2_sf (img->mb_size[1][0]);
+  img->mb_size_shift[1][1] = img->mb_size_shift[2][1] = CeilLog2_sf (img->mb_size[1][1]);
 }
 
 
@@ -600,10 +613,10 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   if (input->silent == FALSE)
   {
     fprintf(stdout,"-------------------- Average SNR all frames ------------------------------\n");
-    fprintf(stdout," SNR Y(dB)           : %5.2f\n",snr->snr_ya);
-    fprintf(stdout," SNR U(dB)           : %5.2f\n",snr->snr_ua);
-    fprintf(stdout," SNR V(dB)           : %5.2f\n",snr->snr_va);
-    fprintf(stdout," Total decoding time : %.3f sec \n",tot_time*0.001);
+    fprintf(stdout," SNR Y(dB)           : %5.2f\n",snr->snra[0]);
+    fprintf(stdout," SNR U(dB)           : %5.2f\n",snr->snra[1]);
+    fprintf(stdout," SNR V(dB)           : %5.2f\n",snr->snra[2]);
+    fprintf(stdout," Total decoding time : %.3f sec (%.3f fps)\n",tot_time*0.001,(snr->frame_ctr ) * 1000.0 / tot_time);
     fprintf(stdout,"--------------------------------------------------------------------------\n");
     fprintf(stdout," Exit JM %s decoder, ver %s ",JM, VERSION);
     fprintf(stdout,"\n");
@@ -611,7 +624,7 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   else
   {
     fprintf(stdout,"\n----------------------- Decoding Completed -------------------------------\n");
-    fprintf(stdout," Total decoding time : %.3f sec \n",tot_time*0.001);
+    fprintf(stdout," Total decoding time : %.3f sec (%.3f fps)\n",tot_time*0.001, (snr->frame_ctr) * 1000.0 / tot_time);
     fprintf(stdout,"--------------------------------------------------------------------------\n");
     fprintf(stdout," Exit JM %s decoder, ver %s ",JM, VERSION);
     fprintf(stdout,"\n");
@@ -676,12 +689,12 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   }
 
 
-  fprintf(p_log,"%6.3f|",snr->snr_y1);
-  fprintf(p_log,"%6.3f|",snr->snr_u1);
-  fprintf(p_log,"%6.3f|",snr->snr_v1);
-  fprintf(p_log,"%6.3f|",snr->snr_ya);
-  fprintf(p_log,"%6.3f|",snr->snr_ua);
-  fprintf(p_log,"%6.3f|\n",snr->snr_va);
+  fprintf(p_log,"%6.3f|",snr->snr1[0]);
+  fprintf(p_log,"%6.3f|",snr->snr1[1]);
+  fprintf(p_log,"%6.3f|",snr->snr1[2]);
+  fprintf(p_log,"%6.3f|",snr->snra[0]);
+  fprintf(p_log,"%6.3f|",snr->snra[1]);
+  fprintf(p_log,"%6.3f|\n",snr->snra[2]);
 
   fclose(p_log);
 
@@ -694,17 +707,17 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
       "%2.2f %2.2f %2.2f %5d "
       "%2.2f %2.2f %2.2f %5d %.3f\n",
       img->number, 0, img->qp,
-      snr->snr_y1,
-      snr->snr_u1,
-      snr->snr_v1,
+      snr->snr1[0],
+      snr->snr1[1],
+      snr->snr1[2],
       0,
       0.0,
       0.0,
       0.0,
       0,
-      snr->snr_ya,
-      snr->snr_ua,
-      snr->snr_va,
+      snr->snra[0],
+      snr->snra[1],
+      snr->snra[2],
       0,
       (double)0.001*tot_time/(img->number+Bframe_ctr-1));
   }
@@ -714,17 +727,17 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
       "%2.2f %2.2f %2.2f %5d "
       "%2.2f %2.2f %2.2f %5d %.3f\n",
       img->number, 0, img->qp,
-      snr->snr_y1,
-      snr->snr_u1,
-      snr->snr_v1,
+      snr->snr1[0],
+      snr->snr1[1],
+      snr->snr1[2],
       0,
       0.0,
       0.0,
       0.0,
       0,
-      snr->snr_ya,
-      snr->snr_ua,
-      snr->snr_va,
+      snr->snra[0],
+      snr->snra[1],
+      snr->snra[2],
       0,
       (double)0.001*tot_time/img->number);
   }
@@ -890,7 +903,7 @@ void free_slice(struct inp_par *inp, struct img_par *img)
 int init_global_buffers()
 {
   int memory_size=0;
-  int quad_range, i;
+  int i;
 
   if (global_init_done)
   {
@@ -930,20 +943,6 @@ int init_global_buffers()
   memory_size += get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 4 + img->num_blk8x8_uv);
 
   memory_size += get_mem2Dint(&(img->siblock), img->FrameHeightInMbs, img->PicWidthInMbs);
-
-  if(img->max_imgpel_value > img->max_imgpel_value_uv || active_sps->chroma_format_idc == YUV400)
-    quad_range = (img->max_imgpel_value + 1) * 2;
-  else
-    quad_range = (img->max_imgpel_value_uv + 1) * 2;
-
-  if ((img->quad = (int*)calloc (quad_range, sizeof(int))) == NULL)
-    no_mem_exit ("init_img: img->quad");
-
-  img->quad+=quad_range/2;
-  for (i=0; i < quad_range/2; ++i)
-  {
-    img->quad[i]=img->quad[-i]=i*i;
-  }
 
   global_init_done = 1;
 
@@ -990,11 +989,6 @@ void free_global_buffers()
   free_mem3Dint(img->wp_weight, 2);
   free_mem3Dint(img->wp_offset, 6);
   free_mem4Dint(img->wbp_weight, 6, MAX_REFERENCE_PICTURES);
-
-  if(img->max_imgpel_value > img->max_imgpel_value_uv)
-    free (img->quad-(img->max_imgpel_value + 1));
-  else
-    free (img->quad-(img->max_imgpel_value_uv + 1));
 
   global_init_done = 0;
 

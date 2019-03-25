@@ -163,6 +163,10 @@ SOURCE=.\ldecod\src\mbuffer.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\mc_prediction.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\memalloc.c
 # End Source File
 # Begin Source File
@@ -304,6 +308,10 @@ SOURCE=.\ldecod\inc\mb_access.h
 # Begin Source File
 
 SOURCE=.\ldecod\inc\mbuffer.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\mc_prediction.h
 # End Source File
 # Begin Source File
 

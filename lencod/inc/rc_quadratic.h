@@ -2,10 +2,11 @@
 /*!
  ***************************************************************************
  * \file
- *    ratectl.h
+ *    rc_quadratic.h
  *
  * \author
  *    Zhengguo LI
+ *    Athanasios Leontaris
  *
  * \date
  *    14 Jan 2003
@@ -77,6 +78,11 @@ typedef struct
   int    PAveFrameQP;
   int    TotalNumberofBasicUnit;
   int    CodedBasicUnit;
+
+  int    NumberofCodedPFrame;  
+  int    TotalQpforPPicture;
+  int    NumberofPPicture;
+
   double CurrentFrameMAD;
   double CurrentBUMAD;
   double TotalBUMAD;
@@ -112,7 +118,7 @@ typedef struct
   double Wp, Wb; // complexity weights
   double DeltaP;
   int    TotalPFrame;
-  int    PDuantQp;
+  int    PMaxQpChange;
 } rc_quadratic;
 
 // rate control functions
@@ -146,7 +152,6 @@ int  updateQPRC0(rc_quadratic *prc, int topfield);
 int  updateQPRC1(rc_quadratic *prc, int topfield);
 int  updateQPRC2(rc_quadratic *prc, int topfield);
 int  updateQPRC3(rc_quadratic *prc, int topfield);
-
 
 // internal functions
 void updateMADModel   (rc_quadratic *prc);

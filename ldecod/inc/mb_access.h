@@ -17,7 +17,6 @@
 
 void CheckAvailabilityOfNeighbors(void);
 
-//void getNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix);
 void (*getNeighbour)(unsigned int curr_mb_nr, int xN, int yN, int is_chroma, PixelPos *pix);
 void getAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int is_chroma, PixelPos *pix);
 void getNonAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int is_chroma, PixelPos *pix);

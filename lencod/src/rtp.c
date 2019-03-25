@@ -19,15 +19,16 @@
 #include <assert.h>
 #include <memory.h>
 
-#include "global.h"
-
-#include "rtp.h"
 
 #ifdef WIN32
 #include <Winsock2.h>
 #else
 #include <netinet/in.h>
 #endif
+
+#include "global.h"
+#include "rtp.h"
+#include "sei.h"
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
@@ -458,7 +459,7 @@ Boolean isAggregationPacket()
 
   return FALSE;
 }
-
+#endif
 /*!
  *****************************************************************************
  * \PrepareAggregationSEIMessage
@@ -474,20 +475,23 @@ Boolean isAggregationPacket()
 void PrepareAggregationSEIMessage()
 {
   Boolean has_aggregation_sei_message = FALSE;
+
+  clear_sei_message(AGGREGATION_SEI);
+
   // prepare the sei message here
   // write the spare picture sei payload to the aggregation sei message
   if (seiHasSparePicture && img->type != B_SLICE)
   {
     FinalizeSpareMBMap();
     assert(seiSparePicturePayload.data->byte_pos == seiSparePicturePayload.payloadSize);
-    write_sei_message(AGGREGATION_SEI, seiSparePicturePayload.data->streamBuffer, seiSparePicturePayload.payloadSize, SEI_SPARE_PICTURE);
+    write_sei_message(AGGREGATION_SEI, seiSparePicturePayload.data->streamBuffer, seiSparePicturePayload.payloadSize, SEI_SPARE_PIC);
     has_aggregation_sei_message = TRUE;
   }
   // write the sub sequence information sei paylaod to the aggregation sei message
   if (seiHasSubseqInfo)
   {
     FinalizeSubseqInfo(img->layer);
-    write_sei_message(AGGREGATION_SEI, seiSubseqInfo[img->layer].data->streamBuffer, seiSubseqInfo[img->layer].payloadSize, SEI_SUBSEQ_INFORMATION);
+    write_sei_message(AGGREGATION_SEI, seiSubseqInfo[img->layer].data->streamBuffer, seiSubseqInfo[img->layer].payloadSize, SEI_SUB_SEQ_INFO);
     ClearSubseqInfoPayload(img->layer);
     has_aggregation_sei_message = TRUE;
   }
@@ -495,7 +499,7 @@ void PrepareAggregationSEIMessage()
   if (seiHasSubseqLayerInfo && img->number == 0)
   {
     FinalizeSubseqLayerInfo();
-    write_sei_message(AGGREGATION_SEI, seiSubseqLayerInfo.data, seiSubseqLayerInfo.payloadSize, SEI_SUBSEQ_LAYER_CHARACTERISTICS);
+    write_sei_message(AGGREGATION_SEI, seiSubseqLayerInfo.data, seiSubseqLayerInfo.payloadSize, SEI_SUB_SEQ_LAYER_CHARACTERISTICS);
     seiHasSubseqLayerInfo = FALSE;
     has_aggregation_sei_message = TRUE;
   }
@@ -503,7 +507,7 @@ void PrepareAggregationSEIMessage()
   if (seiHasSubseqChar)
   {
     FinalizeSubseqChar();
-    write_sei_message(AGGREGATION_SEI, seiSubseqChar.data->streamBuffer, seiSubseqChar.payloadSize, SEI_SUBSEQ_CHARACTERISTICS);
+    write_sei_message(AGGREGATION_SEI, seiSubseqChar.data->streamBuffer, seiSubseqChar.payloadSize, SEI_SUB_SEQ_CHARACTERISTICS);
     ClearSubseqCharPayload();
     has_aggregation_sei_message = TRUE;
   }
@@ -511,7 +515,7 @@ void PrepareAggregationSEIMessage()
   if (seiHasPanScanRectInfo)
   {
     FinalizePanScanRectInfo();
-    write_sei_message(AGGREGATION_SEI, seiPanScanRectInfo.data->streamBuffer, seiPanScanRectInfo.payloadSize, SEI_PANSCAN_RECT);
+    write_sei_message(AGGREGATION_SEI, seiPanScanRectInfo.data->streamBuffer, seiPanScanRectInfo.payloadSize, SEI_PAN_SCAN_RECT);
     ClearPanScanRectInfoPayload();
     has_aggregation_sei_message = TRUE;
   }
@@ -532,29 +536,57 @@ void PrepareAggregationSEIMessage()
     has_aggregation_sei_message = TRUE;
   }
   //write RandomAccess info sei payload to the aggregation sei message
-  if (seiHasRandomAccess_info)
+  if (seiHasRecoveryPoint_info)
   {
     FinalizeRandomAccess();
-    write_sei_message(AGGREGATION_SEI, seiRandomAccess.data->streamBuffer, seiRandomAccess.payloadSize, SEI_RANDOM_ACCESS_POINT);
+    write_sei_message(AGGREGATION_SEI, seiRecoveryPoint.data->streamBuffer, seiRecoveryPoint.payloadSize, SEI_RECOVERY_POINT);
     ClearRandomAccess();
     has_aggregation_sei_message = TRUE;
   }
   // more aggregation sei payload is written here...
 
-  // JVT-D099 write the scene information SEI payload
+  // write the scene information SEI payload
   if (seiHasSceneInformation)
   {
     FinalizeSceneInformation();
-    write_sei_message(AGGREGATION_SEI, seiSceneInformation.data->streamBuffer, seiSceneInformation.payloadSize, SEI_SCENE_INFORMATION);
+    write_sei_message(AGGREGATION_SEI, seiSceneInformation.data->streamBuffer, seiSceneInformation.payloadSize, SEI_SCENE_INFO);
     has_aggregation_sei_message = TRUE;
   }
-  // End JVT-D099
+
+  if (seiHasTone_mapping)
+  {	
+    FinalizeToneMapping();
+    write_sei_message(AGGREGATION_SEI, seiToneMapping.data->streamBuffer, seiToneMapping.payloadSize, SEI_TONE_MAPPING);
+    ClearToneMapping();
+    has_aggregation_sei_message = TRUE;
+  }
+
+  if (seiHasPostFilterHints_info)
+  {
+    FinalizePostFilterHints();
+    write_sei_message(AGGREGATION_SEI, seiPostFilterHints.data->streamBuffer, seiPostFilterHints.payloadSize, SEI_POST_FILTER_HINTS);
+    has_aggregation_sei_message = TRUE;
+  }
+
+  if (seiHasBuffering_period)
+  {
+    FinalizeBufferingPeriod();
+    write_sei_message(AGGREGATION_SEI, seiBufferingPeriod.data->streamBuffer, seiBufferingPeriod.payloadSize, SEI_BUFFERING_PERIOD);
+    has_aggregation_sei_message = TRUE;
+  }
+
+  if (seiHasPicTiming_info)
+  {
+    FinalizePicTiming();
+    write_sei_message(AGGREGATION_SEI, seiPicTiming.data->streamBuffer, seiPicTiming.payloadSize, SEI_PIC_TIMING);
+    has_aggregation_sei_message = TRUE;
+  }
 
   // after all the sei payload is written
   if (has_aggregation_sei_message)
     finalize_sei_message(AGGREGATION_SEI);
 }
-
+#if 0
 /*!
  *****************************************************************************
  * \begin_sub_sequence_rtp

@@ -58,6 +58,25 @@ static inline double dabs(double x)
   return ((x) < 0) ? -(x) : (x);
 }
 
+static inline int64 i64abs(int64 x)
+{
+  return ((x) < 0) ? -(x) : (x);
+}
+
+static inline double dabs2(double x)
+{
+  return (x) * (x);
+}
+
+static inline int iabs2(int x) {
+  return (x) * (x);
+}
+
+static inline int64 i64abs2(int64 x)
+{
+  return (x) * (x);
+}
+
 static inline int isign(int x)
 {
   return ((x) < 0) ? -1 : 1;
@@ -132,9 +151,13 @@ static inline int RSD(int x)
 #  define i64max(a, b)                (((a) > (b)) ? (a) : (b))
 #  define iabs(x)                     (((x) < 0)   ? -(x) : (x))
 #  define dabs(x)                     (((x) < 0)   ? -(x) : (x))
+#  define i64abs(x)                   (((x) < 0)   ? -(x) : (x))
+#  define iabs2(x)                    ((x) * (x))
+#  define dabs2(x)                    ((x) * (x))
+#  define i64abs2(x)                  ((x) * (x))
 #  define isign(x)                    (((x) < 0)   ? -1 : 1)
 #  define isignab(a, b)               (((b) < 0)   ? -iabs(a) : iabs(a))
-#  define rshift_rnd(x, a)            (((a) > 0)   ? (((x) + (1 << ((a)-1))) >> (a)) : ((x) << (-(a)))
+#  define rshift_rnd(x, a)            (((a) > 0)   ? (((x) + (1 << ((a)-1))) >> (a)) : ((x) << (-(a))))
 #  define rshift_rnd_us(x, a)         (((a) > 0)   ? (((x) + (1 << ((a)-1))) >> (a)) : (x))
 #  define rshift_rnd_sf(x, a)         (((x) + (1 << ((a)-1))) >> (a))
 #  define rshift_rnd_us_sf(x, a)      (((x) + (1 << ((a)-1))) >> (a))

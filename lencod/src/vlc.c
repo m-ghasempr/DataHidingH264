@@ -249,14 +249,14 @@ void ue_linfo(int ue, int dummy, int *len,int *info)
 {
   int i,nn;
 
-  nn=(ue+1)/2;
+  nn=(ue+1)>>1;
 
   for (i=0; i < 16 && nn != 0; i++)
   {
-    nn /= 2;
+    nn >>= 1;
   }
-  *len= 2*i + 1;
-  *info=ue+1-(1<<i);
+  *len  = (i << 1) + 1;
+  *info = ue + 1 - (1 << i);
 }
 
 
@@ -275,27 +275,17 @@ void ue_linfo(int ue, int dummy, int *len,int *info)
  ************************************************************************
  */
 void se_linfo(int se, int dummy, int *len,int *info)
-{
-
-  int i,n,sign,nn;
-
-  sign=0;
-
-  if (se <= 0)
-  {
-    sign=1;
-  }
-  n=iabs(se) << 1;
-
-  //  n+1 is the number in the code table.  Based on this we find length and info
-
-  nn=n/2;
+{  
+  int sign = (se <= 0) ? 1 : 0;
+  int n = iabs(se) << 1;   //  n+1 is the number in the code table.  Based on this we find length and info
+  int nn = (n >> 1);
+  int i;
   for (i=0; i < 16 && nn != 0; i++)
   {
-    nn /= 2;
+    nn >>= 1;
   }
-  *len=i*2 + 1;
-  *info=n - (1 << i) + sign;
+  *len  = (i << 1) + 1;
+  *info = n - (1 << i) + sign;
 }
 
 
@@ -309,7 +299,7 @@ void se_linfo(int se, int dummy, int *len,int *info)
  */
 void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
 {
-  ue_linfo(NCBP[img->yuv_format?1:0][cbp][0], dummy, len, info);
+  ue_linfo(NCBP[img->yuv_format ? 1 : 0][cbp][0], dummy, len, info);
 }
 
 
@@ -323,7 +313,7 @@ void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
  */
 void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
 {
-  ue_linfo(NCBP[img->yuv_format?1:0][cbp][1], dummy, len, info);
+  ue_linfo(NCBP[img->yuv_format ? 1 : 0][cbp][1], dummy, len, info);
 }
 
 
@@ -341,46 +331,48 @@ void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
  */
 void levrun_linfo_c2x2(int level,int run,int *len,int *info)
 {
-  const int NTAB[2][2]=
+  static const int NTAB[2][2]=
   {
     {1,5},
     {3,0}
   };
-  const int LEVRUN[4]=
+  static const int LEVRUN[4]=
   {
     2,1,0,0
   };
 
-  int levabs,i,n,sign,nn;
+  int levabs,i,n,sign = 0,nn;
 
   if (level == 0) //  check if the coefficient sign EOB (level=0)
   {
     *len=1;
     return;
   }
-  sign=0;
+
   if (level <= 0)
   {
     sign=1;
   }
-  levabs=iabs(level);
+
+  levabs = iabs(level);
+
   if (levabs <= LEVRUN[run])
   {
-    n=NTAB[levabs-1][run]+1;
+    n = NTAB[levabs - 1][run] + 1;
   }
   else
   {
-    n=(levabs-LEVRUN[run])*8 + run*2;
+    n = (levabs - LEVRUN[run]) * 8 + run * 2;
   }
 
-  nn=n/2;
+  nn = n >> 1;
 
   for (i=0; i < 16 && nn != 0; i++)
   {
-    nn /= 2;
+    nn >>= 1;
   }
-  *len= 2*i + 1;
-  *info=n-(1 << i)+sign;
+  *len  = (i << 1) + 1;
+  *info = n - (1 << i) + sign;
 }
 
 
@@ -398,11 +390,11 @@ void levrun_linfo_c2x2(int level,int run,int *len,int *info)
  */
 void levrun_linfo_inter(int level,int run,int *len,int *info)
 {
-  const byte LEVRUN[16]=
+  static const byte LEVRUN[16]=
   {
     4,2,2,1,1,1,1,1,1,1,0,0,0,0,0,0
   };
-  const byte NTAB[4][10]=
+  static const byte NTAB[4][10]=
   {
     { 1, 3, 5, 9,11,13,21,23,25,27},
     { 7,17,19, 0, 0, 0, 0, 0, 0, 0},
@@ -418,29 +410,19 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
     return;
   }
 
-  if (level <= 0)
-    sign=1;
-  else
-    sign=0;
+  sign   = (level <= 0) ? 1 : 0;
+  levabs = iabs(level);
 
-  levabs=iabs(level);
-  if (levabs <= LEVRUN[run])
-  {
-    n=NTAB[levabs-1][run]+1;
-  }
-  else
-  {
-    n=(levabs-LEVRUN[run])*32 + run*2;
-  }
+  n = (levabs <= LEVRUN[run]) ? NTAB[levabs - 1][run] + 1 : (levabs - LEVRUN[run]) * 32 + run * 2;
 
-  nn=n/2;
+  nn = n >> 1;
 
   for (i=0; i < 16 && nn != 0; i++)
   {
-    nn /= 2;
+    nn >>= 1;
   }
-  *len= 2*i + 1;
-  *info=n-(1 << i)+sign;
+  *len  = (i << 1) + 1;
+  *info = n - (1 << i) + sign;
 
 }
 
@@ -459,9 +441,9 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
  // NOTE this function is called with sym->inf > (1<<(sym->len/2)).  The upper bits of inf are junk
 int symbol2uvlc(SyntaxElement *sym)
 {
-  int suffix_len=sym->len/2;
+  int suffix_len = sym->len >> 1;
   assert (suffix_len<32);
-  sym->bitpattern = (1<<suffix_len)|(sym->inf&((1<<suffix_len)-1));
+  sym->bitpattern = (1<<suffix_len)|(sym->inf & ((1<<suffix_len) - 1));
   return 0;
 }
 
@@ -611,18 +593,21 @@ void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
 {
 
   int i;
-  unsigned int mask = 1 << (se->len-1);
-  assert ((se->len-1)<32);
+  unsigned int mask = 1 << (se->len - 1);
+  assert ((se->len-1) < 32);
 
   // Add the new bits to the bitstream.
   // Write out a byte if it is full
-  for (i=0; i<se->len; i++)
+  for (i = 0; i < se->len; i++)
   {
     currStream->byte_buf <<= 1;
+    
     if (se->bitpattern & mask)
       currStream->byte_buf |= 1;
+
     currStream->bits_to_go--;
     mask >>= 1;
+    
     if (currStream->bits_to_go==0)
     {
       currStream->bits_to_go = 8;
@@ -684,7 +669,7 @@ void writeSE_Flag(SyntaxElement *se, DataPartition *dp )
 void writeSE_invFlag(SyntaxElement *se, DataPartition *dp )
 {
   se->len        = 1;
-  se->bitpattern = 1-(se->value1 & 1);
+  se->bitpattern = 1 - (se->value1 & 1);
 
   writeUVLC2buffer(se, dp->bitstream );
 
@@ -835,9 +820,7 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *dp
       { 0, 0, 0,12,11,10, 9, 8,13,12,12,12, 8,12,10, 6,2},
     },
   };
-  int vlcnum;
-
-  vlcnum = se->len;
+  int vlcnum = se->len;
 
   // se->value1 : numcoeff
   // se->value2 : numtrailingones
@@ -859,7 +842,6 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *dp
     se->len = lentab[vlcnum][se->value2][se->value1];
     se->inf = codtab[vlcnum][se->value2][se->value1];
   }
-  //se->inf = 0;
 
   if (se->len == 0)
   {
@@ -1005,9 +987,7 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *dp)
     {0,1,1},
     {0,1},
   };
-  int vlcnum;
-
-  vlcnum = se->len;
+  int vlcnum = se->len;
 
   // se->value1 : TotalZeros
   se->len = lentab[vlcnum][se->value1];
@@ -1106,10 +1086,8 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *dp)
     {0,1,1},
     {0,1}}
   };
-  int vlcnum;
-  int yuv = img->yuv_format - 1;
-
-  vlcnum = se->len;
+  int vlcnum = se->len;
+  int yuv = img->yuv_format - 1;  
 
   // se->value1 : TotalZeros
   se->len = lentab[yuv][vlcnum][se->value1];
@@ -1166,9 +1144,7 @@ int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *dp)
     {3,0,1,3,2,5,4},
     {7,6,5,4,3,2,1,1,1,1,1,1,1,1,1},
   };
-  int vlcnum;
-
-  vlcnum = se->len;
+  int vlcnum = se->len;
 
   // se->value1 : run
   se->len = lentab[vlcnum][se->value1];
@@ -1224,23 +1200,23 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *dp, int prof
   {
     int iLength = 28, numPrefix = 15;
     int iCodeword, addbit, offset;
-    int levabsm16 = levabs-16;
+    int levabsm16 = levabs - 16;
 
     // escape code2
-    if ((levabsm16) > (1<<11))
+    if ((levabsm16) > 2048)
     {
       numPrefix++;
-      while ((levabsm16) > (1<<(numPrefix-3))-4096)
+      while ((levabsm16) > (1<<(numPrefix-3)) - 4096)
       {
         numPrefix++;
       }
     }
 
-    addbit  = numPrefix - 15;
-    iLength += (addbit<<1);
-    offset = (2048<<addbit)-2048;
+    addbit   = numPrefix - 15;
+    iLength += (addbit << 1);
+    offset   = (2048 << addbit) - 2048;
 
-    iCodeword = (1<<(12+addbit))|((levabsm16)<<1)|sign;
+    iCodeword = (1 << (12+addbit))|((levabsm16) << 1)|sign;
 
     /* Assert to make sure that the code fits in the VLC */
     /* make sure that we are in High Profile to represent level_prefix > 15 */
@@ -1251,6 +1227,7 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *dp, int prof
       se->inf = iCodeword;
       return (se->len);
     }
+    
     se->len = iLength;
     se->inf = iCodeword;
   }
@@ -1289,7 +1266,7 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *dp,
   int levabs = iabs(level);
   int sign = (level < 0 ? 1 : 0);
 
-  int shift = vlc-1;
+  int shift = vlc - 1;
   int escape = (15<<shift)+1;
 
   int numPrefix = (levabs-1)>>shift;
@@ -1304,15 +1281,15 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *dp,
   }
   else
   {
-    int levabsesc = levabs-escape;
+    int levabsesc = levabs - escape;
 
     iLength = 28;
     numPrefix = 15;
 
-    if ((levabsesc) > (1<<11))
+    if ((levabsesc) > 2048)
     {
       numPrefix++;
-      while ((levabsesc) > (1<<(numPrefix-3))-4096)
+      while ((levabsesc) > (1<<(numPrefix-3)) - 4096)
       {
         numPrefix++;
       }
@@ -1320,9 +1297,9 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *dp,
 
     addbit  = numPrefix - 15;
     iLength += (addbit<<1);
-    offset = (2048<<addbit)-2048;
+    offset = (2048 << addbit) - 2048;
 
-    iCodeword = (1<<(12+addbit))|((levabsesc-offset)<<1)|sign;
+    iCodeword = (1 << (12 + addbit)) | ((levabsesc - offset) << 1) | sign;
     /* Assert to make sure that the code fits in the VLC */
     /* make sure that we are in High Profile to represent level_prefix > 15 */
     if (numPrefix > 15 &&  profile_idc < 100)

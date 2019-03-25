@@ -29,7 +29,7 @@ extern StorablePicture *dec_picture;
 #if TRACE
 #define SYMTRACESTRING(s) strncpy(sym.tracestring,s,TRACESTRING_SIZE)
 #else
-#define SYMTRACESTRING(s) // to nothing
+#define SYMTRACESTRING(s) // do nothing
 #endif
 
 extern int UsedBits;
@@ -57,6 +57,18 @@ unsigned CeilLog2( unsigned uiVal)
   return uiRet;
 }
 
+unsigned CeilLog2_sf( unsigned uiVal)
+{
+  unsigned uiTmp = uiVal-1;
+  unsigned uiRet = 0;
+
+  while( uiTmp > 0 )
+  {
+    uiTmp >>= 1;
+    uiRet++;
+  }
+  return uiRet;
+}
 
 /*!
  ************************************************************************

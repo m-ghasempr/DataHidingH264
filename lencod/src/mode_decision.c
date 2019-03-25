@@ -1006,3 +1006,12 @@ void adjust_mb16x16_cost(int cost)
   ? 1.0
   : sqrt(mb16x16_cost / (CALM_MF_FACTOR_THRESHOLD * img->lambda_mf_factor[img->type][img->qp]));
 }
+
+void update_lambda_costs(RD_PARAMS *enc_mb, int lambda_mf[3])
+{
+  int MEPos;
+  for (MEPos = 0; MEPos < 3; MEPos ++)
+  {
+    lambda_mf[MEPos] = input->CtxAdptLagrangeMult == 0 ? enc_mb->lambda_mf[MEPos] : (int)(enc_mb->lambda_mf[MEPos] * sqrt(lambda_mf_factor));
+  }
+}

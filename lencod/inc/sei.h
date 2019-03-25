@@ -43,6 +43,8 @@ typedef enum {
   SEI_FILM_GRAIN_CHARACTERISTICS,
   SEI_DEBLOCKING_FILTER_DISPLAY_PREFERENCE,
   SEI_STEREO_VIDEO_INFO,
+  SEI_POST_FILTER_HINTS,
+  SEI_TONE_MAPPING,
 
   SEI_MAX_ELEMENTS  //!< number of maximum syntax elements
 } SEI_type;
@@ -264,6 +266,69 @@ void UpdateRandomAccess();
 void FinalizeRandomAccess();
 void CloseRandomAccess();
 
+// tone mapping information
+#define MAX_CODED_BIT_DEPTH	12
+#define MAX_SEI_BIT_DEPTH	12
+#define MAX_NUM_PIVOTS		(1<<MAX_CODED_BIT_DEPTH)
+
+typedef struct
+{
+  unsigned int  tone_map_id;
+  unsigned char tone_map_cancel_flag;
+  unsigned int  tone_map_repetition_period;
+  unsigned char coded_data_bit_depth;
+  unsigned char sei_bit_depth;
+  unsigned int  model_id;
+  // variables for model 0
+  int  min_value;
+  int  max_value;
+  // variables for model 1
+  int  sigmoid_midpoint;
+  int  sigmoid_width;
+  // variables for model 2
+  int start_of_coded_interval[1<<MAX_SEI_BIT_DEPTH];
+  // variables for model 3
+  int num_pivots;
+  int coded_pivot_value[MAX_NUM_PIVOTS];
+  int sei_pivot_value[MAX_NUM_PIVOTS];
+
+  Bitstream *data;
+  int payloadSize;
+} tone_mapping_struct;
+
+extern Boolean seiHasTone_mapping;
+extern tone_mapping_struct seiToneMapping;
+
+void InitToneMapping();
+void FinalizeToneMapping();
+void ClearToneMapping();
+void UpdateToneMapping();
+void CloseToneMapping();
+
+//! Post Filter Hints Information
+typedef struct
+{
+  unsigned int  filter_hint_size_y;
+  unsigned int  filter_hint_size_x;
+  unsigned int  filter_hint_type;
+  int           ***filter_hint;
+  unsigned int  additional_extension_flag;
+
+  Bitstream *data;
+  int payloadSize;
+} post_filter_information_struct;
+
+extern Boolean seiHasPostFilterHints_info;
+extern post_filter_information_struct seiPostFilterHints;
+
+void InitPostFilterHints();
+void ClearPostFilterHints();
+void UpdatePostFilterHints();
+void FinalizePostFilterHints();
+void ClosePostFilterHints();
+
+int Write_SEI_NALU(int len);
+
 
 // This is only temp
 //! Buffering Period Information
@@ -272,13 +337,15 @@ void CloseRandomAccess();
 typedef struct
 {
   int seq_parameter_set_id;
-  int initial_cpb_removal_delay[MAX_CPB_CNT_MINUS1+1];
-  int initial_cpb_removal_delay_offset[MAX_CPB_CNT_MINUS1+1];
+  int nal_initial_cpb_removal_delay[MAX_CPB_CNT_MINUS1+1];
+  int nal_initial_cpb_removal_delay_offset[MAX_CPB_CNT_MINUS1+1];
+  int vcl_initial_cpb_removal_delay[MAX_CPB_CNT_MINUS1+1];
+  int vcl_initial_cpb_removal_delay_offset[MAX_CPB_CNT_MINUS1+1];
 
   Bitstream *data;
   int payloadSize;
 } bufferingperiod_information_struct;
-Boolean seiHasBufferingPeriod_info;
+extern Boolean seiHasBuffering_period;
 bufferingperiod_information_struct seiBufferingPeriod;
 
 void InitBufferingPeriod();
@@ -312,7 +379,7 @@ typedef struct
   Bitstream *data;
   int payloadSize;
 } pictiming_information_struct;
-Boolean seiHasPicTiming_info;
+extern Boolean seiHasPicTiming_info;
 pictiming_information_struct seiPicTiming;
 
 void InitPicTiming();

@@ -946,7 +946,7 @@ int dct_luma_16x16(int new_intra_mode)
 */
 int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
 {
-  int i,j, ii, ilev, coeff_ctr;
+  int i,j, ilev, coeff_ctr;
   static int m4[4][4], m5[4], m6[4];
   int level,scan_pos = 0,run = -1;
   int nonzero = FALSE;
@@ -976,9 +976,10 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   leveloffset   = LevelOffset4x4Luma[intra][qp_per];
   invlevelscale = InvLevelScale4x4Luma[intra][qp_rem];
 
-  //  Horizontal transform
+
   if (!lossless_qpprime)
   {
+    //  Horizontal transform
     for (j=0; j < BLOCK_SIZE; j++)
     {
       m5[0] = img->m7[j][0]+img->m7[j][3];
@@ -1045,45 +1046,54 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
 
     ACLevel[scan_pos] = 0;
 
-    //     IDCT.
-    //     horizontal
-    for (j=0; j < BLOCK_SIZE; j++)
+    if (scan_pos)
     {
-      m6[0]=(m4[j][0]     +  m4[j][2]);
-      m6[1]=(m4[j][0]     -  m4[j][2]);
-      m6[2]=(m4[j][1]>>1) -  m4[j][3];
-      m6[3]= m4[j][1]     + (m4[j][3]>>1);
+      //     IDCT.
+      //     horizontal
+      for (j=0; j < BLOCK_SIZE; j++)
+      {
+        m6[0]=(m4[j][0]     +  m4[j][2]);
+        m6[1]=(m4[j][0]     -  m4[j][2]);
+        m6[2]=(m4[j][1]>>1) -  m4[j][3];
+        m6[3]= m4[j][1]     + (m4[j][3]>>1);
 
-      m4[j][0] = m6[0] + m6[3];
-      m4[j][1] = m6[1] + m6[2];
-      m4[j][2] = m6[1] - m6[2];
-      m4[j][3] = m6[0] - m6[3];
-    }
+        m4[j][0] = m6[0] + m6[3];
+        m4[j][1] = m6[1] + m6[2];
+        m4[j][2] = m6[1] - m6[2];
+        m4[j][3] = m6[0] - m6[3];
+      }
 
-    //  vertical
-    for (i=0; i < BLOCK_SIZE; i++)
-    {
-
-      m6[0]=(m4[0][i]     +  m4[2][i]);
-      m6[1]=(m4[0][i]     -  m4[2][i]);
-      m6[2]=(m4[1][i]>>1) -  m4[3][i];
-      m6[3]= m4[1][i]     + (m4[3][i]>>1);
-
-      ii = i + block_x;
-
-      img->m7[0][i] = iClip1( img->max_imgpel_value, rshift_rnd_sf((m6[0]+m6[3]+((long)img->mpr[    block_y][ii] << DQ_BITS)),DQ_BITS));
-      img->m7[1][i] = iClip1( img->max_imgpel_value, rshift_rnd_sf((m6[1]+m6[2]+((long)img->mpr[1 + block_y][ii] << DQ_BITS)),DQ_BITS));
-      img->m7[2][i] = iClip1( img->max_imgpel_value, rshift_rnd_sf((m6[1]-m6[2]+((long)img->mpr[2 + block_y][ii] << DQ_BITS)),DQ_BITS));
-      img->m7[3][i] = iClip1( img->max_imgpel_value, rshift_rnd_sf((m6[0]-m6[3]+((long)img->mpr[3 + block_y][ii] << DQ_BITS)),DQ_BITS));
-    }
-    //  Decoded block moved to frame memory
-    for (j=0; j < BLOCK_SIZE; j++)
-    {
-      pix_y = img->pix_y + block_y + j;
-      pix_x = img->pix_x + block_x;
+      //  vertical
       for (i=0; i < BLOCK_SIZE; i++)
       {
-        enc_picture->imgY[pix_y][pix_x + i]=img->m7[j][i];
+
+        m6[0]=(m4[0][i]     +  m4[2][i]);
+        m6[1]=(m4[0][i]     -  m4[2][i]);
+        m6[2]=(m4[1][i]>>1) -  m4[3][i];
+        m6[3]= m4[1][i]     + (m4[3][i]>>1);
+
+        img->m7[0][i] = m6[0]+m6[3];
+        img->m7[1][i] = m6[1]+m6[2];
+        img->m7[2][i] = m6[1]-m6[2];
+        img->m7[3][i] = m6[0]-m6[3];
+      }
+
+      // generate final block
+      for (j=0; j < BLOCK_SIZE; j++)
+      {        
+        for (i=0; i < BLOCK_SIZE; i++)
+        {
+          enc_picture->imgY[img->pix_y + block_y + j][img->pix_x + block_x + i]     
+          = iClip1( img->max_imgpel_value, rshift_rnd_sf((img->m7[j][i]+((long)img->mpr[block_y + j][block_x + i] << DQ_BITS)),DQ_BITS));
+        }
+      }
+
+    }
+    else // no transformed residual;
+    {
+      for (j=block_y; j < block_y + BLOCK_SIZE; j++)
+      {
+        memcpy(&(enc_picture->imgY[img->pix_y + j][img->pix_x + block_x]),&(img->mpr[j][block_x]), BLOCK_SIZE * sizeof(imgpel));
       }
     }
   }
@@ -1143,7 +1153,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
  *    Transform,quantization,inverse transform for chroma.
  *    The main reason why this is done in a separate routine is the
  *    additional 2x2 transform of DC-coeffs. This routine is called
- *    ones for each of the chroma components.
+ *    once for each of the chroma components.
  *
  * \par Input:
  *    uv    : Make difference between the U and V chroma component  \n
@@ -1687,6 +1697,7 @@ int dct_chroma(int uv,int cr_cbp)
             currMB->cbp_blk &= ~(uv_cbpblk);  // if no chroma DC's: then reset coded-bits of this chroma subblock
 
           ACLevel[0] = 0;
+
           for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// ac coeff
           {
             i = pos_scan[coeff_ctr][0];
@@ -1732,6 +1743,7 @@ int dct_chroma(int uv,int cr_cbp)
           {
             m5[j]=img->m7[n2+j][i1];
           }
+          
           m6[0] = (m5[0] + m5[2]);
           m6[1] = (m5[0] - m5[2]);
           m6[2] = (m5[1]>>1) - m5[3];
@@ -1748,7 +1760,7 @@ int dct_chroma(int uv,int cr_cbp)
     //  Decoded block moved to memory
     for (j=0; j < img->mb_cr_size_y; j++)
     {
-      pix_c_y = img->pix_c_y+j;
+      pix_c_y = img->pix_c_y + j;
       for (i=0; i < img->mb_cr_size_x; i++)
       {
         pix_c_x = img->pix_c_x + i;
@@ -2041,7 +2053,7 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
  *    Transform,quantization,inverse transform for chroma.
  *    The main reason why this is done in a separate routine is the
  *    additional 2x2 transform of DC-coeffs. This routine is called
- *    ones for each of the chroma components.
+ *    once for each of the chroma components.
  *
  * \par Input:
  *    uv    : Make difference between the U and V chroma component               \n
@@ -2441,7 +2453,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
  *
  * \par Output:
  *    nonzero: 0 if no levels are nonzero.  1 if there are nonzero levels.            \n
- *    coeff_cost: Counter for nonzero coefficients, used to discard expencive levels.
+ *    coeff_cost: Counter for nonzero coefficients, used to discard expensive levels.
  ************************************************************************
  */
 void copyblock_sp(int block_x,int block_y)
@@ -2616,12 +2628,12 @@ int writePCMByteAlign(Bitstream *currStream)
  *  - only one kind of prediction is considered and not two
  *  - the resulting error coefficients are not quantized before being sent to the VLC
  *
- * \para Input:
+ * \par Input:
  *    block_x,block_y: Block position inside a macro block (0,4,8,12).
  *
- * \para Output:
+ * \par Output:
  *    nonzero: 0 if no levels are nonzero.  1 if there are nonzero levels.
- *    coeff_cost: Counter for nonzero coefficients, used to discard expencive levels.
+ *    coeff_cost: Counter for nonzero coefficients, used to discard expensive levels.
  *
  *
  ************************************************************************

@@ -38,28 +38,38 @@ void update_rc(Macroblock *currMB, short best_mode)
   if(input->basicunit < img->FrameSizeInMbs)
   {
     generic_RC->TotalMADBasicUnit += generic_RC->MADofMB[img->current_mb_nr];
+  }  
+}
 
-    // delta_qp is present only for non-skipped macroblocks
-    if ((currMB->cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM))
-      currMB->prev_cbp = 1;
-    else
-    {
-      currMB->delta_qp = 0;
-      currMB->qp = currMB->prev_qp;
-      img->qp = currMB->qp;
-      currMB->prev_cbp = 0;
-    }
+/*!
+ *************************************************************************************
+ * \brief
+ *    Update QP Parameters (critical in case of SKIP MBs or MBAFF)
+ *************************************************************************************
+ */
 
-    if (input->MbInterlace)
-    {
-      // update rdopt buffered qps...
-      rdopt->delta_qp = currMB->delta_qp;
-      rdopt->qp = currMB->qp;
-      rdopt->prev_cbp = currMB->prev_cbp;
+void handle_qp(Macroblock *currMB, short best_mode)
+{
+  // delta_qp is present only for non-skipped macroblocks
+  if ((currMB->cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM))
+    currMB->prev_cbp = 1;
+  else
+  {
+    currMB->delta_qp = 0;
+    currMB->qp = currMB->prev_qp;
+    img->qp = currMB->qp;
+    currMB->prev_cbp = 0;
+  }
 
-      delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
-      qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
-    }
+  if (input->MbInterlace)
+  {
+    // update rdopt buffered qps...
+    rdopt->delta_qp = currMB->delta_qp;
+    rdopt->qp = currMB->qp;
+    rdopt->prev_cbp = currMB->prev_cbp;
+
+    delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
+    qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
   }
   set_chroma_qp(currMB);
 }
@@ -212,12 +222,12 @@ void copy_rc_generic( rc_generic *dst, rc_generic *src )
 void generic_alloc( rc_generic **prc )
 {
   *prc = (rc_generic *) malloc ( sizeof( rc_generic ) );
-  if (NULL==*prc)
+  if (NULL == *prc)
   {
     no_mem_exit("init_global_buffers: generic_alloc");
   }
   (*prc)->MADofMB = (int *) calloc (img->FrameSizeInMbs, sizeof (int));
-  if (NULL==(*prc)->MADofMB)
+  if (NULL == (*prc)->MADofMB)
   {
     no_mem_exit("init_global_buffers: (*prc)->MADofMB");
   }

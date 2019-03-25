@@ -45,11 +45,11 @@ typedef enum {
 #define MAXIMUMVALUEOFcpb_cnt   32
 typedef struct
 {
-  unsigned int  cpb_cnt;                                          // ue(v)
+  unsigned int  cpb_cnt_minus1;                                   // ue(v)
   unsigned int  bit_rate_scale;                                   // u(4)
   unsigned int  cpb_size_scale;                                   // u(4)
-    unsigned int  bit_rate_value [MAXIMUMVALUEOFcpb_cnt];         // ue(v)
-    unsigned int  cpb_size_value[MAXIMUMVALUEOFcpb_cnt];          // ue(v)
+    unsigned int  bit_rate_value_minus1[MAXIMUMVALUEOFcpb_cnt];   // ue(v)
+    unsigned int  cpb_size_value_minus1[MAXIMUMVALUEOFcpb_cnt];   // ue(v)
     unsigned int  vbr_cbr_flag[MAXIMUMVALUEOFcpb_cnt];            // u(1)
   unsigned int  initial_cpb_removal_delay_length_minus1;          // u(5)
   unsigned int  cpb_removal_delay_length_minus1;                  // u(5)
@@ -74,8 +74,8 @@ typedef struct
       unsigned int  transfer_characteristics;                     // u(8)
       unsigned int  matrix_coefficients;                          // u(8)
   Boolean      chroma_location_info_present_flag;                // u(1)
-    unsigned int  chroma_location_frame;                          // ue(v)
-    unsigned int  chroma_location_field;                          // ue(v)
+    unsigned int  chroma_sample_loc_type_top_field;               // ue(v)
+    unsigned int  chroma_sample_loc_type_bottom_field;            // ue(v)
   Boolean      timing_info_present_flag;                         // u(1)
     unsigned int  num_units_in_tick;                              // u(32)
     unsigned int  time_scale;                                     // u(32)
@@ -86,13 +86,14 @@ typedef struct
     hrd_parameters_t vcl_hrd_parameters;                      // hrd_paramters_t
   // if ((nal_hrd_parameters_present_flag || (vcl_hrd_parameters_present_flag))
     Boolean      low_delay_hrd_flag;                             // u(1)
+  Boolean      pic_struct_present_flag;                        // u(1)
   Boolean      bitstream_restriction_flag;                       // u(1)
     Boolean      motion_vectors_over_pic_boundaries_flag;        // u(1)
     unsigned int  max_bytes_per_pic_denom;                        // ue(v)
     unsigned int  max_bits_per_mb_denom;                          // ue(v)
     unsigned int  log2_max_mv_length_vertical;                    // ue(v)
     unsigned int  log2_max_mv_length_horizontal;                  // ue(v)
-    unsigned int  max_dec_frame_reordering;                       // ue(v)
+    unsigned int  num_reorder_frames;                       // ue(v)
     unsigned int  max_dec_frame_buffering;                        // ue(v)
 } vui_seq_parameters_t;
 

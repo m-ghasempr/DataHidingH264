@@ -15,7 +15,7 @@
       Nokia Inc., USA
       Nokia Corporation, Finland
       Siemens AG, Germany
-      Heinrich-Hertz-Institute for Communication Technology GmbH, Germany
+      Fraunhofer-Institute for Telecommunications Heinrich-Hertz-Institut (HHI), Germany
       University of Hannover, Institut of Communication Theory and Signal Processing,Germany
       Videolocus, Canada
       LSI Logic, Canada
@@ -94,8 +94,9 @@
       Karsten Suehring                <suehring@hhi.de>
       Heiko Schwarz                   <hschwarz@hhi.de>
       Detlev Marpe                    <marpe@hhi.de>
-      Guido Heising                   <heising@hhi.de>
-      Heinrich-Hertz-Institute
+      Guido Heising
+      Fraunhofer-Institute for Telecommunications
+      Heinrich-Hertz-Institut (HHI)
       Einsteinufer 37
       10587 Berlin
       Germany

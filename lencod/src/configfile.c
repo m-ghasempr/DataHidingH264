@@ -596,6 +596,147 @@ unsigned CeilLog2( unsigned uiVal)
   return uiRet;
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    read the slice group configuration file. Returns without action
+ *    if type is not 0, 2 or 6
+ ************************************************************************
+ */
+void read_slice_group_info()
+{
+  FILE * sgfile=NULL;
+  int i;
+  int ret;
+
+  if ((input->slice_group_map_type != 0) && (input->slice_group_map_type != 2) && (input->slice_group_map_type != 6))
+  {
+    // nothing to do
+    return;
+  }
+
+  // do we have a file name (not only NULL character)
+  if (strlen (input->SliceGroupConfigFileName) <= 1)
+    error ("No slice group config file name specified", 500);
+    
+  // open file
+  sgfile = fopen(input->SliceGroupConfigFileName,"r");
+
+  if ( NULL==sgfile )
+  {
+    snprintf(errortext, ET_SIZE, "Error opening slice group file %s", input->SliceGroupConfigFileName);
+    error (errortext, 500);
+  }
+
+  switch (input->slice_group_map_type)
+  {
+  case 0:
+    input->run_length_minus1=(int *)malloc(sizeof(int)*(input->num_slice_groups_minus1+1));
+    if ( NULL==input->run_length_minus1 )
+    {
+      fclose(sgfile);
+      no_mem_exit("PatchInp: input->run_length_minus1");
+    }
+
+    // each line contains one 'run_length_minus1' value
+    for(i=0;i<=input->num_slice_groups_minus1;i++)
+    {
+      ret = fscanf(sgfile,"%d",(input->run_length_minus1+i));
+      fscanf(sgfile,"%*[^\n]");
+      if ( 1!=ret )
+      {
+        fclose(sgfile);
+        snprintf(errortext, ET_SIZE, "Error while reading slice group config file (line %d)", i+1);
+        error (errortext, 500);
+      }
+    }
+    break;
+
+  case 2:
+    input->top_left=(int *)malloc(sizeof(int)*input->num_slice_groups_minus1);
+    input->bottom_right=(int *)malloc(sizeof(int)*input->num_slice_groups_minus1);
+    if (NULL==input->top_left)
+    {
+      fclose(sgfile);
+      no_mem_exit("PatchInp: input->top_left");
+    }
+    if (NULL==input->bottom_right)
+    {
+      fclose(sgfile);
+      no_mem_exit("PatchInp: input->bottom_right");
+    }
+
+    // every two lines contain 'top_left' and 'bottom_right' value
+    for(i=0;i<input->num_slice_groups_minus1;i++)
+    {
+      ret = fscanf(sgfile,"%d",(input->top_left+i));
+      fscanf(sgfile,"%*[^\n]");
+      if ( 1!=ret )
+      {
+        fclose(sgfile);
+        snprintf(errortext, ET_SIZE, "Error while reading slice group config file (line %d)", 2*i +1);
+        error (errortext, 500);
+      }
+      ret = fscanf(sgfile,"%d",(input->bottom_right+i));
+      fscanf(sgfile,"%*[^\n]");
+      if ( 1!=ret )
+      {
+        fclose(sgfile);
+        snprintf(errortext, ET_SIZE, "Error while reading slice group config file (line %d)", 2*i + 2);
+        error (errortext, 500);
+      }
+    }
+    break;
+
+  case 6:
+    {
+      int tmp;
+      int frame_mb_only;
+      int mb_width, mb_height, mapunit_height;
+
+      frame_mb_only = !(input->PicInterlace || input->MbInterlace);
+      mb_width= (input->img_width+img->auto_crop_right)>>4;
+      mb_height= (input->img_height+img->auto_crop_bottom)>>4;
+      mapunit_height=mb_height/(2-frame_mb_only);
+
+      input->slice_group_id=(byte * ) malloc(sizeof(byte)*mapunit_height*mb_width);
+      if (NULL==input->slice_group_id)
+      {
+        fclose(sgfile);
+        no_mem_exit("PatchInp: input->slice_group_id");
+      }
+
+      // each line contains slice_group_id for one Macroblock
+      for (i=0;i<mapunit_height*mb_width;i++)
+      {
+        ret = fscanf(sgfile,"%d", &tmp);
+        input->slice_group_id[i]= (byte) tmp;
+        if ( 1!=ret )
+        {
+          fclose(sgfile);
+          snprintf(errortext, ET_SIZE, "Error while reading slice group config file (line %d)", i + 1);
+          error (errortext, 500);
+        }
+        if ( *(input->slice_group_id+i) > input->num_slice_groups_minus1 )
+        {
+          fclose(sgfile);
+          snprintf(errortext, ET_SIZE, "Error while reading slice group config file: slice_group_id not allowed (line %d)", i + 1);
+          error (errortext, 500);
+        }
+        fscanf(sgfile,"%*[^\n]");
+      }
+    }
+    break;
+
+  default:
+    // we should not get here
+    error ("Wrong slice group type while reading config file", 500);
+    break;
+  }
+
+  // close file again
+  fclose(sgfile);
+}
 
 /*!
  ***********************************************************************
@@ -608,10 +749,7 @@ static void PatchInp (void)
   int bitdepth_qp_scale = 6*(input->BitDepthLuma - 8);
 
   // These variables are added for FMO
-  FILE * sgfile=NULL;
   int i,j;
-  int frame_mb_only;
-  int mb_width, mb_height, mapunit_height;
   int storedBplus1;
 
   TestEncoderParams(bitdepth_qp_scale);
@@ -621,38 +759,38 @@ static void PatchInp (void)
 
   // Set block sizes
 
-    // Skip/Direct16x16
-    input->part_size[0][0] = 4;
-    input->part_size[0][1] = 4;
+  // Skip/Direct16x16
+  input->part_size[0][0] = 4;
+  input->part_size[0][1] = 4;
   // 16x16
-    input->part_size[1][0] = 4;
-    input->part_size[1][1] = 4;
+  input->part_size[1][0] = 4;
+  input->part_size[1][1] = 4;
   // 16x8
-    input->part_size[2][0] = 4;
-    input->part_size[2][1] = 2;
+  input->part_size[2][0] = 4;
+  input->part_size[2][1] = 2;
   // 8x16
-    input->part_size[3][0] = 2;
-    input->part_size[3][1] = 4;
+  input->part_size[3][0] = 2;
+  input->part_size[3][1] = 4;
   // 8x8
-    input->part_size[4][0] = 2;
-    input->part_size[4][1] = 2;
+  input->part_size[4][0] = 2;
+  input->part_size[4][1] = 2;
   // 8x4
-    input->part_size[5][0] = 2;
-    input->part_size[5][1] = 1;
+  input->part_size[5][0] = 2;
+  input->part_size[5][1] = 1;
   // 4x8
-    input->part_size[6][0] = 1;
-    input->part_size[6][1] = 2;
+  input->part_size[6][0] = 1;
+  input->part_size[6][1] = 2;
   // 4x4
-    input->part_size[7][0] = 1;
-    input->part_size[7][1] = 1;
+  input->part_size[7][0] = 1;
+  input->part_size[7][1] = 1;
 
-    input->blocktype_lut[0][0] = 7; // 4x4
-    input->blocktype_lut[0][1] = 6; // 4x8
-    input->blocktype_lut[1][0] = 5; // 8x4
-    input->blocktype_lut[1][1] = 4; // 8x8
-    input->blocktype_lut[1][3] = 3; // 8x16
-    input->blocktype_lut[3][1] = 2; // 16x8
-    input->blocktype_lut[3][3] = 1; // 16x16
+  input->blocktype_lut[0][0] = 7; // 4x4
+  input->blocktype_lut[0][1] = 6; // 4x8
+  input->blocktype_lut[1][0] = 5; // 8x4
+  input->blocktype_lut[1][1] = 4; // 8x8
+  input->blocktype_lut[1][3] = 3; // 8x16
+  input->blocktype_lut[3][1] = 2; // 16x8
+  input->blocktype_lut[3][3] = 1; // 16x16
 
   for (j = 0; j<8;j++)
   {
@@ -797,87 +935,12 @@ static void PatchInp (void)
       fprintf ( stderr, "Using %d MBs per slice.\n", input->slice_argument);
     }
   }
-  /*
-  // add check for MAXSLICEGROUPIDS
-  if(input->num_slice_groups_minus1>=MAXSLICEGROUPIDS)
+
+  // read the slice group configuration file. Only for types 0, 2 or 6
+  if ( 0 != input->num_slice_groups_minus1 )
   {
-    snprintf(errortext, ET_SIZE, "num_slice_groups_minus1 exceeds MAXSLICEGROUPIDS");
-    error (errortext, 500);
+    read_slice_group_info();
   }
-  */
-
-  // Following codes are to read slice group configuration from SliceGroupConfigFileName for slice group type 0,2 or 6
-  if( (input->num_slice_groups_minus1!=0)&&
-    ((input->slice_group_map_type == 0) || (input->slice_group_map_type == 2) || (input->slice_group_map_type == 6)) )
-  {
-    if (strlen (input->SliceGroupConfigFileName) > 0 && (sgfile=fopen(input->SliceGroupConfigFileName,"r"))==NULL)
-    {
-      snprintf(errortext, ET_SIZE, "Error open file %s", input->SliceGroupConfigFileName);
-      error (errortext, 500);
-    }
-    else
-    {
-      if (input->slice_group_map_type == 0)
-      {
-        input->run_length_minus1=(int *)malloc(sizeof(int)*(input->num_slice_groups_minus1+1));
-        if (NULL==input->run_length_minus1)
-          no_mem_exit("PatchInp: input->run_length_minus1");
-
-        // each line contains one 'run_length_minus1' value
-        for(i=0;i<=input->num_slice_groups_minus1;i++)
-        {
-          fscanf(sgfile,"%d",(input->run_length_minus1+i));
-          fscanf(sgfile,"%*[^\n]");
-        }
-      }
-      else if (input->slice_group_map_type == 2)
-      {
-        input->top_left=(int *)malloc(sizeof(int)*input->num_slice_groups_minus1);
-        input->bottom_right=(int *)malloc(sizeof(int)*input->num_slice_groups_minus1);
-        if (NULL==input->top_left)
-          no_mem_exit("PatchInp: input->top_left");
-        if (NULL==input->bottom_right)
-          no_mem_exit("PatchInp: input->bottom_right");
-
-        // every two lines contain 'top_left' and 'bottom_right' value
-        for(i=0;i<input->num_slice_groups_minus1;i++)
-        {
-          fscanf(sgfile,"%d",(input->top_left+i));
-          fscanf(sgfile,"%*[^\n]");
-          fscanf(sgfile,"%d",(input->bottom_right+i));
-          fscanf(sgfile,"%*[^\n]");
-        }
-      }
-      else if (input->slice_group_map_type == 6)
-      {
-        int tmp;
-
-        frame_mb_only = !(input->PicInterlace || input->MbInterlace);
-        mb_width= (input->img_width+img->auto_crop_right)>>4;
-        mb_height= (input->img_height+img->auto_crop_bottom)>>4;
-        mapunit_height=mb_height/(2-frame_mb_only);
-
-        input->slice_group_id=(byte * ) malloc(sizeof(byte)*mapunit_height*mb_width);
-        if (NULL==input->slice_group_id)
-          no_mem_exit("PatchInp: input->slice_group_id");
-
-        // each line contains slice_group_id for one Macroblock
-        for (i=0;i<mapunit_height*mb_width;i++)
-        {
-          fscanf(sgfile,"%d", &tmp);
-          input->slice_group_id[i]= (byte) tmp;
-          if ( *(input->slice_group_id+i) > input->num_slice_groups_minus1 )
-          {
-            snprintf(errortext, ET_SIZE, "Error read slice group information from file %s", input->SliceGroupConfigFileName);
-            error (errortext, 500);
-          }
-          fscanf(sgfile,"%*[^\n]");
-        }
-      }
-      fclose(sgfile);
-    }
-  }
-
 
   if (input->ReferenceReorder && (input->PicInterlace || input->MbInterlace))
   {
@@ -935,7 +998,7 @@ static void PatchInp (void)
   // Tian Dong: May 31, 2002
   // The number of frames in one sub-seq in enhanced layer should not exceed
   // the number of reference frame number.
-  if ( input->NumFramesInELSubSeq >= input->num_ref_frames || input->NumFramesInELSubSeq < 0 )
+  if ( input->NumFramesInELSubSeq > input->num_ref_frames || input->NumFramesInELSubSeq < 0 )
   {
     snprintf(errortext, ET_SIZE, "NumFramesInELSubSeq (%d) is out of range [0,%d).", input->NumFramesInELSubSeq, input->num_ref_frames);
     error (errortext, 500);
@@ -991,6 +1054,24 @@ static void PatchInp (void)
     if ( (input->successive_Bframe || input->jumpd) && input->RCUpdateMode == RC_MODE_1 )
     {
       snprintf(errortext, ET_SIZE, "Use RC_MODE_1 only for all-intra coding.");
+      error (errortext, 500);
+    }
+
+    if ( input->BRefPictures == 2 && input->intra_period == 0 && input->RCUpdateMode != RC_MODE_1 )
+    {
+      snprintf(errortext, ET_SIZE, "Use RCUpdateMode=1 for all-B_SLICE coding.");
+      error (errortext, 500);
+    }
+
+    if ( input->HierarchicalCoding && input->RCUpdateMode != RC_MODE_2 && input->RCUpdateMode != RC_MODE_3 )
+    {
+      snprintf(errortext, ET_SIZE, "Use RCUpdateMode=2 or 3 for hierarchical B-picture coding.");
+      error (errortext, 500);
+    }
+
+    if ( (input->RCUpdateMode != RC_MODE_1) && (input->intra_period == 1) )
+    {
+      snprintf(errortext, ET_SIZE, "Use RCUpdateMode=1 for all-I_SLICE coding.");
       error (errortext, 500);
     }
   }
@@ -1222,10 +1303,68 @@ static void ProfileCheck(void)
       error (errortext, 500);
     }
   }
+
+	//FRExt
+  if (input->IntraProfile && (input->ProfileIDC<FREXT_HP || input->ProfileIDC>FREXT_Hi444))
+  {
+    snprintf(errortext, ET_SIZE, "\nAllIntraProfile is allowed only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
+    error (errortext, 500);
+  }
+
+  if (input->IntraProfile && !input->idr_enable) 
+  {
+    snprintf(errortext, ET_SIZE, "\nAllIntraProfile requires IDRIntraEnable equal 1.");
+    error (errortext, 500);
+  }
+
+  if (input->IntraProfile && input->intra_period != 1) 
+  {
+    snprintf(errortext, ET_SIZE, "\nAllIntraProfile requires IntraPeriod equal 1.");
+    error (errortext, 500);
+  }
+
+  if (input->IntraProfile && input->num_ref_frames) 
+  {
+    fprintf( stderr, "\nWarning: Setting NumberReferenceFrames to 0 in IntraProfile.\n\n");
+	  input->num_ref_frames = 0;
+  }
+
+  if (input->IntraProfile == 0 && input->num_ref_frames == 0) 
+  {
+    snprintf(errortext, ET_SIZE, "\nProfiles other than IntraProfile require NumberReferenceFrames > 0.");
+    error (errortext, 500);
+  }
+}
+
+
+// Level Limit             -  -  -  -  -  -  -  -  -  1b  10  11   12   13   -  -  -  -  -  -  20   21   22    -  -  -  -  -  -  -
+unsigned int  MaxFs [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 99, 396, 396, 396, 0, 0, 0, 0, 0, 0, 396, 792, 1620, 0, 0, 0, 0, 0, 0, 0,  
+//                        30    31    32    -  -  -  -  -  -  -  40    41    42    -  -  -  -  -  -  -  50     51
+                          1620, 3600, 5120, 0, 0, 0, 0, 0, 0, 0, 8192, 8192, 8704, 0, 0, 0, 0, 0, 0, 0, 22080, 36864 };
+
+unsigned getMaxFs (unsigned int levelIdc)
+{
+  unsigned int ret;
+
+  if ( (levelIdc < 9) || (levelIdc > 51))
+    error ("getMaxFs: Unknown LevelIdc", 500);
+
+  // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
+  if ( (levelIdc == 11) && (active_sps->profile_idc < FREXT_HP) && (active_sps->constrained_set3_flag == 1) )
+    levelIdc = 9;
+
+  ret = MaxFs[levelIdc];
+
+  if ( 0 == ret )
+    error ("getMaxFs: Unknown LevelIdc", 500);
+
+  return ret;
 }
 
 static void LevelCheck(void)
 {
+  unsigned int PicSizeInMbs = ( (input->img_width + img->auto_crop_right) * (input->img_height + img->auto_crop_bottom) ) >> 8;
+
   if ( (input->LevelIDC>=30) && (input->directInferenceFlag==0))
   {
     fprintf( stderr, "\nWarning: LevelIDC 3.0 and above require direct_8x8_inference to be set to 1. Please check your settings.\n");
@@ -1233,9 +1372,25 @@ static void LevelCheck(void)
   }
   if ( ((input->LevelIDC<21) || (input->LevelIDC>41)) && (input->PicInterlace > 0 || input->MbInterlace > 0) )
   {
-    snprintf(errortext, ET_SIZE, "\nInterlace modes only supported for LevelIDC in the range of 2.1 and 4.1. Please check your settings.\n");
+    snprintf(errortext, ET_SIZE, "\nInterlace modes only supported for LevelIDC in the range of 21 and 41. Please check your settings.\n");
     error (errortext, 500);
   }
 
-}
+  if ( PicSizeInMbs > getMaxFs(input->LevelIDC) )
+  {
+    snprintf(errortext, ET_SIZE, "\nPicSizeInMbs exceeds maximum allowed size at specified LevelIdc %d\n", input->LevelIDC);
+    error (errortext, 500);
+  }
+  
+  if (input->IntraProfile && (PicSizeInMbs > 1620) && input->slice_mode != 1) 
+  {
+    error ("\nIntraProfile with PicSizeInMbs > 1620 requires SliceMode equal 1.", 500);
+  }
 
+  if (input->IntraProfile && (PicSizeInMbs > 1620) && ((unsigned int)input->slice_argument > (  getMaxFs(input->LevelIDC) >> 2 ) ) )
+  {
+    //when PicSizeInMbs is greater than 1620, the number of macroblocks in any coded slice shall not exceed MaxFS / 4
+    snprintf(errortext, ET_SIZE, "\nIntraProfile requires SliceArgument smaller or equal to 1/4 MaxFs at specified LevelIdc %d.", input->LevelIDC);
+    error (errortext, 500);
+  }
+}

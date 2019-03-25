@@ -34,6 +34,7 @@ void rescale_cum_freq(BiContextTypePtr bi_ct);
 unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct );
 unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep);
 unsigned int biari_decode_final(DecodingEnvironmentPtr dep);
-
+unsigned int getbyte(DecodingEnvironmentPtr dep);
+unsigned int getword(DecodingEnvironmentPtr dep);
 #endif  // BIARIDECOD_H_
 

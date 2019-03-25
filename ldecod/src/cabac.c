@@ -1120,7 +1120,7 @@ void readCBP_CABAC(SyntaxElement *se,
  *    This function is used to arithmetically decode the chroma
  *    intra prediction mode of a given MB.
  ************************************************************************
- */  //GB
+ */
 void readCIPredMode_CABAC(SyntaxElement *se,
                           struct img_par *img,
                           DecodingEnvironmentPtr dep_dp)
@@ -1131,25 +1131,18 @@ void readCIPredMode_CABAC(SyntaxElement *se,
   int                 act_ctx,a,b;
   int                 act_sym  = se->value1;
 
-  if (currMB->mb_available_up == NULL) b = 0;
+  Macroblock          *MbUp   = currMB->mb_available_up;
+  Macroblock          *MbLeft = currMB->mb_available_left;
+
+  if (MbUp == NULL) 
+    b = 0;
+  else 
+    b = ((MbUp->c_ipred_mode != 0) && (MbUp->mb_type != IPCM)) ? 1 : 0;
+
+  if (MbLeft == NULL)
+    a = 0;
   else
-  {
-    if( (currMB->mb_available_up)->mb_type==IPCM)
-      b=0;
-    else
-      b = ( ((currMB->mb_available_up)->c_ipred_mode != 0) ? 1 : 0);
-  }
-
-
-  if (currMB->mb_available_left == NULL) a = 0;
-  else
-  {
-    if( (currMB->mb_available_left)->mb_type==IPCM)
-      a=0;
-    else
-      a = ( ((currMB->mb_available_left)->c_ipred_mode != 0) ? 1 : 0);
-  }
-
+    a =  ((MbLeft->c_ipred_mode != 0) && (MbLeft->mb_type != IPCM)) ? 1 : 0;
 
   act_ctx = a+b;
 
@@ -1158,9 +1151,7 @@ void readCIPredMode_CABAC(SyntaxElement *se,
   if (act_sym!=0)
     act_sym = unary_bin_max_decode(dep_dp,ctx->cipr_contexts+3,0,2)+1;
 
-
   se->value1 = act_sym;
-
 
 #if TRACE
   fprintf(p_trace, "@%-6d %-63s (%3d)\n",symbolCount++, se->tracestring, se->value1);
@@ -1516,11 +1507,16 @@ int readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, DataPartitio
   DecodingEnvironmentPtr dep_dp = &(this_dataPart->de_cabac);
 
   curr_len = arideco_bits_read(dep_dp);
-
+#if (TRACE==2)
+  fprintf(p_trace, "curr_len: %d\n",curr_len);
+#endif
   // perform the actual decoding by calling the appropriate method
   se->reading(se, img, dep_dp);
-
-  return (se->len = (arideco_bits_read(dep_dp) - curr_len));
+  se->len = (arideco_bits_read(dep_dp) - curr_len);
+  #if (TRACE==2)
+  fprintf(p_trace, "se_len: %d\n",se->len);
+#endif
+  return (se->len);
 }
 
 
@@ -1765,20 +1761,31 @@ unsigned int unary_exp_golomb_mv_decode(DecodingEnvironmentPtr dep_dp,
  *    Dong Wang <Dong.Wang@bristol.ac.uk>
  ************************************************************************
 */
-void readIPCMBytes_CABAC(SyntaxElement *sym, Bitstream *currStream)
+void readIPCMBytes_CABAC(SyntaxElement *sym, struct datapartition *dP)
 {
-  int read_len = currStream->read_len;
+  Bitstream* currStream = dP->bitstream;
+  DecodingEnvironmentPtr dep = &(dP->de_cabac);
+  int* read_len = &(currStream->read_len);
   int code_len = currStream->code_len;
   byte *buf = currStream->streamBuffer;
 
+  while (dep->DbitsLeft >= 8)
+  {
+    dep->Dvalue>>=8;
+    dep->DbitsLeft-=8;
+    (*dep->Dcodestrm_len)--;
+  }
+
+#if (TRACE==2)
+  fprintf(p_trace, "read_len: %d\n", *read_len);
+#endif
+
   sym->len=8;
 
-  if(read_len<code_len)
-    sym->inf=buf[read_len++];
+  if(*read_len<code_len)
+    sym->inf=buf[(*read_len)++];
 
   sym->value1=sym->inf;
-
-  currStream->read_len=read_len;
 
 #if TRACE
   tracebits2(sym->tracestring, sym->len, sym->inf);

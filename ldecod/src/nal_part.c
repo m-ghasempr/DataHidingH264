@@ -8,7 +8,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Tobias Oelbaum <oelbaum@hhi.de, oelbaum@drehvial.de>
+ *    - Tobias Oelbaum <oelbaum@drehvial.de>
  ************************************************************************
  */
 

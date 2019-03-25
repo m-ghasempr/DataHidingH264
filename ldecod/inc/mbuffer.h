@@ -102,8 +102,13 @@ typedef struct storable_picture
   DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //!< stores the memory management control operations
 
   // picture error concealment
-  int concealed_pic; //indicates if this is a concealed picutre
-
+  int         concealed_pic; //indicates if this is a concealed picutre
+  
+  // variables for tone mapping
+  int         seiHasTone_mapping;
+  int         tone_mapping_model_id;
+  int         tonemapped_bit_depth;  
+  imgpel*     tone_mapping_lut;                //!< tone mapping look up table
 } StorablePicture;
 
 

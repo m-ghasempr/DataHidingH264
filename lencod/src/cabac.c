@@ -217,6 +217,7 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, DataPartition *dp)
       b = 0;
     else
       b = (currMB->mb_available_up->skip_flag==0 ? 1 : 0);
+
     if (currMB->mb_available_left == NULL)
       a = 0;
     else
@@ -252,6 +253,7 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, DataPartition *dp)
     currMB->skip_flag = (curr_mb_type==0)?1:0;
   }
   se->context = act_ctx;
+  se->value1  = 1 - currMB->skip_flag;
 
   dp->bitstream->write_flag = 1;
   se->len = (arienco_bits_written(eep_dp) - curr_len);
@@ -495,7 +497,7 @@ void writeMB_typeInfo_CABAC(SyntaxElement *se, DataPartition *dp)
 
     if(act_sym==mode16x16) // additional info for 16x16 Intra-mode
     {
-      if( mode_sym==25 )
+      if( mode_sym==24 )
       {
         biari_encode_symbol_final(eep_dp, 1 );
         dp->bitstream->write_flag = 1;
@@ -910,12 +912,19 @@ void writeCIPredMode_CABAC(SyntaxElement *se, DataPartition *dp)
   Macroblock          *currMB  = &img->mb_data[img->current_mb_nr];
   int                 act_ctx,a,b;
   int                 act_sym  = se->value1;
+  
+  Macroblock          *MbUp   = currMB->mb_available_up;
+  Macroblock          *MbLeft = currMB->mb_available_left;
 
-  if (currMB->mb_available_up == NULL) b = 0;
-  else  b = ( ((currMB->mb_available_up)->c_ipred_mode != 0) ? 1 : 0);
+  if (MbUp == NULL) 
+    b = 0;
+  else 
+    b = ((MbUp->c_ipred_mode != 0) && (MbUp->mb_type != IPCM)) ? 1 : 0;
 
-  if (currMB->mb_available_left == NULL) a = 0;
-  else  a = ( ((currMB->mb_available_left)->c_ipred_mode != 0) ? 1 : 0);
+  if (MbLeft == NULL)
+    a = 0;
+  else
+    a =  ((MbLeft->c_ipred_mode != 0) && (MbLeft->mb_type != IPCM)) ? 1 : 0;
 
   act_ctx = a+b;
 

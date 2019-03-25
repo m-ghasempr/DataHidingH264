@@ -37,7 +37,7 @@ typedef enum {
 typedef enum {
  NALU_PRIORITY_HIGHEST     = 3,
  NALU_PRIORITY_HIGH        = 2,
- NALU_PRIRITY_LOW          = 1,
+ NALU_PRIORITY_LOW         = 1,
  NALU_PRIORITY_DISPOSABLE  = 0
 } NalRefIdc;
 

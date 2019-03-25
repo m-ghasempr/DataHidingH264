@@ -150,12 +150,15 @@ void clear_rdopt ()
     free_mem2Dint(bestIntraFAdjust4x4);
     free_mem2Dint(bestInterFAdjust8x8);
     free_mem2Dint(bestIntraFAdjust8x8);
-    free_mem3Dint(bestInterFAdjust4x4Cr, 2);
-    free_mem3Dint(bestIntraFAdjust4x4Cr, 2);
     free_mem2Dint(fadjust8x8);
     free_mem2Dint(fadjust4x4);
-    free_mem3Dint(fadjust4x4Cr, 2);
-    free_mem3Dint(fadjust8x8Cr, 2);
+    if (input->yuv_format != 0)
+    {
+      free_mem3Dint(bestInterFAdjust4x4Cr, 2);
+      free_mem3Dint(bestIntraFAdjust4x4Cr, 2);
+      free_mem3Dint(fadjust4x4Cr, 2);
+      free_mem3Dint(fadjust8x8Cr, 2);
+    }
   }
 
   // structure for saving the coding state
@@ -214,12 +217,15 @@ void init_rdopt ()
     get_mem2Dint(&bestIntraFAdjust4x4, 16, 16);
     get_mem2Dint(&bestInterFAdjust8x8, 16, 16);
     get_mem2Dint(&bestIntraFAdjust8x8, 16, 16);
-    get_mem3Dint(&bestInterFAdjust4x4Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
-    get_mem3Dint(&bestIntraFAdjust4x4Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
     get_mem2Dint(&fadjust8x8, 16, 16);
     get_mem2Dint(&fadjust4x4, 16, 16);
-    get_mem3Dint(&fadjust4x4Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
-    get_mem3Dint(&fadjust8x8Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
+    if (input->yuv_format != 0 )
+    {
+      get_mem3Dint(&bestInterFAdjust4x4Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
+      get_mem3Dint(&bestIntraFAdjust4x4Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
+      get_mem3Dint(&fadjust4x4Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
+      get_mem3Dint(&fadjust8x8Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
+    }
   }
 
   // structure for saving the coding state
@@ -487,7 +493,7 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   {
     for (x=pic_pix_x; x<pic_pix_x+4; x++)
     {
-      distortion += img->quad [imgY_org[pic_opix_y+y][x] - imgY[pic_pix_y+y][x]];
+      distortion += iabs2( imgY_org[pic_opix_y+y][x] - imgY[pic_pix_y+y][x] );
     }
   }
 
@@ -867,7 +873,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
       for (j=img->opix_y+pay; j<img->opix_y+pay+8; j++)
         for (i=img->opix_x+pax; i<img->opix_x+pax+8; i++)
         {
-          distortion += img->quad[imgY_org[j][i] - decs->decY[k][j][i]];
+          distortion += iabs2( imgY_org[j][i] - decs->decY[k][j][i]);
         }
     }
     distortion /= input->NoOfDecoders;
@@ -877,7 +883,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
     for (j=pay; j<pay+8; j++)
       for (i=img->pix_x+pax; i<img->pix_x+pax+8; i++)
       {
-        distortion += img->quad [imgY_org[img->opix_y+j][i] - enc_picture->imgY[img->pix_y+j][i]];
+        distortion += iabs2( imgY_org[img->opix_y+j][i] - enc_picture->imgY[img->pix_y+j][i]);
       }
   }
 
@@ -1522,8 +1528,11 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
   {
     memset(&(img->fadjust4x4[0][0][0]), 0, MB_PIXELS * sizeof(int));
     memset(&(img->fadjust8x8[0][0][0]), 0, MB_PIXELS * sizeof(int));
-    memset(&(img->fadjust4x4Cr[0][0][0][0]), 0, img->mb_cr_size_y * img->mb_cr_size_x * sizeof(int));
-    memset(&(img->fadjust4x4Cr[0][1][0][0]), 0, img->mb_cr_size_y * img->mb_cr_size_x  * sizeof(int));
+    if (img->yuv_format != 0)
+    {
+      memset(&(img->fadjust4x4Cr[0][0][0][0]), 0, img->mb_cr_size_y * img->mb_cr_size_x * sizeof(int));
+      memset(&(img->fadjust4x4Cr[0][1][0][0]), 0, img->mb_cr_size_y * img->mb_cr_size_x  * sizeof(int));
+    }
   }
 
   if (mode<P8x8)
@@ -1615,7 +1624,7 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
       for (j = 0; j<MB_BLOCK_SIZE; j++)
       {
         for (i=img->opix_x; i<img->opix_x+MB_BLOCK_SIZE; i++)
-          distortion += img->quad [imgY_org[img->opix_y+j][i] - decs->decY[k][img->opix_y+j][i]];
+          distortion += iabs2( imgY_org[img->opix_y+j][i] - decs->decY[k][img->opix_y+j][i] );
       }
     }
     distortion /= input->NoOfDecoders;
@@ -1629,8 +1638,8 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
         j2 = j + img->pix_c_y;
         for (i=img->opix_c_x; i<img->opix_c_x+img->mb_cr_size_x; i++)
         {
-          distortion += img->quad [imgUV_org[0][j1][i] - enc_picture->imgUV[0][j2][i]];
-          distortion += img->quad [imgUV_org[1][j1][i] - enc_picture->imgUV[1][j2][i]];
+          distortion += iabs2( imgUV_org[0][j1][i] - enc_picture->imgUV[0][j2][i] );
+          distortion += iabs2( imgUV_org[1][j1][i] - enc_picture->imgUV[1][j2][i] );
         }
       }
     }
@@ -1643,7 +1652,7 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
       j1 = j + img->opix_y;
       j2 = j + img->pix_y;
       for (i=img->opix_x; i<img->opix_x+MB_BLOCK_SIZE; i++)
-        distortion += img->quad [imgY_org[j1][i] - enc_picture->imgY[j2][i]];
+        distortion += iabs2( imgY_org[j1][i] - enc_picture->imgY[j2][i] );
     }
 
     if (img->yuv_format != YUV400)
@@ -1655,8 +1664,8 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
         j2 = j + img->pix_c_y;
         for (i=img->opix_c_x; i<img->opix_c_x+img->mb_cr_size_x; i++)
         {
-          distortion += img->quad [imgUV_org[0][j1][i] - enc_picture->imgUV[0][j2][i]];
-          distortion += img->quad [imgUV_org[1][j1][i] - enc_picture->imgUV[1][j2][i]];
+          distortion += iabs2( imgUV_org[0][j1][i] - enc_picture->imgUV[0][j2][i] );
+          distortion += iabs2( imgUV_org[1][j1][i] - enc_picture->imgUV[1][j2][i] );
         }
       }
     }
@@ -1768,7 +1777,7 @@ void store_adaptive_rounding_parameters (int mode, Macroblock *currMB)
     else
       memcpy(&(bestIntraFAdjust4x4[0][0]),&(img->fadjust4x4[1 + mode == I16MB][0][0]),MB_PIXELS * sizeof(int));
   }
-  if (input->AdaptRndChroma)
+  if ((input->yuv_format != 0)&&(input->AdaptRndChroma))
   {
     if (currMB->luma_transform_size_8x8_flag && mode == P8x8)
     {
@@ -2883,7 +2892,7 @@ void update_offset_params(int mode, int luma_transform_size_8x8_flag)
     }
   }
 
-  if (input->AdaptRndChroma)
+  if ((input->yuv_format != 0)&&(input->AdaptRndChroma))
   {
     int u_pos = AdaptRndCrPos[is_inter][img->type];
     int v_pos = u_pos + 1;

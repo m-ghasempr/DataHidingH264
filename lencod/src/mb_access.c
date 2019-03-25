@@ -135,8 +135,8 @@ void get_mb_pos (int mb_addr, int *x, int*y, int is_chroma)
  *    input x position
  * \param yN
  *    input y position
- * \param luma
- *    1 if luma coding, 0 for chroma
+ * \param is_chroma
+ *    0 if luma coding, 1 for chroma
  * \param pix
  *    returns position informations
  ************************************************************************
@@ -145,19 +145,6 @@ void getNonAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int is_chroma, 
 {
   Macroblock *currMb = &img->mb_data[curr_mb_nr];
   int maxW = img->mb_size[is_chroma][0], maxH = img->mb_size[is_chroma][1];
-/*
-  if (!is_chroma)
-  {
-    maxW = 16;
-    maxH = 16;
-  }
-  else
-  {
-    assert(img->yuv_format != 0);
-    maxW = img->mb_cr_size_x;
-    maxH = img->mb_cr_size_y;
-  }
-*/
 
   if ((xN<0)&&(yN<0))
   {
@@ -203,15 +190,15 @@ void getNonAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int is_chroma, 
 /*!
  ************************************************************************
  * \brief
- *    get neighbouring positions for aff coding
+ *    get neighboring positions for aff coding
  * \param curr_mb_nr
  *   current macroblock number (decoding order)
  * \param xN
  *    input x position
  * \param yN
  *    input y position
- * \param luma
- *    1 if luma coding, 0 for chroma
+ * \param is_chroma
+ *    0 if luma coding, 1 for chroma
  * \param pix
  *    returns position informations
  ************************************************************************
@@ -222,19 +209,6 @@ void getAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int is_chroma, Pix
   int maxW, maxH;
   int yM = -1;
 
-/*
-  if (!is_chroma)
-  {
-    maxW = 16;
-    maxH = 16;
-  }
-  else
-  {
-    assert(img->yuv_format != 0);
-    maxW = img->mb_cr_size_x;
-    maxH = img->mb_cr_size_y;
-  }
-*/
   maxW = img->mb_size[is_chroma][0];
   maxH = img->mb_size[is_chroma][1];
 
@@ -559,50 +533,16 @@ void getAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int is_chroma, Pix
   }
 }
 
-
 /*!
  ************************************************************************
  * \brief
- *    get neighbouring positions. MB AFF is automatically used from img structure
+ *    get neighboring 4x4 luma block
  * \param curr_mb_nr
  *   current macroblock number (decoding order)
- * \param xN
- *    input x position
- * \param yN
- *    input y position
- * \param luma
- *    1 if luma coding, 0 for chroma
- * \param pix
- *    returns position informations
- ************************************************************************
- */
-/*
-void getNeighbour(int curr_mb_nr, int xN, int yN, int is_chroma, PixelPos *pix)
-{
-  if (curr_mb_nr<0)
-    error ("getNeighbour: invalid macroblock number", 100);
-
-  if (img->MbaffFrameFlag)
-    getAffNeighbour(curr_mb_nr, xN, yN, is_chroma, pix);
-  else
-    getNonAffNeighbour(curr_mb_nr, xN, yN, is_chroma, pix);
-}
-*/
-
-/*!
- ************************************************************************
- * \brief
- *    get neighbouring  get neighbouring 4x4 luma block
- * \param curr_mb_nr
- *   current macroblock number (decoding order)
- * \param block_x
+ * \param block_x_pos
  *    input x block position
- * \param block_y
+ * \param block_y_pos
  *    input y block position
- * \param rel_x
- *    relative x position of neighbor
- * \param rel_y
- *    relative y position of neighbor
  * \param pix
  *    returns position informations
  ************************************************************************
@@ -624,17 +564,13 @@ void getLuma4x4Neighbour (int curr_mb_nr, int block_x_pos, int block_y_pos, Pixe
 /*!
  ************************************************************************
  * \brief
- *    get neighbouring 4x4 chroma block
+ *    get neighboring 4x4 chroma block
  * \param curr_mb_nr
  *   current macroblock number (decoding order)
  * \param block_x
  *    input x block position
  * \param block_y
  *    input y block position
- * \param rel_x
- *    relative x position of neighbor
- * \param rel_y
- *    relative y position of neighbor
  * \param pix
  *    returns position informations
  ************************************************************************

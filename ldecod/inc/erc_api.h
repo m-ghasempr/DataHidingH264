@@ -8,7 +8,7 @@
  *
  * \author
  *      - Ari Hourunranta                <ari.hourunranta@nokia.com>
- *      - Ye-Kui Wang                   <wyk@ieee.org>
+ *      - Ye-Kui Wang                    <wyk@ieee.org>
  *      - Jill Boyce                     <jill.boyce@thomson.net>
  *      - Saurav K Bandyopadhyay         <saurav@ieee.org>
  *      - Zhenyu Wu                      <Zhenyu.Wu@thomson.net

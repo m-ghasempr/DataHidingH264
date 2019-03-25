@@ -33,7 +33,7 @@
 
 #define NALU_PRIORITY_HIGHEST     3
 #define NALU_PRIORITY_HIGH        2
-#define NALU_PRIRITY_LOW          1
+#define NALU_PRIORITY_LOW         1
 #define NALU_PRIORITY_DISPOSABLE  0
 
 

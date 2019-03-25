@@ -43,11 +43,13 @@
  ***********************************************************************
  */
 
-
-//typedef byte imgpel;
-//typedef unsigned short distpel;
-typedef unsigned short imgpel;
-typedef int distpel;
+#if (IMGTYPE == 0)
+  typedef byte imgpel;
+  typedef unsigned short distpel;
+#else
+  typedef unsigned short imgpel;
+  typedef int distpel;
+#endif
 
 enum {
   YUV400 = 0,
@@ -160,8 +162,7 @@ typedef enum
   NO_SLICES,
   FIXED_MB,
   FIXED_RATE,
-  CALLBACK,
-  FMO
+  CALL_BACK,
 } SliceMode;
 
 
@@ -236,12 +237,12 @@ typedef struct
   unsigned int  Elow, Erange;
   unsigned int  Ebuffer;
   unsigned int  Ebits_to_go;
-  unsigned int  Ebits_to_follow;
+  unsigned int  Echunks_outstanding;
+  int           Epbuf;
   byte          *Ecodestrm;
   int           *Ecodestrm_len;
   int           C;
   int           E;
-
 } EncodingEnvironment;
 
 typedef EncodingEnvironment *EncodingEnvironmentPtr;
@@ -601,6 +602,7 @@ typedef struct
 {
   int ProfileIDC;                    //!< value of syntax element profile_idc
   int LevelIDC;                      //!< value of syntax element level_idc
+  int IntraProfile;                  //!< Enable Intra profiles
 
   int no_frames;                     //!< number of frames to be encoded
   int qp0;                           //!< QP of first frame
@@ -646,6 +648,61 @@ typedef struct
   int Generate_SEIVUI;
   char SEIMessageText[500];
   int VUISupport;
+
+  // VUI parameters
+  int VUI_aspect_ratio_info_present_flag;
+  int   VUI_aspect_ratio_idc;
+  int     VUI_sar_width;
+  int     VUI_sar_height;
+  int VUI_overscan_info_present_flag;
+  int   VUI_overscan_appropriate_flag;
+  int VUI_video_signal_type_present_flag;
+  int   VUI_video_format;
+  int     VUI_video_full_range_flag;
+  int     VUI_colour_description_present_flag;
+  int       VUI_colour_primaries;
+  int       VUI_transfer_characteristics; 
+  int       VUI_matrix_coefficients;
+  int VUI_chroma_location_info_present_flag;
+  int   VUI_chroma_sample_loc_type_top_field;
+  int   VUI_chroma_sample_loc_type_bottom_field;
+  int VUI_timing_info_present_flag;
+  int   VUI_num_units_in_tick;
+  int   VUI_time_scale;
+  int   VUI_fixed_frame_rate_flag;
+  int VUI_nal_hrd_parameters_present_flag;
+  int   VUI_nal_cpb_cnt_minus1;
+  int   VUI_nal_bit_rate_scale;
+  int   VUI_nal_cpb_size_scale;
+  int     VUI_nal_bit_rate_value_minus1;
+  int     VUI_nal_cpb_size_value_minus1;
+  int     VUI_nal_vbr_cbr_flag;
+  int   VUI_nal_initial_cpb_removal_delay_length_minus1;
+  int   VUI_nal_cpb_removal_delay_length_minus1;
+  int   VUI_nal_dpb_output_delay_length_minus1;
+  int   VUI_nal_time_offset_length;
+  int VUI_vcl_hrd_parameters_present_flag;
+  int   VUI_vcl_cpb_cnt_minus1;
+  int   VUI_vcl_bit_rate_scale;
+  int   VUI_vcl_cpb_size_scale;
+  int     VUI_vcl_bit_rate_value_minus1;
+  int     VUI_vcl_cpb_size_value_minus1;
+  int     VUI_vcl_vbr_cbr_flag;
+  int   VUI_vcl_initial_cpb_removal_delay_length_minus1;
+  int   VUI_vcl_cpb_removal_delay_length_minus1;
+  int   VUI_vcl_dpb_output_delay_length_minus1;
+  int   VUI_vcl_time_offset_length;
+  int   VUI_low_delay_hrd_flag;
+  int VUI_pic_struct_present_flag;
+  int VUI_bitstream_restriction_flag;
+  int   VUI_motion_vectors_over_pic_boundaries_flag;
+  int   VUI_max_bytes_per_pic_denom;
+  int   VUI_max_bits_per_mb_denom;
+  int   VUI_log2_max_mv_length_vertical;
+  int   VUI_log2_max_mv_length_horizontal;
+  int   VUI_num_reorder_frames;
+  int   VUI_max_dec_frame_buffering;
+  // end of VUI parameters
 
   int ResendSPS;
   int ResendPPS;
@@ -811,6 +868,8 @@ typedef struct
   double RCBoverPRatio;
   double RCISliceBitRatio;
   double RCBSliceBitRatio[RC_MAX_TEMPORAL_LEVELS];
+  int RCMinQP;
+  int RCMaxQP;
 
   int ScalingMatrixPresentFlag;
   int ScalingListPresentFlag[8];
@@ -862,6 +921,10 @@ typedef struct
   int ChromaMEEnable;
   int MEErrorMetric[3];
   int ModeDecisionMetric;
+
+  // tone mapping SEI message
+  int ToneMappingSEIPresentFlag;
+  char ToneMappingFile[FILE_NAME_SIZE];    //!< ToneMapping SEI message cfg file
 
 } InputParameters;
 
@@ -1061,6 +1124,7 @@ typedef struct
   int pic_unit_size_on_disk;
   int bitdepth_luma;
   int bitdepth_chroma;
+  int bitdepth_scale[2];
   int bitdepth_luma_qp_scale;
   int bitdepth_chroma_qp_scale;
   int bitdepth_lambda_scale;

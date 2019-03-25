@@ -204,7 +204,7 @@ void set_MB_parameters (int mb_addr)
 void proceed2nextMacroblock(void)
 {
 #if TRACE
-  int use_bitstream_backing = (input->slice_mode == FIXED_RATE || input->slice_mode == CALLBACK);
+  int use_bitstream_backing = (input->slice_mode == FIXED_RATE || input->slice_mode == CALL_BACK);
 #endif
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   int*        bitCount = currMB->bitcounter;
@@ -303,7 +303,7 @@ void set_chroma_qp(Macroblock *currMB)
 void start_macroblock(int mb_addr, int mb_field)
 {
   int i,j,l;
-  int use_bitstream_backing = (input->slice_mode == FIXED_RATE || input->slice_mode == CALLBACK);
+  int use_bitstream_backing = (input->slice_mode == FIXED_RATE || input->slice_mode == CALL_BACK);
   Macroblock *currMB = &img->mb_data[mb_addr];
   Slice *curr_slice = img->currentSlice;
   DataPartition *dataPart;
@@ -376,7 +376,7 @@ void start_macroblock(int mb_addr, int mb_field)
       currMB->prev_delta_qp = 0;
     }
     // frame layer rate control
-    if(input->basicunit==img->FrameSizeInMbs)
+    if (input->basicunit == img->FrameSizeInMbs)
     {
       currMB->delta_qp = 0;
       currMB->qp       = img->qp;
@@ -385,7 +385,7 @@ void start_macroblock(int mb_addr, int mb_field)
     else
     {
       // each I or B frame has only one QP
-      if( ((img->type == I_SLICE || img->type == B_SLICE) && input->RCUpdateMode != RC_MODE_1 ) || (!IMG_NUMBER) )
+      if( ((img->type == I_SLICE || img->type == B_SLICE) && input->RCUpdateMode != RC_MODE_1 ) || !(img->number) )
       {
         currMB->delta_qp = 0;
         currMB->qp       = img->qp;
@@ -469,7 +469,7 @@ void start_macroblock(int mb_addr, int mb_field)
         {
           if(!((input->MbInterlace) && img->bot_MB))
           {
-            if((img->NumberofCodedMacroBlocks>0) && (img->NumberofCodedMacroBlocks%img->BasicUnit==0))
+            if((img->NumberofCodedMacroBlocks > 0) && (img->NumberofCodedMacroBlocks % img->BasicUnit == 0))
             {
               // frame coding
               if(active_sps->frame_mbs_only_flag)
@@ -534,6 +534,7 @@ void start_macroblock(int mb_addr, int mb_field)
   else
   {
     Slice* currSlice = img->currentSlice;
+    int new_qp = img->qp;
 
     if (prev_mb>-1)
     {
@@ -546,9 +547,38 @@ void start_macroblock(int mb_addr, int mb_field)
       currMB->prev_delta_qp = 0;
     }
 
-    currMB->qp = currSlice->qp ;
+    if (prev_mb < 0) //first macroblock (of slice)
+    {
+      currMB->delta_qp = 0;
+      currMB->qp       = img->qp;
+    }
+    else
+    {
+      if (!((input->MbInterlace) && img->bot_MB)) //top macroblock
+      {
+        if (img->mb_data[prev_mb].prev_cbp == 1)
+        {
+          currMB->delta_qp = 0;
+          currMB->qp       = img->qp;
+        }
+        else
+        {
+          currMB->qp = img->mb_data[prev_mb].prev_qp;
+          currMB->delta_qp = currMB->qp - img->mb_data[prev_mb].qp;
+          img->qp = currMB->qp;
+        }
+      }
+      else //bottom macroblock
+      {
+        currMB->delta_qp = 0;
+        currMB->qp       = img->qp;       // needed in loop filter (even if constant QP is used)
+      }
+    }
 
-    currMB->delta_qp = currMB->qp - currMB->prev_qp;
+    currMB->delta_qp = new_qp - currMB->qp + currMB->delta_qp;
+    img->qp = currMB->qp = new_qp;
+
+    //currMB->delta_qp = currMB->qp - currMB->prev_qp;
     delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
     qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
   }
@@ -657,7 +687,7 @@ void terminate_macroblock( Boolean *end_of_slice,      //!< returns true for las
   DataPartition *dataPart;
   Bitstream *currStream;
   int rlc_bits=0;
-  int use_bitstream_backing = (input->slice_mode == FIXED_RATE || input->slice_mode == CALLBACK);
+  int use_bitstream_backing = (input->slice_mode == FIXED_RATE || input->slice_mode == CALL_BACK);
   int new_slice;
   static int skip = FALSE;
 
@@ -720,8 +750,8 @@ void terminate_macroblock( Boolean *end_of_slice,      //!< returns true for las
       currStream->byte_buf_skip    = currStream->byte_buf;
       // restore the bitstream
       currStream->bits_to_go = currStream->stored_bits_to_go;
-      currStream->byte_pos = currStream->stored_byte_pos;
-      currStream->byte_buf = currStream->stored_byte_buf;
+      currStream->byte_pos   = currStream->stored_byte_pos;
+      currStream->byte_buf   = currStream->stored_byte_buf;
       skip = TRUE;
     }
     //! Check if the last coded macroblock fits into the size of the slice
@@ -731,7 +761,7 @@ void terminate_macroblock( Boolean *end_of_slice,      //!< returns true for las
       if(slice_too_big(rlc_bits))
       {
         *recode_macroblock = TRUE;
-        *end_of_slice = TRUE;
+        *end_of_slice      = TRUE;
       }
       else if(!img->cod_counter)
         skip = FALSE;
@@ -757,7 +787,7 @@ void terminate_macroblock( Boolean *end_of_slice,      //!< returns true for las
       currSlice->num_mb++;
     break;
 
-  case  CALLBACK:
+  case  CALL_BACK:
     if (img->current_mb_nr > 0 && !new_slice)
     {
       if (currSlice->slice_too_big(rlc_bits))
@@ -966,15 +996,15 @@ void LumaPrediction4x4 ( int   block_x,    //!< relative horizontal block coordi
   static imgpel l1_pred[16];
 
   int  i, j;
-  int  block_x4  = block_x+4;
-  int  block_y4  = block_y+4;
-  int  pic_opix_x = ((img->opix_x + block_x) << 2) + IMG_PAD_SIZE_TIMES4;
-  int  pic_opix_y = ((img->opix_y + block_y) << 2) + IMG_PAD_SIZE_TIMES4;
-  int  bx        = block_x >> 2;
-  int  by        = block_y >> 2;
-  imgpel* l0pred     = l0_pred;
-  imgpel* l1pred     = l1_pred;
-  Macroblock*    currMB     = &img->mb_data[img->current_mb_nr];
+  int  block_x4     = block_x + 4;
+  int  block_y4     = block_y + 4;
+  int  pic_opix_x   = ((img->opix_x + block_x) << 2) + IMG_PAD_SIZE_TIMES4;
+  int  pic_opix_y   = ((img->opix_y + block_y) << 2) + IMG_PAD_SIZE_TIMES4;
+  int  bx           = block_x >> 2;
+  int  by           = block_y >> 2;
+  imgpel* l0pred    = l0_pred;
+  imgpel* l1pred    = l1_pred;
+  Macroblock* currMB = &img->mb_data[img->current_mb_nr];
 
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type== P_SLICE || img->type == SP_SLICE)) ||
                          (active_pps->weighted_bipred_idc && (img->type== B_SLICE)));
@@ -1004,7 +1034,6 @@ void LumaPrediction4x4 ( int   block_x,    //!< relative horizontal block coordi
 
   if (apply_weights)
   {
-
     if (p_dir==2)
     {
       int wbp0 = wbp_weight[0][l0_ref_idx][l1_ref_idx][0];

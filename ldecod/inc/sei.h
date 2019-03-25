@@ -34,11 +34,36 @@ typedef enum {
   SEI_FILM_GRAIN_CHARACTERISTICS,
   SEI_DEBLOCKING_FILTER_DISPLAY_PREFERENCE,
   SEI_STEREO_VIDEO_INFO,
+  SEI_POST_FILTER_HINTS,
+  SEI_TONE_MAPPING,
 
   SEI_MAX_ELEMENTS  //!< number of maximum syntax elements
 } SEI_type;
 
 #define MAX_FN 256
+// tone mapping information
+#define MAX_CODED_BIT_DEPTH	12
+#define MAX_SEI_BIT_DEPTH   12
+#define MAX_NUM_PIVOTS     (1<<MAX_CODED_BIT_DEPTH)
+
+#ifdef ENABLE_OUTPUT_TONEMAPPING
+typedef struct
+{
+  Boolean seiHasTone_mapping;
+  unsigned int  tone_map_repetition_period;
+  unsigned char coded_data_bit_depth;
+  unsigned char sei_bit_depth;
+  unsigned int  model_id;
+  unsigned int count;
+  
+  imgpel lut[1<<MAX_CODED_BIT_DEPTH];                 //<! look up table for mapping the coded data value to output data value
+
+  Bitstream *data;
+  int payloadSize;
+} tone_mapping_struct;
+
+extern tone_mapping_struct seiToneMapping;
+#endif
 
 void InterpretSEIMessage(byte* msg, int size, ImageParameters *img);
 void interpret_spare_pic( byte* payload, int size, ImageParameters *img );
@@ -64,5 +89,13 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
 void interpret_film_grain_characteristics_info( byte* payload, int size, ImageParameters *img );
 void interpret_deblocking_filter_display_preference_info( byte* payload, int size, ImageParameters *img );
 void interpret_stereo_video_info_info( byte* payload, int size, ImageParameters *img );
+void interpret_post_filter_hints_info( byte* payload, int size, ImageParameters *img );
+// functions for tone mapping SEI message
+void interpret_tone_mapping( byte* payload, int size, ImageParameters *img );
 
+#ifdef ENABLE_OUTPUT_TONEMAPPING
+void tone_map(imgpel** imgX, imgpel* lut, int size_x, int size_y);
+void init_tone_mapping_sei();
+void update_tone_mapping_sei();
+#endif
 #endif

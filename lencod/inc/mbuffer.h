@@ -50,7 +50,6 @@ typedef struct storable_picture
 
   imgpel **   imgY;          //!< Y picture component
   imgpel ****   imgY_sub;      //!< Y picture component upsampled (Quarter pel)
-  imgpel ****   imgY_sub_w;    //!< Y picture component upsampled (Quarter pel) for weighted prediction
   imgpel *****  imgUV_sub;      //!< UV picture component upsampled (Quarter/One-Eighth pel)
   imgpel ***  imgUV;         //!< U and V picture components
 

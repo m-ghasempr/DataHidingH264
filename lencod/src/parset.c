@@ -29,7 +29,7 @@
 // Local helpers
 static int IdentifyProfile(void);
 static int IdentifyLevel(void);
-static int GenerateVUISequenceParameters(Bitstream *bitstream);
+static int GenerateVUI_parameters_rbsp(seq_parameter_set_rbsp_t *sps, Bitstream *bitstream);
 
 extern ColocatedParams *Co_located;
 
@@ -239,6 +239,10 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
     sps->constrained_set3_flag = TRUE;
     sps->level_idc = 11;
   }
+  else if (frext_profile && input->IntraProfile)
+  {
+    sps->constrained_set3_flag = TRUE;
+  }
   else
   {
     sps->constrained_set3_flag = FALSE;
@@ -289,9 +293,12 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   sps->direct_8x8_inference_flag = (Boolean) input->directInferenceFlag;
 
   // Sequence VUI not implemented, signalled as not present
-  sps->vui_parameters_present_flag = (Boolean) ((input->rgb_input_flag && input->yuv_format==3)|| input->Generate_SEIVUI);
+  sps->vui_parameters_present_flag = (Boolean) ((input->rgb_input_flag && input->yuv_format==3) || input->Generate_SEIVUI);
 
   sps->chroma_format_idc = input->yuv_format;
+
+  if ( sps->vui_parameters_present_flag )
+    GenerateVUIParameters(sps);
 
   // This should be moved somewhere else.
   {
@@ -305,7 +312,6 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
     height = FrameHeightInMbs * MB_BLOCK_SIZE;
 
     Co_located = alloc_colocated (width, height,sps->mb_adaptive_frame_field_flag);
-
   }
 
   // Fidelity Range Extensions stuff
@@ -676,7 +682,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
   len+=u_1  ("SPS: vui_parameters_present_flag",             sps->vui_parameters_present_flag,               bitstream);
 
   if (sps->vui_parameters_present_flag)
-    len+=GenerateVUISequenceParameters(bitstream);    // currently a dummy, asserting
+    len+=GenerateVUI_parameters_rbsp(sps, bitstream);    // currently a dummy, asserting
 
   SODBtoRBSP(bitstream);     // copies the last couple of bits into the byte buffer
 
@@ -881,78 +887,89 @@ int IdentifyLevel(void)
  *    exits with error message
  *************************************************************************************
  */
-static int GenerateVUISequenceParameters(Bitstream *bitstream)
+static int GenerateVUI_parameters_rbsp(seq_parameter_set_rbsp_t *sps, Bitstream *bitstream)
 {
   int len=0;
+  vui_seq_parameters_t *vui_seq_parameters = &(sps->vui_seq_parameters);
 
-  // special case to signal the RGB format
-  if(input->rgb_input_flag && input->yuv_format==3)
-  {
-    //still pretty much a dummy VUI
-    printf   ("VUI: writing Sequence Parameter VUI to signal RGB format\n");
-    len+=u_1 ("VUI: aspect_ratio_info_present_flag", 0, bitstream);
-    len+=u_1 ("VUI: overscan_info_present_flag", 0, bitstream);
-    len+=u_1 ("VUI: video_signal_type_present_flag", 1, bitstream);
-    len+=u_v (3, "VUI: video format", 2, bitstream);
-    len+=u_1 ("VUI: video_full_range_flag", 1, bitstream);
-    len+=u_1 ("VUI: color_description_present_flag", 1, bitstream);
-    len+=u_v (8, "VUI: colour primaries", 2, bitstream);
-    len+=u_v (8, "VUI: transfer characteristics", 2, bitstream);
-    len+=u_v (8, "VUI: matrix coefficients", 0, bitstream);
-    len+=u_1 ("VUI: chroma_loc_info_present_flag", 0, bitstream);
-    len+=u_1 ("VUI: timing_info_present_flag", 0, bitstream);
-    len+=u_1 ("VUI: nal_hrd_parameters_present_flag", 0, bitstream);
-    len+=u_1 ("VUI: vcl_hrd_parameters_present_flag", 0, bitstream);
-    len+=u_1 ("VUI: pic_struc_present_flag", 0, bitstream);
-    len+=u_1 ("VUI: bitstream_restriction_flag", 0, bitstream);
-
-    return len;
-  }
-  else if (input->Generate_SEIVUI)
-  {
-      int bitstream_restriction_flag = 0;
-      int timing_info_present_flag = 0;
-      int aspect_ratio_info_present_flag = 0;
-      len+=u_1 ("VUI: aspect_ratio_info_present_flag", 0, bitstream);
-      if (aspect_ratio_info_present_flag)
-      {
-        len+=u_v (8,"VUI: aspect_ratio_idc", 1, bitstream);
-      }
-      len+=u_1 ("VUI: overscan_info_present_flag", 0, bitstream);
-      len+=u_1 ("VUI: video_signal_type_present_flag", 0, bitstream);
-      len+=u_1 ("VUI: chroma_loc_info_present_flag", 0, bitstream);
-      len+=u_1 ("VUI: timing_info_present_flag", timing_info_present_flag, bitstream);
-            // timing parameters
-      if (timing_info_present_flag)
-      {
-        len+=u_v (32,"VUI: num_units_in_tick", 416667, bitstream);
-        len+=u_v (32,"VUI: time_scale", 20000000, bitstream);
-        len+=u_1 ("VUI: fixed_frame_rate_flag", 1, bitstream);
-      }
-      // end of timing parameters
-      len+=u_1 ("VUI: nal_hrd_parameters_present_flag", 0, bitstream);
-      len+=u_1 ("VUI: vcl_hrd_parameters_present_flag", 0, bitstream);
-      len+=u_1 ("VUI: pic_struc_present_flag", 0, bitstream);
-
-      len+=u_1 ("VUI: bitstream_restriction_flag", bitstream_restriction_flag, bitstream);
-      if (bitstream_restriction_flag)
-      {
-        len+=u_1 ("VUI: motion_vectors_over_pic_boundaries_flag", 1, bitstream);
-        len+=ue_v ("VUI: max_bytes_per_pic_denom", 0, bitstream);
-        len+=ue_v ("VUI: max_bits_per_mb_denom", 0, bitstream);
-        len+=ue_v ("VUI: log2_max_mv_length_horizontal", 11, bitstream);
-        len+=ue_v ("VUI: log2_max_mv_length_vertical", 11, bitstream);
-        len+=ue_v ("VUI: num_reorder_frames", 3, bitstream);
-        len+=ue_v ("VUI: max_dec_frame_buffering", 4, bitstream);
-      }
+  len+=u_1 ("VUI: aspect_ratio_info_present_flag", vui_seq_parameters->aspect_ratio_info_present_flag, bitstream);
+  if (vui_seq_parameters->aspect_ratio_info_present_flag)
+  {        
+    len+=u_v (8,"VUI: aspect_ratio_idc", vui_seq_parameters->aspect_ratio_idc, bitstream);
+    if (vui_seq_parameters->aspect_ratio_idc == 255)
+    {
+      len+=u_v (16,"VUI: sar_width",  vui_seq_parameters->sar_width,  bitstream);
+      len+=u_v (16,"VUI: sar_height", vui_seq_parameters->sar_height, bitstream);
     }
-  else
+  }  
+
+  len+=u_1 ("VUI: overscan_info_present_flag", vui_seq_parameters->overscan_info_present_flag, bitstream);
+  if (vui_seq_parameters->overscan_info_present_flag)
   {
-    printf ("Sequence Parameter VUI not yet implemented, this should never happen, exit\n");
-    exit (-1);
+    len+=u_1 ("VUI: overscan_appropriate_flag", vui_seq_parameters->overscan_appropriate_flag, bitstream);
+  } 
+
+  len+=u_1 ("VUI: video_signal_type_present_flag", vui_seq_parameters->video_signal_type_present_flag, bitstream);
+  if (vui_seq_parameters->video_signal_type_present_flag)
+  {
+    len+=u_v (3,"VUI: video_format", vui_seq_parameters->video_format, bitstream);
+    len+=u_1 ("VUI: video_full_range_flag", vui_seq_parameters->video_full_range_flag, bitstream);
+    len+=u_1 ("VUI: colour_description_present_flag", vui_seq_parameters->colour_description_present_flag, bitstream);
+    if (vui_seq_parameters->colour_description_present_flag)
+    {
+      len+=u_v (8,"VUI: colour_primaries", vui_seq_parameters->colour_primaries, bitstream);
+      len+=u_v (8,"VUI: transfer_characteristics", vui_seq_parameters->transfer_characteristics, bitstream);
+      len+=u_v (8,"VUI: matrix_coefficients", vui_seq_parameters->matrix_coefficients, bitstream);
+    }
   }
 
-  return 1;
+  len+=u_1 ("VUI: chroma_loc_info_present_flag", vui_seq_parameters->chroma_location_info_present_flag, bitstream);
+  if (vui_seq_parameters->chroma_location_info_present_flag)
+  {
+    len+=ue_v ("VUI: chroma_sample_loc_type_top_field", vui_seq_parameters->chroma_sample_loc_type_top_field, bitstream);
+    len+=ue_v ("VUI: chroma_sample_loc_type_bottom_field", vui_seq_parameters->chroma_sample_loc_type_bottom_field, bitstream);
+  }
+
+  len+=u_1 ("VUI: timing_info_present_flag", vui_seq_parameters->timing_info_present_flag, bitstream);
+  // timing parameters
+  if (vui_seq_parameters->timing_info_present_flag)
+  {
+    len+=u_v (32,"VUI: num_units_in_tick",  vui_seq_parameters->num_units_in_tick, bitstream);
+    len+=u_v (32,"VUI: time_scale",         vui_seq_parameters->time_scale, bitstream);
+    len+=u_1 ("VUI: fixed_frame_rate_flag", vui_seq_parameters->fixed_frame_rate_flag, bitstream);
+  }
+  // end of timing parameters
+  // nal_hrd_parameters_present_flag
+  len+=u_1 ("VUI: nal_hrd_parameters_present_flag", vui_seq_parameters->nal_hrd_parameters_present_flag, bitstream);
+  if ( vui_seq_parameters->nal_hrd_parameters_present_flag )
+  {
+    len += WriteHRDParameters(sps, bitstream);
+  }
+  // vcl_hrd_parameters_present_flag
+  len+=u_1 ("VUI: vcl_hrd_parameters_present_flag", vui_seq_parameters->vcl_hrd_parameters_present_flag, bitstream);
+  if ( vui_seq_parameters->vcl_hrd_parameters_present_flag )
+  {
+    len += WriteHRDParameters(sps, bitstream);
+  }
+  if ( vui_seq_parameters->nal_hrd_parameters_present_flag || vui_seq_parameters->vcl_hrd_parameters_present_flag )
+  {
+    len+=u_1 ("VUI: low_delay_hrd_flag", vui_seq_parameters->low_delay_hrd_flag, bitstream );
+  }
+  len+=u_1 ("VUI: pic_struct_present_flag", vui_seq_parameters->pic_struct_present_flag, bitstream);
+
+  len+=u_1 ("VUI: bitstream_restriction_flag", vui_seq_parameters->bitstream_restriction_flag, bitstream);
+  if (vui_seq_parameters->bitstream_restriction_flag)
+  {
+    len+=u_1  ("VUI: motion_vectors_over_pic_boundaries_flag", vui_seq_parameters->motion_vectors_over_pic_boundaries_flag, bitstream);
+    len+=ue_v ("VUI: max_bytes_per_pic_denom", vui_seq_parameters->max_bytes_per_pic_denom, bitstream);
+    len+=ue_v ("VUI: max_bits_per_mb_denom", vui_seq_parameters->max_bits_per_mb_denom, bitstream);
+    len+=ue_v ("VUI: log2_max_mv_length_horizontal", vui_seq_parameters->log2_max_mv_length_horizontal, bitstream);
+    len+=ue_v ("VUI: log2_max_mv_length_vertical", vui_seq_parameters->log2_max_mv_length_vertical, bitstream);
+    len+=ue_v ("VUI: num_reorder_frames", vui_seq_parameters->num_reorder_frames, bitstream);
+    len+=ue_v ("VUI: max_dec_frame_buffering", vui_seq_parameters->max_dec_frame_buffering, bitstream);
+  }
+
+  return len;
 }
 
 /*!
@@ -1006,7 +1023,7 @@ int GenerateSEImessage_rbsp (int id, byte *rbsp)
   bitstream->bits_to_go = 8;
 
   {
-    char sei_message[500];
+    char sei_message[500] = "";
     char uuid_message[9] = "RandomMSG"; // This is supposed to be Random
     unsigned int i, message_size = strlen(input->SEIMessageText);
     struct TIMEB tstruct;
@@ -1045,4 +1062,150 @@ int GenerateSEImessage_rbsp (int id, byte *rbsp)
 
   free(bitstream);
   return LenInBytes;
+}
+
+/*!
+ *************************************************************************************
+ * \brief
+ *    int WriteHRDParameters((seq_parameter_set_rbsp_t *sps, Bitstream *bitstream)
+ *
+ *
+ * \return
+ *    size of the RBSP in bytes, negative in case of an error
+ *
+ * \note
+ *************************************************************************************
+ */
+
+int WriteHRDParameters(seq_parameter_set_rbsp_t *sps, Bitstream *bitstream)
+{
+  // hrd_parameters()
+  int len = 0;
+  unsigned int SchedSelIdx = 0;
+  hrd_parameters_t *hrd = &(sps->vui_seq_parameters.nal_hrd_parameters);
+
+  len+=ue_v ("VUI: cpb_cnt_minus1", hrd->cpb_cnt_minus1, bitstream);
+  len+=u_v  (4, "VUI: bit_rate_scale", hrd->bit_rate_scale, bitstream);
+  len+=u_v  (4, "VUI: cpb_size_scale", hrd->cpb_size_scale, bitstream);
+
+  for( SchedSelIdx = 0; SchedSelIdx <= (hrd->cpb_cnt_minus1); SchedSelIdx++ )
+  {
+    len+=ue_v ("VUI: bit_rate_value_minus1", hrd->bit_rate_value_minus1[SchedSelIdx], bitstream);
+    len+=ue_v ("VUI: cpb_size_value_minus1", hrd->cpb_size_value_minus1[SchedSelIdx], bitstream);
+    len+=u_1  ("VUI: cbr_flag", hrd->vbr_cbr_flag[SchedSelIdx], bitstream);
+  }
+
+  len+=u_v  (5, "VUI: initial_cpb_removal_delay_length_minus1", hrd->initial_cpb_removal_delay_length_minus1, bitstream);
+  len+=u_v  (5, "VUI: cpb_removal_delay_length_minus1", hrd->cpb_removal_delay_length_minus1, bitstream);
+  len+=u_v  (5, "VUI: dpb_output_delay_length_minus1", hrd->dpb_output_delay_length_minus1, bitstream);
+  len+=u_v  (5, "VUI: time_offset_length", hrd->time_offset_length, bitstream);
+
+  return len;
+}
+
+/*!
+ *************************************************************************************
+ * \brief
+ *    void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps)
+ *
+ *
+ * \return
+ *    none
+ *
+ * \note
+ *************************************************************************************
+ */
+
+void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps)
+{
+  unsigned int          SchedSelIdx;
+  hrd_parameters_t     *nal_hrd = &(sps->vui_seq_parameters.nal_hrd_parameters);
+  hrd_parameters_t     *vcl_hrd = &(sps->vui_seq_parameters.vcl_hrd_parameters);
+  vui_seq_parameters_t *vui     = &(sps->vui_seq_parameters);
+
+  vui->aspect_ratio_info_present_flag      = (Boolean) input->VUI_aspect_ratio_info_present_flag;
+  vui->aspect_ratio_idc                    = (unsigned int) input->VUI_aspect_ratio_idc;
+  vui->sar_width                           = (unsigned int) input->VUI_sar_width;
+  vui->sar_height                          = (unsigned int) input->VUI_sar_height;
+  vui->overscan_info_present_flag          = (Boolean) input->VUI_overscan_info_present_flag;
+  vui->overscan_appropriate_flag           = (Boolean) input->VUI_overscan_appropriate_flag;
+  vui->video_signal_type_present_flag      = (Boolean) input->VUI_video_signal_type_present_flag;
+  vui->video_format                        = (unsigned int) input->VUI_video_format;
+  vui->video_full_range_flag               = (Boolean) input->VUI_video_full_range_flag;
+  vui->colour_description_present_flag     = (Boolean) input->VUI_colour_description_present_flag;
+  vui->colour_primaries                    = (unsigned int) input->VUI_colour_primaries;
+  vui->transfer_characteristics            = (unsigned int) input->VUI_transfer_characteristics;
+  vui->matrix_coefficients                 = (unsigned int) input->VUI_matrix_coefficients;
+  vui->chroma_location_info_present_flag   = (Boolean) input->VUI_chroma_location_info_present_flag;
+  vui->chroma_sample_loc_type_top_field    = (unsigned int) input->VUI_chroma_sample_loc_type_top_field;
+  vui->chroma_sample_loc_type_bottom_field = (unsigned int) input->VUI_chroma_sample_loc_type_bottom_field;
+  vui->timing_info_present_flag            = (Boolean) input->VUI_timing_info_present_flag;
+  vui->num_units_in_tick                   = (unsigned int) input->VUI_num_units_in_tick;
+  vui->time_scale                          = (unsigned int) input->VUI_time_scale;
+  vui->fixed_frame_rate_flag               = (Boolean) input->VUI_fixed_frame_rate_flag;  
+
+  // NAL HRD parameters
+  vui->nal_hrd_parameters_present_flag             = (Boolean) input->VUI_nal_hrd_parameters_present_flag;  
+  nal_hrd->cpb_cnt_minus1                          = (unsigned int) input->VUI_nal_cpb_cnt_minus1;
+  nal_hrd->bit_rate_scale                          = (unsigned int) input->VUI_nal_bit_rate_scale;
+  nal_hrd->cpb_size_scale                          = (unsigned int) input->VUI_nal_cpb_size_scale;
+  for ( SchedSelIdx = 0; SchedSelIdx <= nal_hrd->cpb_cnt_minus1; SchedSelIdx++ )
+  {
+    nal_hrd->bit_rate_value_minus1[SchedSelIdx]    = (unsigned int) input->VUI_nal_bit_rate_value_minus1;
+    nal_hrd->cpb_size_value_minus1[SchedSelIdx]    = (unsigned int) input->VUI_nal_cpb_size_value_minus1;
+    nal_hrd->vbr_cbr_flag[SchedSelIdx]             = (unsigned int) input->VUI_nal_vbr_cbr_flag;
+  }
+  nal_hrd->initial_cpb_removal_delay_length_minus1 = (unsigned int) input->VUI_nal_initial_cpb_removal_delay_length_minus1;
+  nal_hrd->cpb_removal_delay_length_minus1         = (unsigned int) input->VUI_nal_cpb_removal_delay_length_minus1;
+  nal_hrd->dpb_output_delay_length_minus1          = (unsigned int) input->VUI_nal_dpb_output_delay_length_minus1;
+  nal_hrd->time_offset_length                      = (unsigned int) input->VUI_nal_time_offset_length;
+  
+  // VCL HRD parameters
+  vui->vcl_hrd_parameters_present_flag             = (Boolean) input->VUI_vcl_hrd_parameters_present_flag;  
+  vcl_hrd->cpb_cnt_minus1                          = (unsigned int) input->VUI_vcl_cpb_cnt_minus1;
+  vcl_hrd->bit_rate_scale                          = (unsigned int) input->VUI_vcl_bit_rate_scale;
+  vcl_hrd->cpb_size_scale                          = (unsigned int) input->VUI_vcl_cpb_size_scale;
+  for ( SchedSelIdx = 0; SchedSelIdx <= vcl_hrd->cpb_cnt_minus1; SchedSelIdx++ )
+  {
+    vcl_hrd->bit_rate_value_minus1[SchedSelIdx]    = (unsigned int) input->VUI_vcl_bit_rate_value_minus1;
+    vcl_hrd->cpb_size_value_minus1[SchedSelIdx]    = (unsigned int) input->VUI_vcl_cpb_size_value_minus1;
+    vcl_hrd->vbr_cbr_flag[SchedSelIdx]             = (unsigned int) input->VUI_vcl_vbr_cbr_flag;
+  }
+  vcl_hrd->initial_cpb_removal_delay_length_minus1 = (unsigned int) input->VUI_vcl_initial_cpb_removal_delay_length_minus1;
+  vcl_hrd->cpb_removal_delay_length_minus1         = (unsigned int) input->VUI_vcl_cpb_removal_delay_length_minus1;
+  vcl_hrd->dpb_output_delay_length_minus1          = (unsigned int) input->VUI_vcl_dpb_output_delay_length_minus1;
+  vcl_hrd->time_offset_length                      = (unsigned int) input->VUI_vcl_time_offset_length;
+
+  vui->low_delay_hrd_flag                      = (Boolean) input->VUI_low_delay_hrd_flag;
+  vui->pic_struct_present_flag                 = (Boolean) input->VUI_pic_struct_present_flag;
+  vui->bitstream_restriction_flag              = (Boolean) input->VUI_bitstream_restriction_flag;
+  vui->motion_vectors_over_pic_boundaries_flag = (Boolean) input->VUI_motion_vectors_over_pic_boundaries_flag;
+  vui->max_bytes_per_pic_denom                 = (unsigned int) input->VUI_max_bytes_per_pic_denom;
+  vui->max_bits_per_mb_denom                   = (unsigned int) input->VUI_max_bits_per_mb_denom;
+  vui->log2_max_mv_length_horizontal           = (unsigned int) input->VUI_log2_max_mv_length_horizontal;
+  vui->log2_max_mv_length_vertical             = (unsigned int) input->VUI_log2_max_mv_length_vertical;
+  vui->num_reorder_frames                      = (unsigned int) input->VUI_num_reorder_frames;
+  vui->max_dec_frame_buffering                 = (unsigned int) input->VUI_max_dec_frame_buffering;
+  
+  // special case to signal the RGB format
+  if(input->rgb_input_flag && input->yuv_format==3)
+  {
+    printf   ("VUI: writing Sequence Parameter VUI to signal RGB format\n");
+
+    vui->aspect_ratio_info_present_flag = FALSE;
+    vui->overscan_info_present_flag = FALSE;
+    vui->video_signal_type_present_flag = TRUE;
+    vui->video_format = 2;
+    vui->video_full_range_flag = TRUE;
+    vui->colour_description_present_flag = TRUE;
+    vui->colour_primaries = 2;
+    vui->transfer_characteristics = 2;
+    vui->matrix_coefficients = 0;
+    vui->chroma_location_info_present_flag = FALSE;
+    vui->timing_info_present_flag = FALSE;
+    vui->nal_hrd_parameters_present_flag = FALSE;
+    vui->vcl_hrd_parameters_present_flag = FALSE;
+    vui->pic_struct_present_flag = FALSE;
+    vui->bitstream_restriction_flag = FALSE;
+  } 
 }

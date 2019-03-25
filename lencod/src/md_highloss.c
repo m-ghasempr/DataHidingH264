@@ -38,9 +38,8 @@
 */
 void encode_one_macroblock_highloss ()
 {
-  int max_index;
-
-  int         rerun, block, index, mode, i, j, ctr16x16, MEPos;
+  int         max_index;
+  int         rerun, block, index, mode, i, j, ctr16x16;
   char        best_pdir;
   RD_PARAMS   enc_mb;
   double      min_rdcost = 0, max_rdcost=1e30;
@@ -50,6 +49,10 @@ void encode_one_macroblock_highloss ()
   int         min_cost = INT_MAX, cost_direct=0, have_direct=0, i16mode=0;
   int         intra1 = 0;
   int         cost8x8_direct = 0;
+  int         mb_available_up;
+  int         mb_available_left;
+  int         mb_available_up_left;
+
   short       islice      = (short) (img->type==I_SLICE);
   short       bslice      = (short) (img->type==B_SLICE);
   short       pslice      = (short) ((img->type==P_SLICE) || (img->type==SP_SLICE));
@@ -116,10 +119,7 @@ void encode_one_macroblock_highloss ()
         {
           for (cost=0, block=0; block<(mode==1?1:2); block++)
           {
-            for (MEPos =0; MEPos <3; MEPos ++)
-            {
-              lambda_mf[MEPos] = input->CtxAdptLagrangeMult == 0 ? enc_mb.lambda_mf[MEPos] : (int)(enc_mb.lambda_mf[MEPos] * sqrt(lambda_mf_factor));
-            }
+            update_lambda_costs(&enc_mb, lambda_mf);
             PartitionMotionSearch (mode, block, lambda_mf);
 
             //--- set 4x4 block indizes (for getting MV) ---
@@ -289,10 +289,6 @@ void encode_one_macroblock_highloss ()
 
    {
      // store_coding_state (cs_cm);
-     int mb_available_up;
-     int mb_available_left;
-     int mb_available_up_left;
-
      min_rdcost = max_rdcost;
      max_index = 9;
 
@@ -410,28 +406,29 @@ void encode_one_macroblock_highloss ()
 #endif
    }
 
-     if (rerun==0)
-       intra1 = IS_INTRA(currMB);
+   if (rerun==0)
+     intra1 = IS_INTRA(currMB);
   } // for (rerun=0; rerun<runs; rerun++)
 
   //=====  S E T   F I N A L   M A C R O B L O C K   P A R A M E T E R S ======
   //---------------------------------------------------------------------------
 
-    if (((cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM) ))
-      currMB->prev_cbp = 1;
-    else if ((cbp==0 && !input->RCEnable) || (best_mode==IPCM))
-    {
-      currMB->delta_qp = 0;
-      currMB->qp       = currMB->prev_qp;
-      set_chroma_qp(currMB);
-      img->qp          = currMB->qp;
-      currMB->prev_cbp = 0;
-    }
-    set_stored_macroblock_parameters ();
+  if (((cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM) ))
+    currMB->prev_cbp = 1;
+  else if ((cbp==0 && !input->RCEnable) || (best_mode==IPCM))
+  {
+    currMB->delta_qp = 0;
+    currMB->qp       = currMB->prev_qp;
+    set_chroma_qp(currMB);
+    img->qp          = currMB->qp;
+    currMB->prev_cbp = 0;
+  }
+  set_stored_macroblock_parameters ();
 
   // Rate control
   if(input->RCEnable)
     update_rc(currMB, best_mode);
+  handle_qp(currMB, best_mode);
 
   rdopt->min_rdcost = min_rdcost;
 
@@ -461,6 +458,6 @@ void encode_one_macroblock_highloss ()
   if(input->UseConstrainedIntraPred && (img->type==P_SLICE || img->type==B_SLICE))
   {
     img->intra_block[img->current_mb_nr] = IS_INTRA(currMB);
-    }
+  }
 }
 

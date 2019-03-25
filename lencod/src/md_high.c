@@ -39,16 +39,20 @@
 void encode_one_macroblock_high ()
 {
   int         max_index;
-  int         block, index, mode, i, j, ctr16x16, MEPos;
+  int         block, index, mode, i, j, ctr16x16;
   char        best_pdir;
   RD_PARAMS   enc_mb;
-  double      min_rdcost, max_rdcost=1e30;
+  double      min_rdcost = 0, max_rdcost=1e30;
   char        best_ref[2] = {0, -1};
   int         bmcost[5] = {INT_MAX};
   int         cost=0;
   int         min_cost = INT_MAX, cost_direct=0, have_direct=0, i16mode=0;
   int         intra1 = 0;
   int         cost8x8_direct = 0;
+  int         mb_available_up;
+  int         mb_available_left;
+  int         mb_available_up_left;
+
   short       islice      = (short) (img->type==I_SLICE);
   short       bslice      = (short) (img->type==B_SLICE);
   short       pslice      = (short) ((img->type==P_SLICE) || (img->type==SP_SLICE));
@@ -109,10 +113,8 @@ void encode_one_macroblock_high ()
       {
         for (cost=0, block=0; block<(mode==1?1:2); block++)
         {
-          for (MEPos = 0; MEPos < 3; MEPos ++)
-          {
-            lambda_mf[MEPos] = input->CtxAdptLagrangeMult == 0 ? enc_mb.lambda_mf[MEPos] : (int)(enc_mb.lambda_mf[MEPos] * sqrt(lambda_mf_factor));
-          }
+          update_lambda_costs(&enc_mb, lambda_mf);
+
           PartitionMotionSearch (mode, block, lambda_mf);
 
           //--- set 4x4 block indizes (for getting MV) ---
@@ -255,7 +257,6 @@ void encode_one_macroblock_high ()
       //--- re-set coding state (as it was before 8x8 block coding) ---
       reset_coding_state (cs_mb);
 
-
       // This is not enabled yet since mpr has reverse order.
       if (input->RCEnable)
         rc_store_diff(img->opix_x,img->opix_y,img->mpr);
@@ -280,130 +281,124 @@ void encode_one_macroblock_high ()
   //========= C H O O S E   B E S T   M A C R O B L O C K   M O D E =========
   //-------------------------------------------------------------------------
 
+  min_rdcost = max_rdcost;
+  max_index = 9;
+
+  if (input->BiPredMotionEstimation)
+    img->bi_pred_me[1] =0;  
+
+  if (img->yuv_format != YUV400)
   {
-    // store_coding_state (cs_cm);
-    int mb_available_up;
-    int mb_available_left;
-    int mb_available_up_left;
+    // precompute all new chroma intra prediction modes
+    IntraChromaPrediction(&mb_available_up, &mb_available_left, &mb_available_up_left);
 
-    min_rdcost = max_rdcost;
-    max_index = 9;
-
-    if (input->BiPredMotionEstimation)
-      img->bi_pred_me[1] =0;
-
-    if (img->yuv_format != YUV400)
-    {
-      // precompute all new chroma intra prediction modes
-      IntraChromaPrediction(&mb_available_up, &mb_available_left, &mb_available_up_left);
-
-      if (input->FastCrIntraDecision)
-      {
-        IntraChromaRDDecision(enc_mb);
-        min_chroma_pred_mode = (short) currMB->c_ipred_mode;
-        max_chroma_pred_mode = (short) currMB->c_ipred_mode;
-      }
-      else
-      {
-        min_chroma_pred_mode = DC_PRED_8;
-        max_chroma_pred_mode = PLANE_8;
-      }
+    if (input->FastCrIntraDecision) 
+    {           
+      IntraChromaRDDecision(enc_mb);
+      min_chroma_pred_mode = (short) currMB->c_ipred_mode;
+      max_chroma_pred_mode = (short) currMB->c_ipred_mode;
     }
-    else
+    else 
     {
       min_chroma_pred_mode = DC_PRED_8;
-      max_chroma_pred_mode = DC_PRED_8;
+      max_chroma_pred_mode = PLANE_8;
     }
+  }
+  else
+  {
+    min_chroma_pred_mode = DC_PRED_8;        
+    max_chroma_pred_mode = DC_PRED_8;
+  }
 
-    for (currMB->c_ipred_mode=min_chroma_pred_mode; currMB->c_ipred_mode<=max_chroma_pred_mode; currMB->c_ipred_mode++)
+  for (currMB->c_ipred_mode=min_chroma_pred_mode; currMB->c_ipred_mode<=max_chroma_pred_mode; currMB->c_ipred_mode++)
+  {
+    // bypass if c_ipred_mode is not allowed
+    if ( (img->yuv_format != YUV400) &&
+      (  ((!intra || !input->IntraDisableInterOnly) && input->ChromaIntraDisable == 1 && currMB->c_ipred_mode!=DC_PRED_8) 
+      || (currMB->c_ipred_mode == VERT_PRED_8 && !mb_available_up) 
+      || (currMB->c_ipred_mode == HOR_PRED_8  && !mb_available_left) 
+      || (currMB->c_ipred_mode == PLANE_8     && (!mb_available_left || !mb_available_up || !mb_available_up_left))))
+      continue;        
+
+    //===== GET BEST MACROBLOCK MODE =====
+    for (ctr16x16=0, index=0; index < max_index; index++)
     {
-      // bypass if c_ipred_mode is not allowed
-      if ( (img->yuv_format != YUV400) &&
-        (  ((!intra || !input->IntraDisableInterOnly) && input->ChromaIntraDisable == 1 && currMB->c_ipred_mode!=DC_PRED_8)
-        || (currMB->c_ipred_mode == VERT_PRED_8 && !mb_available_up)
-        || (currMB->c_ipred_mode == HOR_PRED_8  && !mb_available_left)
-        || (currMB->c_ipred_mode == PLANE_8     && (!mb_available_left || !mb_available_up || !mb_available_up_left))))
+      mode = mb_mode_table[index];
+
+      if (img->yuv_format != YUV400)
+      {           
+        mode = mb_mode_table[index];
+        i16mode = 0; 
+      }
+      //--- for INTER16x16 check all prediction directions ---
+      if (mode==1 && bslice)
+      {
+        best8x8pdir[1][0] = best8x8pdir[1][1] = best8x8pdir[1][2] = best8x8pdir[1][3] = (char) ctr16x16;
+
+        if ( (bslice) && (input->BiPredMotionEstimation) 
+          && (ctr16x16 == 2 && img->bi_pred_me[mode] < 2 && mode == 1))
+          ctr16x16--;
+        if (ctr16x16 < 2) 
+          index--;
+        ctr16x16++;
+      }
+
+      // Skip intra modes in inter slices if best inter mode is 
+      // a MB partition and cbp is 0.
+      if (input->SkipIntraInInterSlices && !intra && mode >= I16MB 
+        && best_mode <=3 && currMB->cbp == 0)
         continue;
 
-      //===== GET BEST MACROBLOCK MODE =====
-      for (ctr16x16=0, index=0; index < max_index; index++)
+      // check if weights are in valid range for biprediction.
+      if (bslice && active_pps->weighted_bipred_idc == 1 && mode < P8x8) 
       {
-        mode = mb_mode_table[index];
-
-        if (img->yuv_format != YUV400)
+        int cur_blk, cur_comp;
+        int weight_sum;
+        Boolean invalid_mode = FALSE;
+        for (cur_blk = 0; cur_blk < 4; cur_blk ++)
         {
-          mode = mb_mode_table[index];
-          i16mode = 0;
-        }
-        //--- for INTER16x16 check all prediction directions ---
-        if (mode==1 && bslice)
-        {
-          best8x8pdir[1][0] = best8x8pdir[1][1] = best8x8pdir[1][2] = best8x8pdir[1][3] = (char) ctr16x16;
-
-          if ( (bslice) && (input->BiPredMotionEstimation)
-            && (ctr16x16 == 2 && img->bi_pred_me[mode] < 2 && mode == 1))
-            ctr16x16--;
-          if (ctr16x16 < 2)
-            index--;
-          ctr16x16++;
-        }
-
-        // Skip intra modes in inter slices if best inter mode is
-        // a MB partition and cbp is 0.
-        if (input->SkipIntraInInterSlices && !intra && mode >= I16MB
-          && best_mode <=3 && currMB->cbp == 0)
-          continue;
-
-        // check if weights are in valid range for biprediction.
-        if (bslice && active_pps->weighted_bipred_idc == 1 && mode < P8x8)
-        {
-          int cur_blk, cur_comp;
-          int weight_sum;
-          Boolean invalid_mode = FALSE;
-          for (cur_blk = 0; cur_blk < 4; cur_blk ++)
-          {
-            if (best8x8pdir[mode][cur_blk] == 2)
+          if (best8x8pdir[mode][cur_blk] == 2)
+          { 
+            for (cur_comp = 0; cur_comp < (active_sps->chroma_format_idc == YUV400 ? 1 : 3) ; cur_comp ++)
             {
-              for (cur_comp = 0; cur_comp < (active_sps->chroma_format_idc == YUV400 ? 1 : 3) ; cur_comp ++)
-              {
-                weight_sum =
-                     wbp_weight[0][(int) best8x8fwref[mode][cur_blk]][(int) best8x8bwref[mode][cur_blk]][cur_comp] +
-                     wbp_weight[1][(int) best8x8fwref[mode][cur_blk]][(int) best8x8bwref[mode][cur_blk]][cur_comp];
+              weight_sum = 
+                wbp_weight[0][(int) best8x8fwref[mode][cur_blk]][(int) best8x8bwref[mode][cur_blk]][cur_comp] + 
+                wbp_weight[1][(int) best8x8fwref[mode][cur_blk]][(int) best8x8bwref[mode][cur_blk]][cur_comp];
 
-                if (weight_sum < -128 ||  weight_sum > 127)
-                {
-                  invalid_mode = TRUE;
-                  break;
-                }
-              }
-              if (invalid_mode == TRUE)
+              if (weight_sum < -128 ||  weight_sum > 127) 
+              {
+                invalid_mode = TRUE;
                 break;
+              }
             }
-          }
-          if (invalid_mode == TRUE)
-          {
-            if ((input->BiPredMotionEstimation) && ctr16x16 == 2
-              && img->bi_pred_me[mode] < 2 && mode == 1)
-              img->bi_pred_me[mode] = (short) (img->bi_pred_me[mode] + 1);
-            continue;
+            if (invalid_mode == TRUE)
+              break;
           }
         }
+        if (invalid_mode == TRUE)
+        {       
+          if ((input->BiPredMotionEstimation) && ctr16x16 == 2 
+            && img->bi_pred_me[mode] < 2 && mode == 1) 
+            img->bi_pred_me[mode] = (short) (img->bi_pred_me[mode] + 1); 
+          continue;
+        }
+      }
 
-        if (enc_mb.valid[mode])
-          compute_mode_RD_cost(mode, currMB, enc_mb, &min_rdcost, &min_rate, i16mode, bslice, &inter_skip);
+      if (enc_mb.valid[mode])
+        compute_mode_RD_cost(mode, currMB, enc_mb, &min_rdcost, &min_rate, i16mode, bslice, &inter_skip);
 
-        if ((input->BiPredMotionEstimation) && (bslice) && ctr16x16 == 2
-          && img->bi_pred_me[mode] < 2 && mode == 1 && best8x8pdir[1][0] == 2)
-          img->bi_pred_me[mode] = (short) (img->bi_pred_me[mode] + 1);
-      }// for (ctr16x16=0, index=0; index<max_index; index++)
-    }// for (currMB->c_ipred_mode=DC_PRED_8; currMB->c_ipred_mode<=max_chroma_pred_mode; currMB->c_ipred_mode++)
+      if ((input->BiPredMotionEstimation) && (bslice) && ctr16x16 == 2 
+        && img->bi_pred_me[mode] < 2 && mode == 1 && best8x8pdir[1][0] == 2) 
+        img->bi_pred_me[mode] = (short) (img->bi_pred_me[mode] + 1); 
+    }// for (ctr16x16=0, index=0; index<max_index; index++)
+  }// for (currMB->c_ipred_mode=DC_PRED_8; currMB->c_ipred_mode<=max_chroma_pred_mode; currMB->c_ipred_mode++)                     
 
 #ifdef BEST_NZ_COEFF
-    for (j=0;j<4;j++)
-      for (i=0; i<(4+img->num_blk8x8_uv); i++)
-        img->nz_coeff[img->current_mb_nr][j][i] = gaaiMBAFF_NZCoeff[j][i];
+  for (j=0;j<4;j++)
+    for (i=0; i<(4+img->num_blk8x8_uv); i++)
+      img->nz_coeff[img->current_mb_nr][j][i] = gaaiMBAFF_NZCoeff[j][i]; 
 #endif
-  }
+
 
   intra1 = IS_INTRA(currMB);
 
@@ -425,6 +420,7 @@ void encode_one_macroblock_high ()
   // Rate control
   if(input->RCEnable)
     update_rc(currMB, best_mode);
+  handle_qp(currMB, best_mode);
 
   rdopt->min_rdcost = min_rdcost;
 

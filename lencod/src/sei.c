@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <memory.h>
-
+#include <string.h>
 #include "global.h"
 
 #include "memalloc.h"
@@ -26,20 +26,25 @@
 Boolean seiHasTemporal_reference=FALSE;
 Boolean seiHasClock_timestamp=FALSE;
 Boolean seiHasPanscan_rect=FALSE;
-Boolean seiHasBuffering_period=FALSE;
 Boolean seiHasHrd_picture=FALSE;
 Boolean seiHasFiller_payload=FALSE;
 Boolean seiHasUser_data_registered_itu_t_t35=FALSE;
 Boolean seiHasUser_data_unregistered=FALSE;
-Boolean seiHasRandom_access_point=FALSE;
+Boolean seiHasRecoveryPoint_info=FALSE;
 Boolean seiHasRef_pic_buffer_management_repetition=FALSE;
 Boolean seiHasSpare_picture=FALSE;
+
+Boolean seiHasBuffering_period=FALSE;
+Boolean seiHasPicTiming_info=FALSE;
 
 Boolean seiHasSceneInformation=FALSE;
 
 Boolean seiHasSubseq_information=FALSE;
 Boolean seiHasSubseq_layer_characteristics=FALSE;
 Boolean seiHasSubseq_characteristics=FALSE;
+Boolean seiHasTone_mapping=FALSE;
+Boolean seiHasPostFilterHints_info=FALSE;
+//#define PRINT_TONE_MAPPING
 
 /*
  ************************************************************************
@@ -79,6 +84,14 @@ void InitSEIMessages()
   InitUser_data_registered_itu_t_t35();
   // init user_RandomAccess
   InitRandomAccess();
+  // Init tone_mapping
+  InitToneMapping();
+  // init post_filter_hints
+  InitPostFilterHints();
+  // init BufferingPeriod
+  InitBufferingPeriod();
+  // init PicTiming
+  InitPicTiming();
 }
 
 void CloseSEIMessages()
@@ -95,6 +108,10 @@ void CloseSEIMessages()
   CloseUser_data_unregistered();
   CloseUser_data_registered_itu_t_t35();
   CloseRandomAccess();
+  CloseToneMapping();
+  ClosePostFilterHints();
+  CloseBufferingPeriod();
+  ClosePicTiming();
 
   for (i=0; i<MAX_LAYER_NUMBER; i++)
   {
@@ -123,6 +140,15 @@ Boolean HaveAggregationSEI()
     return TRUE;
   if (seiHasRecoveryPoint_info)
     return TRUE;
+  if (seiHasTone_mapping)
+    return TRUE;
+  if (seiHasPostFilterHints_info)
+    return TRUE;
+  if (seiHasBuffering_period)
+    return TRUE;
+  if (seiHasPicTiming_info)
+    return TRUE;
+
   return FALSE;
 //  return input->SparePictureOption && ( seiHasSpare_picture || seiHasSubseq_information ||
 //    seiHasSubseq_layer_characteristics || seiHasSubseq_characteristics );
@@ -155,14 +181,14 @@ void write_sei_message(int id, byte* payload, int payload_size, int payload_type
   size = payload_size;
   offset = sei_message[id].payloadSize;
 
-  while ( type > 255 )
+  while ( type > 254 )
   {
     sei_message[id].data[offset++] = 0xFF;
     type = type - 255;
   }
   sei_message[id].data[offset++] = (byte) type;
 
-  while ( size > 255 )
+  while ( size > 254 )
   {
     sei_message[id].data[offset++] = 0xFF;
     size = size - 255;
@@ -1235,7 +1261,7 @@ void ClearPanScanRectInfoPayload()
   seiPanScanRectInfo.data->byte_buf    = 0;
   seiPanScanRectInfo.payloadSize       = 0;
 
-  seiHasPanScanRectInfo = TRUE;
+  seiHasPanScanRectInfo = FALSE;
 }
 
 void UpdatePanScanRectInfo()
@@ -1337,7 +1363,7 @@ void ClearUser_data_unregistered()
   memset( seiUser_data_unregistered.byte, 0, MAXRTPPAYLOADLEN);
   seiUser_data_unregistered.total_byte = 0;
 
-  seiHasUser_data_unregistered_info = TRUE;
+  seiHasUser_data_unregistered_info = FALSE;
 }
 
 void UpdateUser_data_unregistered()
@@ -1444,7 +1470,7 @@ void ClearUser_data_registered_itu_t_t35()
   seiUser_data_registered_itu_t_t35.itu_t_t35_country_code = 0;
   seiUser_data_registered_itu_t_t35.itu_t_t35_country_code_extension_byte = 0;
 
-  seiHasUser_data_registered_itu_t_t35_info = TRUE;
+  seiHasUser_data_registered_itu_t_t35_info = FALSE;
 }
 
 void UpdateUser_data_registered_itu_t_t35()
@@ -1551,7 +1577,6 @@ void CloseUser_data_registered_itu_t_t35()
  *      Shankar Regunathan                 <tian@cs.tut.fi>
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
-Boolean seiHasRecoveryPoint_info;
 recovery_point_information_struct seiRecoveryPoint;
 void InitRandomAccess()
 {
@@ -1640,3 +1665,700 @@ void CloseRandomAccess()
   }
   seiRecoveryPoint.data = NULL;
 }
+
+/*
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *  \functions on HDR tone-mapping messages
+ *  \brief
+ *      Based on JVT-T060
+ *  \author
+ *      Jane Zhao, sharp labs of america
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+tone_mapping_struct seiToneMapping;
+
+int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
+{
+  int i;
+  FILE* fp;
+  char buf[1024];
+  unsigned int tmp;
+
+  printf ("Parsing Tone mapping cfg file %s ..........\n\n", input->ToneMappingFile);
+  if ((fp = fopen(input->ToneMappingFile, "r")) == NULL) {
+    fprintf(stderr, "Tone mapping config file %s is not found, disable tone mapping SEI\n", input->ToneMappingFile);
+    seiHasTone_mapping=FALSE;
+
+    return 1;
+  }
+
+  //read the tone mapping config file	
+  while (fscanf(fp, "%s", buf)!=EOF) 
+  {
+    if (strcmp(buf, "tone_map_id")==0) 
+    {
+      fscanf(fp, " = %ud\n", &(pSeiToneMapping->tone_map_id));							
+    }
+    else if (strcmp(buf, "tone_map_cancel_flag")==0) 
+    {
+      fscanf(fp, " = %ud\n", &tmp);
+      pSeiToneMapping->tone_map_cancel_flag = tmp ? 1 : 0;
+    }
+    else if (strcmp(buf, "tone_map_repetition_period")==0) 
+    {
+      fscanf(fp, " = %ud\n", &(pSeiToneMapping->tone_map_repetition_period));
+    }				
+    else if (strcmp(buf, "coded_data_bit_depth")==0) 
+    {
+      fscanf(fp, " = %ud\n", &tmp);
+      pSeiToneMapping->coded_data_bit_depth = (unsigned char) tmp;
+    }
+    else if (strcmp(buf, "sei_bit_depth")==0) 
+    {
+      fscanf(fp, " = %ud\n", &tmp);
+      pSeiToneMapping->sei_bit_depth =  (unsigned char) tmp;
+    }
+    else if (strcmp(buf, "model_id")==0) 
+    {
+      fscanf(fp, " = %ud\n", &(pSeiToneMapping->model_id));
+    }
+    //else if (model_id ==0) 
+    else if (strcmp(buf, "min_value")==0) 
+    {
+      fscanf(fp, " = %d\n", &(pSeiToneMapping->min_value));
+    }
+    else if (strcmp(buf, "max_value")==0) 
+    {
+      fscanf(fp, " = %d\n", &(pSeiToneMapping->max_value));
+    }		
+    //(model_id == 1)
+    else if (strcmp(buf, "sigmoid_midpoint")==0) 
+    {
+      fscanf(fp, " = %d\n", &(pSeiToneMapping->sigmoid_midpoint));
+    }
+    else if (strcmp(buf, "sigmoid_width")==0) 
+    {
+      fscanf(fp, " = %d\n", &(pSeiToneMapping->sigmoid_width));
+    }		 
+    // (model_id == 2) 
+    else if (strcmp(buf, "start_of_coded_interval")==0) 
+    {
+      int max_output_num = 1<<(pSeiToneMapping->sei_bit_depth);
+      fscanf(fp, " = ");
+      for (i=0; i < max_output_num; i++)
+        fscanf(fp, "%d\n", &(pSeiToneMapping->start_of_coded_interval[i]));
+    }		 
+    //(model_id == 3)
+    else if (strcmp(buf, "num_pivots")==0) 
+    {
+      fscanf(fp, " = %d\n", &(pSeiToneMapping->num_pivots));
+    }
+
+    else if (strcmp(buf, "coded_pivot_value")==0) 
+    {
+      fscanf(fp, " = ");
+      for (i=0; i < pSeiToneMapping->num_pivots; i++)
+        fscanf(fp, "%d\n", &(pSeiToneMapping->coded_pivot_value[i]));
+    }
+    else if (strcmp(buf, "sei_pivot_value")==0) 
+    {
+      fscanf(fp, " = ");
+      for (i=0; i < pSeiToneMapping->num_pivots; i++)
+        fscanf(fp, "%d\n", &(pSeiToneMapping->sei_pivot_value[i]));
+    }		
+    else
+    {
+      // read till the line end 
+      fgets(buf, sizeof(buf), fp);
+    }
+  }
+
+  fclose(fp);
+
+  return 0;
+}
+
+void InitToneMapping() 
+{
+  if (input->ToneMappingSEIPresentFlag == 0)
+  {
+    seiHasTone_mapping = FALSE;
+    return;
+  }
+  else
+    seiHasTone_mapping = TRUE;
+
+  seiToneMapping.data = malloc( sizeof(Bitstream) );
+  if( seiToneMapping.data == NULL ) no_mem_exit("InitToneMapping: seiToneMapping.data");
+  seiToneMapping.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  if( seiToneMapping.data->streamBuffer == NULL ) no_mem_exit("InitToneMapping: seiToneMapping.data->streamBuffer");
+  memset( seiToneMapping.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+  seiToneMapping.data->bits_to_go  = 8;
+  seiToneMapping.data->byte_pos    = 0;
+  seiToneMapping.data->byte_buf    = 0;
+  seiToneMapping.payloadSize       = 0;
+
+  // read tone mapping config from file
+  ParseToneMappingConfigFile(&seiToneMapping);
+}
+
+void FinalizeToneMapping()
+{
+  Bitstream *bitstream = seiToneMapping.data;  
+  int i;
+
+  ue_v("SEI: tone_map_id"						, seiToneMapping.tone_map_id,				bitstream);
+  u_1("SEI: tone_map_cancel_flag"				, seiToneMapping.tone_map_cancel_flag,		bitstream);
+
+#ifdef PRINT_TONE_MAPPING
+  printf("frame %d: Tone-mapping SEI message\n", img->frame_num);
+  printf("tone_map_id = %d\n", seiToneMapping.tone_map_id);
+  printf("tone_map_cancel_flag = %d\n", seiToneMapping.tone_map_cancel_flag);
+#endif
+  if (!seiToneMapping.tone_map_cancel_flag) 
+  {
+    ue_v(  "SEI: tone_map_repetition_period", seiToneMapping.tone_map_repetition_period, bitstream);
+    u_v (8,"SEI: coded_data_bit_depth"      , seiToneMapping.coded_data_bit_depth,       bitstream);
+    u_v (8,"SEI: sei_bit_depth"             , seiToneMapping.sei_bit_depth,              bitstream);
+    ue_v(  "SEI: model_id"                  , seiToneMapping.model_id,                   bitstream);
+
+#ifdef PRINT_TONE_MAPPING
+    printf("tone_map_repetition_period = %d\n", seiToneMapping.tone_map_repetition_period);
+    printf("coded_data_bit_depth = %d\n", seiToneMapping.coded_data_bit_depth);
+    printf("sei_bit_depth = %d\n", seiToneMapping.sei_bit_depth);
+    printf("model_id = %d\n", seiToneMapping.model_id);
+#endif
+    if (seiToneMapping.model_id == 0) 
+    { // linear mapping
+      u_v (32,"SEI: min_value", seiToneMapping.min_value,	bitstream);
+      u_v (32,"SEI: min_value", seiToneMapping.max_value,	bitstream);
+#ifdef PRINT_TONE_MAPPING
+      printf("min_value = %d, max_value = %d\n", seiToneMapping.min_value, seiToneMapping.max_value);
+#endif
+    }
+    else if (seiToneMapping.model_id == 1) 
+    { // sigmoidal mapping
+      u_v (32,"SEI: sigmoid_midpoint", seiToneMapping.sigmoid_midpoint,			bitstream);
+      u_v (32,"SEI: sigmoid_width", seiToneMapping.sigmoid_width,					bitstream);
+#ifdef PRINT_TONE_MAPPING
+      printf("sigmoid_midpoint = %d, sigmoid_width = %d\n", seiToneMapping.sigmoid_midpoint, seiToneMapping.sigmoid_width);
+#endif
+    }
+    else if (seiToneMapping.model_id == 2) 
+    { // user defined table mapping
+      int bit_depth_val = 1<<seiToneMapping.sei_bit_depth;
+      for (i=0; i<bit_depth_val; i++) 
+      {
+        u_v((((seiToneMapping.coded_data_bit_depth+7)>>3)<<3), "SEI: start_of_coded_interval", seiToneMapping.start_of_coded_interval[i],	bitstream);
+#ifdef PRINT_TONE_MAPPING
+        //printf("start_of_coded_interval[%d] = %d\n", i, seiToneMapping.start_of_coded_interval[i]);
+#endif			
+      }
+    }
+    else if (seiToneMapping.model_id == 3) 
+    {  // piece-wise linear mapping
+      u_v (16,"SEI: num_pivots", seiToneMapping.num_pivots, bitstream);
+#ifdef PRINT_TONE_MAPPING
+      printf("num_pivots = %d\n", seiToneMapping.num_pivots);
+#endif
+      for (i=0; i < seiToneMapping.num_pivots; i++) 
+      {
+        u_v( (((seiToneMapping.coded_data_bit_depth+7)>>3)<<3), "SEI: coded_pivot_value",	seiToneMapping.coded_pivot_value[i],	bitstream);
+        u_v( (((seiToneMapping.sei_bit_depth+7)>>3)<<3), "SEI: sei_pivot_value",			seiToneMapping.sei_pivot_value[i],		bitstream);
+#ifdef PRINT_TONE_MAPPING
+        printf("coded_pivot_value[%d] = %d, sei_pivot_value[%d] = %d\n", i, seiToneMapping.coded_pivot_value[i], i, seiToneMapping.sei_pivot_value[i]);
+#endif
+      }
+    }
+  } // end !tone_map_cancel_flag
+
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( bitstream->bits_to_go != 8 )
+  {
+    (bitstream->byte_buf) <<= 1;
+    bitstream->byte_buf |= 1;
+    bitstream->bits_to_go--;
+    if ( bitstream->bits_to_go != 0 ) 
+      (bitstream->byte_buf) <<= (bitstream->bits_to_go);
+    bitstream->bits_to_go = 8;
+    bitstream->streamBuffer[bitstream->byte_pos++]=bitstream->byte_buf;
+    bitstream->byte_buf = 0;
+  }
+  seiToneMapping.payloadSize = bitstream->byte_pos;
+}
+
+
+void UpdateToneMapping() 
+{
+  // return;
+
+  // you may manually generate some test case here
+}
+
+void ClearToneMapping() 
+{
+  memset( seiToneMapping.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+  seiToneMapping.data->bits_to_go  = 8;
+  seiToneMapping.data->byte_pos    = 0;
+  seiToneMapping.data->byte_buf    = 0;
+  seiToneMapping.payloadSize       = 0;
+
+  seiHasTone_mapping=FALSE;
+}
+
+void CloseToneMapping() 
+{
+
+  if (seiToneMapping.data)
+  {
+    free(seiToneMapping.data->streamBuffer);
+    free(seiToneMapping.data);
+  }
+  seiToneMapping.data = NULL;	
+  seiHasTone_mapping = FALSE;
+}
+
+/*
+ ************************************************************************
+ *  \functions on post-filter message
+ *  \brief
+ *      Based on JVT-U035
+ *  \author
+ *      Steffen Wittmann <steffen.wittmann@eu.panasonic.com>
+ ************************************************************************
+ */
+post_filter_information_struct seiPostFilterHints;
+
+void InitPostFilterHints()
+{
+  seiPostFilterHints.data = malloc( sizeof(Bitstream) );
+  if( seiPostFilterHints.data == NULL ) no_mem_exit("InitPostFilterHints: seiPostFilterHints.data");
+  seiPostFilterHints.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  if( seiPostFilterHints.data->streamBuffer == NULL ) no_mem_exit("InitPostFilterHints: seiPostFilterHints.data->streamBuffer");
+  ClearPostFilterHints();
+}
+
+void ClearPostFilterHints()
+{
+  memset( seiPostFilterHints.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+  seiPostFilterHints.data->bits_to_go  = 8;
+  seiPostFilterHints.data->byte_pos    = 0;
+  seiPostFilterHints.data->byte_buf    = 0;
+  seiPostFilterHints.payloadSize       = 0;
+
+  seiPostFilterHints.filter_hint_size_y        = 0;
+  seiPostFilterHints.filter_hint_size_x        = 0;
+  seiPostFilterHints.filter_hint_type          = 0;
+  seiPostFilterHints.additional_extension_flag = 0;
+}
+
+void UpdatePostFilterHints()
+{
+  unsigned int color_component, cx, cy;
+  seiPostFilterHints.filter_hint_type = 0; //define filter_hint_type here
+  seiPostFilterHints.filter_hint_size_y = seiPostFilterHints.filter_hint_size_x = 5; //define filter_hint_size here
+  get_mem3Dint(&seiPostFilterHints.filter_hint, 3, seiPostFilterHints.filter_hint_size_y, seiPostFilterHints.filter_hint_size_x);
+
+  for (color_component = 0; color_component < 3; color_component ++)
+    for (cy = 0; cy < seiPostFilterHints.filter_hint_size_y; cy ++)
+      for (cx = 0; cx < seiPostFilterHints.filter_hint_size_x; cx ++)
+		seiPostFilterHints.filter_hint[color_component][cy][cx] = 1; //define filter_hint here
+
+  seiPostFilterHints.additional_extension_flag = 0;
+}
+
+void FinalizePostFilterHints()
+{
+  Bitstream *bitstream = seiPostFilterHints.data;
+  unsigned int color_component, cx, cy;
+
+  ue_v(  "SEI: post_filter_hint_size_y", seiPostFilterHints.filter_hint_size_y, bitstream);
+  ue_v(  "SEI: post_filter_hint_size_x", seiPostFilterHints.filter_hint_size_x, bitstream);
+  u_v (2,"SEI: post_filter_hint_type",   seiPostFilterHints.filter_hint_type,   bitstream);
+
+  for (color_component = 0; color_component < 3; color_component ++)
+    for (cy = 0; cy < seiPostFilterHints.filter_hint_size_y; cy ++)
+      for (cx = 0; cx < seiPostFilterHints.filter_hint_size_x; cx ++)
+		se_v("SEI: post_filter_hints", seiPostFilterHints.filter_hint[color_component][cy][cx], bitstream);
+
+  u_1 ("SEI: post_filter_additional_extension_flag", seiPostFilterHints.additional_extension_flag, bitstream);
+
+// #define PRINT_POST_FILTER_HINTS
+#ifdef PRINT_POST_FILTER_HINTS
+  printf(" post_filter_hint_size_y %d \n", seiPostFilterHints.filter_hint_size_y);
+  printf(" post_filter_hint_size_x %d \n", seiPostFilterHints.filter_hint_size_x);
+  printf(" post_filter_hint_type %d \n",   seiPostFilterHints.filter_hint_type);
+  for (color_component = 0; color_component < 3; color_component ++)
+    for (cy = 0; cy < seiPostFilterHints.filter_hint_size_y; cy ++)
+      for (cx = 0; cx < seiPostFilterHints.filter_hint_size_x; cx ++)
+		printf(" post_filter_hint[%d][%d][%d] %d \n", color_component, cy, cx, filter_hint[color_component][cy][cx]);
+
+  printf(" additional_extension_flag %d \n", seiPostFilterHints.additional_extension_flag);
+
+#undef PRINT_POST_FILTER_HINTS
+#endif
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( bitstream->bits_to_go != 8 )
+  {
+    (bitstream->byte_buf) <<= 1;
+    bitstream->byte_buf |= 1;
+    bitstream->bits_to_go--;
+    if ( bitstream->bits_to_go != 0 ) 
+      (bitstream->byte_buf) <<= (bitstream->bits_to_go);
+    bitstream->bits_to_go = 8;
+    bitstream->streamBuffer[bitstream->byte_pos++]=bitstream->byte_buf;
+    bitstream->byte_buf = 0;
+  }
+  seiPostFilterHints.payloadSize = bitstream->byte_pos;
+}
+
+void ClosePostFilterHints()
+{
+  if (seiPostFilterHints.data)
+  {
+    free(seiPostFilterHints.data->streamBuffer);
+    free(seiPostFilterHints.data);  
+    if (seiPostFilterHints.filter_hint)
+      free_mem3Dint(seiPostFilterHints.filter_hint, 3);
+  }
+  seiPostFilterHints.data = NULL;
+}
+
+/*
+**++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+*  \functions to write SEI message into NAL
+*  \brief     
+**++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+*/
+int Write_SEI_NALU(int len)
+{  
+  NALU_t *nalu = NULL;
+  int RBSPlen = 0;
+  int NALUlen;
+  byte *rbsp;
+
+  if (HaveAggregationSEI())
+  {
+    nalu = AllocNALU(64000);
+    rbsp = sei_message[AGGREGATION_SEI].data;
+    RBSPlen = sei_message[AGGREGATION_SEI].payloadSize;
+    NALUlen = RBSPtoNALU (rbsp, nalu, RBSPlen, NALU_TYPE_SEI, NALU_PRIORITY_LOW, 0, 1);
+    nalu->startcodeprefix_len = 4;
+
+    len += WriteNALU (nalu);
+    FreeNALU (nalu);
+  }  
+
+  return len;
+}
+
+/*
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *  \functions on buffering period SEI message
+ *  \brief
+ *      Based on final Recommendation
+ *  \author
+ *      Athanasios Leontaris                 <aleon@dolby.com>
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+void InitBufferingPeriod()
+{
+  seiBufferingPeriod.data = malloc( sizeof(Bitstream) );
+  if( seiBufferingPeriod.data == NULL ) 
+    no_mem_exit("InitBufferingPeriod: seiBufferingPeriod.data");
+
+  seiBufferingPeriod.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  if( seiBufferingPeriod.data->streamBuffer == NULL ) 
+    no_mem_exit("InitBufferingPeriod: seiBufferingPeriod.data->streamBuffer");
+
+  ClearBufferingPeriod();
+}
+
+void ClearBufferingPeriod()
+{
+  unsigned int SchedSelIdx;
+  memset( seiBufferingPeriod.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+
+  seiBufferingPeriod.data->bits_to_go  = 8;
+  seiBufferingPeriod.data->byte_pos    = 0;
+  seiBufferingPeriod.data->byte_buf    = 0;
+  seiBufferingPeriod.payloadSize       = 0;
+
+  seiBufferingPeriod.seq_parameter_set_id = active_sps->seq_parameter_set_id;
+  if ( active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag )
+  {
+    for ( SchedSelIdx = 0; SchedSelIdx <= active_sps->vui_seq_parameters.nal_hrd_parameters.cpb_cnt_minus1; SchedSelIdx++ )
+    {
+      seiBufferingPeriod.nal_initial_cpb_removal_delay[SchedSelIdx] = 0;
+      seiBufferingPeriod.nal_initial_cpb_removal_delay_offset[SchedSelIdx] = 0;
+    }
+  }
+  if ( active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag )
+  {
+    for ( SchedSelIdx = 0; SchedSelIdx <= active_sps->vui_seq_parameters.vcl_hrd_parameters.cpb_cnt_minus1; SchedSelIdx++ )
+    {
+      seiBufferingPeriod.vcl_initial_cpb_removal_delay[SchedSelIdx] = 0;
+      seiBufferingPeriod.vcl_initial_cpb_removal_delay_offset[SchedSelIdx] = 0;
+    }
+  }
+
+  seiHasBuffering_period = FALSE;
+}
+
+void UpdateBufferingPeriod()
+{
+  seiHasBuffering_period = FALSE;
+}
+
+void FinalizeBufferingPeriod()
+{
+  unsigned int SchedSelIdx;
+  Bitstream *bitstream = seiBufferingPeriod.data;
+
+  ue_v(   "SEI: seq_parameter_set_id",     seiBufferingPeriod.seq_parameter_set_id,   bitstream);
+  if ( active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag )
+  {
+    for ( SchedSelIdx = 0; SchedSelIdx <= active_sps->vui_seq_parameters.nal_hrd_parameters.cpb_cnt_minus1; SchedSelIdx++ )
+    {
+      u_v( active_sps->vui_seq_parameters.nal_hrd_parameters.initial_cpb_removal_delay_length_minus1 + 1,
+        "SEI: initial_cpb_removal_delay",     seiBufferingPeriod.nal_initial_cpb_removal_delay[SchedSelIdx],   bitstream);
+      u_v( active_sps->vui_seq_parameters.nal_hrd_parameters.initial_cpb_removal_delay_length_minus1 + 1,
+        "SEI: initial_cpb_removal_delay_offset",     seiBufferingPeriod.nal_initial_cpb_removal_delay_offset[SchedSelIdx],   bitstream);
+    }
+  }
+  if ( active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag )
+  {
+    for ( SchedSelIdx = 0; SchedSelIdx <= active_sps->vui_seq_parameters.vcl_hrd_parameters.cpb_cnt_minus1; SchedSelIdx++ )
+    {
+      u_v( active_sps->vui_seq_parameters.vcl_hrd_parameters.initial_cpb_removal_delay_length_minus1 + 1,
+        "SEI: initial_cpb_removal_delay",     seiBufferingPeriod.vcl_initial_cpb_removal_delay[SchedSelIdx],   bitstream);
+      u_v( active_sps->vui_seq_parameters.vcl_hrd_parameters.initial_cpb_removal_delay_length_minus1 + 1,
+        "SEI: initial_cpb_removal_delay_offset",     seiBufferingPeriod.vcl_initial_cpb_removal_delay_offset[SchedSelIdx],   bitstream);
+    }
+  }
+
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( bitstream->bits_to_go != 8 )
+  {
+    (bitstream->byte_buf) <<= 1;
+    bitstream->byte_buf |= 1;
+    bitstream->bits_to_go--;
+    if ( bitstream->bits_to_go != 0 )
+      (bitstream->byte_buf) <<= (bitstream->bits_to_go);
+    bitstream->bits_to_go = 8;
+    bitstream->streamBuffer[bitstream->byte_pos++]=bitstream->byte_buf;
+    bitstream->byte_buf = 0;
+  }
+  seiBufferingPeriod.payloadSize = bitstream->byte_pos;
+}
+
+void CloseBufferingPeriod()
+{
+  if (seiBufferingPeriod.data)
+  {
+    free(seiBufferingPeriod.data->streamBuffer);
+    free(seiBufferingPeriod.data);
+  }
+  seiBufferingPeriod.data = NULL;
+}
+
+/*
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *  \functions on picture timing SEI message
+ *  \brief
+ *      Based on final Recommendation
+ *  \author
+ *      Athanasios Leontaris                 <aleon@dolby.com>
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+void InitPicTiming()
+{
+  seiPicTiming.data = malloc( sizeof(Bitstream) );
+  if( seiPicTiming.data == NULL ) 
+    no_mem_exit("InitPicTiming: seiPicTiming.data");
+
+  seiPicTiming.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  if( seiPicTiming.data->streamBuffer == NULL ) 
+    no_mem_exit("InitPicTiming: seiPicTiming.data->streamBuffer");
+
+  ClearPicTiming();
+}
+
+void ClearPicTiming()
+{
+  memset( seiPicTiming.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+
+  seiPicTiming.data->bits_to_go  = 8;
+  seiPicTiming.data->byte_pos    = 0;
+  seiPicTiming.data->byte_buf    = 0;
+  seiPicTiming.payloadSize       = 0;
+
+  // initialization
+  seiPicTiming.cpb_removal_delay = 0;
+  seiPicTiming.dpb_output_delay = 0;
+  seiPicTiming.pic_struct = 0;
+  memset(seiPicTiming.clock_timestamp_flag, 0, MAX_PIC_STRUCT_VALUE * sizeof(Boolean) ); // 0 == FALSE
+  seiPicTiming.ct_type = 0;
+  seiPicTiming.nuit_field_based_flag = FALSE;
+  seiPicTiming.counting_type = 0;
+  seiPicTiming.full_timestamp_flag = FALSE;
+  seiPicTiming.discontinuity_flag = FALSE;
+  seiPicTiming.cnt_dropped_flag = FALSE;
+  seiPicTiming.n_frames = 0;
+  seiPicTiming.seconds_value = 0;
+  seiPicTiming.minutes_value = 0;
+  seiPicTiming.hours_value = 0;
+  seiPicTiming.seconds_flag = FALSE;
+  seiPicTiming.minutes_flag = FALSE;
+  seiPicTiming.hours_flag = FALSE;
+  seiPicTiming.time_offset = 0;  
+
+  seiHasPicTiming_info = FALSE;
+}
+
+void UpdatePicTiming()
+{
+  seiHasPicTiming_info = FALSE;
+}
+
+void FinalizePicTiming()
+{
+  Bitstream *bitstream = seiPicTiming.data;
+  // CpbDpbDelaysPresentFlag can also be set "by some means not specified in this Recommendation | International Standard"
+  Boolean CpbDpbDelaysPresentFlag =  (Boolean) (active_sps->vui_parameters_present_flag
+                              && (   (active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag != 0)
+                                   ||(active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag != 0)));
+  hrd_parameters_t *hrd = NULL;
+
+  assert( active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag || active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag );
+  if (active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag)
+    hrd = &(active_sps->vui_seq_parameters.vcl_hrd_parameters);
+  else if (active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag)
+    hrd = &(active_sps->vui_seq_parameters.nal_hrd_parameters);
+  else // this should never happen
+    error ("HRD structures not properly created.",-1);
+
+  if ( CpbDpbDelaysPresentFlag )
+  {
+    u_v( hrd->cpb_removal_delay_length_minus1 + 1, "SEI: cpb_removal_delay", seiPicTiming.cpb_removal_delay, bitstream);
+    u_v( hrd->dpb_output_delay_length_minus1  + 1, "SEI: dpb_output_delay",  seiPicTiming.dpb_output_delay,  bitstream);
+  }
+  if ( active_sps->vui_seq_parameters.pic_struct_present_flag )
+  {
+    int NumClockTS = 0, i;
+    int bottom_field_flag = (img->structure == BOTTOM_FIELD) ? 1 : 0;
+
+    u_v( 4, "SEI: pic_struct", seiPicTiming.pic_struct, bitstream);
+    // interpret pic_struct
+    switch( seiPicTiming.pic_struct )
+    {
+    case 0:
+    default:
+      // frame
+      assert( img->fld_flag == 0 );
+      NumClockTS = 1;
+      break;
+    case 1:
+      // top field
+      assert( img->fld_flag == 1 && bottom_field_flag == 0 );
+      NumClockTS = 1;
+      break;
+    case 2:
+      // bottom field
+      assert( img->fld_flag == 1 && bottom_field_flag == 1 );
+      NumClockTS = 1;
+      break;
+    case 3:
+      // top field, bottom field, in that order
+    case 4:
+      // bottom field, top field, in that order
+      assert( img->fld_flag == 0 );
+      NumClockTS = 2;
+      break;
+    case 5:
+      // top field, bottom field, top field repeated, in that order
+    case 6:
+      // bottom field, top field, bottom field repeated, in that order
+      assert( img->fld_flag == 0 );
+      NumClockTS = 3;
+    case 7:
+      // frame doubling
+      assert( img->fld_flag == 0 && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );
+      NumClockTS = 2;
+      break;
+    case 8:
+      // frame tripling
+      assert( img->fld_flag == 0 && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );
+      NumClockTS = 3;
+      break;
+    }
+    for ( i = 0; i < NumClockTS; i++ )
+    {
+      u_1( "SEI: clock_timestamp_flag", seiPicTiming.clock_timestamp_flag[i], bitstream);
+      if ( seiPicTiming.clock_timestamp_flag[i] )
+      {
+        u_v( 2, "SEI: ct_type", seiPicTiming.ct_type, bitstream);
+        u_1( "SEI: nuit_field_based_flag", seiPicTiming.nuit_field_based_flag, bitstream);
+        u_v( 5, "SEI: counting_type", seiPicTiming.counting_type, bitstream);
+        u_1( "SEI: full_timestamp_flag", seiPicTiming.full_timestamp_flag, bitstream);
+        u_1( "SEI: discontinuity_flag", seiPicTiming.discontinuity_flag, bitstream);
+        u_1( "SEI: cnt_dropped_flag", seiPicTiming.cnt_dropped_flag, bitstream);
+        u_v( 8, "SEI: n_frames", seiPicTiming.n_frames, bitstream);
+
+        if ( seiPicTiming.full_timestamp_flag )
+        {      
+          u_v( 6, "SEI: seconds_value", seiPicTiming.seconds_value, bitstream);
+          u_v( 6, "SEI: minutes_value", seiPicTiming.minutes_value, bitstream);
+          u_v( 5, "SEI: hours_value",   seiPicTiming.hours_value, bitstream);
+        }
+        else
+        {            
+          u_1( "SEI: seconds_flag", seiPicTiming.seconds_flag, bitstream);
+          if (seiPicTiming.seconds_flag)
+          {
+            u_v( 6, "SEI: seconds_value", seiPicTiming.seconds_value, bitstream);
+            u_1( "SEI: minutes_flag", seiPicTiming.minutes_flag, bitstream);
+            if (seiPicTiming.minutes_flag)
+            {
+              u_v( 6, "SEI: minutes_value", seiPicTiming.minutes_value, bitstream);
+              u_1( "SEI: hours_flag", seiPicTiming.hours_flag, bitstream);
+              if (seiPicTiming.hours_flag)
+              {
+                u_v( 5, "SEI: hours_value",   seiPicTiming.hours_value, bitstream);
+              }
+            }
+          }
+        }
+        if ( hrd->time_offset_length )
+        {
+          u_v( hrd->time_offset_length, "SEI: time_offset", seiPicTiming.time_offset, bitstream);
+        }
+      }
+    }
+  }
+
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( bitstream->bits_to_go != 8 )
+  {
+    (bitstream->byte_buf) <<= 1;
+    bitstream->byte_buf |= 1;
+    bitstream->bits_to_go--;
+    if ( bitstream->bits_to_go != 0 )
+      (bitstream->byte_buf) <<= (bitstream->bits_to_go);
+    bitstream->bits_to_go = 8;
+    bitstream->streamBuffer[bitstream->byte_pos++]=bitstream->byte_buf;
+    bitstream->byte_buf = 0;
+  }
+  seiPicTiming.payloadSize = bitstream->byte_pos;
+}
+
+void ClosePicTiming()
+{
+  if (seiPicTiming.data)
+  {
+    free(seiPicTiming.data->streamBuffer);
+    free(seiPicTiming.data);
+  }
+  seiPicTiming.data = NULL;
+}
+

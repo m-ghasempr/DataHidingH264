@@ -16,8 +16,6 @@ Global
 		Debug = Debug
 		Release = Release
 	EndGlobalSection
-	GlobalSection(ProjectDependencies) = postSolution
-	EndGlobalSection
 	GlobalSection(ProjectConfiguration) = postSolution
 		{5499B067-CF32-4141-A757-E0A29866994A}.Debug.ActiveCfg = Debug|Win32
 		{5499B067-CF32-4141-A757-E0A29866994A}.Debug.Build.0 = Debug|Win32

@@ -572,9 +572,13 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
     img->height_cr       = 0;
 
     // Fidelity Range Extensions stuff (part 1)
-    img->bitdepth_luma   = sps->bit_depth_luma_minus8 + 8;
+    img->bitdepth_luma       = sps->bit_depth_luma_minus8 + 8;
+    img->bitdepth_scale[0]   = 1 << sps->bit_depth_luma_minus8;
     if (sps->chroma_format_idc != YUV400)
-      img->bitdepth_chroma = sps->bit_depth_chroma_minus8 + 8;
+    {
+      img->bitdepth_chroma   = sps->bit_depth_chroma_minus8 + 8;
+      img->bitdepth_scale[1] = 1 << sps->bit_depth_chroma_minus8;
+    }
 
     img->MaxFrameNum = 1<<(sps->log2_max_frame_num_minus4+4);
     img->PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);

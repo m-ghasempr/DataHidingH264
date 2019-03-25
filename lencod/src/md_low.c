@@ -44,7 +44,7 @@ static imgpel temp_imgY[16][16]; // to temp store the Y data for 8x8 transform
 void encode_one_macroblock_low ()
 {
 
-  int         block, mode, i, j, k, dummy, MEPos;
+  int         block, mode, i, j, k, dummy;
   char        best_pdir;
   RD_PARAMS   enc_mb;
   char        best_ref[2] = {0, -1};
@@ -119,10 +119,7 @@ void encode_one_macroblock_low ()
       {
         for (cost=0, block=0; block<(mode==1?1:2); block++)
         {
-          for (MEPos=0; MEPos<3; MEPos++)
-          {
-            lambda_mf[MEPos] = input->CtxAdptLagrangeMult == 0 ? enc_mb.lambda_mf[MEPos] : (int)(enc_mb.lambda_mf[MEPos] * sqrt(lambda_mf_factor));
-          }
+          update_lambda_costs(&enc_mb, lambda_mf);
           PartitionMotionSearch (mode, block, lambda_mf);
 
           //--- set 4x4 block indizes (for getting MV) ---
@@ -586,6 +583,7 @@ void encode_one_macroblock_low ()
   // Rate control
   if(input->RCEnable)
     update_rc(currMB, best_mode);
+  handle_qp(currMB, best_mode);
 
   rdopt->min_rdcost = min_cost;
 

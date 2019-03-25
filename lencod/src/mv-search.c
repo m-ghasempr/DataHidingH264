@@ -318,7 +318,8 @@ Init_Motion_Search_Module ()
   if ((byte_abs = (int*)calloc(byte_abs_range, sizeof(int))) == NULL)
     no_mem_exit("Init_Motion_Search_Module: byte_abs");
 
-  get_mem4Dint (&motion_cost, 8, 2, img->max_num_references, 4);
+  if (img->max_num_references)
+    get_mem4Dint (&motion_cost, 8, 2, img->max_num_references, 4);
 
   //--- set array offsets ---
   mvbits   += max_mvd;
@@ -451,7 +452,9 @@ Clear_Motion_Search_Module ()
   free (mvbits);
   free (refbits);
   free (byte_abs);
-  free_mem4Dint (motion_cost, 8, 2);
+					
+  if (motion_cost)
+    free_mem4Dint (motion_cost, 8, 2);
 
   if(input->SearchMode == FAST_FULL_SEARCH)
     ClearFastFullIntegerSearch ();
@@ -852,7 +855,7 @@ BlockMotionSearch (short     ref,           //!< reference idx
     }
   }
 
-  if (img->type==B_SLICE && input->BiPredMotionEstimation!=0 && (blocktype == 1) && (ref==0))
+  if (img->type==B_SLICE && input->BiPredMotionEstimation != 0 && (blocktype == 1) && (ref==0))
   {
     short   ******bipred_mv = list ? img->bipred_mv1 : img->bipred_mv2;
     int     min_mcostbi = max_value;

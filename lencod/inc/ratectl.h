@@ -21,23 +21,20 @@
 /* generic rate control variables */
 typedef struct {
   // RC flags
-  int TopFieldFlag;
-  int FieldControl;
-  int FieldFrame;
-  int NoGranularFieldRC;
+  int   TopFieldFlag;
+  int   FieldControl;
+  int   FieldFrame;
+  int   NoGranularFieldRC;
   // bits stats
-  int NumberofHeaderBits;
-  int NumberofTextureBits;
-  int NumberofBasicUnitHeaderBits;
-  int NumberofBasicUnitTextureBits;
+  int   NumberofHeaderBits;
+  int   NumberofTextureBits;
+  int   NumberofBasicUnitHeaderBits;
+  int   NumberofBasicUnitTextureBits;
   // frame stats
-  int NumberofCodedBFrame;
-  int NumberofCodedPFrame;
-  int NumberofGOP;
-  int TotalQpforPPicture;
-  int NumberofPPicture;
+  int   NumberofGOP;
+  int   NumberofCodedBFrame;  
   // MAD stats
-  int64  TotalMADBasicUnit;
+  int64 TotalMADBasicUnit;
   int   *MADofMB;
   // buffer and budget
   int64 CurrentBufferFullness; //LIZG 25/10/2002
@@ -63,6 +60,7 @@ double QP2Qstep( int QP );
 int    calc_MAD( void );
 double ComputeFrameMAD( void );
 void   update_rc(Macroblock *currMB, short best_mode);
+void   handle_qp(Macroblock *currMB, short best_mode);
 
 // rate control functions
 // init/copy

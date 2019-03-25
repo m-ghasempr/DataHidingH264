@@ -28,6 +28,7 @@
 #include "mbuffer.h"
 #include "image.h"
 #include "memalloc.h"
+#include "sei.h"
 
 FrameStore* out_buffer;
 
@@ -102,9 +103,12 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
   if (( sizeof(char) == sizeof (imgpel)) && ( sizeof(char) == symbol_size_in_bytes))
   {
     // imgpel == pixel_in_file == 1 byte -> simple copy
-    for(i=0;i<theight;i++)
-      memcpy(buf+crop_left+(i*twidth),&(imgX[i+crop_top][crop_left]), twidth);
-
+    buf += crop_left;
+    for(i = 0; i < theight; i++) 
+    {
+      memcpy(buf, &(imgX[i + crop_top][crop_left]), twidth);
+      buf += twidth;
+    }
   }
   else
   {
@@ -182,12 +186,10 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
       }
       else
       {
-        for(i=0;i<size_y;i++)
-        {
-          for(j=0;j<size_x;j++)
-          {
-            *(buf++)=(char) imgX[i][j];
-          }
+        imgpel *cur_pixel = &(imgX[0][0]);;
+        for(i = 0; i < size_y * size_x; i++)
+        {          
+          *(buf++)=(char) *(cur_pixel++);
         }
       }
     }
@@ -378,16 +380,28 @@ void write_picture(StorablePicture *p, int p_out, int real_structure)
 */
 void write_out_picture(StorablePicture *p, int p_out)
 {
-  int SubWidthC  [4]= { 1, 2, 2, 1};
-  int SubHeightC [4]= { 1, 2, 1, 1};
+  static int SubWidthC  [4]= { 1, 2, 2, 1};
+  static int SubHeightC [4]= { 1, 2, 1, 1};
 
   int crop_left, crop_right, crop_top, crop_bottom;
-  int symbol_size_in_bytes = img->pic_unit_bitsize_on_disk/8;
+  int symbol_size_in_bytes = (img->pic_unit_bitsize_on_disk >> 3);
   Boolean rgb_output = (Boolean) (active_sps->vui_seq_parameters.matrix_coefficients==0);
   unsigned char *buf;
 
   if (p->non_existing)
     return;
+
+#ifdef ENABLE_OUTPUT_TONEMAPPING
+  // note: this tone-mapping is working for RGB format only. Sharp
+  if (p->seiHasTone_mapping && rgb_output)
+  {
+    //printf("output frame %d with tone model id %d\n",  p->frame_num, p->tone_mapping_model_id);
+    symbol_size_in_bytes = (p->tonemapped_bit_depth>8)? 2 : 1;
+    tone_map(p->imgY, p->tone_mapping_lut, p->size_x, p->size_y);
+    tone_map(p->imgUV[0], p->tone_mapping_lut, p->size_x_cr, p->size_y_cr);
+    tone_map(p->imgUV[1], p->tone_mapping_lut, p->size_x_cr, p->size_y_cr);
+  }
+#endif
 
   if (p->frame_cropping_flag)
   {
@@ -556,7 +570,8 @@ void write_unpaired_field(FrameStore* fs, int p_out)
 {
   StorablePicture *p;
   assert (fs->is_used<3);
-  if(fs->is_used &1)
+
+  if(fs->is_used & 0x01)
   {
     // we have a top field
     // construct an empty bottom field
@@ -568,7 +583,7 @@ void write_unpaired_field(FrameStore* fs, int p_out)
     write_picture (fs->frame, p_out, TOP_FIELD);
   }
 
-  if(fs->is_used &2)
+  if(fs->is_used & 0x02)
   {
     // we have a bottom field
     // construct an empty top field
@@ -588,7 +603,7 @@ void write_unpaired_field(FrameStore* fs, int p_out)
     write_picture (fs->frame, p_out, BOTTOM_FIELD);
   }
 
-  fs->is_used=3;
+  fs->is_used = 3;
 }
 
 /*!
@@ -689,6 +704,7 @@ void direct_output(StorablePicture *p, int p_out)
     // we have both fields, so output them
     dpb_combine_field_yuv(out_buffer);
     write_picture (out_buffer->frame, p_out, FRAME);
+
     if (-1!=p_ref && !input->silent)
       find_snr(snr, out_buffer->frame, p_ref);
     free_storable_picture(out_buffer->frame);

@@ -8,8 +8,10 @@
  *    Headerfile for binary arithmetic encoding routines
  *
  * \author
- *    Detlev Marpe,
- *    Gabi Blaettermann
+ *    - Detlev Marpe
+ *    - Gabi Blaettermann
+ *    - Gunnar Marten
+ *
  *    Copyright (C) 2000 HEINRICH HERTZ INSTITUTE All Rights Reserved.
  *
  * \date
@@ -31,16 +33,25 @@
 
 #define Elow                      (eep->Elow)
 #define Erange                    (eep->Erange)
-#define Ebits_to_follow           (eep->Ebits_to_follow)
 #define Ebuffer                   (eep->Ebuffer)
 #define Ebits_to_go               (eep->Ebits_to_go)
 #define Ecodestrm                 (eep->Ecodestrm)
 #define Ecodestrm_len             (eep->Ecodestrm_len)
 #define Ecodestrm_laststartcode   (eep->Ecodestrm_laststartcode)
+
 #define B_BITS                    10 // Number of bits to represent the whole coding interval
-#define ONE                       (1 << B_BITS)
-#define HALF                      (1 << (B_BITS-1))
-#define QUARTER                   (1 << (B_BITS-2))
+
+#define Echunks_outstanding       (eep->Echunks_outstanding)
+#define Epbuf                     (eep->Epbuf)
+#define BITS_TO_LOAD   16
+#define MAX_BITS       (B_BITS + BITS_TO_LOAD)
+#define ONE            (1 << MAX_BITS)
+#define HALF           (1 << (B_BITS-1))
+#define QUARTER        (1 << (B_BITS-2))
+#define MIN_BITS_TO_GO  0
+#define B_LOAD_MASK    ((1<<BITS_TO_LOAD) - 1)
+
+
 
 // Range table for LPS
 const byte rLPS_table_64x4[64][4]=
@@ -111,7 +122,7 @@ const byte rLPS_table_64x4[64][4]=
         {   2,   2,   2,   2}
 };
 
-const unsigned short AC_next_state_MPS_64[64] =
+const byte AC_next_state_MPS_64[64] =
 {
                 1,2,3,4,5,6,7,8,9,10,
                 11,12,13,14,15,16,17,18,19,20,
@@ -122,7 +133,7 @@ const unsigned short AC_next_state_MPS_64[64] =
                 61,62,62,63
 };
 
-const unsigned short AC_next_state_LPS_64[64] =
+const byte AC_next_state_LPS_64[64] =
 {
                  0, 0, 1, 2, 2, 4, 4, 5, 6, 7,
                  8, 9, 9,11,11,12,13,13,15,15,
@@ -133,6 +144,7 @@ const unsigned short AC_next_state_LPS_64[64] =
                  37,38,38,63
 };
 
+const byte renorm_table_32[32]={6,5,4,4,3,3,3,3,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 
 #endif  // BIARIENCOD_H
 

@@ -12,7 +12,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    Yuri Vatis  vatis@hhi.de
+ *    Yuri Vatis
  **************************************************************************/
 
 #ifndef _TRANSFORM8X8_H_

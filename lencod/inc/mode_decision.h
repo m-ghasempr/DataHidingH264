@@ -82,7 +82,7 @@ void determine_prediction_list(int, int [5], char [2], char *, int *, short *);
 void compute_mode_RD_cost(int mode, Macroblock *currMB, RD_PARAMS enc_mb,
                                double *min_rdcost, double *min_rate,
                                int i16mode, short bslice, short *inter_skip);
-
+extern void update_lambda_costs(RD_PARAMS *enc_mb, int lambda_mf[3]);
 
 void get_initial_mb16x16_cost(void);
 void adjust_mb16x16_cost(int);

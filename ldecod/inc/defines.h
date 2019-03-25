@@ -4,7 +4,7 @@
  * \file defines.h
  *
  * \brief
- *    Headerfile containing some useful global definitions
+ *    Header file containing some useful global definitions.
  *
  * \author
  *    Detlev Marpe
@@ -19,14 +19,15 @@
 #define _DEFINES_H_
 
 #if defined _DEBUG
-#define TRACE           0                   //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
+#define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #else
-#define TRACE           0                   //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
+#define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-// Dump dbp for debug purposes
+// Dump DPB for debug purposes
 #define DUMP_DPB        0
 //#define PAIR_FIELDS_IN_OUTPUT
+#define IMGTYPE         1       //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
 
 //#define MAX_NUM_SLICES 150
 #define MAX_NUM_SLICES 50
@@ -41,7 +42,6 @@
 #define YUV420 1
 #define YUV422 2
 #define YUV444 3
-
 
 #define ZEROSNR 0
 
@@ -72,6 +72,16 @@
 
 //#define _LEAKYBUCKET_
 
+#define PSKIP   0
+#define BSKIP_DIRECT   0
+#define P16x16  1
+#define P16x8   2
+#define P8x16   3
+#define SMB8x8  4
+#define SMB8x4  5
+#define SMB4x8  6
+#define SMB4x4  7
+
 #define P8x8    8
 #define I4MB    9
 #define I16MB   10
@@ -98,12 +108,16 @@
 #define MAX_QP          51
 
 #define BLOCK_SIZE      4
+#define SMB_BLOCK_SIZE  8
+#define BLOCK_PIXELS    16
+#define BLOCK_SHIFT     2
 #define MB_BLOCK_SIZE   16
 #define MB_BLOCK_PIXELS 256    // MB_BLOCK_SIZE * MB_BLOCK_SIZE
 #define BLOCK_MULTIPLE  4      // (MB_BLOCK_SIZE/BLOCK_SIZE)
 
-#define NO_INTRA_PMODE  9        //!< #intra prediction modes
-/* 4x4 intra prediction modes */
+#define NO_INTRA_PMODE  9      //!< number of intra prediction modes
+
+// 4x4 intra prediction modes 
 #define VERT_PRED             0
 #define HOR_PRED              1
 #define DC_PRED               2
@@ -134,7 +148,7 @@
 #define SEARCH_SYNC     1
 #define PICTURE_DECODED 2
 
-#define MAX_REFERENCE_PICTURES 32               //!< H264 allows 32 fields
+#define MAX_REFERENCE_PICTURES 32               //!< H.264 allows 32 fields
 
 #define INVALIDINDEX  (-135792468)
 
@@ -143,13 +157,11 @@
 #define MVPRED_U        2
 #define MVPRED_UR       3
 
-#define DECODE_COPY_MB  0
-#define DECODE_MB       1
-//#define DECODE_MB_BFRAME 2
-
-
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
+
+// enable tone map the output if tone mapping SEI present
+#define ENABLE_OUTPUT_TONEMAPPING
 
 #endif
 

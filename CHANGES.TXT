@@ -1,3 +1,22 @@
+Changes in Version JM 12.2 (since JM 12.1)
+------------------------------------------
+
+Professional Profiles:
+- encoder: 420/422 intra only coding (SWi)
+- encoder/decoder: post-filter hint SEI (SWi)
+- encoder/decoder: tone-mapping SEI (ASe)
+
+- encoder/decoder: cleanup and speed improvements (AT/AL)
+- encoder/decoder: deblocking filter speedup (AT)
+- encoder/decoder: CAVLC entropy coder speedup (AT)
+- encoder/decoder: CABAC arithmetical coder speedup [JVT-U084] (GM/DM/KS)
+- encoder: VUI support (AL)
+- encoder: further rate control fixes (AL)
+- encoder: add error checks for slice group config files (KS)
+- encoder: fix I_PCM encoding with CABAC (KS)
+- decoder: Motion Compensation speedup (AT)
+
+
 Changes in Version JM 12.1 (since JM 12.0)
 ------------------------------------------
 - encoder: fix example configuration files (KS/AT)
@@ -5,7 +24,7 @@ Changes in Version JM 12.1 (since JM 12.0)
 - decoder: fix compilation with trace enabled (KS)
 - encoder/decoder: fix for shift_right_round functions on 64-bit machines (AT)
 - encoder/decoder: predict_nnz functions (YDh)
-- encoder/decoder: cleanups (KS/AT)
+- encoder/decoder: cleanups (KS/AT/AL)
 
 
 Changes in Version JM 12.0 (since JM 11.0)
@@ -1137,6 +1156,7 @@ AL      Athanasios Leontaris    athanasios.leontaris@dolby.com
 AJ      Anthony Joch            anthony@ubvideo.com
 AM      Alan MacDonald          newslists@warpzillion.com
 AS      Albert Simpson          ASimpson@amphion.com
+ASe     Andrew Segall           asegall@sharplabs.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
 AW      Armand Wemelsfelder     wemel@planet.nl
 BH      Barry Haskell           bhaskell@apple.com
@@ -1158,6 +1178,7 @@ ES      Eric Setton             esetton@stanford.edu
 FB      Frank Bossen            bossen@docomolabs-usa.com
 GB      Gabi Blaetterman        blaetter@hhi.de
 GC      Guy Cote                guy@videolocus.com
+GM      Gunnar Marten           gunnar_marten@web.de
 GrC     Greg Conklin            gregc@real.com
 GS      Gary Sullivan           garysull@microsoft.com
 FW      Feng Wu                 fengwu@microsoft.com
@@ -1218,6 +1239,7 @@ SR      Shankar Regunathan      shanre@microsoft.com
 SeS     Sergey A. Sablin        sergey@elecard.net.ru
 SSu     Shijun Sun              ssun@sharplabs.com
 SW      Stephan Wenger          stewe@stewe.org
+SWi     Steffen Wittmann        Steffen.Wittmann@eu.panasonic.com
 SY      Steve Yao               steveyao@sandvideo.com
 SZ      Steve Zeng              stevezeng@rogers.com
 TH      Till Hallbach           halbach@tele.ntnu.no

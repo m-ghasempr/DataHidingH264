@@ -803,6 +803,7 @@ static void init_slice (int start_mb_addr)
 
   if (img->type == B_SLICE)
     compute_colocated(Co_located, listX);
+
   if (img->type != I_SLICE && input->SearchMode == EPZS)
     EPZSSliceInit(EPZSCo_located, listX);
 

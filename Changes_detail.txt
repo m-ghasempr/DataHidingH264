@@ -1,3 +1,63 @@
+Detailed Changes for JM 13.0
+----------------------------
+
+JVT-U043
+--------
+
+(1) Highlight of the changes to encoder: 
+
+* Two fields - ToneMappingSEIPresentFlag and ToneMappingFile are added to the bottom of encoder.cfg
+  ToneMappingFile is the tone mapping configuation file
+  
+* #define PRINT_TONE_MAPPING in sei.c to print the tone mapping sei messages
+  several tone mapping related functions are implemented in sei.c
+  
+* Writing SEI message into bitstream is done at the end of init_frame () in image.c
+	
+
+(2) Highlight of the changes to decoder: 
+
+* Define PRINT_TONE_MAPPING at the top of in sei.c to print out the tone mapping sei messages
+  Tone mapping SEI messages is interpreted in interpret_tone_mapping() in sei.c 
+
+* Define ENABLE_OUTPUT_TONEMAPPING in defines.h to enable the tone-mappping processing.
+  The actual tone mapping processing is done in  output.c  write_out_picture() 
+  A tone_mapping flag and tone-mapping look-up-table is added to the StorablePicture stucture.
+
+
+(3) Note: 
+* The actual tone-mapping processing is perormed only when tone_map_id ==0.
+For other tone_map_id, the tone-mapping sei messages are printed out, but no actual processing is performed.
+
+* Curretnly only the RGB 4:4:4 tone mapping is supported. For other format, it needs color format 
+conversion before performing the tone mapping process.
+
+
+(4) Test bitstreams: 
+source Crew_10.rgb, size 1280x720,  bit-depth 10, RGB 4:4:4; 10 frames, encoded with all intra
+source Crew_8.rgb, size 1280x720,   bit-depth 8, RGB 4:4:4; 10 frames, encoded with all intra
+   
+    1) test1.264    // test processing by different model_id. These models are intentionally very different, so that one can easily tell that different tone mappings are applied.
+
+at frame 0, send: tone_map_id=0, tone_map_cancel_flag=0, tone_map_repetition_period=1, coded_data_bit_depth=10, sei_bit_depth=8, model_id=0
+at frame=2, send: tone_map_id=0, tone_map_cancel_flag=0, tone_map_repetition_period=1, coded_data_bit_depth=10, sei_bit_depth=8, model_id=1
+at frame=4, send: tone_map_id=0, tone_map_cancel_flag=0, tone_map_repetition_period=1, coded_data_bit_depth=10, sei_bit_depth=8, model_id=2
+at frame=6, send: tone_map_id=0, tone_map_cancel_flag=0, tone_map_repetition_period=1, coded_data_bit_depth=10, sei_bit_depth=8, model_id=3
+
+    2) test2.264    // test the tone_map_repetition_period and tone_map cancel flag
+
+at frame 0, send: tone_map_id=0, tone_map_cancel_flag=0, tone_map_repetition_period=0, coded_data_bit_depth=8, sei_bit_depth=8, model_id=1
+at frame 2, send: tone_map_id=0, tone_map_cancel_flag=0, tone_map_repetition_period=5, coded_data_bit_depth=8, sei_bit_depth=8, model_id=1
+at frame 8, send: tone_map_id=0, tone_map_cancel_flag=1
+
+    3) test3.264   // test the case of tone_map_id != 0
+at frame 0, send: tone_map_id=1, tone_map_cancel_flag=0, tone_map_repetition_period=1, coded_data_bit_depth=10, sei_bit_depth=8, model_id=1
+
+
+
+Sharp
+2/1/2007
+
 Changes for JM 7.5
 ------------------
 I updated the reference encoder with proper reference picture list handling

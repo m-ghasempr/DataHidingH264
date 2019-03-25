@@ -7,8 +7,8 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Yuri Vatis                      <vatis@hhi.de>
- *    - Jan Muenster                    <muenster@hhi.de>
+ *    - Yuri Vatis
+ *    - Jan Muenster
  *    - Lowell Winger                   <lwinger@lsil.com>
  * \date
  *    12. October 2003
@@ -205,6 +205,7 @@ const byte COEFF_COST8x8[2][64] =
    9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,
    9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9}
 };
+
 
 /*!
  *************************************************************************************
@@ -1189,7 +1190,7 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
   //===== get distortion (SSD) of 8x8 block =====
   for (y=0; y<8; y++)
     for (x=pic_pix_x; x<pic_pix_x+8; x++)
-      distortion += img->quad [imgY_orig[pic_opix_y+y][x] - imgY[pic_pix_y+y][x]];
+      distortion += iabs2( imgY_orig[pic_opix_y+y][x] - imgY[pic_pix_y+y][x]);
 
   //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO UVLC) =====
   se.value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
@@ -1468,6 +1469,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       }
     }
   }
+
   if (!currMB->luma_transform_size_8x8_flag || input->symbol_mode != UVLC)
     ACLevel[scan_pos] = 0;
   else
@@ -1481,80 +1483,89 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
   // horizontal inverse transform
   if (!lossless_qpprime)
   {
-    for( i=0; i<8; i++)
+    if (scan_pos)
     {
-      a[0] = img->m7[i][0] + img->m7[i][4];
-      a[4] = img->m7[i][0] - img->m7[i][4];
-      a[2] = (img->m7[i][2]>>1) - img->m7[i][6];
-      a[6] = img->m7[i][2] + (img->m7[i][6]>>1);
-
-      b[0] = a[0] + a[6];
-      b[2] = a[4] + a[2];
-      b[4] = a[4] - a[2];
-      b[6] = a[0] - a[6];
-
-      a[1] = -img->m7[i][3] + img->m7[i][5] - img->m7[i][7] - (img->m7[i][7]>>1);
-      a[3] =  img->m7[i][1] + img->m7[i][7] - img->m7[i][3] - (img->m7[i][3]>>1);
-      a[5] = -img->m7[i][1] + img->m7[i][7] + img->m7[i][5] + (img->m7[i][5]>>1);
-      a[7] =  img->m7[i][3] + img->m7[i][5] + img->m7[i][1] + (img->m7[i][1]>>1);
-
-      b[1] = a[1] + (a[7]>>2);
-      b[7] = -(a[1]>>2) + a[7];
-      b[3] = a[3] + (a[5]>>2);
-      b[5] = (a[3]>>2) - a[5];
-
-      m6[0][i] = b[0] + b[7];
-      m6[1][i] = b[2] + b[5];
-      m6[2][i] = b[4] + b[3];
-      m6[3][i] = b[6] + b[1];
-      m6[4][i] = b[6] - b[1];
-      m6[5][i] = b[4] - b[3];
-      m6[6][i] = b[2] - b[5];
-      m6[7][i] = b[0] - b[7];
-    }
-
-    // vertical inverse transform
-    for( i=0; i<8; i++)
-    {
-      a[0] =  m6[i][0] + m6[i][4];
-      a[4] =  m6[i][0] - m6[i][4];
-      a[2] = (m6[i][2]>>1) - m6[i][6];
-      a[6] =  m6[i][2] + (m6[i][6]>>1);
-
-      b[0] = a[0] + a[6];
-      b[2] = a[4] + a[2];
-      b[4] = a[4] - a[2];
-      b[6] = a[0] - a[6];
-
-      a[1] = -m6[i][3] + m6[i][5] - m6[i][7] - (m6[i][7]>>1);
-      a[3] =  m6[i][1] + m6[i][7] - m6[i][3] - (m6[i][3]>>1);
-      a[5] = -m6[i][1] + m6[i][7] + m6[i][5] + (m6[i][5]>>1);
-      a[7] =  m6[i][3] + m6[i][5] + m6[i][1] + (m6[i][1]>>1);
-
-      b[1] =   a[1] + (a[7]>>2);
-      b[7] = -(a[1]>>2) + a[7];
-      b[3] =   a[3] + (a[5]>>2);
-      b[5] =  (a[3]>>2) - a[5];
-
-      img->m7[0][i] = b[0] + b[7];
-      img->m7[1][i] = b[2] + b[5];
-      img->m7[2][i] = b[4] + b[3];
-      img->m7[3][i] = b[6] + b[1];
-      img->m7[4][i] = b[6] - b[1];
-      img->m7[5][i] = b[4] - b[3];
-      img->m7[6][i] = b[2] - b[5];
-      img->m7[7][i] = b[0] - b[7];
-    }
-
-    for( j=0; j<2*BLOCK_SIZE; j++)
-    {
-      pix_y = block_y + j;
-      ipix_y = img->pix_y + pix_y;
-      for( i=0; i<2*BLOCK_SIZE; i++)
+      for( i=0; i<8; i++)
       {
-        pix_x = block_x + i;
-        img->m7[j][i] = iClip1( img->max_imgpel_value, rshift_rnd_sf((img->m7[j][i]+((long)img->mpr[pix_y][pix_x] << DQ_BITS_8)),DQ_BITS_8));
-        enc_picture->imgY[ipix_y][img->pix_x + pix_x]= (imgpel) img->m7[j][i];
+        a[0] = img->m7[i][0] + img->m7[i][4];
+        a[4] = img->m7[i][0] - img->m7[i][4];
+        a[2] = (img->m7[i][2]>>1) - img->m7[i][6];
+        a[6] = img->m7[i][2] + (img->m7[i][6]>>1);
+
+        b[0] = a[0] + a[6];
+        b[2] = a[4] + a[2];
+        b[4] = a[4] - a[2];
+        b[6] = a[0] - a[6];
+
+        a[1] = -img->m7[i][3] + img->m7[i][5] - img->m7[i][7] - (img->m7[i][7]>>1);
+        a[3] =  img->m7[i][1] + img->m7[i][7] - img->m7[i][3] - (img->m7[i][3]>>1);
+        a[5] = -img->m7[i][1] + img->m7[i][7] + img->m7[i][5] + (img->m7[i][5]>>1);
+        a[7] =  img->m7[i][3] + img->m7[i][5] + img->m7[i][1] + (img->m7[i][1]>>1);
+
+        b[1] = a[1] + (a[7]>>2);
+        b[7] = -(a[1]>>2) + a[7];
+        b[3] = a[3] + (a[5]>>2);
+        b[5] = (a[3]>>2) - a[5];
+
+        m6[0][i] = b[0] + b[7];
+        m6[1][i] = b[2] + b[5];
+        m6[2][i] = b[4] + b[3];
+        m6[3][i] = b[6] + b[1];
+        m6[4][i] = b[6] - b[1];
+        m6[5][i] = b[4] - b[3];
+        m6[6][i] = b[2] - b[5];
+        m6[7][i] = b[0] - b[7];
+      }
+
+      // vertical inverse transform
+      for( i=0; i<8; i++)
+      {
+        a[0] =  m6[i][0] + m6[i][4];
+        a[4] =  m6[i][0] - m6[i][4];
+        a[2] = (m6[i][2]>>1) - m6[i][6];
+        a[6] =  m6[i][2] + (m6[i][6]>>1);
+
+        b[0] = a[0] + a[6];
+        b[2] = a[4] + a[2];
+        b[4] = a[4] - a[2];
+        b[6] = a[0] - a[6];
+
+        a[1] = -m6[i][3] + m6[i][5] - m6[i][7] - (m6[i][7]>>1);
+        a[3] =  m6[i][1] + m6[i][7] - m6[i][3] - (m6[i][3]>>1);
+        a[5] = -m6[i][1] + m6[i][7] + m6[i][5] + (m6[i][5]>>1);
+        a[7] =  m6[i][3] + m6[i][5] + m6[i][1] + (m6[i][1]>>1);
+
+        b[1] =   a[1] + (a[7]>>2);
+        b[7] = -(a[1]>>2) + a[7];
+        b[3] =   a[3] + (a[5]>>2);
+        b[5] =  (a[3]>>2) - a[5];
+
+        img->m7[0][i] = b[0] + b[7];
+        img->m7[1][i] = b[2] + b[5];
+        img->m7[2][i] = b[4] + b[3];
+        img->m7[3][i] = b[6] + b[1];
+        img->m7[4][i] = b[6] - b[1];
+        img->m7[5][i] = b[4] - b[3];
+        img->m7[6][i] = b[2] - b[5];
+        img->m7[7][i] = b[0] - b[7];
+      }
+
+      for( j=0; j<2*BLOCK_SIZE; j++)
+      {
+        pix_y = block_y + j;
+        ipix_y = img->pix_y + pix_y;
+        for( i=0; i<2*BLOCK_SIZE; i++)
+        {
+          pix_x = block_x + i;
+          enc_picture->imgY[ipix_y][img->pix_x + pix_x] = iClip1( img->max_imgpel_value, rshift_rnd_sf((img->m7[j][i]+((long)img->mpr[pix_y][pix_x] << DQ_BITS_8)),DQ_BITS_8));
+        }
+      }
+    }
+    else // no transform coefficients
+    {
+      for( j=block_y; j< block_y + 2*BLOCK_SIZE; j++)
+      {
+        memcpy(&(enc_picture->imgY[img->pix_y + j][img->pix_x + block_x]),&(img->mpr[j][block_x]), 2*BLOCK_SIZE * sizeof(imgpel));
       }
     }
   }

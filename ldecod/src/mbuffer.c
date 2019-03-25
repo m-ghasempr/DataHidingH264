@@ -458,6 +458,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   s->MbaffFrameFlag                = 0;
 
   s->top_poc = s->bottom_poc = s->poc = 0;
+  s->seiHasTone_mapping = 0;
 
   return s;
 }
@@ -566,6 +567,9 @@ void free_storable_picture(StorablePicture* p)
       free_mem2Dshort(p->slice_id);
       p->slice_id=NULL;
     }
+
+    if (p->seiHasTone_mapping)
+      free(p->tone_mapping_lut);
 
     free(p);
     p = NULL;
@@ -2881,23 +2885,23 @@ void dpb_split_field(FrameStore *fs)
     fs->top_field    = alloc_storable_picture(TOP_FIELD,    fs->frame->size_x, fs->frame->size_y, fs->frame->size_x_cr, fs->frame->size_y_cr);
     fs->bottom_field = alloc_storable_picture(BOTTOM_FIELD, fs->frame->size_x, fs->frame->size_y, fs->frame->size_x_cr, fs->frame->size_y_cr);
 
-    for (i=0; i<fs->frame->size_y/2; i++)
+    for (i = 0; i < (fs->frame->size_y>>1); i++)
     {
       memcpy(fs->top_field->imgY[i], fs->frame->imgY[i*2], fs->frame->size_x*sizeof(imgpel));
     }
 
-    for (i=0; i<fs->frame->size_y_cr/2; i++)
+    for (i = 0; i< (fs->frame->size_y_cr>>1); i++)
     {
       memcpy(fs->top_field->imgUV[0][i], fs->frame->imgUV[0][i*2], fs->frame->size_x_cr*sizeof(imgpel));
       memcpy(fs->top_field->imgUV[1][i], fs->frame->imgUV[1][i*2], fs->frame->size_x_cr*sizeof(imgpel));
     }
 
-    for (i=0; i<fs->frame->size_y/2; i++)
+    for (i = 0; i < (fs->frame->size_y>>1); i++)
     {
       memcpy(fs->bottom_field->imgY[i], fs->frame->imgY[i*2 + 1], fs->frame->size_x*sizeof(imgpel));
     }
 
-    for (i=0; i<fs->frame->size_y_cr/2; i++)
+    for (i = 0; i < (fs->frame->size_y_cr>>1); i++)
     {
       memcpy(fs->bottom_field->imgUV[0][i], fs->frame->imgUV[0][i*2 + 1], fs->frame->size_x_cr*sizeof(imgpel));
       memcpy(fs->bottom_field->imgUV[1][i], fs->frame->imgUV[1][i*2 + 1], fs->frame->size_x_cr*sizeof(imgpel));
@@ -2959,13 +2963,13 @@ void dpb_split_field(FrameStore *fs)
     fs->frame->bottom_field=NULL;
   }
 
-  for (j=0 ; j<fs->frame->size_y/4 ; j++)
+  for (j = 0; (j < fs->frame->size_y >> 2) ; j++)
   {
     jdiv=j/4;
-    for (i=0 ; i<fs->frame->size_x/4 ; i++)
+    for (i = 0 ; i < (fs->frame->size_x >> 2) ; i++)
     {
-      idiv=i/4;
-      currentmb = twosz16*(jdiv/2)+ (idiv)*2 + (jdiv%2);
+      idiv = (i >> 2);
+      currentmb = twosz16*(jdiv >> 1)+ (idiv)*2 + (jdiv & 0x01);
 
       if (fs->frame->MbaffFrameFlag && fs->frame->mb_field[currentmb])
       {
@@ -2992,16 +2996,16 @@ void dpb_split_field(FrameStore *fs)
 
   if (!fs->frame->frame_mbs_only_flag && fs->frame->MbaffFrameFlag)
   {
-    for (j=0 ; j<fs->frame->size_y/8; j++)
+    for (j=0 ; j< (fs->frame->size_y >> 3); j++)
     {
-      jj = (j/4)*8 + j%4;
+      jj = (j >> 2)*8 + (j & 0x03);
       jj4 = jj + 4;
-      jdiv=j/2;
-      for (i=0 ; i<fs->frame->size_x/4 ; i++)
+      jdiv = (j >> 1);
+      for (i=0 ; i < (fs->frame->size_x>>2); i++)
       {
-        idiv=i/4;
+        idiv = (i >> 2);
 
-        currentmb = twosz16*(jdiv/2)+ (idiv)*2 + (jdiv%2);
+        currentmb = twosz16*(jdiv >> 1)+ (idiv)*2 + (jdiv & 0x01);
         // Assign field mvs attached to MB-Frame buffer to the proper buffer
         if (fs->frame->mb_field[currentmb])
         {
@@ -3034,16 +3038,16 @@ void dpb_split_field(FrameStore *fs)
   //! Generate field MVs from Frame MVs
   if (!fs->frame->frame_mbs_only_flag)
   {
-    for (j=0 ; j<fs->frame->size_y/8 ; j++)
+    for (j=0 ; j < (fs->frame->size_y >> 3) ; j++)
     {
       jj = 2* RSD(j);
-      jdiv = j/2;
-      for (i=0 ; i<fs->frame->size_x/4 ; i++)
+      jdiv = (j >> 1);
+      for (i=0 ; i < (fs->frame->size_x >> 2) ; i++)
       {
         ii = RSD(i);
-        idiv = i/4;
+        idiv = (i >> 2);
 
-        currentmb = twosz16*(jdiv/2)+ (idiv)*2 + (jdiv%2);
+        currentmb = twosz16 * (jdiv >> 1)+ (idiv)*2 + (jdiv & 0x01);
 
         if (!fs->frame->MbaffFrameFlag  || !fs->frame->mb_field[currentmb])
         {
@@ -3085,7 +3089,7 @@ void dpb_split_field(FrameStore *fs)
   }
   else
   {
-    memset( &(fs->frame->field_frame[0][0]), 0, fs->frame->size_y * fs->frame->size_x /16 * sizeof(byte));
+    memset( &(fs->frame->field_frame[0][0]), 0, (fs->frame->size_y * fs->frame->size_x >> 4) * sizeof(byte));
   }
 }
 

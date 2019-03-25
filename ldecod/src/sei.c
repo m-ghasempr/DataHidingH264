@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-
+#include <math.h>
 #include "global.h"
 #include "memalloc.h"
 #include "sei.h"
@@ -30,6 +30,9 @@ extern int UsedBits;
 
 extern seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
 
+#ifdef ENABLE_OUTPUT_TONEMAPPING
+tone_mapping_struct seiToneMapping;
+#endif
 
 // #define PRINT_BUFFERING_PERIOD_INFO    // uncomment to print buffering period SEI info
 // #define PRINT_PCITURE_TIMING_INFO      // uncomment to print picture timing SEI info
@@ -54,7 +57,8 @@ extern seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
 // #define PRINT_FILM_GRAIN_CHARACTERISTICS_INFO      // uncomment to print Film grain characteristics SEI info
 // #define PRINT_DEBLOCKING_FILTER_DISPLAY_PREFERENCE_INFO // uncomment to print deblocking filter display preference SEI info
 // #define PRINT_STEREO_VIDEO_INFO_INFO               // uncomment to print stero video SEI info
-
+// #define PRINT_TONE_MAPPING                         // uncomment to print tone-mapping SEI info
+// #define PRINT_POST_FILTER_HINT_INFO                // uncomment to print post-filter hint SEI info
 /*!
  ************************************************************************
  *  \brief
@@ -162,6 +166,11 @@ void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
     case  SEI_STEREO_VIDEO_INFO:
       interpret_stereo_video_info_info ( msg+offset, payload_size, img );
       break;
+    case SEI_TONE_MAPPING:
+      interpret_tone_mapping( msg+offset, payload_size, img );
+      break;
+    case SEI_POST_FILTER_HINTS:
+      interpret_post_filter_hints_info ( msg+offset, payload_size, img );
     default:
       interpret_reserved_info( msg+offset, payload_size, img );
       break;
@@ -1807,7 +1816,7 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
           else
             time_offset_length = 24;
           if (time_offset_length)
-            time_offset = u_v(time_offset_length, "SEI: time_offset"   , buf); // TODO interpretation is unsigned, need signed interpretation (i_v)
+            time_offset = i_v(time_offset_length, "SEI: time_offset"   , buf);
           else
             time_offset = 0;
 #ifdef PRINT_PCITURE_TIMING_INFO
@@ -1822,4 +1831,306 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
 #ifdef PRINT_PCITURE_TIMING_INFO
 #undef PRINT_PCITURE_TIMING_INFO
 #endif
+}
+
+/*!
+ ************************************************************************
+ *  \brief
+ *     Interpret the HDR tone-mapping SEI message (JVT-T060)
+ *  \param payload
+ *     a pointer that point to the sei payload
+ *  \param size
+ *     the size of the sei message
+ *  \param img
+ *     the image pointer
+ *
+ ************************************************************************
+ */
+typedef struct
+{
+  unsigned int  tone_map_id;
+  unsigned char tone_map_cancel_flag;
+  unsigned int  tone_map_repetition_period;
+  unsigned char coded_data_bit_depth;
+  unsigned char sei_bit_depth;
+  unsigned int  model_id;
+  // variables for model 0
+  int  min_value;
+  int  max_value;
+  // variables for model 1
+  int  sigmoid_midpoint;
+  int  sigmoid_width;
+  // variables for model 2
+  int start_of_coded_interval[1<<MAX_SEI_BIT_DEPTH];
+  // variables for model 3
+  int num_pivots;
+  int coded_pivot_value[MAX_NUM_PIVOTS];
+  int sei_pivot_value[MAX_NUM_PIVOTS];
+} tone_mapping_struct_tmp;
+
+void interpret_tone_mapping( byte* payload, int size, ImageParameters *img )
+{
+  tone_mapping_struct_tmp seiToneMappingTmp;
+  Bitstream* buf;
+  int i = 0, max_coded_num, max_output_num;
+
+  memset (&seiToneMappingTmp, 0, sizeof (tone_mapping_struct_tmp));
+
+  buf = malloc(sizeof(Bitstream));
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  seiToneMappingTmp.tone_map_id = ue_v("SEI: tone_map_id", buf);
+  seiToneMappingTmp.tone_map_cancel_flag = u_1("SEI: tone_map_cancel_flag", buf);
+
+#ifdef PRINT_TONE_MAPPING
+  printf("Tone-mapping SEI message\n");
+  printf("tone_map_id = %d\n", seiToneMappingTmp.tone_map_id);
+
+  if (seiToneMappingTmp.tone_map_id != 0)
+    printf("WARNING! Tone_map_id != 0, print the SEI message info only. The tone mapping is actually applied only when Tone_map_id==0\n\n");
+  printf("tone_map_cancel_flag = %d\n", seiToneMappingTmp.tone_map_cancel_flag);
+#endif
+
+  if (!seiToneMappingTmp.tone_map_cancel_flag) 
+  {
+    seiToneMappingTmp.tone_map_repetition_period  = ue_v(  "SEI: tone_map_repetition_period", buf);
+    seiToneMappingTmp.coded_data_bit_depth        = u_v (8,"SEI: coded_data_bit_depth"      , buf);
+    seiToneMappingTmp.sei_bit_depth               = u_v (8,"SEI: sei_bit_depth"             , buf);
+    seiToneMappingTmp.model_id                    = ue_v(  "SEI: model_id"                  , buf);
+
+#ifdef PRINT_TONE_MAPPING
+    printf("tone_map_repetition_period = %d\n", seiToneMappingTmp.tone_map_repetition_period);
+    printf("coded_data_bit_depth = %d\n", seiToneMappingTmp.coded_data_bit_depth);
+    printf("sei_bit_depth = %d\n", seiToneMappingTmp.sei_bit_depth);
+    printf("model_id = %d\n", seiToneMappingTmp.model_id);
+#endif
+
+    max_coded_num  = 1<<seiToneMappingTmp.coded_data_bit_depth;
+    max_output_num = 1<<seiToneMappingTmp.sei_bit_depth;
+
+    if (seiToneMappingTmp.model_id == 0) 
+    { // linear mapping with clipping
+      seiToneMappingTmp.min_value		= u_v (32,"SEI: min_value", buf);
+      seiToneMappingTmp.max_value		= u_v (32,"SEI: min_value", buf);
+#ifdef PRINT_TONE_MAPPING
+      printf("min_value = %d, max_value = %d\n", seiToneMappingTmp.min_value, seiToneMappingTmp.max_value);
+#endif
+    }
+    else if (seiToneMappingTmp.model_id == 1) 
+    { // sigmoidal mapping
+      seiToneMappingTmp.sigmoid_midpoint = u_v (32,"SEI: sigmoid_midpoint", buf);
+      seiToneMappingTmp.sigmoid_width	= u_v (32,"SEI: sigmoid_width", buf);
+#ifdef PRINT_TONE_MAPPING
+      printf("sigmoid_midpoint = %d, sigmoid_width = %d\n", seiToneMappingTmp.sigmoid_midpoint, seiToneMappingTmp.sigmoid_width);
+#endif
+    }
+    else if (seiToneMappingTmp.model_id == 2) 
+    { // user defined table mapping
+      for (i=0; i<max_output_num; i++) 
+      {
+        seiToneMappingTmp.start_of_coded_interval[i] = u_v((((seiToneMappingTmp.coded_data_bit_depth+7)>>3)<<3), "SEI: start_of_coded_interval"  , buf);
+#ifdef PRINT_TONE_MAPPING // too long to print
+        //printf("start_of_coded_interval[%d] = %d\n", i, seiToneMappingTmp.start_of_coded_interval[i]);
+#endif
+      }
+    }
+    else if (seiToneMappingTmp.model_id == 3) 
+    {  // piece-wise linear mapping
+      seiToneMappingTmp.num_pivots = u_v (16,"SEI: num_pivots", buf);
+#ifdef PRINT_TONE_MAPPING
+      printf("num_pivots = %d\n", seiToneMappingTmp.num_pivots);
+#endif
+      seiToneMappingTmp.coded_pivot_value[0] = 0;
+      seiToneMappingTmp.sei_pivot_value[0] = 0;
+      seiToneMappingTmp.coded_pivot_value[seiToneMappingTmp.num_pivots+1] = max_coded_num-1;
+      seiToneMappingTmp.sei_pivot_value[seiToneMappingTmp.num_pivots+1] = max_output_num-1;
+
+      for (i=1; i < seiToneMappingTmp.num_pivots+1; i++) 
+      {
+        seiToneMappingTmp.coded_pivot_value[i] = u_v( (((seiToneMappingTmp.coded_data_bit_depth+7)>>3)<<3), "SEI: coded_pivot_value", buf);
+        seiToneMappingTmp.sei_pivot_value[i] = u_v( (((seiToneMappingTmp.sei_bit_depth+7)>>3)<<3), "SEI: sei_pivot_value", buf);
+#ifdef PRINT_TONE_MAPPING
+        printf("coded_pivot_value[%d] = %d, sei_pivot_value[%d] = %d\n", i, seiToneMappingTmp.coded_pivot_value[i], i, seiToneMappingTmp.sei_pivot_value[i]);
+#endif
+      }
+    }
+
+#ifdef ENABLE_OUTPUT_TONEMAPPING
+    // Currently, only when the map_id == 0, the tone-mapping is actually applied.
+    if (seiToneMappingTmp.tone_map_id== 0) 
+    {
+      int j;
+      seiToneMapping.seiHasTone_mapping = TRUE;
+      seiToneMapping.tone_map_repetition_period = seiToneMappingTmp.tone_map_repetition_period;
+      seiToneMapping.coded_data_bit_depth = seiToneMappingTmp.coded_data_bit_depth;
+      seiToneMapping.sei_bit_depth = seiToneMappingTmp.sei_bit_depth;
+      seiToneMapping.model_id = seiToneMappingTmp.model_id;
+      seiToneMapping.count = 0;
+
+      // generate the look up table of tone mapping
+      switch(seiToneMappingTmp.model_id)
+      {
+      case 0:            // linear mapping with clipping
+        for (i=0; i<=seiToneMappingTmp.min_value; i++)
+          seiToneMapping.lut[i] = 0;
+
+        for (i=seiToneMappingTmp.min_value+1; i < seiToneMappingTmp.max_value; i++)
+          seiToneMapping.lut[i] = (i-seiToneMappingTmp.min_value) * (max_output_num-1)/(seiToneMappingTmp.max_value- seiToneMappingTmp.min_value);
+
+        for (i=seiToneMappingTmp.max_value; i<max_coded_num; i++)
+          seiToneMapping.lut[i] = max_output_num-1;
+        break;
+      case 1: // sigmoid mapping
+
+        for (i=0; i < max_coded_num; i++) 
+        {
+#if 0
+          int j = (int)(1 + exp( -6*(double)(i-seiToneMappingTmp.sigmoid_midpoint)/seiToneMappingTmp.sigmoid_width));
+          seiToneMapping.lut[i] = ((max_output_num-1)+(j>>1)) / j;
+#else
+          double tmp = 1.0 + exp( -6*(double)(i-seiToneMappingTmp.sigmoid_midpoint)/seiToneMappingTmp.sigmoid_width);
+          seiToneMapping.lut[i] = (int)( (double)(max_output_num-1)/ tmp + 0.5);
+#endif
+        }
+        break;
+      case 2: // user defined table
+        if (0 < max_output_num-1)
+        {
+          for (j=0; j<max_output_num-1; j++) 
+          {
+            for (i=seiToneMappingTmp.start_of_coded_interval[j]; i<seiToneMappingTmp.start_of_coded_interval[j+1]; i++) 
+            {
+              seiToneMapping.lut[i] = j;
+            }
+          }
+          seiToneMapping.lut[i] = max_output_num-1;
+        }
+        break;
+      case 3: // piecewise linear mapping
+        for (j=0; j<seiToneMappingTmp.num_pivots+1; j++) 
+        {
+#if 0
+          slope = ((seiToneMappingTmp.sei_pivot_value[j+1] - seiToneMappingTmp.sei_pivot_value[j])<<16)/(seiToneMappingTmp.coded_pivot_value[j+1]-seiToneMappingTmp.coded_pivot_value[j]);
+          for (i=seiToneMappingTmp.coded_pivot_value[j]; i <= seiToneMappingTmp.coded_pivot_value[j+1]; i++) 
+          {
+            seiToneMapping.lut[i] = seiToneMappingTmp.sei_pivot_value[j] + (( (i - seiToneMappingTmp.coded_pivot_value[j]) * slope)>>16);
+          }
+#else
+          double slope = (double)(seiToneMappingTmp.sei_pivot_value[j+1] - seiToneMappingTmp.sei_pivot_value[j])/(seiToneMappingTmp.coded_pivot_value[j+1]-seiToneMappingTmp.coded_pivot_value[j]);
+          for (i=seiToneMappingTmp.coded_pivot_value[j]; i <= seiToneMappingTmp.coded_pivot_value[j+1]; i++) 
+          {
+            seiToneMapping.lut[i] = seiToneMappingTmp.sei_pivot_value[j] + (int)(( (i - seiToneMappingTmp.coded_pivot_value[j]) * slope));
+          }
+#endif
+        }
+        break;
+
+      default:
+        break;
+      } // end switch
+    }
+#endif
+  } // end !tone_map_cancel_flag
+  free (buf);
+}
+
+#ifdef ENABLE_OUTPUT_TONEMAPPING
+// tone map using the look-up-table generated according to SEI tone mapping message
+void tone_map (imgpel** imgX, imgpel* lut, int size_x, int size_y)
+{
+  int i, j;
+
+  for(i=0;i<size_y;i++)
+  {
+    for(j=0;j<size_x;j++)
+    {
+      imgX[i][j] = (imgpel)lut[imgX[i][j]];
+    }
+  }
+}
+
+void init_tone_mapping_sei() 
+{
+  seiToneMapping.seiHasTone_mapping = FALSE;
+  seiToneMapping.count = 0;
+}
+
+void update_tone_mapping_sei() 
+{
+
+  if(seiToneMapping.tone_map_repetition_period == 0)
+  {
+    seiToneMapping.seiHasTone_mapping = FALSE;
+    seiToneMapping.count = 0;
+  }
+  else if (seiToneMapping.tone_map_repetition_period>1)
+  {
+    seiToneMapping.count++;
+    if (seiToneMapping.count>=seiToneMapping.tone_map_repetition_period) 
+    {
+      seiToneMapping.seiHasTone_mapping = FALSE;
+      seiToneMapping.count = 0;
+    }
+  }
+}
+#endif
+
+/*!
+ ************************************************************************
+ *  \brief
+ *     Interpret the post filter hints SEI message (JVT-U035)
+ *  \param payload
+ *     a pointer that point to the sei payload
+ *  \param size
+ *     the size of the sei message
+ *  \param img
+ *     the image pointer
+ *    
+ ************************************************************************
+ */
+void interpret_post_filter_hints_info( byte* payload, int size, ImageParameters *img )
+{
+  Bitstream* buf;
+  unsigned int filter_hint_size_y, filter_hint_size_x, filter_hint_type, color_component, cx, cy, additional_extension_flag;
+  int ***filter_hint;
+
+  buf = malloc(sizeof(Bitstream));
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  UsedBits = 0;
+
+  filter_hint_size_y = ue_v("SEI: filter_hint_size_y", buf); // interpret post-filter hint SEI here
+  filter_hint_size_x = ue_v("SEI: filter_hint_size_x", buf); // interpret post-filter hint SEI here
+  filter_hint_type   = u_v(2, "SEI: filter_hint_type", buf); // interpret post-filter hint SEI here
+
+  get_mem3Dint (&filter_hint, 3, filter_hint_size_y, filter_hint_size_x);
+
+  for (color_component = 0; color_component < 3; color_component ++)
+    for (cy = 0; cy < filter_hint_size_y; cy ++)
+      for (cx = 0; cx < filter_hint_size_x; cx ++)
+		filter_hint[color_component][cy][cx] = se_v("SEI: filter_hint", buf); // interpret post-filter hint SEI here
+
+  additional_extension_flag = u_1("SEI: additional_extension_flag", buf); // interpret post-filter hint SEI here
+
+#ifdef PRINT_POST_FILTER_HINT_INFO
+  printf(" Post-filter hint SEI message\n");
+  printf(" post_filter_hint_size_y %d \n", filter_hint_size_y);
+  printf(" post_filter_hint_size_x %d \n", filter_hint_size_x);
+  printf(" post_filter_hint_type %d \n",   filter_hint_type);
+  for (color_component = 0; color_component < 3; color_component ++)
+    for (cy = 0; cy < filter_hint_size_y; cy ++)
+      for (cx = 0; cx < filter_hint_size_x; cx ++)
+		printf(" post_filter_hint[%d][%d][%d] %d \n", color_component, cy, cx, filter_hint[color_component][cy][cx]);
+
+  printf(" additional_extension_flag %d \n", additional_extension_flag);
+
+#undef PRINT_POST_FILTER_HINT_INFO
+#endif
+
+  free_mem3Dint (filter_hint, 3);
+  free( buf );
 }

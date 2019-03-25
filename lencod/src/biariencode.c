@@ -4,12 +4,16 @@
  * \file biariencode.c
  *
  * \brief
- *    Routines for binary arithmetic encoding
+ *   Routines for binary arithmetic encoding.
+ *
+ *   This modified implementation of the M Coder is based on JVT-U084 
+ *   with the choice of M_BITS = 16.
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *    - Detlev Marpe                    <marpe@hhi.de>
- *    - Gabi Blaettermann               <blaetter@hhi.de>
+ *    - Gabi Blaettermann
+ *    - Gunnar Marten
  *************************************************************************************
  */
 
@@ -21,35 +25,6 @@
 
 int binCount = 0;
 
-/*!
- ************************************************************************
- * Macro for writing bytes of code
- ***********************************************************************
- */
-
-#define put_byte() { \
-                     Ecodestrm[(*Ecodestrm_len)++] = Ebuffer; \
-                     Ebits_to_go = 8; \
-                     while (eep->C > 7) { \
-                       eep->C-=8; \
-                       eep->E++; \
-                     } \
-                    }
-
-#define put_one_bit(b) { \
-                         Ebuffer <<= 1; Ebuffer |= (b); \
-                         if (--Ebits_to_go == 0) \
-                           put_byte(); \
-                       }
-
-#define put_one_bit_plus_outstanding(b) { \
-                                          put_one_bit(b); \
-                                          while (Ebits_to_follow > 0) \
-                                          { \
-                                            Ebits_to_follow--; \
-                                            put_one_bit(!(b)); \
-                                          } \
-                                         }
 
 int pic_bin_count;
 
@@ -100,7 +75,73 @@ void arienco_delete_encoding_environment(EncodingEnvironmentPtr eep)
     free(eep);
 }
 
+/*!
+ ************************************************************************
+ * Macro for writing bytes of code
+ ***********************************************************************
+ */
+#define put_one_byte(b) { \
+  if(Epbuf==3){ \
+    put_buffer(eep);\
+  } \
+  Ebuffer = (Ebuffer<<8) + (b); \
+  Epbuf++; \
+}
 
+#define put_one_word(b) { \
+  if(Epbuf>=3){ \
+    put_buffer(eep);\
+  } \
+  Ebuffer = (Ebuffer<<16) + (b); \
+  Epbuf+=2; \
+}
+
+#define put_one_byte_final(b) { \
+  Ecodestrm[(*Ecodestrm_len)++] = b; \
+}
+
+#define _put_last_chunk_plus_outstanding(l) { \
+  while (Echunks_outstanding > 0) \
+  { \
+    put_one_word(0xFFFF); \
+    Echunks_outstanding--; \
+  } \
+  put_one_word(l); \
+}
+
+#define _put_last_chunk_plus_outstanding_final(l) { \
+  while (Echunks_outstanding > 0) \
+  { \
+    put_one_word(0xFFFF); \
+    Echunks_outstanding--; \
+  } \
+  put_one_byte(l); \
+}
+
+void put_buffer(EncodingEnvironmentPtr eep)
+{
+  while(Epbuf>=0)
+  {
+    Ecodestrm[(*Ecodestrm_len)++] =  (Ebuffer>>((Epbuf--)<<3))&0xFF; 
+  }
+  while(eep->C > 7)
+  {
+    eep->C-=8;
+    eep->E++;
+  }
+  Ebuffer=0; 
+}
+
+
+void propagate_carry(EncodingEnvironmentPtr eep)
+{
+  Ebuffer +=1; 
+  while (Echunks_outstanding > 0) 
+  { 
+    put_one_word(0); 
+    Echunks_outstanding--; 
+  }
+}
 
 /*!
  ************************************************************************
@@ -113,18 +154,18 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
                             int *code_len )
 {
   Elow = 0;
-  Ebits_to_follow = 0;
+  Echunks_outstanding = 0;
   Ebuffer = 0;
-  Ebits_to_go = 9; // to swallow first redundant bit
+  Epbuf = -1;	// to remove redundant chunk ^^
+  Ebits_to_go = BITS_TO_LOAD + 1; // to swallow first redundant bit
 
   Ecodestrm = code_buffer;
   Ecodestrm_len = code_len;
 
   Erange = HALF-2;
 
-  eep->C = 0;
   eep->E = 0;
-
+  eep->C = 0;
 }
 
 /*!
@@ -135,7 +176,7 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
  */
 int arienco_bits_written(EncodingEnvironmentPtr eep)
 {
-   return (8 * (*Ecodestrm_len) + Ebits_to_follow + 8  - Ebits_to_go);
+  return (((*Ecodestrm_len) + Epbuf + 1) << 3) + (Echunks_outstanding * BITS_TO_LOAD) + BITS_TO_LOAD - Ebits_to_go;
 }
 
 
@@ -147,16 +188,60 @@ int arienco_bits_written(EncodingEnvironmentPtr eep)
  */
 void arienco_done_encoding(EncodingEnvironmentPtr eep)
 {
-  put_one_bit_plus_outstanding((unsigned char) ((Elow >> (B_BITS-1)) & 1));
-  put_one_bit((unsigned char) (Elow >> (B_BITS-2))&1);
-  put_one_bit((unsigned char) 1);
-
-  stats->bit_use_stuffingBits[img->type]+=(8-Ebits_to_go);
-
-  while (Ebits_to_go != 8)
-    put_one_bit(0);
+  register unsigned int low = Elow;
+  int bl = Ebits_to_go;
+  int remaining_bits = BITS_TO_LOAD - bl; // output (2 + remaining) bits for terminating the codeword + one stop bit
+  unsigned char mask;
 
   pic_bin_count += eep->E*8 + eep->C; // no of processed bins
+
+  if (remaining_bits <= 5) // one terminating byte 
+  {
+    stats->bit_use_stuffingBits[img->type]+=(5-remaining_bits);
+    mask = 255 - ((1 << (6-remaining_bits)) - 1); 
+    low = (low >> (MAX_BITS - 8)) & mask; // mask out the (2+remaining_bits) MSBs
+    low += (1<<(5-remaining_bits));		 // put the terminating stop bit '1'
+
+    _put_last_chunk_plus_outstanding_final(low);
+    put_buffer(eep);
+  }
+  else if(remaining_bits <=13)				// two terminating bytes
+  {
+    stats->bit_use_stuffingBits[img->type]+=(13-remaining_bits);
+    _put_last_chunk_plus_outstanding_final(((low >> (MAX_BITS - 8)) & 0xFF)); // mask out the 8 MSBs for output
+
+    put_buffer(eep);
+    if (remaining_bits > 6)
+    {
+      mask = 255 - ((1 << (14 - remaining_bits)) - 1); 
+      low = (low >> (MAX_BITS - 16)) & mask; 
+      low += (1<<(13-remaining_bits));		 // put the terminating stop bit '1'
+      put_one_byte_final(low);
+    }
+    else
+    {
+      put_one_byte_final(128); // second byte contains terminating stop bit '1' only
+    }
+  }
+  else             // three terminating bytes
+  { 
+    _put_last_chunk_plus_outstanding(((low >> (MAX_BITS - BITS_TO_LOAD)) & B_LOAD_MASK)); // mask out the 16 MSBs for output
+    put_buffer(eep);
+    stats->bit_use_stuffingBits[img->type]+=(21-remaining_bits);
+
+    if (remaining_bits > 14)
+    {
+      mask = 255 - ((1 << (22 - remaining_bits)) - 1); 
+      low = (low >> (MAX_BITS - 24)) & mask; 
+      low += (1<<(21-remaining_bits));       // put the terminating stop bit '1'
+      put_one_byte_final(low);
+    }
+    else
+    {
+      put_one_byte_final(128); // third byte contains terminating stop bit '1' only
+    }
+  }
+  Ebits_to_go=8;
 }
 
 extern int cabac_encoding;
@@ -172,97 +257,125 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
 {
   register unsigned int range = Erange;
   register unsigned int low = Elow;
-  unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3];
-
-#if (2==TRACE)
-  if (cabac_encoding)
-    fprintf(p_trace, "%d  0x%04x  %d  %d\n", binCount++, Erange , bi_ct->state, bi_ct->MPS );
-#endif
+  unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3];	 
+  register int bl = Ebits_to_go;
 
   range -= rLPS;
+
+  eep->C++;	
   bi_ct->count += cabac_encoding;
 
-  /* covers all cases where code does not bother to shift down symbol to be
-   * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code simply
-   * masks off the bit position and passes in the resulting value */
+  /* covers all cases where code does not bother to shift down symbol to be 
+  * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code simply 
+  * masks off the bit position and passes in the resulting value */
   symbol = (short) (symbol != 0);
 
-  if (symbol != bi_ct->MPS)
+  if (symbol == bi_ct->MPS)  //MPS
   {
-    low += range;
+    bi_ct->state = AC_next_state_MPS_64[bi_ct->state]; // next state
+
+    if( range >= QUARTER ) // no renorm
+    {
+      Erange = range;
+      return;
+    }
+    else 
+    {   
+      range<<=1;
+      if( --bl > MIN_BITS_TO_GO )  // renorm once, no output
+      {
+        Erange = range;
+        Ebits_to_go = bl;
+        return;
+      }
+    }
+
+  } 
+  else					//LPS
+  {
+    unsigned int renorm;
+
+    low += range<<bl;
     range = rLPS;
 
     if (!bi_ct->state)
-      bi_ct->MPS = (unsigned char) (bi_ct->MPS ^ 0x01);               // switch LPS if necessary
-    bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
-  }
-  else
-    bi_ct->state = AC_next_state_MPS_64[bi_ct->state]; // next state
+      bi_ct->MPS = (bi_ct->MPS ^ 0x01);               // switch MPS if necessary
 
-  /* renormalisation */
-  while (range < QUARTER)
-  {
-    if (low >= HALF)
+    bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
+
+    renorm= renorm_table_32[(rLPS>> 3) & 0x1F];
+    bl-=renorm;
+
+    range<<=renorm;
+
+    if (low >= ONE) // output of carry needed
     {
-      put_one_bit_plus_outstanding(1);
-      low -= HALF;
+      low -= ONE;
+      propagate_carry(eep);
     }
-    else if (low < QUARTER)
+    if( bl > MIN_BITS_TO_GO )
     {
-      put_one_bit_plus_outstanding(0);
+      Erange = range;
+      Elow = low;
+      Ebits_to_go = bl;
+      return;
     }
-    else
-    {
-      Ebits_to_follow++;
-      low -= QUARTER;
-    }
-    low <<= 1;
-    range <<= 1;
+  }
+
+  //renorm needed
+
+  Elow = (low << BITS_TO_LOAD )& (ONE - 1);
+  low = (low >> (MAX_BITS - BITS_TO_LOAD)) & B_LOAD_MASK; // mask out the 8/16 MSBs for output
+
+  if (low < B_LOAD_MASK){			// no carry possible, output now
+    _put_last_chunk_plus_outstanding(low);}
+  else{					// low == "FF.."; keep it, may affect future carry
+    Echunks_outstanding++;
   }
   Erange = range;
-  Elow = low;
-  eep->C++;
+  bl += BITS_TO_LOAD;
+  Ebits_to_go = bl;
 }
 
 /*!
  ************************************************************************
  * \brief
- *    Arithmetic encoding of one binary symbol assuming
+ *    Arithmetic encoding of one binary symbol assuming 
  *    a fixed prob. distribution with p(symbol) = 0.5
  ************************************************************************
  */
 void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol)
 {
-  register unsigned int low = (Elow<<1);
-
-#if (2==TRACE)
-  extern int cabac_encoding;
-  if (cabac_encoding)
-    fprintf(p_trace, "%d  0x%04x\n", binCount++, Erange );
-#endif
+  register unsigned int low = Elow;
+  Ebits_to_go--;  
+  eep->C++;
 
   if (symbol != 0)
-    low += Erange;
-
-  /* renormalisation as for biari_encode_symbol;
-     note that low has already been doubled */
-  if (low >= ONE)
   {
-    put_one_bit_plus_outstanding(1);
-    low -= ONE;
+    low += Erange<<Ebits_to_go;
+    if (low >= ONE) // output of carry needed
+    {
+      low -= ONE;
+      propagate_carry(eep);
+    }
   }
-  else
-    if (low < HALF)
-    {
-      put_one_bit_plus_outstanding(0);
-    }
-    else
-    {
-      Ebits_to_follow++;
-      low -= HALF;
-    }
+  if(Ebits_to_go == MIN_BITS_TO_GO)  // renorm needed
+  {
+    Elow = (low << BITS_TO_LOAD )& (ONE - 1);
+    low = (low >> (MAX_BITS - BITS_TO_LOAD)) & B_LOAD_MASK; // mask out the 8/16 MSBs for output
+    if (low < B_LOAD_MASK)	{		// no carry possible, output now
+      _put_last_chunk_plus_outstanding(low);}
+    else{					// low == "FF"; keep it, may affect future carry
+      Echunks_outstanding++;}
+
+    Ebits_to_go = BITS_TO_LOAD;
+    return;
+  }
+  else					// no renorm needed
+  {
     Elow = low;
-    eep->C++;
+    return;
+  }
 }
 
 /*!
@@ -275,43 +388,64 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
 {
   register unsigned int range = Erange-2;
   register unsigned int low = Elow;
+  int bl = Ebits_to_go; 
 
-#if (2==TRACE)
-  extern int cabac_encoding;
-  if (cabac_encoding)
-    fprintf(p_trace, "%d  0x%04x\n", binCount++, Erange);
-#endif
-
-  if (symbol) {
-    low += range;
-    range = 2;
-  }
-
-  while (range < QUARTER)
-  {
-    if (low >= HALF)
-    {
-      put_one_bit_plus_outstanding(1);
-      low -= HALF;
-    }
-    else
-      if (low < QUARTER)
-      {
-        put_one_bit_plus_outstanding(0);
-      }
-      else
-      {
-        Ebits_to_follow++;
-        low -= QUARTER;
-      }
-      low <<= 1;
-      range <<= 1;
-  }
-  Erange = range;
-  Elow = low;
   eep->C++;
-}
 
+  if (symbol == 0) // MPS
+  {
+    if( range >= QUARTER ) // no renorm
+    {
+      Erange = range;
+      return;
+    }
+    else 
+    {   
+      range<<=1;
+      if( --bl > MIN_BITS_TO_GO )  // renorm once, no output
+      {
+        Erange =range;
+        Ebits_to_go = bl;
+        return;
+      }
+    }
+  }
+  else			// LPS
+  {
+    low += range<<bl;
+    range = 2;
+
+    if (low >= ONE) // output of carry needed
+    {
+      low -= ONE; // remove MSB, i.e., carry bit
+      propagate_carry(eep);
+    }
+    bl -= 7; // 7 left shifts needed to renormalize
+
+    range<<=7;
+    if( bl > MIN_BITS_TO_GO )
+    {
+      Erange = range;
+      Elow = low;
+      Ebits_to_go = bl;
+      return;
+    }
+  }
+
+
+  //renorm needed
+
+  Elow = (low << BITS_TO_LOAD ) & (ONE - 1);
+  low = (low >> (MAX_BITS - BITS_TO_LOAD)) & B_LOAD_MASK; // mask out the 8/16 MSBs
+  if (low < B_LOAD_MASK){			// no carry possible, output now
+    _put_last_chunk_plus_outstanding(low);}
+  else{					// low == "FF"; keep it, may affect future carry
+    Echunks_outstanding++;}
+
+  Erange = range;
+  bl += BITS_TO_LOAD;
+  Ebits_to_go = bl;
+}
 
 /*!
  ************************************************************************

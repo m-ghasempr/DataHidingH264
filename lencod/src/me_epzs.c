@@ -45,8 +45,6 @@ static const short search_point_qp[10][2] = {{0,0},{-1,0}, {0,1}, {1,0},  {0,-1}
 //static const int   next_subpel_pos_start[5][5] = {};
 //static const int   next_subpel_pos_end  [5][5] = {};
 
-
-
 static short EPZSBlkCount;
 static int   searcharray;
 static int   mv_rescale;
@@ -79,10 +77,10 @@ static int pattern_data[5][12][4] =
 };
 
 // Other definitions
-const  char c_EPZSPattern[6][20]    = { "Diamond", "Square", "Extended Diamond", "Large Diamond", "SBP Large Diamond", "PMVFAST"};
-const  char c_EPZSDualPattern[7][20] = { "Disabled","Diamond", "Square", "Extended Diamond", "Large Diamond", "SBP Large Diamond", "PMVFAST"};
-const  char c_EPZSFixed[3][20] = { "Disabled","All P", "All P + B"};
-const  char c_EPZSOther[2][20] = { "Disabled","Enabled"};
+static const  char c_EPZSPattern[6][20]    = { "Diamond", "Square", "Extended Diamond", "Large Diamond", "SBP Large Diamond", "PMVFAST"};
+static const  char c_EPZSDualPattern[7][20] = { "Disabled","Diamond", "Square", "Extended Diamond", "Large Diamond", "SBP Large Diamond", "PMVFAST"};
+static const  char c_EPZSFixed[3][20] = { "Disabled","All P", "All P + B"};
+static const  char c_EPZSOther[2][20] = { "Disabled","Enabled"};
 
 static int medthres[8];
 static int maxthres[8];
@@ -120,7 +118,7 @@ EPZSColocParams *EPZSCo_located;
 *    the allocated EPZSColocParams structure
 ************************************************************************
 */
-EPZSColocParams* allocEPZScolocated(int size_x, int size_y, int mb_adaptive_frame_field_flag)
+static EPZSColocParams* allocEPZScolocated(int size_x, int size_y, int mb_adaptive_frame_field_flag)
 {
   EPZSColocParams *s;
 
@@ -153,7 +151,7 @@ EPZSColocParams* allocEPZScolocated(int size_x, int size_y, int mb_adaptive_fram
 *
 ************************************************************************
 */
-void freeEPZScolocated(EPZSColocParams* p)
+static void freeEPZScolocated(EPZSColocParams* p)
 {
   if (p)
   {
@@ -183,7 +181,7 @@ void freeEPZScolocated(EPZSColocParams* p)
 *    the allocated EPZSStructure structure
 ************************************************************************
 */
-EPZSStructure* allocEPZSpattern(int searchpoints)
+static EPZSStructure* allocEPZSpattern(int searchpoints)
 {
   EPZSStructure *s;
 
@@ -207,7 +205,7 @@ EPZSStructure* allocEPZSpattern(int searchpoints)
 *
 ************************************************************************
 */
-void freeEPZSpattern(EPZSStructure* p)
+static void freeEPZSpattern(EPZSStructure* p)
 {
   if (p)
   {
@@ -217,7 +215,7 @@ void freeEPZSpattern(EPZSStructure* p)
   }
 }
 
-void assignEPZSpattern(EPZSStructure *pattern,int type, int stopSearch, int nextLast, EPZSStructure *nextpattern)
+static void assignEPZSpattern(EPZSStructure *pattern,int type, int stopSearch, int nextLast, EPZSStructure *nextpattern)
 {
   int i;
 
@@ -259,7 +257,7 @@ static int RoundLog2 (int iValue)
 *    EPZS Search Window Predictor Initialization
 ************************************************************************
 */
-void EPZSWindowPredictorInit (short search_range, EPZSStructure * predictor, short mode)
+static void EPZSWindowPredictorInit (short search_range, EPZSStructure * predictor, short mode)
 {
   int pos;
   int searchpos, fieldsearchpos;

@@ -19,6 +19,7 @@ int se_v (char *tracestring, Bitstream *bitstream);
 int ue_v (char *tracestring, Bitstream *bitstream);
 Boolean u_1 (char *tracestring, Bitstream *bitstream);
 int u_v (int LenInBits, char *tracestring, Bitstream *bitstream);
+int i_v (int LenInBits, char *tracestring, Bitstream *bitstream);
 
 // UVLC mapping
 void linfo_ue(int len, int info, int *value1, int *dummy);
@@ -37,17 +38,18 @@ int  GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount);
 int  GetVLCSymbol_IntraMode (byte buffer[],int totbitoffset,int *info, int bytecount);
 
 int readSyntaxElement_FLC(SyntaxElement *sym, Bitstream *currStream);
-int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *dP,
+int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  Bitstream *currStream,
                                            char *type);
-int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPartition *dP);
-int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP);
-int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartition *dP);
-int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP);
-int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP);
-int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP);
+int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  Bitstream *currStream);
+int readSyntaxElement_Level_VLC0(SyntaxElement *sym, Bitstream *currStream);
+int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, Bitstream *currStream);
+int readSyntaxElement_TotalZeros(SyntaxElement *sym,  Bitstream *currStream);
+int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  Bitstream *currStream);
+int readSyntaxElement_Run(SyntaxElement *sym,  Bitstream *currStream);
 int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
              int numbits);
 int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits);
+int ShowBitsThres (byte *curbyte,int totbitoffset,int bytecount, int numbits, int code);
 
 int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount);
 

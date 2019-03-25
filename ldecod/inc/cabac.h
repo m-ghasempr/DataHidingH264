@@ -5,7 +5,7 @@
  *    cabac.h
  *
  * \brief
- *    Headerfile for entropy coding routines
+ *    Header file for entropy coding routines
  *
  * \author
  *    Detlev Marpe                                                         \n

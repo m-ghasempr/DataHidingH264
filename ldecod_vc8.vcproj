@@ -289,6 +289,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\ldecod\src\mc_prediction.c"
+				>
+			</File>
+			<File
 				RelativePath=".\ldecod\src\memalloc.c"
 				>
 			</File>
@@ -431,6 +435,10 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\mbuffer.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\mc_prediction.h"
 				>
 			</File>
 			<File

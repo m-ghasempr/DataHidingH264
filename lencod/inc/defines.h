@@ -27,7 +27,8 @@
 
 #define GET_METIME      1       //!< Enables or disables ME computation time
 #define DUMP_DPB        0       //!< Dump dbp for debug purposes
-typedef unsigned char byte;    //!< byte type definition
+typedef unsigned char byte;     //!< byte type definition
+#define IMGTYPE         1       //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
 
 #define RC_MAX_TEMPORAL_LEVELS   5
 

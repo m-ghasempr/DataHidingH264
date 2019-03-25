@@ -133,17 +133,14 @@ void getSubImagesLuma( StorablePicture *s )
  *
  * \param s
  *    pointer to StorablePicture structure
- * \param dst_x
- *    horizontal index to sub-image being generated
  * \param dst_y
  *    vertical index to sub-image being generated
- * \param src_x
- *    horizontal index to source sub-image
+ * \param dst_x
+ *    horizontal index to sub-image being generated
  * \param src_y
  *    vertical index to source sub-image
- * \param store_int
- *    store shifted integer version of picture to temporary array for
- *    increased fidelity during application of the six tap filter
+ * \param src_x
+ *    horizontal index to source sub-image
  ************************************************************************
  */
 void getHorSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, int src_x )
@@ -210,14 +207,14 @@ void getHorSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, 
  *
  * \param s
  *    pointer to StorablePicture structure
- * \param dst_x
- *    horizontal index to sub-image being generated
  * \param dst_y
  *    vertical index to sub-image being generated
- * \param src_x
- *    horizontal index to source sub-image
+ * \param dst_x
+ *    horizontal index to sub-image being generated
  * \param src_y
  *    vertical index to source sub-image
+ * \param src_x
+ *    horizontal index to source sub-image
  * \param use_stored_int
  *    use stored shifted integer version of picture to temporary array for
  *    increased fidelity during application of the six tap filter
@@ -375,18 +372,18 @@ void getVerSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, 
  *
  * \param s
  *    pointer to StorablePicture structure
- * \param dst_x
- *    horizontal index to sub-image being generated
  * \param dst_y
  *    vertical index to sub-image being generated
- * \param src_x_l
- *    horizontal index to "LEFT" source sub-image
+ * \param dst_x
+ *    horizontal index to sub-image being generated
  * \param src_y_l
  *    vertical index to "LEFT" source sub-image
- * \param src_x_r
- *    horizontal index to "RIGHT" source sub-image
+ * \param src_x_l
+ *    horizontal index to "LEFT" source sub-image
  * \param src_y_r
  *    vertical index to "RIGHT" source sub-image
+ * \param src_x_r
+ *    horizontal index to "RIGHT" source sub-image
  * \param offset
  *    offset (either +0 or +1) for RIGHT sub-image HOR coordinate
  ************************************************************************

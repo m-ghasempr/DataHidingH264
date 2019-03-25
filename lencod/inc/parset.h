@@ -34,12 +34,15 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, seq_parameter_s
                                  int WeightedPrediction, int WeightedBiprediction,
                                  int cb_qp_index_offset, int cr_qp_index_offset);
 
-int Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingList, short *UseDefaultScalingMatrix, Bitstream *bitstream);
-int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *buf);
-int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *buf);
-int GenerateSEImessage_rbsp (int id, byte *buf);
+int  Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingList, short *UseDefaultScalingMatrix, Bitstream *bitstream);
+int  GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *buf);
+int  GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *buf);
+int  GenerateSEImessage_rbsp (int id, byte *buf);
 void FreeSPS (seq_parameter_set_rbsp_t *sps);
 void FreePPS (pic_parameter_set_rbsp_t *pps);
+
+int  WriteHRDParameters(seq_parameter_set_rbsp_t *sps, Bitstream *bitstream);
+void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps);
 
 pic_parameter_set_rbsp_t *AllocPPS (void);
 seq_parameter_set_rbsp_t *AllocSPS (void);

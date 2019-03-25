@@ -212,7 +212,8 @@ SetupLargerBlocks (int list, int refindex, int max_pos)
 #define ADD_UP_BLOCKS()   _o=*_bo; _i=*_bi; _j=*_bj; for(pos=0;pos<max_pos;pos++) _o[pos] = _i[pos] + _j[pos];
 #define INCREMENT(inc)    _bo+=inc; _bi+=inc; _bj+=inc;
 
-  distpel   pos, **_bo, **_bi, **_bj;
+  int       pos;
+  distpel   **_bo, **_bi, **_bj;
   register distpel *_o,   *_i,   *_j;
 
   //--- blocktype 6 ---

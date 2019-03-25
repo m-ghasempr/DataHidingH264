@@ -12,7 +12,7 @@
  *      - Ye-Kui Wang                      <wyk@ieee.org>
  *      - Jill Boyce                       <jill.boyce@thomson.net>
  *      - Saurav K Bandyopadhyay           <saurav@ieee.org>
- *      - Zhenyu Wu                        <Zhenyu.Wu@thomson.net
+ *      - Zhenyu Wu                        <Zhenyu.Wu@thomson.net>
  *      - Purvin Pandit                    <Purvin.Pandit@thomson.net>
  *
  *************************************************************************************
@@ -25,6 +25,7 @@
 #include "memalloc.h"
 #include "erc_do.h"
 #include "image.h"
+#include "mc_prediction.h"
 
 extern int erc_mvperMB;
 struct img_par *erc_img;
@@ -549,8 +550,8 @@ static int concealByTrial(frame *recfr, imgpel *predMB,
 */
 static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpel *predMB)
 {
-  int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
-  int i=0,j=0,ii=0,jj=0,i1=0,j1=0,j4=0,i4=0;
+  static imgpel tmp_block[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
+  int i=0, j=0, ii=0, jj=0,i1=0,j1=0,j4=0,i4=0;
   int jf=0;
   int uv;
   int vec1_x=0,vec1_y=0;
@@ -591,11 +592,11 @@ static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpe
       vec1_x = i4*4*mv_mul + mv[0];
       vec1_y = j4*4*mv_mul + mv[1];
 
-      get_block(ref_frame, listX[0], vec1_x,vec1_y,img,tmp_block);
+      get_block_luma(ref_frame, listX[0], vec1_x, vec1_y, BLOCK_SIZE, BLOCK_SIZE, img, tmp_block);
 
       for(ii=0;ii<BLOCK_SIZE;ii++)
         for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-          img->mpr[jj+joff][ii+ioff]=tmp_block[jj][ii];
+          img->mpr[LumaComp][jj+joff][ii+ioff]=tmp_block[jj][ii];
     }
   }
 
@@ -604,7 +605,7 @@ static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpe
   {
     for (i = 0; i < 16; i++)
     {
-      pMB[j*16+i] = img->mpr[j][i];
+      pMB[j*16+i] = img->mpr[LumaComp][j][i];
     }
   }
   pMB += 256;
@@ -623,7 +624,7 @@ static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpe
 
     for(uv=0;uv<2;uv++)
     {
-      for (b8=0;b8<(img->num_blk8x8_uv/2);b8++)
+      for (b8=0;b8<(img->num_uv_blocks);b8++)
       {
         for(b4=0;b4<4;b4++)
         {
@@ -652,7 +653,7 @@ static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpe
               if0=f1_x-if1;
               jf0=f1_y-jf1;
 
-              img->mpr[jj+joff][ii+ioff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
+              img->mpr[uv + 1][jj+joff][ii+ioff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
                                           if1*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii1]+
                                           if0*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii0]+
                                           if1*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
@@ -665,7 +666,7 @@ static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpe
       {
         for (i = 0; i < 8; i++)
         {
-          pMB[j*8+i] = img->mpr[j][i];
+          pMB[j*8+i] = img->mpr[uv + 1][j][i];
         }
       }
       pMB += 64;
@@ -847,7 +848,7 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
 static void buildPredblockRegionYUV(struct img_par *img, int *mv,
                                     int x, int y, imgpel *predMB, int list)
 {
-    int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
+    static imgpel tmp_block[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
     int i=0,j=0,ii=0,jj=0,i1=0,j1=0,j4=0,i4=0;
     int jf=0;
     int uv;
@@ -880,18 +881,18 @@ static void buildPredblockRegionYUV(struct img_par *img, int *mv,
     vec1_x = x*mv_mul + mv[0];
     vec1_y = y*mv_mul + mv[1];
 
-    get_block(ref_frame, listX[list], vec1_x,vec1_y,img,tmp_block);
+    get_block_luma(ref_frame, listX[list], vec1_x,vec1_y, BLOCK_SIZE, BLOCK_SIZE, img, tmp_block);
 
     for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
       for(ii=0;ii<BLOCK_SIZE;ii++)
-        img->mpr[jj][ii]=tmp_block[jj][ii];
+        img->mpr[LumaComp][jj][ii]=tmp_block[jj][ii];
 
 
     for (j = 0; j < 4; j++)
     {
       for (i = 0; i < 4; i++)
       {
-        pMB[j*4+i] = img->mpr[j][i];
+        pMB[j*4+i] = img->mpr[LumaComp][j][i];
       }
     }
     pMB += 16;
@@ -935,7 +936,7 @@ static void buildPredblockRegionYUV(struct img_par *img, int *mv,
                     if0=f1_x-if1;
                     jf0=f1_y-jf1;
 
-                    img->mpr[jj][ii]=(if0*jf0*listX[list][ref_frame]->imgUV[uv][jj0][ii0]+
+                    img->mpr[uv + 1][jj][ii]=(if0*jf0*listX[list][ref_frame]->imgUV[uv][jj0][ii0]+
                         if1*jf0*listX[list][ref_frame]->imgUV[uv][jj0][ii1]+
                         if0*jf1*listX[list][ref_frame]->imgUV[uv][jj1][ii0]+
                         if1*jf1*listX[list][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
@@ -946,7 +947,7 @@ static void buildPredblockRegionYUV(struct img_par *img, int *mv,
             {
               for (i = 0; i < 2; i++)
               {
-                pMB[j*2+i] = img->mpr[j][i];
+                pMB[j*2+i] = img->mpr[uv + 1][j][i];
               }
             }
             pMB += 4;
