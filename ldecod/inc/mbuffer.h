@@ -48,6 +48,9 @@ typedef struct storable_picture
 
   int  ***    ref_idx;       //<! reference picture   [list][subblock_x][subblock_y]
                              //   [list][mb_nr][subblock_x][subblock_y]
+  int64 ***    ref_poc;      //<! reference picture identifier [list][subblock_x][subblock_y]
+                             //   (not  simply index) 
+
   int64 ***    ref_pic_id;    //<! reference picture identifier [list][subblock_x][subblock_y]
                              //   (not  simply index) 
   int  ****   mv;            //<! motion vector       [list][subblock_x][subblock_y][component]
@@ -94,6 +97,10 @@ typedef struct decoded_picture_buffer
   unsigned      ltref_frames_in_buffer;
   int           last_output_poc;
   int           max_long_term_pic_idx;
+
+  int           init_done;
+
+  FrameStore   *last_picture;
 } DecodedPictureBuffer;
 
 
@@ -101,7 +108,7 @@ extern DecodedPictureBuffer dpb;
 extern StorablePicture **listX[6];
 extern int listXsize[6];
 
-void             init_dpb(struct inp_par *inp);
+void             init_dpb();
 void             free_dpb();
 FrameStore*      alloc_frame_store();
 void             free_frame_store(FrameStore* f);

@@ -65,6 +65,7 @@
 
 #include "global.h"
 #include "configfile.h"
+#include "fast_me.h"
 
 
 static char *GetConfigFileContent (char *Filename);
@@ -75,6 +76,41 @@ static void PatchInp ();
 
 #define MAX_ITEMS_TO_PARSE  10000
 
+
+/*!
+ ***********************************************************************
+ * \brief
+ *   print help message and exit
+ ***********************************************************************
+ */
+void JMHelpExit ()
+{
+  fprintf( stderr, "\n   lencod [-h] [-p defenc.cfg] {[-f curenc1.cfg]...[-f curencN.cfg]}"
+    " {[-p EncParam1=EncValue1]..[-p EncParamM=EncValueM]}\n\n"    
+    "## Parameters\n\n"
+
+    "## Options\n"
+    "   -h :  prints function usage\n"
+    "   -d :  use <defenc.cfg> as default file for parameter initializations.\n"
+    "         If not used then file defaults to encoder.cfg in local directory.\n"
+    "   -f :  read <curencM.cfg> for reseting selected encoder parameters.\n"
+    "         Multiple files could be used that set different parameters\n"
+    "   -p :  Set parameter <EncParamM> to <EncValueM>.\n"
+    "         See default encoder.cfg file for description of all parameters.\n\n"
+    
+    "## Supported video file formats\n"
+    "   RAW:  .yuv -> YUV 4:2:0\n\n"
+    
+    "## Examples of usage:\n"
+    "   lencod\n"
+    "   lencod  -h\n"
+    "   lencod  -d default.cfg\n"
+    "   lencod  -f curenc1.cfg\n"
+    "   lencod  -f curenc1.cfg -p InputFile=\"e:\\data\\container_qcif_30.yuv\" -p SourceWidth=176 -p SourceHeight=144\n"  
+    "   lencod  -f curenc1.cfg -p FramesToBeEncoded=30 -p QPFirstFrame=28 -p QPRemainingFrame=28 -p QPBPicture=30\n");
+
+  exit(-1);
+}
 
 /*!
  ***********************************************************************
@@ -93,9 +129,19 @@ void Configure (int ac, char *av[])
   char *filename=DEFAULTCONFIGFILENAME;
 
   memset (&configinput, 0, sizeof (InputParameters));
+  //Set some initial parameters.
+  configinput.LevelIDC   = LEVEL_IDC;
+  configinput.ProfileIDC = PROFILE_IDC;
   // Process default config file
-
   CLcount = 1;
+
+  if (ac==2)
+  {
+    if (0 == strncmp (av[1], "-h", 2))
+    {
+      JMHelpExit();
+    }
+  }
 
   if (ac>=3)
   {
@@ -103,6 +149,10 @@ void Configure (int ac, char *av[])
     {
       filename=av[2];
       CLcount = 3;
+    }
+    if (0 == strncmp (av[1], "-h", 2))
+    {
+      JMHelpExit();
     }
   }
   printf ("Parsing Configfile %s", filename);
@@ -115,6 +165,11 @@ void Configure (int ac, char *av[])
 
   while (CLcount < ac)
   {
+    if (0 == strncmp (av[CLcount], "-h", 2))
+    {
+      JMHelpExit();
+    }
+    
     if (0 == strncmp (av[CLcount], "-f", 2))  // A file parameter?
     {
       content = GetConfigFileContent (av[CLcount+1]);
@@ -663,6 +718,7 @@ static void PatchInp ()
   // End JVT-D095, JVT-D097
   if( !input->direct_type && input->num_reference_frames<2 && input->successive_Bframe >0)
     error("temporal direct needs at least 2 ref frames\n",-1000);
+
 }
 
 void PatchInputNoFrames()

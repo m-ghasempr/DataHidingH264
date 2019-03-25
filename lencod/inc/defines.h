@@ -27,10 +27,6 @@
 
 typedef unsigned char byte;    //!< byte type definition
 
-// APJ: Added the following define
-#define PROFILE_IDC     88
-#define LEVEL_IDC       21
-
 #define LIST_0 0
 #define LIST_1 1
 
@@ -61,8 +57,6 @@ typedef unsigned char byte;    //!< byte type definition
 
 
 #define _FAST_FULL_ME_
-
-//#define _Fast_ME_  //defnition for fast motion estiamtion , added by Zhibo Chen, refer JVT-D016 for detail
 
 #define _FULL_SEARCH_RANGE_
 #define _ADAPT_LAST_GROUP_

@@ -26,7 +26,7 @@ typedef struct storable_picture
   int         top_poc;
   int         bottom_poc;
   int         order_num;
-  int         ref_pic_num[6][20];
+  int64       ref_pic_num[6][32];
   int         pic_num;
   int         long_term_pic_num;
   int         long_term_frame_idx;
@@ -98,6 +98,10 @@ typedef struct decoded_picture_buffer
   unsigned      ltref_frames_in_buffer;
   int           last_output_poc;
   int           max_long_term_pic_idx;
+
+  int           init_done;
+
+  FrameStore   *last_picture;
 } DecodedPictureBuffer;
 
 
@@ -105,7 +109,7 @@ extern DecodedPictureBuffer dpb;
 extern StorablePicture **listX[6];
 extern int listXsize[6];
 
-void             init_dpb(InputParameters *inp);
+void             init_dpb();
 void             free_dpb();
 FrameStore*      alloc_frame_store();
 void             free_frame_store(FrameStore* f);

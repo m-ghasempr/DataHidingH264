@@ -527,6 +527,9 @@ typedef struct
                              //! all input parameters
 typedef struct
 {
+  int ProfileIDC;               //!< profile idc
+  int LevelIDC;                 //!< level idc
+
   int no_frames;                //!< number of frames to be encoded
   int qp0;                      //!< QP of first frame
   int qpN;                      //!< QP of remaining frames
@@ -650,6 +653,9 @@ typedef struct
   int SeinitialQP;
   int basicunit;
   int channel_type;
+
+  // FastME enable
+  int FMEnable;
 
 } InputParameters;
 
@@ -1008,7 +1014,6 @@ void     free_picture (Picture *pic);
 
 int   encode_one_slice(int SLiceGroupId, Picture *pic);   //! returns the number of MBs in the slice
 
-void  encode_one_macroblock();
 void  start_macroblock(int mb_addr, int mb_field);
 void  set_MB_parameters (int mb_addr);           //! sets up img-> according to input-> and currSlice->
 
@@ -1119,6 +1124,10 @@ void modify_redundant_pic_cnt(unsigned char *streamBuffer);
 // End JVT-D101
 
 int poc_distance( int refa, int refb);
+
+// Fast ME enable
+int BlockMotionSearch (int,int,int,int,int,int,double);
+void encode_one_macroblock (void);
 
 #endif
 

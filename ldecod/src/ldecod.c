@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 7.6
+ *     JM 8.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -61,8 +61,8 @@
 
 #include "erc_api.h"
 
-#define JM          "7"
-#define VERSION     "7.6"
+#define JM          "8"
+#define VERSION     "8.0"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -85,6 +85,8 @@ extern StorablePicture* dec_picture;
 struct inp_par    *input;       //!< input parameters from input configuration file
 struct snr_par    *snr;         //!< statistics
 struct img_par    *img;         //!< image parameters
+
+int global_init_done = 0;
 
 /*!
  ***********************************************************************
@@ -128,8 +130,14 @@ int main(int argc, char **argv)
   init(img);
 
   dec_picture = NULL;
-  init_dpb(input);
+
+  dpb.init_done = 0;
+
+//  init_dpb(input);
   init_out_buffer();
+
+  img->idr_psnr_number=0;
+  img->psnr_number=0;
 
   img->number=0;
   img->type = I_SLICE;
@@ -610,6 +618,11 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
 {
   int memory_size=0;
 
+  if (global_init_done)
+  {
+    free_global_buffers(inp, img);
+  }
+
   if (img->structure != FRAME)
   {
     img->height *= 2;         // set height to frame (twice of field) for normal variables
@@ -646,6 +659,8 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
     img->height_cr /= 2;   // reset height for normal variables
   }
   
+  global_init_done = 1;
+
   return (memory_size);
 }
 
@@ -686,6 +701,8 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
   free_mem3Dint(img->wp_weight, 2);
   free_mem3Dint(img->wp_offset, 2);
   free_mem4Dint(img->wbp_weight, 2, MAX_REFERENCE_PICTURES);
+
+  global_init_done = 0;
 
 }
 

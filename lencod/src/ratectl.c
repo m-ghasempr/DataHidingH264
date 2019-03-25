@@ -1212,6 +1212,7 @@ int updateQuantizationParameter(int topfield)
       }
     } 
   }
+  return m_Qc;
 }
 
 //update the parameters of quadratic R-D model

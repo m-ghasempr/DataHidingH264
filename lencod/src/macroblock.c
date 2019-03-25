@@ -491,7 +491,8 @@ void start_macroblock(int mb_addr, int mb_field)
   currMB->bitcounter[BITS_COEFF_UV_MB] = 0;
 
 #ifdef _FAST_FULL_ME_
-  ResetFastFullIntegerSearch ();
+  if(!input->FMEnable)
+    ResetFastFullIntegerSearch ();
 #endif
 }
 
@@ -2464,12 +2465,11 @@ int writeMotionInfo2NAL ()
   Macroblock*     currMB    = &img->mb_data[img->current_mb_nr];
   int             no_bits   = 0;
   int   bframe          = (img->type==B_SLICE);
-  int   multframe       = (input->num_reference_frames>1); 
   int   step_h0         = (input->blc_size[IS_P8x8(currMB) ? 4 : currMB->mb_type][0] >> 2);
   int   step_v0         = (input->blc_size[IS_P8x8(currMB) ? 4 : currMB->mb_type][1] >> 2);
 
   //=== If multiple ref. frames, write reference frame for the MB ===
-  if (IS_INTERMV (currMB) && multframe)
+  if (IS_INTERMV (currMB))
   {
     // if UVLC is turned on, a 8x8 macroblock with all ref=0 in a P-frame is signalled in macroblock mode
     if (!IS_P8x8 (currMB) || !ZeroRef (currMB) || input->symbol_mode==CABAC || bframe)

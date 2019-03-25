@@ -14,6 +14,10 @@
 
 #define DEFAULTCONFIGFILENAME "encoder.cfg"
 
+#define PROFILE_IDC     88
+#define LEVEL_IDC       21
+
+
 typedef struct {
   char *TokenName;
   void *Place;
@@ -28,6 +32,8 @@ InputParameters configinput;
 #ifdef INCLUDED_BY_CONFIGFILE_C
 
 Mapping Map[] = {
+    {"ProfileIDC",               &configinput.ProfileIDC,              0},
+    {"LevelIDC",                 &configinput.LevelIDC,                0},
     {"PictureRate",              &configinput.PictureRate,             0},
     {"IDRIntraEnable",           &configinput.idr_enable,              0},
     {"IntraPeriod",              &configinput.intra_period,            0},
@@ -37,7 +43,7 @@ Mapping Map[] = {
     {"FrameSkip",                &configinput.jumpd,                   0},
     {"UseHadamard",              &configinput.hadamard,                0},
     {"SearchRange",              &configinput.search_range,            0},
-    {"NumberReferenceFrames",    &configinput.num_reference_frames,             0},
+    {"NumberReferenceFrames",    &configinput.num_reference_frames,    0},
     {"SourceWidth",              &configinput.img_width,               0},
     {"SourceHeight",             &configinput.img_height,              0},
     {"MbLineIntraUpdate",        &configinput.intra_upd,               0},
@@ -108,25 +114,27 @@ Mapping Map[] = {
     {"SparePictureDetectionThr", &configinput.SPDetectionThreshold,    0},
     {"SparePicturePercentageThr",&configinput.SPPercentageThreshold,   0},
 
-    // JVT-D095, JVT-D097
-    {"FmoTopLeftMB",                  &configinput.top_left_mb,                 0},
-    {"FmoBottomRightMB",                  &configinput.bottom_right_mb,                 0},
-    {"FmoChangeDirection",                  &configinput.slice_group_change_direction,                 0},
-    {"FmoChangeRate",                  &configinput.slice_group_change_rate_minus1,                 0},
-    // End JVT-D095, JVT-D097
+    {"FmoTopLeftMB",             &configinput.top_left_mb,                    0},
+    {"FmoBottomRightMB",         &configinput.bottom_right_mb,                0},
+    {"FmoChangeDirection",       &configinput.slice_group_change_direction,   0},
+    {"FmoChangeRate",            &configinput.slice_group_change_rate_minus1, 0},
 
-    {"UseRedundantSlice", &configinput.redundant_slice_flag, 0}, // JVT-D101
-    {"PicOrderCntType", &configinput.pic_order_cnt_type, 0},     // POC200301
+    {"UseRedundantSlice",        &configinput.redundant_slice_flag,    0},
+    {"PicOrderCntType",          &configinput.pic_order_cnt_type,      0},
 
     {"ContextInitMethod",        &configinput.context_init_method,     0},
     {"FixedModelNumber",         &configinput.model_number,            0},
-    // Rate Control on JVT Standard
-    {"RateControlEnable",        &configinput.RCEnable,                0},
-    {"Bitrate",                  &configinput.bit_rate,                     0},
-    {"InitialQP",                &configinput.SeinitialQP,        0},
-    {"BasicUnit",               &configinput.basicunit,        0},
-    {"ChannelType",               &configinput.channel_type,        0},
 
+    // Rate Control
+    {"RateControlEnable",        &configinput.RCEnable,                0},
+    {"Bitrate",                  &configinput.bit_rate,                0},
+    {"InitialQP",                &configinput.SeinitialQP,             0},
+    {"BasicUnit",                &configinput.basicunit,               0},
+    {"ChannelType",              &configinput.channel_type,            0},
+
+    // Fast ME enable
+    {"UseFME",                   &configinput.FMEnable,                0},
+    
     {NULL,                       NULL,                                -1}
 };
 

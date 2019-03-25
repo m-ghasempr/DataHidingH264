@@ -1638,14 +1638,36 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               else
               {
               
-                if (dec_picture->ref_pic_num[LIST_0 + list_offset][ref_idx]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
+                //if (dec_picture->ref_pic_num[LIST_0 + list_offset][ref_idx]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
+                //{
+                //  mapped_idx=ref_idx;
+                //}
+                //else
+                if (listX[LIST_1 + list_offset][0]->ref_poc[refList][img->block_x+k][imgblock_y+j] == 1)
                 {
-                  mapped_idx=ref_idx;
-                }
-                else
-                {
-                  for (iref=0;iref<listXsize[LIST_0 + list_offset];iref++)
+                  for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
                   {
+                    
+                    if (listX[LIST_0 + list_offset][iref]->poc==listX[LIST_1 + list_offset][0]->poc)
+                    {
+                      mapped_idx=iref;
+                      break;
+                    }
+                    else //! invalid index. Default to zero even though this case should not happen
+                    {                        
+                      mapped_idx=INVALIDINDEX;
+                    }
+                  }
+                  if (INVALIDINDEX == mapped_idx)
+                  {
+                    error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
+                  }
+                }                
+                else                  
+                {
+                  for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
+                  {
+
                     if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
                     {
                       mapped_idx=iref;
@@ -1904,14 +1926,34 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
             int mapped_idx, iref;                             
             int j6;
             
-            if (dec_picture->ref_pic_num[LIST_0 + list_offset][ref_idx]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
+            if (listX[LIST_1 + list_offset][0]->ref_poc[refList][img->block_x+i0][imgblock_y+j0] == 1)              
             {
-              mapped_idx=ref_idx;
-            }
-            else             
-            {
-              for (iref=0;iref<listXsize[LIST_0 + list_offset];iref++)
+              for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
               {
+                
+
+                if (listX[LIST_0 + list_offset][iref]->poc==listX[LIST_1 + list_offset][0]->poc)
+                {
+                  mapped_idx=iref;
+                  break;
+                }
+                else //! invalid index. Default to zero even though this case should not happen
+                {                        
+                  mapped_idx=INVALIDINDEX;
+                }
+              }
+              if (INVALIDINDEX == mapped_idx)
+              {
+                error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
+              }
+            }
+            
+            else
+              
+            {
+              for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
+              {
+
                 if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
                 {
                   mapped_idx=iref;
@@ -3006,7 +3048,7 @@ void decode_ipcm_mb(struct img_par *img)
 {
   int i,j;
 
-  Macroblock *currMb = &img->mb_data[img->mb_y*img->PicWidthInMbs + img->mb_x] ;    
+  Macroblock *currMb = &img->mb_data[img->current_mb_nr];    
 
   int dy;
 
@@ -3499,14 +3541,30 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               {
                 int mapped_idx=0;
                 int prescale, iref;                             
-                
-                if (dec_picture->ref_pic_num[LIST_0 + list_offset][ref_idx]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
+                if (listX[LIST_1 + list_offset][0]->ref_poc[refList][i4][j6] == 1)
                 {
-                  mapped_idx=ref_idx;
+                  for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
+                  {
+                
+                    if (listX[LIST_0 + list_offset][iref]->poc==listX[LIST_1 + list_offset][0]->poc)
+                    {
+                      mapped_idx=iref;
+                      break;
+                    }
+                    else //! invalid index. Default to zero even though this case should not happen
+                    {                        
+                      mapped_idx=INVALIDINDEX;
+                    }
+                  }
+                  if (INVALIDINDEX == mapped_idx)
+                  {
+                    error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
+                  }
                 }
+                
                 else
                 {
-                  for (iref=0;iref<listXsize[LIST_0 + list_offset];iref++)
+                  for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
                   {
                     if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList ][ref_idx])
                     {
@@ -3659,7 +3717,9 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               }
               for(ii=0;ii<BLOCK_SIZE;ii++)
                 for(jj=0;jj<BLOCK_SIZE;jj++)  
-                  img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_block[ii][jj] * img->wp_weight[0][fw_ref_idx][0]  + img->wp_round_luma)>>img->luma_log2_weight_denom) + img->wp_offset[0][fw_ref_idx][0]);
+                  img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_block[ii][jj] * img->wp_weight[0][fw_ref_idx][0]  
+                                               + img->wp_round_luma)>>img->luma_log2_weight_denom) 
+                                               + img->wp_offset[0][fw_ref_idx][0]);
             }
             else
             {
@@ -3681,7 +3741,9 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
               for(ii=0;ii<BLOCK_SIZE;ii++)
                 for(jj=0;jj<BLOCK_SIZE;jj++)  
-                  img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_blockbw[ii][jj] * img->wp_weight[1][bw_ref_idx][0] + img->wp_round_luma)>>img->luma_log2_weight_denom) + img->wp_offset[1][bw_ref_idx][0]);
+                  img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_blockbw[ii][jj] * img->wp_weight[1][bw_ref_idx][0] 
+                                               + img->wp_round_luma)>>img->luma_log2_weight_denom) 
+                                               + img->wp_offset[1][bw_ref_idx][0]);
             }
             else
             {
@@ -3693,6 +3755,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           else if(img->apply_weights)
           {
             int alpha_fw, alpha_bw;
+            if (mv_mode==0 && img->direct_type==0 )bw_ref_idx=0;    //temporal direct 
             if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
               (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
             {
@@ -3705,7 +3768,9 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
             
             for(ii=0;ii<BLOCK_SIZE;ii++)
               for(jj=0;jj<BLOCK_SIZE;jj++)  
-                img->mpr[ii+ioff][jj+joff] = (int)Clip1(((alpha_fw * tmp_block[ii][jj] + alpha_bw * tmp_blockbw[ii][jj]  + (1<<img->luma_log2_weight_denom)) >> (img->luma_log2_weight_denom+1)) + ((img->wp_offset[0][fw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] + 1) >>1));
+                img->mpr[ii+ioff][jj+joff] = (int)Clip1(((alpha_fw * tmp_block[ii][jj] + alpha_bw * tmp_blockbw[ii][jj]  
+                                             + (1<<img->luma_log2_weight_denom)) >> (img->luma_log2_weight_denom+1)) 
+                                             + ((img->wp_offset[0][fw_refframe][0] + img->wp_offset[1][bw_refframe][0] + 1) >>1));
           }
           else
           {

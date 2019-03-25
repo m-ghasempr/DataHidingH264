@@ -1,3 +1,25 @@
+Changes for Version JM 8.0 to JM 7.6
+------------------------------------
+- encoder/decoder: SP filter strength (KS)
+- decoder: fix decoder snr calculation for streams that contain idr pictures (AT)
+- decoder: increase NAL unit buffer size (KS)
+- encoder: further statistics fixes (AW)
+- encoder: fix wrong LumaPrediction4x4 call (AW)
+- encoder: fix reference index writing for MB AFF with one reference frame (AW)
+- decoder: fix bottom field first decoding (KS)
+- encoder: add profile and level idc to config file (KS)
+- encoder/decoder: determine DPB size depending on level (KS)
+- encoder/deocder: fix field pairing (KS)
+- encoder/deocder: fix memory allocation for reference picture list (KS)
+- encoder: decrease list0 size for b slices (KS)
+- encoder: make FME a config file option (TK)
+- encoder: add -h help option (AT)
+- encoder/decoder: fix writing of unpaired field (ZY)
+- decoder: fix currMB calculation in i_pcm reading (ZY)
+- decoder: set ref_pic_num for each slice (KS/AS)
+- decoder: disable deblocking filter P_SLICE simplifications (KS/AS)
+- decoder: "hack fix" for direct mode decoding (AT)
+
 Changes for Version JM7.6 to JM 7.5c
 ------------------------------------
 - encoder/decoder: temporal direct loop index fix (RV/AT/KS)
@@ -737,6 +759,7 @@ AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AJ      Anthony Joch            anthony@ubvideo.com
 AS      Albert Simpson          ASimpson@amphion.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
+AW      Armand Wemelsfelder     wemel@planet.nl
 BH      Barry Haskell           bhaskell@apple.com
 CG      Cristina Gomila         GomilaC@tce.com
 DC      Doug Chin               dougchin@sandvideo.com
@@ -786,6 +809,7 @@ SR      Shankar Regunathan      shanre@microsoft.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
 SY      Steve Yao               steveyao@sandvideo.com
 TH      Till Hallbach           halbach@tele.ntnu.no
+TK      Thomas Kunlin           thomas.kunlin@ief.u-psud.fr
 TO      Tobias Oelbaum          drehvial@gmx.net
 TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp
 TSh     Tamar Shoham            Tamar.Shoham@comverse.com
@@ -802,3 +826,4 @@ YW      Ye-Kui Wang             wyk@ieee.org
 XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com      
 ZX      Z. Xue                  jon_xz@yahoo.com
 ZL      Li Zhang                zhangli@jdl.ac.cn
+ZY      Zheng Yanzhao           yzzheng@singnet.com

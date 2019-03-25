@@ -552,6 +552,9 @@ typedef struct img_par
   
   int model_number;
 
+  int idr_psnr_number;
+  int psnr_number;
+
 } ImageParameters;
 
 extern ImageParameters *img;

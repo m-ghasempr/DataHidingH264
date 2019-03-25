@@ -587,20 +587,21 @@ void decoding_poc(struct img_par *img)
 
     if ((!img->field_pic_flag)||(!img->bottom_field_flag ))
     {
-      img->toppoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
+      img->ThisPOC= img->toppoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
     }
 
     if (!img->field_pic_flag)
       img->bottompoc = img->toppoc + img->delta_pic_order_cnt_bottom;
     else
       if( img->bottom_field_flag ) 
-        img->bottompoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
+        img->ThisPOC= img->bottompoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
 
     // last: some post-processing. 
+      
     if ( img->toppoc <= img->bottompoc )
-      img->ThisPOC = img->framepoc = img->toppoc;
+      img->framepoc = img->toppoc;
     else
-      img->ThisPOC = img->framepoc = img->bottompoc;
+      img->framepoc = img->bottompoc;
     break;
 
   case 1: // POC MODE 1

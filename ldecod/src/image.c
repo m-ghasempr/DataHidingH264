@@ -332,7 +332,18 @@ void find_snr(
 
   // calculate frame number
   // KS: This works for the way, the HHI encoder sets POC
-    frame_no = img->ThisPOC/2;
+//  frame_no = img->ThisPOC/2;
+  
+  int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? (img->toppoc!=img->bottompoc)? img->framepoc /2 :img->framepoc  : img->framepoc/2;
+  // calculate frame number
+  // KS: This works for the way, the HHI encoder sets POC
+  //frame_no = img->ThisPOC/2;
+
+  if (psnrPOC==0 && img->psnr_number)
+    img->idr_psnr_number=img->psnr_number + 1;
+  img->psnr_number=max(img->psnr_number,img->idr_psnr_number+psnrPOC);
+
+  frame_no = img->idr_psnr_number+psnrPOC;
 
   rewind(p_ref);
 
@@ -613,6 +624,35 @@ static void reorder_lists(int currSliceType, Slice * currSlice)
   }
 
   free_ref_pic_list_reordering_buffer(currSlice);
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    initialize ref_pic_num array
+ ************************************************************************
+ */
+void set_ref_pic_num()
+{
+  int i,j;
+
+  for (i=0;i<listXsize[LIST_0];i++)
+  {
+    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
+  }
+
+  for (i=0;i<listXsize[LIST_1];i++)
+  {
+    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
+  }
+
+  if (img->structure==FRAME)
+    for (j=2;j<6;j++)
+      for (i=0;i<listXsize[j];i++)
+      {
+        dec_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
+      }
 }
 
 
@@ -983,7 +1023,7 @@ int read_new_slice()
  */
 void init_frame(struct img_par *img, struct inp_par *inp)
 {
-  int i,k,l,j;
+  int i,k,l;
 
   if (dec_picture)
   {
@@ -999,25 +1039,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   dec_picture->coded_frame = (img->structure==FRAME);
 //  dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
 
-  for (i=0;i<listXsize[LIST_0];i++)
-  {
-    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
-  }
-
-  for (i=0;i<listXsize[LIST_1];i++)
-  {
-    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
-  }
-
-//  if (img->MbaffFrameFlag)
-  if (img->structure==FRAME)
-    for (j=2;j<6;j++)
-      for (i=0;i<listXsize[j];i++)
-      {
-//        dec_picture->ref_pic_num[j][i]=min (listX[j][i]->top_poc,listX[j][i]->bottom_poc) * 2 ;// + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
-        dec_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
-      }
-    
+   
   img->current_slice_nr=0;
 
   if (img->type > SI_SLICE)
@@ -1027,7 +1049,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   }
 
   // allocate memory for frame buffers
-  if (img->number == 0) 
+  if (img->idr_flag) 
   {
     init_global_buffers(inp, img); 
   }
@@ -1168,6 +1190,8 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
   int read_flag;
   img->cod_counter=-1;
 
+  set_ref_pic_num();
+
   //reset_ec_flags();
 
   while (end_of_slice == FALSE) // loop over macroblocks
@@ -1280,6 +1304,7 @@ void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_hea
     erc_mvperMB = 0;
   }
   */
+
   // decode main slice information
   if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
     decode_one_slice(img,inp);
@@ -1316,16 +1341,6 @@ void init_top(struct img_par *img, struct inp_par *inp)
   dec_picture->coded_frame = (img->structure==FRAME);
   dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
 
-  for (i=0;i<listXsize[LIST_0];i++)
-  {
-    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0);
-  }
-  
-  for (i=0;i<listXsize[LIST_1];i++)
-  {
-    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc * 2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
-  }
-
   img->number *= 2;
   img->current_slice_nr=0;
 
@@ -1340,7 +1355,7 @@ void init_top(struct img_par *img, struct inp_par *inp)
   }
 
   // allocate memory for frame buffers
-  if (img->number == 0) 
+  if (img->idr_flag) 
   {
     init_global_buffers(inp, img); 
   }
@@ -1382,16 +1397,6 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   dec_picture->coded_frame = (img->structure==FRAME);
   dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
 
-  for (i=0;i<listXsize[LIST_0];i++)
-  {
-    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0);
-  }
-  
-  for (i=0;i<listXsize[LIST_1];i++)
-  {
-    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc * 2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
-  }
-
   img->number++;
   img->current_slice_nr=0;
 
@@ -1404,6 +1409,12 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   {
     set_ec_flag(SE_PTYPE);
     img->type = P_SLICE;  // concealed element
+  }
+
+  // allocate memory for frame buffers
+  if (img->idr_flag) 
+  {
+    init_global_buffers(inp, img); 
   }
 
   if(img->constrained_intra_pred_flag)

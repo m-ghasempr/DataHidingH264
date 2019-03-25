@@ -24,6 +24,7 @@
 #include "fmo.h"
 #include "cabac.h"
 #include "vlc.h"
+#include "mbuffer.h"
 
 #if TRACE
 #define SYMTRACESTRING(s) strncpy(sym->tracestring,s,TRACESTRING_SIZE)
@@ -287,7 +288,13 @@ void UseParameterSet (int PicParsetId)
 
   sps =  &SeqParSet[PicParSet[PicParsetId].seq_parameter_set_id];
 
-  active_sps = sps;
+  
+  if (active_sps != sps)
+  {
+    active_sps = sps;
+    init_dpb();
+  }
+
   active_pps = pps;
 
   // In theory, and with a well-designed software, the lines above

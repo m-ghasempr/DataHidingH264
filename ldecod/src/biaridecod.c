@@ -252,7 +252,7 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
   register unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 0x03];
 
 #if TRACE
-  fprintf(p_trace, "%d  0x%04x  %d  %d\n", binCount++, dep->Drange, bi_ct->state, bi_ct->MPS );
+//  fprintf(p_trace, "%d  0x%04x  %d  %d\n", binCount++, dep->Drange, bi_ct->state, bi_ct->MPS );
 #endif
 
   range -= rLPS;
@@ -301,7 +301,7 @@ unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep)
   register unsigned int value  = (dep->Dvalue<<1);
 
 #if TRACE
-  fprintf(p_trace, "%d  0x%04x\n", binCount++, dep->Drange );
+//  fprintf(p_trace, "%d  0x%04x\n", binCount++, dep->Drange );
 #endif
 
   if (--Dbits_to_go < 0) 
@@ -333,7 +333,7 @@ unsigned int biari_decode_final(DecodingEnvironmentPtr dep)
   register unsigned int range  = dep->Drange - 2;
 
 #if TRACE
-  fprintf(p_trace, "%d  0x%04x\n", binCount++, dep->Drange );
+//  fprintf(p_trace, "%d  0x%04x\n", binCount++, dep->Drange );
 #endif
     
   if (value >= range) 

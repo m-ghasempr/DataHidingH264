@@ -207,88 +207,97 @@ void GetStrength(byte Strength[16],ImageParameters *img,int MbQAddr,int dir,int 
     blkQ = ((yQ>>2)<<2) + (xQ>>2);
     blkP = ((yP>>2)<<2) + (xP>>2);
 
-    // Start with Strength=3. or Strength=4 for Mb-edge
-    Strength[idx] = (edge == 0 && (((!img->MbaffFrameFlag && (img->structure==FRAME)) ||
+    if ((img->type==SP_SLICE)||(img->type==SI_SLICE) )
+    {
+      Strength[idx] = (edge == 0 && (((!img->MbaffFrameFlag && (img->structure==FRAME)) ||
       (img->MbaffFrameFlag && !MbP->mb_field && !MbQ->mb_field)) ||
       ((img->MbaffFrameFlag || (img->structure!=FRAME)) && !dir))) ? 4 : 3;
-
-    if(  !(MbP->mb_type==I4MB || MbP->mb_type==I16MB || MbP->mb_type==IPCM)
-          && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB || MbQ->mb_type==IPCM) )
+    }
+    else
     {
-      if( ((MbQ->cbp_blk &  (1 << blkQ )) != 0) || ((MbP->cbp_blk &  (1 << blkP)) != 0) )
-        Strength[idx] = 2 ;
-      else
-      {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
-        // if this is a mixed mode edge then one set of reference pictures will be frame and the
-        // other will be field
-        if (mixedModeEdgeFlag)
-        {
-          (Strength[idx] = 1);
-        }
+      // Start with Strength=3. or Strength=4 for Mb-edge
+      Strength[idx] = (edge == 0 && (((!img->MbaffFrameFlag && (img->structure==FRAME)) ||
+        (img->MbaffFrameFlag && !MbP->mb_field && !MbQ->mb_field)) ||
+        ((img->MbaffFrameFlag || (img->structure!=FRAME)) && !dir))) ? 4 : 3;
+
+      if(  !(MbP->mb_type==I4MB || MbP->mb_type==I16MB || MbP->mb_type==IPCM)
+        && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB || MbQ->mb_type==IPCM) )
+      {
+        if( ((MbQ->cbp_blk &  (1 << blkQ )) != 0) || ((MbP->cbp_blk &  (1 << blkP)) != 0) )
+          Strength[idx] = 2 ;
         else
-        {
-        get_mb_block_pos (MbQAddr, &mb_x, &mb_y);
-        blk_y  = (mb_y<<2) + (blkQ >> 2) ;
-        blk_x  = (mb_x<<2) + (blkQ  & 3) ;
-        blk_y2 = pixP.pos_y >> 2;
-        blk_x2 = pixP.pos_x >> 2;
-        if( (img->type == B_SLICE) )
-        {
-            int64 ref_p0,ref_p1,ref_q0,ref_q1;      
-            ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
-            ref_q0 = list0_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list0_refPicIdArr[blk_x2][blk_y2];
-            ref_p1 = list1_refIdxArr[blk_x][blk_y]<0 ? -1 : list1_refPicIdArr[blk_x][blk_y];
-            ref_q1 = list1_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list1_refPicIdArr[blk_x2][blk_y2];
-            if ( ((ref_p0==ref_q0) && (ref_p1==ref_q1)) ||
-              ((ref_p0==ref_q1) && (ref_p1==ref_q0))) 
+        {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
+          // if this is a mixed mode edge then one set of reference pictures will be frame and the
+          // other will be field
+          if (mixedModeEdgeFlag)
+          {
+            (Strength[idx] = 1);
+          }
+          else
+          {
+            get_mb_block_pos (MbQAddr, &mb_x, &mb_y);
+            blk_y  = (mb_y<<2) + (blkQ >> 2) ;
+            blk_x  = (mb_x<<2) + (blkQ  & 3) ;
+            blk_y2 = pixP.pos_y >> 2;
+            blk_x2 = pixP.pos_x >> 2;
+            if( (img->type == B_SLICE) )
             {
-              Strength[idx]=0;
-              // L0 and L1 reference pictures of p0 are different; q0 as well
-              if (ref_p0 != ref_p1) 
-              { 
-                // compare MV for the same reference picture
-                if (ref_p0==ref_q0) 
-                {
-                  Strength[idx] =  (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
-                    (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit) |
-                    (abs( list1_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
-                    (abs( list1_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit);
+              int64 ref_p0,ref_p1,ref_q0,ref_q1;      
+              ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
+              ref_q0 = list0_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list0_refPicIdArr[blk_x2][blk_y2];
+              ref_p1 = list1_refIdxArr[blk_x][blk_y]<0 ? -1 : list1_refPicIdArr[blk_x][blk_y];
+              ref_q1 = list1_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list1_refPicIdArr[blk_x2][blk_y2];
+              if ( ((ref_p0==ref_q0) && (ref_p1==ref_q1)) ||
+                ((ref_p0==ref_q1) && (ref_p1==ref_q0))) 
+              {
+                Strength[idx]=0;
+                // L0 and L1 reference pictures of p0 are different; q0 as well
+                if (ref_p0 != ref_p1) 
+                { 
+                  // compare MV for the same reference picture
+                  if (ref_p0==ref_q0) 
+                  {
+                    Strength[idx] =  (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
+                      (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit) |
+                      (abs( list1_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
+                      (abs( list1_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit);
+                  }
+                  else 
+                  {
+                    Strength[idx] =  (abs( list0_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
+                      (abs( list0_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit) |
+                      (abs( list1_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
+                      (abs( list1_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit);
+                  } 
                 }
                 else 
-                {
-                  Strength[idx] =  (abs( list0_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
+                { // L0 and L1 reference pictures of p0 are the same; q0 as well
+
+                  Strength[idx] =  ((abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
+                    (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit ) |
+                    (abs( list1_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
+                    (abs( list1_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit))
+                    &&
+                    ((abs( list0_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
                     (abs( list0_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit) |
                     (abs( list1_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
-                    (abs( list1_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit);
-                } 
+                    (abs( list1_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit));
+                }       
               }
               else 
-              { // L0 and L1 reference pictures of p0 are the same; q0 as well
-                
-                Strength[idx] =  ((abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
-                  (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit ) |
-                  (abs( list1_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
-                  (abs( list1_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit))
-                  &&
-                  ((abs( list0_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
-                  (abs( list0_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit) |
-                  (abs( list1_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
-                  (abs( list1_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit));
-              }       
+              {
+                Strength[idx] = 1;        
+              } 
             }
-            else 
-            {
-              Strength[idx] = 1;        
-            } 
-          }
-        else  
-        { // P slice
-            int64 ref_p0,ref_q0;      
-            ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
-            ref_q0 = list0_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list0_refPicIdArr[blk_x2][blk_y2];
-            Strength[idx] =  (ref_p0 != ref_q0 ) |
-              (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4 ) |
-              (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit );
+            else  
+            { // P slice
+              int64 ref_p0,ref_q0;      
+              ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
+              ref_q0 = list0_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list0_refPicIdArr[blk_x2][blk_y2];
+              Strength[idx] =  (ref_p0 != ref_q0 ) |
+                (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4 ) |
+                (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit );
+            }
           }
         }
       }

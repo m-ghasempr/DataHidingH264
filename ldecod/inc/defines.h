@@ -48,7 +48,7 @@
 #define NUM_BLOCK_TYPES 8
 
 
-#define MAX_CODED_FRAME_SIZE 800000         //!< bytes for one frame
+#define MAX_CODED_FRAME_SIZE 8000000         //!< bytes for one frame
 
 // #define _LEAKYBUCKET_
 

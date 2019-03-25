@@ -182,7 +182,7 @@ void code_a_picture(Picture *pic)
   pic->distortion_u = pic->distortion_v = pic->distortion_y = 0.0;
 
   // restrict list 1 size
-  img->num_ref_idx_l0_active = active_pps->num_ref_idx_l0_active_minus1 + 1 ;
+  img->num_ref_idx_l0_active = max(1, (img->type==B_SLICE ? active_pps->num_ref_idx_l0_active_minus1 : active_pps->num_ref_idx_l0_active_minus1 +1 )); 
   img->num_ref_idx_l1_active = (img->type==B_SLICE ? active_pps->num_ref_idx_l1_active_minus1 + 1 : 0);
 
   // generate reference picture lists

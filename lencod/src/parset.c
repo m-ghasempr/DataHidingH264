@@ -553,7 +553,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
  */
 int IdentifyProfile()
 {
-  return PROFILE_IDC;       // Baseline
+  return input->ProfileIDC;
 };
 
 /*! 
@@ -573,7 +573,7 @@ int IdentifyProfile()
  */
 int IdentifyLevel()
 {
-  return LEVEL_IDC;
+  return input->LevelIDC;
 };
 
 

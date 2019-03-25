@@ -12,6 +12,7 @@
 #ifndef _FAST_ME_H_
 #define _FAST_ME_H_
 #include "global.h"
+#include "mbuffer.h"
 
 #define EARLY_TERMINATION  if(ref>0)  \
   {                                                                    \
@@ -119,7 +120,7 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
                                   double    lambda) ;      // <--  lagrangian parameter for determining motion cost
 
 int AddUpSADQuarter(int pic_pix_x,int pic_pix_y,int blocksize_x,int blocksize_y,
-                    int cand_mv_x,int cand_mv_y, pel_t **ref_pic, pel_t**   orig_pic, 
+                    int cand_mv_x,int cand_mv_y, StorablePicture *ref_picture, pel_t**   orig_pic, 
                     int Mvmcost, int min_mcost,int useABT);
 
 int                                                   //  ==> minimum motion cost after search
@@ -178,5 +179,14 @@ FME_BlockMotionSearch (int       ref,           // <--  reference frame (0... or
                        double    lambda         // <--  lagrangian parameter for determining motion cost
                        );
 
+int                                              //<! minimum motion cost after search
+noFME_BlockMotionSearch (int       ref,          //<! reference idx
+                         int       list,         //<! reference pciture list
+                         int       mb_x,         //<! x-coordinate inside macroblock
+                         int       mb_y,         //<! y-coordinate inside macroblock
+                         int       blocktype,    //<! block type (1-16x16 ... 7-4x4)
+                         int       search_range, //<! 1-d search range for integer-position search
+                         double    lambda        //<! lagrangian parameter for determining motion cost
+                         );
 #endif
 

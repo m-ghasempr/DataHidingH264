@@ -160,7 +160,6 @@ void write_unpaired_field(FrameStore* fs, FILE *p_out)
     clear_picture(fs->bottom_field);
     dpb_combine_field(fs);
     write_picture (fs->frame, p_out);
-    fs->is_used=3;
   }
 
   if(fs->is_used &2)
@@ -172,8 +171,9 @@ void write_unpaired_field(FrameStore* fs, FILE *p_out)
     clear_picture(fs->bottom_field);
     dpb_combine_field(fs);
     write_picture (fs->frame, p_out);
-    fs->is_used=3;
   }
+
+  fs->is_used=3;
 }
 
 /*!
