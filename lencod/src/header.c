@@ -17,6 +17,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "global.h"
+
 #include "elements.h"
 #include "header.h"
 #include "rtp.h"
@@ -140,8 +142,7 @@ int SliceHeader()
   // Direct Mode Type selection for B pictures
   if (img->type==B_SLICE)
   {
-    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", img->direct_type, partition);  	
-    //len +=  u_1 ("SH: direct_spatial_mv_pred_flag", input->direct_type, partition);
+    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", img->direct_spatial_mv_pred_flag, partition);  	
   }
 
   if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type==SP_SLICE))
@@ -230,11 +231,11 @@ int SliceHeader()
   {
     numtmp=img->PicHeightInMapUnits*img->PicWidthInMbs/(float)(active_pps->slice_group_change_rate_minus1+1)+1;
     num_bits_slice_group_change_cycle = (int)ceil(log(numtmp)/log(2));
-    
+
     //! img->slice_group_change_cycle can be changed before calling FmoInit()
     len += u_v (num_bits_slice_group_change_cycle, "SH: slice_group_change_cycle", img->slice_group_change_cycle, partition);
   }
-  
+
   // NOTE: The following syntax element is actually part 
   //        Slice data partition A RBSP syntax
 
@@ -566,13 +567,13 @@ int Partition_BC_Header(int PartNo)
   sym->mapping = ue_linfo;       // Mapping rule: Simple code number to len/info
   sym->value2  = 0;
 
-	//ZL 
-	//changed according to the g050r1
-	SYMTRACESTRING("RTP-PH: Slice ID");
+  //ZL 
+  //changed according to the g050r1
+  SYMTRACESTRING("RTP-PH: Slice ID");
   sym->value1 = img->current_slice_nr;
   len += writeSyntaxElement_UVLC (sym, partition);
 
-	if(active_pps->redundant_pic_cnt_present_flag)
+  if(active_pps->redundant_pic_cnt_present_flag)
   {
   SYMTRACESTRING("RTP-PH: Picture ID");
   sym->value1 = img->currentSlice->picture_id;

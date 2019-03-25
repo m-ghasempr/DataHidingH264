@@ -20,7 +20,7 @@
 #include "erc_do.h"
 
 static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, int32 picSizeX, int *condition );
-static void pixMeanInterpolateBlock( byte *src[], byte *block, int blockSize, int frameWidth );
+static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize, int frameWidth );
 
 /*!
  ************************************************************************
@@ -88,10 +88,10 @@ int ercConcealIntraFrame( frame *recfr, int32 picSizeX, int32 picSizeY, ercVaria
  *      2 for Y, 1 for U/V components
  ************************************************************************
  */
-void ercPixConcealIMB(byte *currFrame, int row, int column, int predBlocks[], int frameWidth, int mbWidthInBlocks) 
+void ercPixConcealIMB(imgpel *currFrame, int row, int column, int predBlocks[], int frameWidth, int mbWidthInBlocks) 
 {
-   byte *src[8]={NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
-   byte *currBlock = NULL;
+   imgpel *src[8]={NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
+   imgpel *currBlock = NULL;
 
    /* collect the reliable neighboring blocks */
    if (predBlocks[0])
@@ -489,7 +489,7 @@ static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, 
  *      Width of the frame in pixels
  ************************************************************************
  */
-static void pixMeanInterpolateBlock( byte *src[], byte *block, int blockSize, int frameWidth )
+static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize, int frameWidth )
 {
   int row, column, k, tmp, srcCounter = 0, weight = 0, bmax = blockSize - 1;
   
@@ -532,7 +532,7 @@ static void pixMeanInterpolateBlock( byte *src[], byte *block, int blockSize, in
       if ( srcCounter > 0 )
         block[ k + column ] = (byte)(tmp/srcCounter);
       else 
-        block[ k + column ] = 127;
+        block[ k + column ] = img->dc_pred_value;   //FREXT
     }
     k += frameWidth;
   }

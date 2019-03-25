@@ -5,17 +5,21 @@
  *
  * \brief
  *    Routines for binary arithmetic encoding
+ *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *    - Detlev Marpe                    <marpe@hhi.de>
  *    - Gabi Blaettermann               <blaetter@hhi.de>
  *************************************************************************************
  */
+
 #include <stdlib.h>
-#include <math.h>
+#include <stdio.h>
+
 #include "global.h"
 #include "biariencode.h"
-#include <assert.h>
+
+int binCount = 0;
 
 /*!
  ************************************************************************
@@ -136,7 +140,7 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   put_one_bit((Elow >> (B_BITS-2))&1);
   put_one_bit(1);
 
-  stat->bit_use_stuffingBits[img->type]+=(8-Ebits_to_go);
+  stats->bit_use_stuffingBits[img->type]+=(8-Ebits_to_go);
 
   while (Ebits_to_go != 8)
     put_one_bit(0);
@@ -163,7 +167,12 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3];
 
   extern int cabac_encoding;
-
+  
+#if TRACE
+//  if (cabac_encoding)
+//    fprintf(p_trace, "%d  0x%04x  %d  %d\n", binCount++, Erange , bi_ct->state, bi_ct->MPS );
+#endif
+  
   if( cabac_encoding )
   {
     bi_ct->count++;
@@ -230,6 +239,13 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
 void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol)
 {
   register unsigned int low = (Elow<<1);
+
+  
+#if TRACE
+//  extern int cabac_encoding;
+//  if (cabac_encoding)
+//    fprintf(p_trace, "%d  0x%04x\n", binCount++, Erange );
+#endif
   
   if (symbol != 0)
     low += Erange;
@@ -266,6 +282,12 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
 {
   register unsigned int range = Erange-2;
   register unsigned int low = Elow;
+  
+#if TRACE
+//  extern int cabac_encoding;
+//  if (cabac_encoding)
+//    fprintf(p_trace, "%d  0x%04x\n", binCount++, Erange);
+#endif
   
   if (symbol) {
     low += range;
@@ -309,7 +331,7 @@ void biari_init_context (BiContextTypePtr ctx, const int* ini)
 {
   int pstate;
 
-  pstate = ((ini[0]*img->qp)>>4) + ini[1];
+  pstate = ((ini[0]* max(0, img->qp)) >> 4) + ini[1];
   pstate = min (max ( 1, pstate), 126);
 
   if ( pstate >= 64 )

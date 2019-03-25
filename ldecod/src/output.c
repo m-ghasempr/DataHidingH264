@@ -18,6 +18,12 @@
 #include <assert.h>
 #include <string.h>
 
+#ifdef WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
 #include "global.h"
 #include "mbuffer.h"
 #include "image.h"
@@ -29,7 +35,7 @@ StorablePicture *pending_output = NULL;
 int              pending_output_state = FRAME;
 
 
-void write_out_picture(StorablePicture *p, FILE *p_out);
+void write_out_picture(StorablePicture *p, int p_out);
 
 #ifdef PAIR_FIELDS_IN_OUTPUT
 
@@ -43,7 +49,7 @@ void clear_picture(StorablePicture *p);
  *    Output file
  ************************************************************************
  */
-void flush_pending_output(FILE *p_out)
+void flush_pending_output(int p_out)
 {
   if (pending_output_state!=FRAME)
   {
@@ -52,12 +58,12 @@ void flush_pending_output(FILE *p_out)
   
   if (pending_output->imgY)
   {
-    free_mem2D (pending_output->imgY);
+    free_mem2Dpel (pending_output->imgY);
     pending_output->imgY=NULL;
   }
   if (pending_output->imgUV)
   {
-    free_mem3D (pending_output->imgUV, 2);
+    free_mem3Dpel (pending_output->imgUV, 2);
     pending_output->imgUV=NULL;
   }
 
@@ -77,7 +83,7 @@ void flush_pending_output(FILE *p_out)
  *    Output file
  ************************************************************************
  */
-void write_picture(StorablePicture *p, FILE *p_out, int real_structure)
+void write_picture(StorablePicture *p, int p_out, int real_structure)
 {
    int i, add;
 
@@ -112,8 +118,8 @@ void write_picture(StorablePicture *p, FILE *p_out, int real_structure)
       pending_output->frame_cropping_rect_bottom_offset = p->frame_cropping_rect_bottom_offset;
     }
 
-    get_mem2D (&(pending_output->imgY), pending_output->size_y, pending_output->size_x);
-    get_mem3D (&(pending_output->imgUV), 2, pending_output->size_y_cr, pending_output->size_x_cr );
+    get_mem2Dpel (&(pending_output->imgY), pending_output->size_y, pending_output->size_x);
+    get_mem3Dpel (&(pending_output->imgUV), 2, pending_output->size_y_cr, pending_output->size_x_cr);
 
     clear_picture(pending_output);
 
@@ -129,12 +135,12 @@ void write_picture(StorablePicture *p, FILE *p_out, int real_structure)
 
     for (i=0; i<pending_output->size_y; i+=2)
     {
-      memcpy(pending_output->imgY[(i+add)], p->imgY[(i+add)], p->size_x);
+      memcpy(pending_output->imgY[(i+add)], p->imgY[(i+add)], p->size_x * sizeof(imgpel));
     }
     for (i=0; i<pending_output->size_y_cr; i+=2)
     {
-      memcpy(pending_output->imgUV[0][(i+add)], p->imgUV[0][(i+add)], p->size_x_cr);
-      memcpy(pending_output->imgUV[1][(i+add)], p->imgUV[1][(i+add)], p->size_x_cr);
+      memcpy(pending_output->imgUV[0][(i+add)], p->imgUV[0][(i+add)], p->size_x_cr * sizeof(imgpel));
+      memcpy(pending_output->imgUV[1][(i+add)], p->imgUV[1][(i+add)], p->size_x_cr * sizeof(imgpel));
     }
     pending_output_state = real_structure;
   }
@@ -168,12 +174,12 @@ void write_picture(StorablePicture *p, FILE *p_out, int real_structure)
 
     for (i=0; i<pending_output->size_y; i+=2)
     {
-      memcpy(pending_output->imgY[(i+add)], p->imgY[(i+add)], p->size_x);
+      memcpy(pending_output->imgY[(i+add)], p->imgY[(i+add)], p->size_x * sizeof(imgpel));
     }
     for (i=0; i<pending_output->size_y_cr; i+=2)
     {
-      memcpy(pending_output->imgUV[0][(i+add)], p->imgUV[0][(i+add)], p->size_x_cr);
-      memcpy(pending_output->imgUV[1][(i+add)], p->imgUV[1][(i+add)], p->size_x_cr);
+      memcpy(pending_output->imgUV[0][(i+add)], p->imgUV[0][(i+add)], p->size_x_cr * sizeof(imgpel));
+      memcpy(pending_output->imgUV[1][(i+add)], p->imgUV[1][(i+add)], p->size_x_cr * sizeof(imgpel));
     }
 
     flush_pending_output(p_out);
@@ -190,9 +196,11 @@ void write_picture(StorablePicture *p, FILE *p_out, int real_structure)
  *    Picture to be written
  * \param p_out
  *    Output file
+ * \param real_structure
+ *    real picture structure
  ************************************************************************
  */
-void write_picture(StorablePicture *p, FILE *p_out, int real_structure)
+void write_picture(StorablePicture *p, int p_out, int real_structure)
 {
   write_out_picture(p, p_out);
 }
@@ -201,22 +209,25 @@ void write_picture(StorablePicture *p, FILE *p_out, int real_structure)
 #endif
 
 /*!
- ************************************************************************
- * \brief
- *    Writes out a storable picture
- * \param p
- *    Picture to be written
- * \param p_out
- *    Output file
- ************************************************************************
- */
-void write_out_picture(StorablePicture *p, FILE *p_out)
+************************************************************************
+* \brief
+*    Writes out a storable picture
+* \param p
+*    Picture to be written
+* \param p_out
+*    Output file
+************************************************************************
+*/
+void write_out_picture(StorablePicture *p, int p_out)
 {
   int i,j;
-
+  
   int crop_left, crop_right, crop_top, crop_bottom;
   int crop_vert_mult;
-  
+  int symbol_size_in_bytes = img->pic_unit_bitsize_on_disk/8;
+  Boolean rgb_output = (active_sps->vui_seq_parameters.matrix_coefficients==0);
+  char *buf;
+
   if (p->non_existing)
     return;
 
@@ -250,29 +261,74 @@ void write_out_picture(StorablePicture *p, FILE *p_out)
 
   //printf ("write frame size: %dx%d\n", p->size_x-crop_left-crop_right,p->size_y-crop_top-crop_bottom );
   
+  // KS: this buffer should actually be allocated only once, but this is still much faster than the previous version
+  buf = malloc (p->size_x*p->size_y*symbol_size_in_bytes);
+  if (NULL==buf)
+  {
+    no_mem_exit("write_out_picture: buf");
+  }
+  
+  if(rgb_output)
+  {
+    crop_left   /= 2;
+    crop_right  /= 2;
+    crop_top    /= 2;
+    crop_bottom /= 2;
+
+    for(i=crop_top;i<p->size_y_cr-crop_bottom;i++)
+      for(j=crop_left;j<p->size_x_cr-crop_right;j++)
+      {
+        memcpy(buf+((j-crop_left+(i-crop_top)*(p->size_x_cr-crop_left-crop_right))*symbol_size_in_bytes),&(p->imgUV[1][i][j]), symbol_size_in_bytes);
+      }
+    write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+
+    if (active_sps->frame_cropping_flag)
+    {
+      crop_left   = 2 * active_sps->frame_cropping_rect_left_offset;
+      crop_right  = 2 * active_sps->frame_cropping_rect_right_offset;
+      crop_top    = crop_vert_mult * active_sps->frame_cropping_rect_top_offset;
+      crop_bottom = crop_vert_mult * active_sps->frame_cropping_rect_bottom_offset;
+    }
+    else
+    {
+      crop_left = crop_right = crop_top = crop_bottom = 0;
+    }
+  }
+  
+  
   for(i=crop_top;i<p->size_y-crop_bottom;i++)
     for(j=crop_left;j<p->size_x-crop_right;j++)
     {
-      fputc(p->imgY[i][j],p_out);
+      memcpy(buf+((j-crop_left+((i-crop_top)*(p->size_x-crop_left-crop_right)))*symbol_size_in_bytes),&(p->imgY[i][j]), symbol_size_in_bytes);
     }
+
+  write(p_out, buf, (p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes);
 
   crop_left   /= 2;
   crop_right  /= 2;
   crop_top    /= 2;
   crop_bottom /= 2;
 
-  for(i=crop_top;i<p->size_y_cr-crop_bottom;i++)
+  for(i=crop_top; i<p->size_y_cr-crop_bottom; i++)
     for(j=crop_left;j<p->size_x_cr-crop_right;j++)
     {
-      fputc(p->imgUV[0][i][j],p_out);
+      memcpy(buf+((j-crop_left+(i-crop_top)*(p->size_x_cr-crop_left-crop_right))*symbol_size_in_bytes),&(p->imgUV[0][i][j]), symbol_size_in_bytes);
     }
-  for(i=crop_top;i<p->size_y_cr-crop_bottom;i++)
-    for(j=crop_left;j<p->size_x_cr-crop_right;j++)
-    {
-      fputc(p->imgUV[1][i][j],p_out);
-    }
+  write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+
+  if (!rgb_output)
+  {
+    for(i=crop_top;i<p->size_y_cr-crop_bottom;i++)
+      for(j=crop_left;j<p->size_x_cr-crop_right;j++)
+      {
+        memcpy(buf+((j-crop_left+(i-crop_top)*(p->size_x_cr-crop_left-crop_right))*symbol_size_in_bytes),&(p->imgUV[1][i][j]), symbol_size_in_bytes);
+      }
+    write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+  }
+
+  free(buf);
     
-  fflush(p_out);
+//  fsync(p_out);
 }
 
 /*!
@@ -284,10 +340,12 @@ void write_out_picture(StorablePicture *p, FILE *p_out)
 void init_out_buffer()
 {
   out_buffer = alloc_frame_store();
+#ifdef PAIR_FIELDS_IN_OUTPUT
   pending_output = calloc (sizeof(StorablePicture), 1);
   if (NULL==pending_output) no_mem_exit("init_out_buffer");
   pending_output->imgUV = NULL;
   pending_output->imgY  = NULL;
+#endif
 }
 
 /*!
@@ -302,8 +360,8 @@ void uninit_out_buffer()
   out_buffer=NULL;
 #ifdef PAIR_FIELDS_IN_OUTPUT
   flush_pending_output(p_out);
-#endif
   free (pending_output);
+#endif
 }
 
 /*!
@@ -317,12 +375,11 @@ void clear_picture(StorablePicture *p)
   int i;
 
   for(i=0;i<p->size_y;i++)
-    memset(p->imgY[i], 128 ,p->size_x);
+    memset(p->imgY[i], img->dc_pred_value, p->size_x*sizeof(imgpel));
   for(i=0;i<p->size_y_cr;i++)
-    memset(p->imgUV[0][i], 128 ,p->size_x_cr);
+    memset(p->imgUV[0][i], img->dc_pred_value, p->size_x_cr*sizeof(imgpel));
   for(i=0;i<p->size_y_cr;i++)
-    memset(p->imgUV[1][i], 128 ,p->size_x_cr);
-  fflush(p_out);
+    memset(p->imgUV[1][i], img->dc_pred_value, p->size_x_cr*sizeof(imgpel));
 }
 
 /*!
@@ -336,7 +393,7 @@ void clear_picture(StorablePicture *p)
  *    Output file
  ************************************************************************
  */
-void write_unpaired_field(FrameStore* fs, FILE *p_out)
+void write_unpaired_field(FrameStore* fs, int p_out)
 {
   StorablePicture *p;
   assert (fs->is_used<3);
@@ -381,7 +438,7 @@ void write_unpaired_field(FrameStore* fs, FILE *p_out)
  *    Output file
  ************************************************************************
  */
-void flush_direct_output(FILE *p_out)
+void flush_direct_output(int p_out)
 {
   write_unpaired_field(out_buffer, p_out);
 
@@ -405,7 +462,7 @@ void flush_direct_output(FILE *p_out)
  *    Output file
  ************************************************************************
  */
-void write_stored_frame( FrameStore *fs,FILE *p_out)
+void write_stored_frame( FrameStore *fs,int p_out)
 {
   // make sure no direct output field is pending
   flush_direct_output(p_out);
@@ -433,7 +490,7 @@ void write_stored_frame( FrameStore *fs,FILE *p_out)
  *    Output file
  ************************************************************************
  */
-void direct_output(StorablePicture *p, FILE *p_out)
+void direct_output(StorablePicture *p, int p_out)
 {
   if (p->structure==FRAME)
   {
@@ -441,7 +498,7 @@ void direct_output(StorablePicture *p, FILE *p_out)
     // so output it directly
     flush_direct_output(p_out);
     write_picture (p, p_out, FRAME);
-    if (p_ref)
+    if (-1!=p_ref)
       find_snr(snr, p, p_ref);
     free_storable_picture(p);
     return;
@@ -468,7 +525,7 @@ void direct_output(StorablePicture *p, FILE *p_out)
     // we have both fields, so output them
     dpb_combine_field(out_buffer);
     write_picture (out_buffer->frame, p_out, FRAME);
-    if (p_ref)
+    if (-1!=p_ref)
       find_snr(snr, out_buffer->frame, p_ref);
     free_storable_picture(out_buffer->frame);
     out_buffer->frame = NULL;
@@ -479,3 +536,4 @@ void direct_output(StorablePicture *p, FILE *p_out)
     out_buffer->is_used = 0;
   }
 }
+

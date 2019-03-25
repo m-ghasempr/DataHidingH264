@@ -19,10 +19,6 @@
 #ifndef _RD_OPT_CS_H_
 #define _RD_OPT_CS_H_
 
-#include "global.h"
-
-
-
 typedef struct {
 
   // important variables of data partition array

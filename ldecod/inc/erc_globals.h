@@ -15,8 +15,8 @@
 #ifndef _ERC_GLOBALS_H_
 #define _ERC_GLOBALS_H_
 
-
 #include <string.h>
+#include "defines.h"
 
 /* "block" means an 8x8 pixel area */
 
@@ -33,9 +33,9 @@
 /* YUV pixel domain image arrays for a video frame */
 typedef struct
 {
-  byte *yptr;
-  byte *uptr;
-  byte *vptr;
+  imgpel *yptr;
+  imgpel *uptr;
+  imgpel *vptr;
 } frame;
 
 /* region structure stores information about a region that is needed for concealment */

@@ -46,22 +46,18 @@
  *  functions.
  *****************************************************************************
 */
+
 //#define PRINT_FMO_MAPS  1
 
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <malloc.h>
 #include <memory.h>
 
-
 #include "global.h"
-#include "defines.h"
-#include "header.h"
+
 #include "fmo.h"
-#include "image.h"
 
 
 static int FirstMBInSlice[MAXSLICEGROUPIDS];

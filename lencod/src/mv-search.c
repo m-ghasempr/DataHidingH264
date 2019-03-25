@@ -22,12 +22,12 @@
 
 #include "contributors.h"
 
-#include <math.h>
 #include <stdlib.h>
-#include <assert.h>
+#include <math.h>
 #include <limits.h>
 
 #include "global.h"
+
 #include "image.h"
 #include "mv-search.h"
 #include "refbuf.h"
@@ -324,7 +324,8 @@ void SetupFastFullPelSearch (int ref, int list)  // <--  reference frame paramet
   
   ref_picture     = listX[list+list_offset][ref];
 
-  if (apply_weights)
+  //===== Use weighted Reference for ME ====
+  if (apply_weights && input->UseWeightedReferenceME)
     ref_pic       = ref_picture->imgY_11_w;
   else
     ref_pic       = ref_picture->imgY_11;
@@ -681,26 +682,27 @@ void SetMotionVectorPredictor (int  pmv[2],
     }
 
     pmv[hv] = pred_vec;
-
+    
   }
 
   if(input->FMEnable) pred_SAD_space = temp_pred_SAD[0]>temp_pred_SAD[1]?temp_pred_SAD[1]:temp_pred_SAD[0];
 }
 
 /*!
- ************************************************************************
- * \brief
- *    Initialize the motion search
- ************************************************************************
- */
+************************************************************************
+* \brief
+*    Initialize the motion search
+************************************************************************
+*/
 void
 Init_Motion_Search_Module ()
 {
   int bits, i, imin, imax, k, l;
-
+  
+  int byte_abs_range             = (img->max_imgpel_value > img->max_imgpel_value_uv) ? (img->max_imgpel_value + 1) * 2 : (img->max_imgpel_value_uv + 1) * 2;
   int search_range               = input->search_range;
   int number_of_reference_frames = img->max_num_references;
-  int max_search_points          = (2*search_range+1)*(2*search_range+1);
+  int max_search_points          = max(9, (2*search_range+1)*(2*search_range+1));
   int max_ref_bits               = 1 + 2 * (int)floor(log(max(16,number_of_reference_frames+1)) / log(2) + 1e-10);
   int max_ref                    = (1<<((max_ref_bits>>1)+1))-1;
   int number_of_subpel_positions = 4 * (2*search_range+3);
@@ -718,14 +720,14 @@ Init_Motion_Search_Module ()
     no_mem_exit("Init_Motion_Search_Module: mvbits");
   if ((refbits = (int*)calloc(max_ref, sizeof(int))) == NULL)
     no_mem_exit("Init_Motion_Search_Module: refbits");
-  if ((byte_abs = (int*)calloc(512, sizeof(int))) == NULL)
+  if ((byte_abs = (int*)calloc(byte_abs_range, sizeof(int))) == NULL)
     no_mem_exit("Init_Motion_Search_Module: byte_abs");
 
   get_mem4Dint (&motion_cost, 8, 2, img->max_num_references+1, 4);
 
   //--- set array offsets ---
   mvbits   += max_mvd;
-  byte_abs += 256;
+  byte_abs += byte_abs_range/2;
 
 
   //=====   INIT ARRAYS   =====
@@ -750,7 +752,7 @@ Init_Motion_Search_Module ()
   }
   //--- init array: absolute value ---
   byte_abs[0] = 0;
-  for (i=1; i<256; i++)   byte_abs[i] = byte_abs[-i] = i;
+  for (i=1; i<byte_abs_range/2; i++)   byte_abs[i] = byte_abs[-i] = i;
   //--- init array: search pattern ---
   spiral_search_x[0] = spiral_search_y[0] = 0;
   for (k=1, l=1; l<=max(1,search_range); l++)
@@ -785,7 +787,7 @@ Clear_Motion_Search_Module ()
 {
   //--- correct array offset ---
   mvbits   -= max_mvd;
-  byte_abs -= 256;
+  byte_abs -= (img->max_imgpel_value > img->max_imgpel_value_uv) ? (img->max_imgpel_value + 1) : (img->max_imgpel_value_uv + 1);
 
   //--- delete arrays ---
   free (spiral_search_x);
@@ -830,7 +832,7 @@ FullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  original pixel values 
   pel_t *(*get_ref_line)(int, pel_t*, int, int, int, int);
 
   int   list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
-  pel_t *ref_pic			= listX[list+list_offset][ref]->imgY_11;
+  pel_t *ref_pic      = listX[list+list_offset][ref]->imgY_11;
   int   img_width     = listX[list+list_offset][ref]->size_x;
   int   img_height    = listX[list+list_offset][ref]->size_y;
 
@@ -845,6 +847,15 @@ FullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  original pixel values 
   int   center_x      = pic_pix_x + *mv_x;                        // center position x (in pel units)
   int   center_y      = pic_pix_y + *mv_y;                        // center position y (in pel units)
   int   check_for_00  = (blocktype==1 && !input->rdopt && img->type!=B_SLICE && ref==0);
+
+  int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
+                         (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));  
+
+  //===== Use weighted Reference for ME ====
+  if (apply_weights && input->UseWeightedReferenceME)
+    ref_pic       = listX[list+list_offset][ref]->imgY_11_w;
+  else
+    ref_pic       = listX[list+list_offset][ref]->imgY_11;
 
   //===== set function for getting reference picture lines =====
   if ((center_x > search_range) && (center_x < img->width -1-search_range-blocksize_x) &&
@@ -1004,27 +1015,27 @@ FastFullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  not used
 int
 SATD (int* diff, int use_hadamard)
 {
-  int k, satd = 0, m[16], dd, *d=diff;
+  int k, satd = 0, m[16], dd, d[16];
   
   if (use_hadamard)
   {
     /*===== hadamard transform =====*/
-    m[ 0] = d[ 0] + d[12];
-    m[ 4] = d[ 4] + d[ 8];
-    m[ 8] = d[ 4] - d[ 8];
-    m[12] = d[ 0] - d[12];
-    m[ 1] = d[ 1] + d[13];
-    m[ 5] = d[ 5] + d[ 9];
-    m[ 9] = d[ 5] - d[ 9];
-    m[13] = d[ 1] - d[13];
-    m[ 2] = d[ 2] + d[14];
-    m[ 6] = d[ 6] + d[10];
-    m[10] = d[ 6] - d[10];
-    m[14] = d[ 2] - d[14];
-    m[ 3] = d[ 3] + d[15];
-    m[ 7] = d[ 7] + d[11];
-    m[11] = d[ 7] - d[11];
-    m[15] = d[ 3] - d[15];
+    m[ 0] = diff[ 0] + diff[12];
+    m[ 4] = diff[ 4] + diff[ 8];
+    m[ 8] = diff[ 4] - diff[ 8];
+    m[12] = diff[ 0] - diff[12];
+    m[ 1] = diff[ 1] + diff[13];
+    m[ 5] = diff[ 5] + diff[ 9];
+    m[ 9] = diff[ 5] - diff[ 9];
+    m[13] = diff[ 1] - diff[13];
+    m[ 2] = diff[ 2] + diff[14];
+    m[ 6] = diff[ 6] + diff[10];
+    m[10] = diff[ 6] - diff[10];
+    m[14] = diff[ 2] - diff[14];
+    m[ 3] = diff[ 3] + diff[15];
+    m[ 7] = diff[ 7] + diff[11];
+    m[11] = diff[ 7] - diff[11];
+    m[15] = diff[ 3] - diff[15];
     
     d[ 0] = m[ 0] + m[ 4];
     d[ 8] = m[ 0] - m[ 4];
@@ -1078,11 +1089,11 @@ SATD (int* diff, int use_hadamard)
     d[15] = m[15] - m[14];
     
     /*===== sum up =====*/
-    for (dd=diff[k=0]; k<16; dd=diff[++k])
+    for (dd=d[k=0]; k<16; dd=d[++k])
     {
       satd += (dd < 0 ? -dd : dd);
     }
-    satd >>= 1;
+    satd = ((satd+1)>>1);
   }
   else
   {
@@ -1096,7 +1107,156 @@ SATD (int* diff, int use_hadamard)
   return satd;
 }
 
+/*!
+ ***********************************************************************
+ * \brief
+ *    Calculate SA(T)D for 8x8
+ ***********************************************************************
+ */
+int
+SATD8X8 (int* diff, int use_hadamard)
+{
+  int i, j, sad=0;
+  int m1[8][8], m2[8][8], m3[8][8];
 
+  if(use_hadamard)
+  {
+    //horizontal
+    for (j=0; j < 8; j++)
+    {
+      m2[j][0] = diff[(j<<3)  ] + diff[(j<<3)+4];
+      m2[j][1] = diff[(j<<3)+1] + diff[(j<<3)+5];
+      m2[j][2] = diff[(j<<3)+2] + diff[(j<<3)+6];
+      m2[j][3] = diff[(j<<3)+3] + diff[(j<<3)+7];
+      m2[j][4] = diff[(j<<3)  ] - diff[(j<<3)+4];
+      m2[j][5] = diff[(j<<3)+1] - diff[(j<<3)+5];
+      m2[j][6] = diff[(j<<3)+2] - diff[(j<<3)+6];
+      m2[j][7] = diff[(j<<3)+3] - diff[(j<<3)+7];
+
+      m1[j][0] = m2[j][0] + m2[j][2];
+      m1[j][1] = m2[j][1] + m2[j][3];
+      m1[j][2] = m2[j][0] - m2[j][2];
+      m1[j][3] = m2[j][1] - m2[j][3];
+      m1[j][4] = m2[j][4] + m2[j][6];
+      m1[j][5] = m2[j][5] + m2[j][7];
+      m1[j][6] = m2[j][4] - m2[j][6];
+      m1[j][7] = m2[j][5] - m2[j][7];
+
+      m2[j][0] = m1[j][0] + m1[j][1];
+      m2[j][1] = m1[j][0] - m1[j][1];
+      m2[j][2] = m1[j][2] + m1[j][3];
+      m2[j][3] = m1[j][2] - m1[j][3];
+      m2[j][4] = m1[j][4] + m1[j][5];
+      m2[j][5] = m1[j][4] - m1[j][5];
+      m2[j][6] = m1[j][6] + m1[j][7];
+      m2[j][7] = m1[j][6] - m1[j][7];
+    }
+
+    //vertical
+    for (i=0; i < 8; i++)
+    {
+      m3[0][i] = m2[0][i] + m2[4][i];
+      m3[1][i] = m2[1][i] + m2[5][i];
+      m3[2][i] = m2[2][i] + m2[6][i];
+      m3[3][i] = m2[3][i] + m2[7][i];
+      m3[4][i] = m2[0][i] - m2[4][i];
+      m3[5][i] = m2[1][i] - m2[5][i];
+      m3[6][i] = m2[2][i] - m2[6][i];
+      m3[7][i] = m2[3][i] - m2[7][i];
+
+      m1[0][i] = m3[0][i] + m3[2][i];
+      m1[1][i] = m3[1][i] + m3[3][i];
+      m1[2][i] = m3[0][i] - m3[2][i];
+      m1[3][i] = m3[1][i] - m3[3][i];
+      m1[4][i] = m3[4][i] + m3[6][i];
+      m1[5][i] = m3[5][i] + m3[7][i];
+      m1[6][i] = m3[4][i] - m3[6][i];
+      m1[7][i] = m3[5][i] - m3[7][i];
+
+      m2[0][i] = m1[0][i] + m1[1][i];
+      m2[1][i] = m1[0][i] - m1[1][i];
+      m2[2][i] = m1[2][i] + m1[3][i];
+      m2[3][i] = m1[2][i] - m1[3][i];
+      m2[4][i] = m1[4][i] + m1[5][i];
+      m2[5][i] = m1[4][i] - m1[5][i];
+      m2[6][i] = m1[6][i] + m1[7][i];
+      m2[7][i] = m1[6][i] - m1[7][i];
+    }
+    for (j=0; j < 8; j++)
+      for (i=0; i < 8; i++)
+        sad += (absm(m2[j][i]));
+    sad=((sad+2)>>2);
+  }
+  else
+  {
+    for(i=0; i<64; i++)
+      sad += byte_abs [diff [i]];
+  }
+
+    return sad;
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Calculate SA(T)D for 8x8
+ ***********************************************************************
+ */
+int
+find_SATD (int curr_diff[MB_BLOCK_SIZE][MB_BLOCK_SIZE], int use_hadamard, int blocktype)
+{
+  int i, j, k, x, y, sad=0;
+  int block_size_x = input->blc_size[blocktype][0];
+  int block_size_y = input->blc_size[blocktype][1];
+  int block_size = (blocktype>4) ? 4:8;
+  int diff[MB_BLOCK_SIZE*MB_BLOCK_SIZE];
+
+  k=0;
+  for(y=0; y<block_size_y; y+=block_size)
+    for(x=0; x<block_size_x; x+=block_size)
+      for(j=y; j<y+block_size; j++)
+        for(i=x; i<x+block_size; i++, k++)
+          diff[k]=curr_diff[j][i];
+
+  if(use_hadamard)
+  {
+    switch(blocktype)
+    {
+    //16x16
+    case 1: 
+            sad  = SATD8X8 (diff, input->hadamard);
+            sad += SATD8X8 (&diff[64], input->hadamard);
+            sad += SATD8X8 (&diff[128], input->hadamard);
+            sad += SATD8X8 (&diff[192], input->hadamard);
+            break;
+    //16x8 8x16
+    case 2:
+    case 3: sad  = SATD8X8 (diff, input->hadamard);
+            sad += SATD8X8 (&diff[64], input->hadamard);
+            break;
+    //8x8
+    case 4: sad  = SATD8X8 (diff, input->hadamard);
+            break;
+    //8x4 4x8
+    case 5:
+    case 6: sad  = SATD (diff, input->hadamard);
+            sad += SATD (&diff[16], input->hadamard);
+            break;
+    //4x4
+    case 7: sad  = SATD (diff, input->hadamard);
+            break;
+    default:sad=-1;
+            break;
+    }
+  }
+  else
+  {
+    for(i=0; i<(block_size_y*block_size_x); i++)
+      sad += byte_abs[diff[i]];
+  }
+
+  return sad;
+}
 
 /*!
  ***********************************************************************
@@ -1121,6 +1281,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
                          double    lambda         // <--  lagrangian parameter for determining motion cost
                          )
 {
+  int   curr_diff[MB_BLOCK_SIZE][MB_BLOCK_SIZE], i, j, k;
   int   diff[16], *d;
   int   pos, best_pos, mcost, abort_search;
   int   y0, x0, ry0, rx0, ry;
@@ -1147,7 +1308,8 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
   
   ref_picture     = listX[list+list_offset][ref];
 
-  if (apply_weights)
+  //===== Use weighted Reference for ME ====
+  if (apply_weights && input->UseWeightedReferenceME)
   {
     ref_pic = listX[list+list_offset][ref]->imgY_ups_w;
   }
@@ -1227,13 +1389,25 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
         *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8, img_height, img_width);
         *d        = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+12, img_height, img_width);
 
-        if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+        if (!input->AllowTransform8x8)
         {
-          abort_search = 1;
-          break;
+          if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+          {
+            abort_search = 1;
+            break;
+          }
         }
-      }
+        else
+        {
+          for(j=0, k=0; j<4; j++)
+            for(i=0; i<4; i++, k++)
+              curr_diff[y0+j][x0+i] = diff[k];
+        }
+       }
     }
+
+    if(input->AllowTransform8x8)
+      mcost += find_SATD (curr_diff, input->hadamard, blocktype);
 
     if (mcost < min_mcost)
     {
@@ -1308,13 +1482,25 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
         *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8, img_height, img_width);
         *d        = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+12, img_height, img_width);
 
-        if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+        if (!input->AllowTransform8x8)
         {
-          abort_search = 1;
-          break;
+          if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+          {
+            abort_search = 1;
+            break;
+          }
+        }
+        else
+        {
+          for(j=0, k=0; j<4; j++)
+            for(i=0; i<4; i++, k++)
+              curr_diff[y0+j][x0+i] = diff[k];
         }
       }
     }
+
+    if(input->AllowTransform8x8)
+      mcost += find_SATD (curr_diff, input->hadamard, blocktype);
 
     if (mcost < min_mcost)
     {
@@ -1358,7 +1544,7 @@ BlockMotionSearch (int       ref,           //!< reference idx
 
   int       pred_mv_x, pred_mv_y, mv_x, mv_y, i, j;
 
-  int       max_value = (1<<20);
+  int       max_value = INT_MAX;
   int       min_mcost = max_value;
 
   int       block_x   = (mb_x>>2);
@@ -1393,7 +1579,7 @@ BlockMotionSearch (int       ref,           //!< reference idx
     n_Bframe =(N_Bframe) ? ((Bframe_ctr%N_Bframe)+1) : 0 ;
   }
 
-   pred_mv = img->pred_mv[block_x][block_y][list][ref][blocktype];
+  pred_mv = img->pred_mv[block_x][block_y][list][ref][blocktype];
 
   //==================================
   //=====   GET ORIGINAL BLOCK   =====
@@ -1528,13 +1714,12 @@ BlockMotionSearch (int       ref,           //!< reference idx
       }
     }
  }
- 
 
   //===========================================
   //=====   GET MOTION VECTOR PREDICTOR   =====
   //===========================================
 
-  if (input->FMEnable) 
+  if(input->FMEnable)
     FME_blocktype=blocktype;
 
   SetMotionVectorPredictor (pred_mv, enc_picture->ref_idx, enc_picture->mv, ref, list, block_x, block_y, bsx, bsy);
@@ -1563,8 +1748,8 @@ BlockMotionSearch (int       ref,           //!< reference idx
     }
     
     min_mcost = FastIntegerPelBlockMotionSearch(orig_pic, ref, list, pic_pix_x, pic_pix_y, blocktype,
-      pred_mv_x, pred_mv_y, &mv_x, &mv_y, search_range,
-      min_mcost, lambda);
+                                                pred_mv_x, pred_mv_y, &mv_x, &mv_y, search_range,
+                                                min_mcost, lambda);
     //FAST MOTION ESTIMATION. ZHIBO CHEN 2003.3
     for (i=0; i < (bsx>>2); i++)
     {
@@ -1709,14 +1894,14 @@ BlockMotionSearch (int       ref,           //!< reference idx
   }
   else
   {
-    for (i=0; i < (bsx>>2); i++)
+  for (i=0; i < (bsx>>2); i++)
+  {
+    for (j=0; j < (bsy>>2); j++)
     {
-      for (j=0; j < (bsy>>2); j++)
-      {
-        all_mv[block_x+i][block_y+j][list][ref][blocktype][0] = mv_x;
-        all_mv[block_x+i][block_y+j][list][ref][blocktype][1] = mv_y;
-      }
+      all_mv[block_x+i][block_y+j][list][ref][blocktype][0] = mv_x;
+      all_mv[block_x+i][block_y+j][list][ref][blocktype][1] = mv_y;
     }
+  }
   }
 
   return min_mcost;
@@ -1738,8 +1923,13 @@ int BIDPartitionCost (int   blocktype,
   static int  bx0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,2,0,2}};
   static int  by0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,0,0,0}, {0,0,2,2}};
 
-  int   diff[16];
-  int   pic_pix_x, pic_pix_y, block_x, block_y;
+  // tchen 4-29-04
+  int   diff[64];
+  int   curr_blk[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // ABT pred.error buffer
+  int   bsx       = min(input->blc_size[blocktype][0],8);
+  int   bsy       = min(input->blc_size[blocktype][1],8);
+  // tchen 4-29-04 end
+   int   pic_pix_x, pic_pix_y, block_x, block_y;
   int   v, h, mcost, i, j, k;
   int   mvd_bits  = 0;
   int   parttype  = (blocktype<4?blocktype:4);
@@ -1779,10 +1969,26 @@ int BIDPartitionCost (int   blocktype,
       for (k=j=0; j<4; j++)
       for (  i=0; i<4; i++, k++)
       {
-        diff[k] = imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+        diff[k] = curr_blk[byy+j][bxx+i] = 
+        imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
       }
-      mcost += SATD (diff, input->hadamard);
+      if ((!input->AllowTransform8x8) || (blocktype>4)) // tchen 4-29-04
+        mcost += SATD (diff, input->hadamard);
     }
+  }
+
+  if (input->AllowTransform8x8 && (blocktype<=4))  // tchen 4-29-04
+  {
+    for (byy=0; byy<input->blc_size[parttype][1]; byy+=bsy)
+      for (bxx=0; bxx<input->blc_size[parttype][0]; bxx+=bsx)
+      {
+        k=0;
+        for (i=0;i<8;i++)
+          for (j=0;j<8;j++)
+            diff[k++] = curr_blk[i+byy][j+bxx];
+
+        mcost += SATD8X8(diff, input->hadamard);
+      }
   }
   return mcost;
 }
@@ -1799,28 +2005,50 @@ int GetSkipCostMB (double lambda)
   int diff[16];
   int cost = 0;
 
-  for (block_y=0; block_y<16; block_y+=4)
+  //T.Nishi(MEI ACC) 04-28-2004
+  int curr_diff[8][8], diff8x8[64];
+  int mb_x, mb_y;
+  int block;  
+  for(block=0;block<4;block++)
   {
-    pic_pix_y = img->opix_y + block_y;
-
-    for (block_x=0; block_x<16; block_x+=4)
+    mb_y    = (block/2)<<3;
+    mb_x    = (block%2)<<3;
+    for (block_y=mb_y; block_y<mb_y+8; block_y+=4)
     {
-      pic_pix_x = img->opix_x + block_x;
+      pic_pix_y = img->opix_y + block_y;
 
-      //===== prediction of 4x4 block =====
-      LumaPrediction4x4 (block_x, block_y, 0, 0, 0, 0, 0);
+      for (block_x=mb_x; block_x<mb_x+8; block_x+=4)
+      {
+        pic_pix_x = img->opix_x + block_x;
 
-      //===== get displaced frame difference ======                
-      for (k=j=0; j<4; j++)
+        //===== prediction of 4x4 block =====
+        LumaPrediction4x4 (block_x, block_y, 0, 0, 0, 0, 0);
+
+        //===== get displaced frame difference ======                
+        for (k=j=0; j<4; j++)
         for (i=0; i<4; i++, k++)
         {
-          diff[k] = imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+          diff[k] = curr_diff[block_y-mb_y+j][block_x-mb_x+i] = imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
         }
-      cost += SATD (diff, input->hadamard);
+
+        if(!((input->rdopt==0)&&(input->AllowTransform8x8)))
+          cost += SATD (diff, input->hadamard);
+      }
+    }
+
+    if((input->rdopt==0)&&(input->AllowTransform8x8))
+    {
+      k=0;
+      for(j=0; j<8; j++)
+        for(i=0; i<8; i++, k++)
+          diff8x8[k]=curr_diff[j][i];
+
+      cost += SATD8X8 (diff8x8, input->hadamard);
     }
   }
 
   return cost;
+  //T.Nishi(MEI ACC) 04-28-2004 end
 }
 
 /*!
@@ -1913,9 +2141,10 @@ void FindSkipModeMotionVector ()
  *    Get cost for direct mode for an 8x8 block
  ************************************************************************
  */
-int Get_Direct_Cost8x8 (int block, double lambda)
+int Get_Direct_Cost8x8 (int block, int *cost8x8)
 {
   int block_y, block_x, pic_pix_y, pic_pix_x, i, j, k;
+  int curr_diff[8][8], diff8x8[64];
   int diff[16];
   int cost  = 0;
   int mb_y  = (block/2)<<3;
@@ -1931,7 +2160,8 @@ int Get_Direct_Cost8x8 (int block, double lambda)
 
       if (direct_pdir[pic_pix_x>>2][pic_pix_y>>2]<0)
       {
-        return (1<<30); //mode not allowed
+        *cost8x8=INT_MAX;
+        return INT_MAX; //mode not allowed 
       }
 
       //===== prediction of 4x4 block =====
@@ -1943,11 +2173,22 @@ int Get_Direct_Cost8x8 (int block, double lambda)
       for (k=j=0; j<4; j++)
         for (i=0; i<4; i++, k++)
         {
-          diff[k] = imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
-
+          diff[k] = curr_diff[block_y-mb_y+j][block_x-mb_x+i] =
+          imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
         }
+
       cost += SATD (diff, input->hadamard);
     }
+  }
+
+  if((input->rdopt==0)&&(input->AllowTransform8x8))
+  {
+    k=0;
+    for(j=0; j<8; j++)
+      for(i=0; i<8; i++, k++)
+        diff8x8[k]=curr_diff[j][i];
+
+    *cost8x8 += SATD8X8 (diff8x8, input->hadamard);
   }
 
   return cost;
@@ -1965,13 +2206,36 @@ int Get_Direct_CostMB (double lambda)
 {
   int i;
   int cost = 0;
+  int cost8x8 = 0;
   
   for (i=0; i<4; i++)
   {
-    cost += Get_Direct_Cost8x8 (i, lambda);
-    if (cost >= (1<<30)) return cost;
+    cost += Get_Direct_Cost8x8 (i, &cost8x8);
+    if ((cost == INT_MAX) || (cost8x8 == INT_MAX)) return cost;
   }
+
+  // T.Nishi(MEI ACC) 04-28-2004
+  switch(input->AllowTransform8x8)
+  {
+  case 1: // Mixture of 8x8 & 4x4 transform
+          if((cost8x8 < cost)||
+            !(input->InterSearch8x4 &&
+            input->InterSearch4x8 &&
+            input->InterSearch4x4)
+            )
+          {
+            cost = cost8x8; //return 8x8 cost
+          }
+          break;
+  case 2: // 8x8 Transform only
+          cost = cost8x8;
+          break;
+  default: // 4x4 Transform only
+          break;
+  }
+
   return cost;
+  // T.Nishi(MEI ACC) 04-28-2004 end
 }
 
 
@@ -2112,7 +2376,7 @@ void Get_Direct_Motion_Vectors ()
     co_located_ref_id = Co_located->ref_pic_id;
   }
 
-  if (img->direct_type)  //spatial direct mode copy from decoder
+  if (img->direct_spatial_mv_pred_flag)  //spatial direct mode copy from decoder
   {
     
     int fw_rFrameL, fw_rFrameU, fw_rFrameUL, fw_rFrameUR;
@@ -2362,7 +2626,7 @@ void Get_Direct_Motion_Vectors ()
           if (mapped_idx !=INVALIDINDEX)
           {
             mv_scale = img->mvscale[LIST_0+list_offset][mapped_idx];
-
+            
             if (mv_scale==9999)
             {
               // forward

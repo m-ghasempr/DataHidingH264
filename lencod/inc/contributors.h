@@ -18,6 +18,7 @@
       Heinrich-Hertz-Institute for Communication Technology GmbH, Germany
       University of Hannover, Institut of Communication Theory and Signal Processing,Germany
       Videolocus, Canada
+	  LSI Logic, Canada
       Motorola Inc., USA
       Microsoft Corp., USA
       Apple Computer, Inc.
@@ -27,7 +28,7 @@
    \par Full Contact Information
    \verbatim
 
-      Lowell Winger                   <lwinger@videolocus.com><lwinger@uwaterloo.ca>
+      Lowell Winger                   <lwinger@videolocus.com><lwinger@uwaterloo.ca><lwinger@lsil.com>
       Guy Côté                        <gcote@videolocus.com>
       Michael Gallant                 <mgallant@videolocus.com>
       VideoLocus Inc.
@@ -198,6 +199,12 @@
       Haidian District 
       Beijing China, 100084
         
+      Alexis Michael Tourapis         <alexis@mobilygen.com>
+      Mobilygen Corporation 
+      2100 Lakeside Drive
+      Santa Clara, CA, 95054
+
+  
    \endverbatim
  */
 

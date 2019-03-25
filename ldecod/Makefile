@@ -25,7 +25,7 @@ ADDINCDIR= ../lcommon/inc
 CC=     $(shell which gcc)
 
 LIBS=   -lm
-FLAGS=  -ffloat-store -Wall -I$(INCDIR) -I$(ADDINCDIR)
+FLAGS=  -ffloat-store -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
 
 ifdef DBG
 SUFFIX= .dbg

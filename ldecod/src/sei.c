@@ -165,18 +165,18 @@ void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
 
 
 /*!
- ************************************************************************
- *  \brief
- *     Interpret the spare picture SEI message
- *  \param payload
- *     a pointer that point to the sei payload
- *  \param size
- *     the size of the sei message
- *  \param img
- *     the image pointer
- *    
- ************************************************************************
- */
+************************************************************************
+*  \brief
+*     Interpret the spare picture SEI message
+*  \param payload
+*     a pointer that point to the sei payload
+*  \param size
+*     the size of the sei message
+*  \param img
+*     the image pointer
+*    
+************************************************************************
+*/
 void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
 {
   int i,x,y;
@@ -189,12 +189,13 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
 
   int m, n, left, right, top, bottom,directx, directy;
   byte ***map;
-
+  
 #ifdef WRITE_MAP_IMAGE
+  int symbol_size_in_bytes = img->pic_unit_bitsize_on_disk/8;
   int  j, k, i0, j0, tmp, kk;
   char filename[20] = "map_dec.yuv";
   FILE *fp;
-  byte** Y;
+  imgpel** Y;
   static int old_pn=-1;
   static int first = 1;
 
@@ -373,7 +374,7 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
   if ( old_pn != img->number )
   {
     old_pn = img->number;
-    get_mem2D(&Y, img->height, img->width);
+    get_mem2Dpel(&Y, img->height, img->width);
     if (first)
     {
       fp = fopen( filename, "wb" );
@@ -387,7 +388,7 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
       for (i=0; i < img->height/16; i++)
         for (j=0; j < img->width/16; j++)
         {
-          tmp=map[kk][i][j]==0? 255 : 0;
+          tmp=map[kk][i][j]==0? img->max_imgpel_value : 0;
           for (i0=0; i0<16; i0++)
             for (j0=0; j0<16; j0++)
               Y[i*16+i0][j*16+j0]=tmp;
@@ -396,15 +397,15 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
       // write the map image
       for (i=0; i < img->height; i++)
         for (j=0; j < img->width; j++)
-          fputc(Y[i][j], fp);
-
+          fwrite(&(Y[i][j]), symbol_size_in_bytes, 1, p_out);
+        
       for (k=0; k < 2; k++)
         for (i=0; i < img->height/2; i++)
           for (j=0; j < img->width/2; j++)
-            fputc(128, fp);
+            fwrite(&(img->dc_pred_value), symbol_size_in_bytes, 1, p_out);
     }
     fclose( fp );
-    free_mem2D( Y );
+    free_mem2Dpel( Y );
   }
   // end of writing map image
 #undef WRITE_MAP_IMAGE
@@ -1319,7 +1320,7 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
   UsedBits = 0;
 
   seq_parameter_set_id   = ue_v("SEI: seq_parameter_set_id"  , buf);
-  sps = &SeqParSet[seq_parameter_set_id];
+   sps = &SeqParSet[seq_parameter_set_id];
 
   activate_sps(sps);
 
@@ -1330,7 +1331,7 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
 
   if (sps->vui_seq_parameters.nal_hrd_parameters_present_flag)
   {
-    for (k=0; k<sps->vui_seq_parameters.nal_hrd_parameters.cpb_cnt; k++)
+    for (k=0; k<sps->vui_seq_parameters.nal_hrd_parameters.cpb_cnt_minus1+1; k++)
     {
       initial_cpb_removal_delay        = u_v(sps->vui_seq_parameters.nal_hrd_parameters.cpb_removal_delay_length_minus1+1,
                                              "SEI: initial_cpb_removal_delay"         , buf);
@@ -1345,7 +1346,7 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
 
   if (sps->vui_seq_parameters.vcl_hrd_parameters_present_flag)
   {
-    for (k=0; k<sps->vui_seq_parameters.vcl_hrd_parameters.cpb_cnt; k++)
+    for (k=0; k<sps->vui_seq_parameters.vcl_hrd_parameters.cpb_cnt_minus1+1; k++)
     {
       initial_cpb_removal_delay        = u_v(sps->vui_seq_parameters.vcl_hrd_parameters.cpb_removal_delay_length_minus1+1,
                                              "SEI: initial_cpb_removal_delay"         , buf);
@@ -1396,7 +1397,11 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
 
   UsedBits = 0;
 
-  assert (NULL!=active_sps);
+  if (NULL==active_sps)
+  {
+    fprintf (stderr, "Warning: no active SPS, timing SEI cannot be parsed\n");
+    return;
+  }
 
 #ifdef PRINT_PCITURE_TIMING_INFO
   printf("Picture timing SEI message\n");

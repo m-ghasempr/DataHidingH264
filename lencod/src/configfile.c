@@ -50,27 +50,32 @@
  * If an -f \<config\> parameter is present in the command line then this file is used to
  * update the defaults of DEFAULTCONFIGFILENAME.  There can be more than one -f parameters
  * present.  If -p <ParameterName = ParameterValue> parameters are present then these
- * overide the default and the additional config file's settings, and are themselfes
+ * override the default and the additional config file's settings, and are themselves
  * overridden by future -p parameters.  There must be whitespace between -f and -p commands
- * and their respecitive parameters
+ * and their respective parameters
  ***********************************************************************
  */
 
 #define INCLUDED_BY_CONFIGFILE_C
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
+#if defined WIN32
+  #include <io.h>
+#else
+  #include <unistd.h>
+#endif
+#include <fcntl.h>
+#include <sys/stat.h>
+
 #include "global.h"
 #include "configfile.h"
-#include "fast_me.h"
-
 
 #include "fmo.h"
 
-static char *GetConfigFileContent (char *Filename);
+       char *GetConfigFileContent (char *Filename);
 static void ParseContent (char *buf, int bufsize);
 static int ParameterNameToMapIndex (char *s);
 static void PatchInp ();
@@ -87,7 +92,7 @@ static void LevelCheck();
  *   print help message and exit
  ***********************************************************************
  */
-void JMHelpExit()
+void JMHelpExit ()
 {
   fprintf( stderr, "\n   lencod [-h] [-p defenc.cfg] {[-f curenc1.cfg]...[-f curencN.cfg]}"
     " {[-p EncParam1=EncValue1]..[-p EncParamM=EncValueM]}\n\n"    
@@ -111,7 +116,7 @@ void JMHelpExit()
     "   lencod  -d default.cfg\n"
     "   lencod  -f curenc1.cfg\n"
     "   lencod  -f curenc1.cfg -p InputFile=\"e:\\data\\container_qcif_30.yuv\" -p SourceWidth=176 -p SourceHeight=144\n"  
-    "   lencod  -f curenc1.cfg -p FramesToBeEncoded=30 -p QPFirstFrame=28 -p QPRemainingFrame=28 -p QPBPicture=30\n");
+    "   lencod  -f curenc1.cfg -p FramesToBeEncoded=30 -p QPISlice=28 -p QPPSlice=28 -p QPBSlice=30\n");
 
   exit(-1);
 }
@@ -126,7 +131,7 @@ void JMHelpExit()
  *    command line parameters
  ***********************************************************************
  */
-void Configure(int ac, char *av[])
+void Configure (int ac, char *av[])
 {
   char *content;
   int CLcount, ContentLen, NumberParams;
@@ -136,6 +141,7 @@ void Configure(int ac, char *av[])
   //Set some initial parameters.
   configinput.LevelIDC   = LEVEL_IDC;
   configinput.ProfileIDC = PROFILE_IDC;
+
   // Process default config file
   CLcount = 1;
 
@@ -254,8 +260,8 @@ char *GetConfigFileContent (char *Filename)
 
   if (NULL == (f = fopen (Filename, "r")))
   {
-    snprintf (errortext, ET_SIZE, "Cannot open configuration file %s.\n", Filename);
-    error (errortext, 300);
+      snprintf (errortext, ET_SIZE, "Cannot open configuration file %s.\n", Filename);
+      error (errortext, 300);
   }
 
   if (0 != fseek (f, 0, SEEK_END))
@@ -400,7 +406,7 @@ void ParseContent (char *buf, int bufsize)
         printf (".");
         break;
       case 1:
-        strcpy ((char *) Map[MapIdx].Place, items [i+2]);
+        strncpy ((char *) Map[MapIdx].Place, items [i+2], FILE_NAME_SIZE);
         printf (".");
         break;
       case 2:           // Numerical double
@@ -471,75 +477,88 @@ unsigned CeilLog2( unsigned uiVal)
  */
 static void PatchInp ()
 {
-
-
+  int bitdepth_qp_scale = 6*(input->BitDepthLuma - 8);
+  
   // These variables are added for FMO
   FILE * sgfile=NULL;
   int i;
   int frame_mb_only;
   int mb_width, mb_height, mapunit_height;
 
-	
+//  input->BitDepthChroma = input->BitDepthLuma;
+  input->LowPassForIntra8x8 = 1;                    //low pass is always used
+
   // consistency check of QPs
-  if (input->qp0 > MAX_QP || input->qp0 < MIN_QP)
+  if (input->qp0 > MAX_QP || input->qp0 < (MIN_QP - bitdepth_qp_scale))
   {
-    snprintf(errortext, ET_SIZE, "Error input parameter quant_0,check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter QPIlice. Check configuration file");
+    error (errortext, 400);
+  }
+  
+  if (input->qpN > MAX_QP || input->qpN < (MIN_QP - bitdepth_qp_scale))
+  {
+    snprintf(errortext, ET_SIZE, "Error in input parameter QPPlice. Check configuration file");
+    error (errortext, 400);
+  }
+  
+  if (input->qpB > MAX_QP || input->qpB < (MIN_QP - bitdepth_qp_scale))
+  {
+    snprintf(errortext, ET_SIZE, "Error in input parameter QPBSlice. Check configuration file");
     error (errortext, 400);
   }
 
-  if (input->qpN > MAX_QP || input->qpN < MIN_QP)
+  if ((input->qpBSoffset + input->qpB > MAX_QP) || (input->qpBSoffset + input->qpB < (MIN_QP - bitdepth_qp_scale)))
   {
-    snprintf(errortext, ET_SIZE, "Error input parameter quant_n,check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter qpBSoffset. Check configuration file");
     error (errortext, 400);
   }
 
-  if (input->qpB > MAX_QP || input->qpB < MIN_QP)
-  {
-    snprintf(errortext, ET_SIZE, "Error input parameter quant_B,check configuration file");
-    error (errortext, 400);
-  }
 #ifdef _CHANGE_QP_
-  if (input->qp2start && (input->qpB2 > MAX_QP || input->qpB2 < MIN_QP))
+  if (input->qp2start && (input->qpB2 > MAX_QP || input->qpB2 < (MIN_QP - bitdepth_qp_scale)))
   {
-    snprintf(errortext, ET_SIZE, "Error input parameter ChangeQPB,check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter ChangeQPB. Check configuration file");
     error (errortext, 400);
   }
 
-  if (input->qp2start && (input->qp02 > MAX_QP || input->qp02 < MIN_QP))
+  if (input->qp2start && (input->qp02 > MAX_QP || input->qp02 < (MIN_QP - bitdepth_qp_scale)))
   {
-    snprintf(errortext, ET_SIZE, "Error input parameter ChangeQIB,check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter ChangeQIB. Check configuration file");
+    error (errortext, 400);
+  }
+  
+  if (input->qp2start && (input->qpN2 > MAX_QP || input->qpN2 < (MIN_QP - bitdepth_qp_scale)))
+  {
+    snprintf(errortext, ET_SIZE, "Error in input parameter ChangeQPP. Check configuration file");
     error (errortext, 400);
   }
 
-  if (input->qp2start && (input->qpN2 > MAX_QP || input->qpN2 < MIN_QP))
+  if (input->qp2start && ((input->qpBs2offset + input->qpB2 > MAX_QP) || (input->qpBs2offset + input->qpB2 < (MIN_QP - bitdepth_qp_scale))))
   {
-    snprintf(errortext, ET_SIZE, "Error input parameter ChangeQPP,check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter ChangeQPBs. Check configuration file");
     error (errortext, 400);
   }
-
-
 #endif
-  if (input->qpsp > MAX_QP || input->qpsp < MIN_QP)
+  if (input->qpsp > MAX_QP || input->qpsp < (MIN_QP - bitdepth_qp_scale))
   {
-    snprintf(errortext, ET_SIZE, "Error input parameter quant_sp,check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter quant_sp. Check configuration file");
     error (errortext, 400);
   }
-  if (input->qpsp_pred > MAX_QP || input->qpsp_pred < MIN_QP)
+  if (input->qpsp_pred > MAX_QP || input->qpsp_pred < (MIN_QP - bitdepth_qp_scale))
   {
-    snprintf(errortext, ET_SIZE, "Error input parameter quant_sp_pred,check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter quant_sp_pred. Check configuration file");
     error (errortext, 400);
   }
   if (input->sp_periodicity <0)
   {
-    snprintf(errortext, ET_SIZE, "Error input parameter sp_periodicity,check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter sp_periodicity. Check configuration file");
     error (errortext, 400);
   }
-  if (input->FrameRate < 0 || input->FrameRate>100)   
+  if (input->FrameRate < 0.0 || input->FrameRate>100.0)   
   {
     snprintf(errortext, ET_SIZE, "Error in input parameter FrameRate, check configuration file");
     error (errortext, 400);
   }
-  if (input->FrameRate == 0)
+  if (input->FrameRate == 0.0)
     input->FrameRate = INIT_FRAME_RATE;
 
   if (input->idr_enable < 0 || input->idr_enable > 1)   
@@ -550,12 +569,12 @@ static void PatchInp ()
 
   if (input->start_frame < 0 )   
   {
-    snprintf(errortext, ET_SIZE, "Error in input parameter StartFrane, Check configuration file.");
+    snprintf(errortext, ET_SIZE, "Error in input parameter StartFrame, Check configuration file.");
     error (errortext, 400);
   }
 
-  // consistency check num_reference_frames
-  if (input->num_reference_frames<1) input->num_reference_frames=1;
+  // consistency check num_ref_frames
+  if (input->num_ref_frames<1) input->num_ref_frames=1;
 
 
   // consistency check size information
@@ -578,52 +597,55 @@ static void PatchInp ()
   // check range of filter offsets
   if (input->LFAlphaC0Offset > 6 || input->LFAlphaC0Offset < -6)
   {
-    snprintf(errortext, ET_SIZE, "Error input parameter LFAlphaC0Offset, check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter LFAlphaC0Offset, check configuration file");
     error (errortext, 400);
   }
 
   if (input->LFBetaOffset > 6 || input->LFBetaOffset < -6)
   {
-    snprintf(errortext, ET_SIZE, "Error input parameter LFBetaOffset, check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter LFBetaOffset, check configuration file");
     error (errortext, 400);
   }
 
   // Set block sizes
-  
-  input->blc_size[0][0]=16;
-  input->blc_size[0][1]=16;
-  
-  input->blc_size[1][0]=16;
-  input->blc_size[1][1]=16;
-  
-  input->blc_size[2][0]=16;
-  input->blc_size[2][1]= 8;
-  
-  input->blc_size[3][0]= 8;
-  input->blc_size[3][1]=16;
-  
-  input->blc_size[4][0]= 8;
-  input->blc_size[4][1]= 8;
-  
-  input->blc_size[5][0]= 8;
-  input->blc_size[5][1]= 4;
-  
-  input->blc_size[6][0]= 4;
-  input->blc_size[6][1]= 8;
-  
-  input->blc_size[7][0]= 4;
-  input->blc_size[7][1]= 4;
-  
+
+    input->blc_size[0][0]=16;
+    input->blc_size[0][1]=16;
+
+    input->blc_size[1][0]=16;
+    input->blc_size[1][1]=16;
+
+    input->blc_size[2][0]=16;
+    input->blc_size[2][1]= 8;
+
+    input->blc_size[3][0]= 8;
+    input->blc_size[3][1]=16;
+
+    input->blc_size[4][0]= 8;
+    input->blc_size[4][1]= 8;
+
+    input->blc_size[5][0]= 8;
+    input->blc_size[5][1]= 4;
+
+    input->blc_size[6][0]= 4;
+    input->blc_size[6][1]= 8;
+
+    input->blc_size[7][0]= 4;
+    input->blc_size[7][1]= 4;
+
   // set proper log2_max_frame_num_minus4.
   {
     int storedBplus1 = (input->StoredBPictures ) ? input->successive_Bframe + 1: 1;
 
-    log2_max_frame_num_minus4 = max( (int)(CeilLog2(1+ input->no_frames *storedBplus1 ))-4, 0);
+//    log2_max_frame_num_minus4 = max( (int)(CeilLog2(input->no_frames * storedBplus1))-4, 0);
+    if (input->Log2MaxFrameNum < 4)
+      log2_max_frame_num_minus4 = max( (int)(CeilLog2(input->no_frames *storedBplus1 ))-4, 0);
+    else 
+      log2_max_frame_num_minus4 = input->Log2MaxFrameNum - 4;
   
-//    log2_max_frame_num_minus4 = 0;
   }
 
-  log2_max_pic_order_cnt_lsb_minus4 = max( (int)(CeilLog2(1+2*input->no_frames * (input->successive_Bframe + 1))) -4, 0);
+  log2_max_pic_order_cnt_lsb_minus4 = max( (int)(CeilLog2( 2*input->no_frames * (input->jumpd + 1))) -4, 0);
 
   if (input->partition_mode < 0 || input->partition_mode > 1)
   {
@@ -645,9 +667,9 @@ static void PatchInp ()
   }
 
   // Direct Mode consistency check
-  if(input->successive_Bframe && input->direct_type != DIR_SPATIAL && input->direct_type != DIR_TEMPORAL)
+  if(input->successive_Bframe && input->direct_spatial_mv_pred_flag != DIR_SPATIAL && input->direct_spatial_mv_pred_flag != DIR_TEMPORAL)
   {
-    snprintf(errortext, ET_SIZE, "Unsupported direct mode=%d, use TEMPORAL=0 or SPATIAL=1", input->direct_type);
+    snprintf(errortext, ET_SIZE, "Unsupported direct mode=%d, use TEMPORAL=0 or SPATIAL=1", input->direct_spatial_mv_pred_flag);
     error (errortext, 400);
   }
 
@@ -674,13 +696,13 @@ static void PatchInp ()
   }
 
   // Open Files
-  if ((p_in=fopen(input->infile,"rb"))==NULL)
+  if ((p_in=open(input->infile, OPENFLAGS_READ))==-1)
   {
     snprintf(errortext, ET_SIZE, "Input file %s does not exist",input->infile);
     error (errortext, 500);
   }
 
-  if (strlen (input->ReconFile) > 0 && (p_dec=fopen(input->ReconFile, "wb"))==NULL)
+  if (strlen (input->ReconFile) > 0 && (p_dec=open(input->ReconFile, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1)
   {
     snprintf(errortext, ET_SIZE, "Error open file %s", input->ReconFile);
     error (errortext, 500);
@@ -692,15 +714,12 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
-	
   // add check for MAXSLICEGROUPIDS
   if(input->num_slice_groups_minus1>=MAXSLICEGROUPIDS)
   {
     snprintf(errortext, ET_SIZE, "num_slice_groups_minus1 exceeds MAXSLICEGROUPIDS");
     error (errortext, 500);
   }
-  
-  
   
   // Following codes are to read slice group configuration from SliceGroupConfigFileName for slice group type 0,2 or 6
   if( (input->num_slice_groups_minus1!=0)&&
@@ -767,6 +786,20 @@ static void PatchInp ()
     }
   }
   
+  
+  if (input->PyramidRefReorder && input->PyramidCoding && (input->PicInterlace || input->MbInterlace))
+  {
+    snprintf(errortext, ET_SIZE, "PyramidRefReorder Not supported with Interlace encoding methods\n");
+    error (errortext, 400);
+  }
+
+  if (input->PocMemoryManagement && input->PyramidCoding && (input->PicInterlace || input->MbInterlace))
+  {
+    snprintf(errortext, ET_SIZE, "PocMemoryManagement not supported with Interlace encoding methods\n");
+    error (errortext, 400);
+  }
+
+
   // frame/field consistency check
   if (input->PicInterlace != FRAME_CODING && input->PicInterlace != ADAPTIVE_CODING && input->PicInterlace != FIELD_CODING)
   {
@@ -780,7 +813,7 @@ static void PatchInp ()
     snprintf (errortext, ET_SIZE, "Unsupported MbInterlace=%d, use frame based coding=0 or field based coding=1 or adaptive=2",input->MbInterlace);
     error (errortext, 400);
   }
-
+   
   if (input->WeightedPrediction < 0 || input->WeightedPrediction > 1 )
   {
     snprintf (errortext, ET_SIZE, "\nWeightedPrediction=%d is not allowed.Select 0 (normal) or 1 (explicit)",input->WeightedPrediction);
@@ -808,13 +841,18 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
+  if (input->rdopt>1)
+  {
+    snprintf(errortext, ET_SIZE, "RDOptimization=2 mode has been deactivated do to diverging of real and simulated decoders.");
+    error (errortext, 500);
+  }
 
   // Tian Dong: May 31, 2002
   // The number of frames in one sub-seq in enhanced layer should not exceed
   // the number of reference frame number.
-  if ( input->NumFramesInELSubSeq >= input->num_reference_frames || input->NumFramesInELSubSeq < 0 )
+  if ( input->NumFramesInELSubSeq >= input->num_ref_frames || input->NumFramesInELSubSeq < 0 )
   {
-    snprintf(errortext, ET_SIZE, "NumFramesInELSubSeq (%d) is out of range [0,%d).", input->NumFramesInELSubSeq, input->num_reference_frames);
+    snprintf(errortext, ET_SIZE, "NumFramesInELSubSeq (%d) is out of range [0,%d).", input->NumFramesInELSubSeq, input->num_ref_frames);
     error (errortext, 500);
   }
   // Tian Dong: Enhanced GOP is not supported in bitstream mode. September, 2002
@@ -855,7 +893,7 @@ static void PatchInp ()
     if( (input->slice_group_map_type >= 3) && (input->slice_group_map_type<=5) ) 
       input->num_slice_groups_minus1 = 1;
   }
-	
+  
   // Rate control
   if(input->RCEnable)
   {
@@ -871,9 +909,44 @@ static void PatchInp ()
     error("Stored B pictures combined with IDR pictures only supported in Picture Order Count type 0\n",-1000);
   }
   
-  if( !input->direct_type && input->num_reference_frames<2 && input->successive_Bframe >0)
+  if( !input->direct_spatial_mv_pred_flag && input->num_ref_frames<2 && input->successive_Bframe >0)
     error("temporal direct needs at least 2 ref frames\n",-1000);
 
+  // frext
+  if(input->AllowTransform8x8 && input->sp_periodicity /*SP-frames*/)
+  {
+    snprintf(errortext, ET_SIZE, "\nThe new 8x8 mode is not implemented for sp-frames.");
+    error (errortext, 500);
+  }
+
+  if(input->AllowTransform8x8 && (input->ProfileIDC<FREXT_HP || input->ProfileIDC>FREXT_Hi444))
+  {
+    snprintf(errortext, ET_SIZE, "\nAllowTransform8x8 may be used only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
+    error (errortext, 500);
+  }
+  if(input->ScalingMatrixPresentFlag && (input->ProfileIDC<FREXT_HP || input->ProfileIDC>FREXT_Hi444))
+  {
+    snprintf(errortext, ET_SIZE, "\nScalingMatrixPresentFlag may be used only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
+    error (errortext, 500);
+  }
+
+  if(input->yuv_format==YUV422 && input->ProfileIDC < FREXT_Hi422)
+  {
+    snprintf(errortext, ET_SIZE, "\nFRExt Profile(YUV Format) Error!\nYUV422 can be used only with ProfileIDC %d or %d\n",FREXT_Hi422, FREXT_Hi444);
+    error (errortext, 500);
+  }
+  if(input->yuv_format==YUV444 && input->ProfileIDC < FREXT_Hi444)
+  {
+    snprintf(errortext, ET_SIZE, "\nFRExt Profile(YUV Format) Error!\nYUV444 can be used only with ProfileIDC %d.\n",FREXT_Hi444);
+    error (errortext, 500);
+  }
+  
+  // Residue Color Transform
+  if(input->yuv_format!=YUV444 && input->residue_transform_flag)
+  {
+    snprintf(errortext, ET_SIZE, "\nResidue color transform is supported only in YUV444.");
+    error (errortext, 500);
+  }
 
   ProfileCheck();
   LevelCheck();
@@ -893,9 +966,15 @@ void PatchInputNoFrames()
 
 static void ProfileCheck()
 {
-  if ((input->ProfileIDC != 66 ) && (input->ProfileIDC != 77 ) && (input->ProfileIDC != 88 ))
+  if((input->ProfileIDC != 66 ) &&
+     (input->ProfileIDC != 77 ) && 
+     (input->ProfileIDC != 88 ) && 
+     (input->ProfileIDC != FREXT_HP    ) && 
+     (input->ProfileIDC != FREXT_Hi10P ) && 
+     (input->ProfileIDC != FREXT_Hi422 ) && 
+     (input->ProfileIDC != FREXT_Hi444 ))
   {
-    snprintf(errortext, ET_SIZE, "Profile must be baseline(66)/main(77)/extended(88).");
+    snprintf(errortext, ET_SIZE, "Profile must be baseline(66)/main(77)/extended(88) or FRExt (%d to %d).", FREXT_HP,FREXT_Hi444);
     error (errortext, 500);
   }
   // baseline

@@ -3,6 +3,9 @@
  ************************************************************************
  * \file mv-search.h
  *
+ * \brief
+ *   array definition for motion search
+ *
  * \author
  *    Inge Lille-Langøy               <inge.lille-langoy@telenor.com>   \n
  *    Copyright (C) 1999  Telenor Satellite Services, Norway

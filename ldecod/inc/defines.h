@@ -19,7 +19,7 @@
 #define _DEFINES_H_
 
 #if defined _DEBUG
-#define TRACE           0                   //!< 0:Trace off 1:Trace on
+#define TRACE           1                   //!< 0:Trace off 1:Trace on
 #else
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
@@ -28,6 +28,18 @@
 
 //#define MAX_NUM_SLICES 150
 #define MAX_NUM_SLICES 50
+
+//FREXT Profile IDC definitions
+#define FREXT_HP        100      //!< YUV 4:2:0/8 "High"
+#define FREXT_Hi10P     110      //!< YUV 4:2:0/10 "High 10"
+#define FREXT_Hi422     122      //!< YUV 4:2:2/10 "High 4:2:2"
+#define FREXT_Hi444     144      //!< YUV 4:4:4/12 "High 4:4:4"
+
+#define YUV400 0
+#define YUV420 1
+#define YUV422 2
+#define YUV444 3
+
 
 // CAVLC
 #define LUMA              0
@@ -47,7 +59,9 @@
 #define LUMA_4x4        5
 #define CHROMA_DC       6
 #define CHROMA_AC       7
-#define NUM_BLOCK_TYPES 8
+#define CHROMA_DC_2x4   8
+#define CHROMA_DC_4x4   9
+#define NUM_BLOCK_TYPES 10
 
 
 #define MAX_CODED_FRAME_SIZE 8000000         //!< bytes for one frame
@@ -56,7 +70,8 @@
 
 #define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
 
-#define Clip1(a)            ((a)>255?255:((a)<0?0:(a)))
+#define Clip1(a)            ((a)>img->max_imgpel_value?img->max_imgpel_value:((a)<0?0:(a)))
+#define Clip1_Chr(a)        ((a)>img->max_imgpel_value_uv?img->max_imgpel_value_uv:((a)<0?0:(a)))
 #define Clip3(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
 
 #define P8x8    8
@@ -64,15 +79,16 @@
 #define I16MB   10
 #define IBLOCK  11
 #define SI4MB   12
-#define MAXMODE 13
+#define I8MB    13
 #define IPCM    14
+#define MAXMODE 15
 
-#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB ||(MB)->mb_type==IPCM || (MB)->mb_type==SI4MB)
+#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB ||(MB)->mb_type==IPCM || (MB)->mb_type==I8MB || (MB)->mb_type==SI4MB)
 #define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB  || (MB)->mb_type==IPCM)
-
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
-#define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB  && (MB)->mb_type!=IPCM)
-#define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB  && (MB)->mb_type!=0 && (MB)->mb_type!=IPCM)
+
+#define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=IPCM)
+#define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=0 && (MB)->mb_type!=IPCM)
 #define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->type==B_SLICE ))
 #define IS_COPY(MB)     ((MB)->mb_type==0     && (img->type==P_SLICE || img->type==SP_SLICE))
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
@@ -123,7 +139,7 @@
 
 #define INVALIDINDEX  (-135792468)
 
-#ifndef WIN32
+#if !defined(WIN32) || defined(__GNUC__)
 #define max(a, b)      ((a) > (b) ? (a) : (b))  //!< Macro returning max value
 #define min(a, b)      ((a) < (b) ? (a) : (b))  //!< Macro returning min value
 #endif

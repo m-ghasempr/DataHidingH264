@@ -12,7 +12,6 @@
  ***************************************************************************
  */
 #include <stdlib.h>
-#include <assert.h>
 
 #include "contributors.h"
 #include "global.h"
@@ -137,9 +136,9 @@ void write_buffer(unsigned long NumberLeakyBuckets, unsigned long Rmin[], unsign
   printf(" Number Leaky Buckets: %ld \n     Rmin     Bmin     Fmin \n", NumberLeakyBuckets);
   for(iBucket =0; iBucket < NumberLeakyBuckets; iBucket++) 
   {
-    assert(Rmin[iBucket]<4294967296); //Overflow should be corrected already.
-    assert(Bmin[iBucket]<4294967296);
-    assert(Fmin[iBucket]<4294967296);
+    //assert(Rmin[iBucket]<4294967296); //Overflow should be corrected already.
+    //assert(Bmin[iBucket]<4294967296);
+    //assert(Fmin[iBucket]<4294967296);
     PutBigDoubleWord(Rmin[iBucket], outf);
     PutBigDoubleWord(Bmin[iBucket], outf);
     PutBigDoubleWord(Fmin[iBucket], outf);
@@ -206,7 +205,7 @@ void calc_buffer()
   long maxBuffer, actualBuffer, InitFullness, iChannelRate;
   unsigned long *Rmin, *Bmin, *Fmin;
    
-  fprintf(stdout,"--------------------------------------------------------------------------\n");
+  fprintf(stdout,"-------------------------------------------------------------------------------\n");
   printf(" Total Frames:  %ld (%d) \n", total_frame_buffer, input->no_frames);
   NumberLeakyBuckets = (unsigned long) input->NumberLeakyBuckets;
   buffer_frame = calloc(total_frame_buffer+1, sizeof(long));
@@ -234,9 +233,9 @@ void calc_buffer()
     for(iBucket=0; iBucket < NumberLeakyBuckets; iBucket++) 
     {
       if(iBucket == 0)
-        Rmin[iBucket] = (AvgRate * img->framerate)/(input->jumpd+1); /* convert bits/frame to bits/second */
+        Rmin[iBucket] = (unsigned long)((float) AvgRate * img->framerate)/(input->jumpd+1); /* convert bits/frame to bits/second */
       else
-        Rmin[iBucket] = Rmin[iBucket-1] + (AvgRate/4) * (img->framerate) / (input->jumpd+1);    
+        Rmin[iBucket] = (unsigned long) ((float) Rmin[iBucket-1] + (AvgRate/4) * (img->framerate) / (input->jumpd+1));    
     }
   }
   Sort(NumberLeakyBuckets, Rmin);   
@@ -244,7 +243,7 @@ void calc_buffer()
   maxBuffer = AvgRate * 20; /* any initialization is good. */        
   for(iBucket=0; iBucket< NumberLeakyBuckets; iBucket++) 
   {           
-    iChannelRate = (long) Rmin[iBucket] * (input->jumpd+1)/(img->framerate); /* converts bits/second to bits/frame */
+    iChannelRate = (long) (Rmin[iBucket] * (input->jumpd+1)/(img->framerate)); /* converts bits/second to bits/frame */
     /* To calculate initial buffer size */
     InitFullness = maxBuffer; /* set Initial Fullness to be buffer size */
     buffer_frame[0] = InitFullness;

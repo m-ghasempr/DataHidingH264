@@ -12,10 +12,8 @@
  ************************************************************************
  */
 
-#include <stdio.h>
 #include <assert.h>
-#include <malloc.h>
-#include "memory.h"
+#include <memory.h>
 
 #include "global.h"
 #include "nalu.h"

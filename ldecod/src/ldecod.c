@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 8.6
+ *     JM 9.0 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -30,6 +30,7 @@
  *     - Byeong-Moon Jeon        <jeonbm@lge.com>
  *     - Gabi Blaettermann       <blaetter@hhi.de>
  *     - Ye-Kui Wang             <wyk@ieee.org>
+ *     - Valeri George           <george@hhi.de>
  *     - Karsten Suehring        <suehring@hhi.de>
  *
  ***********************************************************************
@@ -44,8 +45,13 @@
 #include <sys/timeb.h>
 
 #if defined WIN32
-  #include <conio.h>
+  #include <io.h>
+#else
+  #include <unistd.h>
 #endif
+#include <sys/stat.h>
+#include <fcntl.h>
+
 
 #include <assert.h>
 
@@ -61,8 +67,9 @@
 
 #include "erc_api.h"
 
-#define JM          "8"
-#define VERSION     "8.6"
+#define JM          "9 (FRExt)"
+#define VERSION     "9.0"
+#define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -111,7 +118,7 @@ int main(int argc, char **argv)
   init_conf(input, argv[1]);
 
   init_old_slice();
-  
+
   switch (input->FileFormat)
   {
   case 0:
@@ -165,10 +172,10 @@ int main(int argc, char **argv)
 
   CloseBitstreamFile();
 
-  fclose(p_out);
+  close(p_out);
 //  fclose(p_out2);
-  if (p_ref)
-    fclose(p_ref);
+  if (p_ref!=-1)
+    close(p_ref);
 #if TRACE
   fclose(p_trace);
 #endif
@@ -196,15 +203,53 @@ int main(int argc, char **argv)
  */
 void init(struct img_par *img)  //!< image parameters
 {
-  int i;
+  img->oldFrameSizeInMbs = -1;
 
-  // initilize quad matrix used in snr routine
-  for (i=0; i <  256; i++)
+  imgY_ref  = NULL;
+  imgUV_ref = NULL;
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Initilize FREXT variables
+ ***********************************************************************
+ */
+void init_frext(struct img_par *img)  //!< image parameters
+{
+  //pel bitdepth init
+  img->bitdepth_luma_qp_scale   = 6*(img->bitdepth_luma   - 8);
+  if(img->bitdepth_luma > img->bitdepth_chroma || img->yuv_format == YUV400)
+    img->pic_unit_bitsize_on_disk = (img->bitdepth_luma > 8)? 16:8;
+  else
+    img->pic_unit_bitsize_on_disk = (img->bitdepth_chroma > 8)? 16:8;
+  img->dc_pred_value = 1<<(img->bitdepth_luma - 1);
+  img->max_imgpel_value = (1<<img->bitdepth_luma) - 1;
+
+  if (img->yuv_format != YUV400)
   {
-    img->quad[i]=i*i; // fix from TML 1, truncation removed
+    //for chrominance part
+    img->bitdepth_chroma_qp_scale = 6*(img->bitdepth_chroma - 8);
+    img->max_imgpel_value_uv      = (1<<img->bitdepth_chroma) - 1;
+    img->num_blk8x8_uv = (1<<img->yuv_format)&(~(0x1));
+    img->num_cdc_coeff = img->num_blk8x8_uv<<1;
+    img->mb_cr_size_x  = (img->yuv_format==YUV420 || img->yuv_format==YUV422)? 8:16;
+    img->mb_cr_size_y  = (img->yuv_format==YUV444 || img->yuv_format==YUV422)? 16:8;
+
+    // Residue Color Transform
+    if(img->residue_transform_flag)
+      img->bitdepth_chroma_qp_scale += 6;
+  }
+  else
+  {
+    img->bitdepth_chroma_qp_scale = 0;
+    img->max_imgpel_value_uv      = 0;
+    img->num_blk8x8_uv = 0;
+    img->num_cdc_coeff = 0;
+    img->mb_cr_size_x  = 0;
+    img->mb_cr_size_y  = 0;
   }
 
-  img->oldFrameSizeInMbs = -1;
 }
 
 
@@ -275,9 +320,9 @@ void init_conf(struct inp_par *inp,
   fscanf(fd,"%*[^\n]");
 
 
-  if (inp->poc_scale < 1 || inp->poc_scale > 2)
+  if (inp->poc_scale < 1 || inp->poc_scale > 10)
   {
-    snprintf(errortext, ET_SIZE, "Poc Scale is %d. It has to be 1 or 2",inp->poc_scale);
+    snprintf(errortext, ET_SIZE, "Poc Scale is %d. It has to be within range 1 to 10",inp->poc_scale);
     error(errortext,1);
   }
 
@@ -304,7 +349,7 @@ void init_conf(struct inp_par *inp,
 #endif
 
 
-  if ((p_out=fopen(inp->outfile,"wb"))==0)
+  if ((p_out=open(inp->outfile, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1)
   {
     snprintf(errortext, ET_SIZE, "Error open file %s ",inp->outfile);
     error(errortext,500);
@@ -315,13 +360,14 @@ void init_conf(struct inp_par *inp,
     error(errortext,500);
   }*/
 
-  fprintf(stdout,"--------------------------------------------------------------------------\n");
+
+  fprintf(stdout,"----------------------------- JM %s %s -----------------------------\n", VERSION, EXT_VERSION);
   fprintf(stdout," Decoder config file                    : %s \n",config_filename);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
   fprintf(stdout," Input H.264 bitstream                  : %s \n",inp->infile);
-  fprintf(stdout," Output decoded YUV 4:2:0               : %s \n",inp->outfile);
+  fprintf(stdout," Output decoded YUV                     : %s \n",inp->outfile);
   fprintf(stdout," Output status file                     : %s \n",LOGFILE);
-  if ((p_ref=fopen(inp->reffile,"rb"))==0)
+  if ((p_ref=open(inp->reffile,OPENFLAGS_READ))==-1)
   {
     fprintf(stdout," Input reference file                   : %s does not exist \n",inp->reffile);
     fprintf(stdout,"                                          SNR values are not available\n");
@@ -339,7 +385,7 @@ void init_conf(struct inp_par *inp,
   fprintf(stdout,"--------------------------------------------------------------------------\n");
 #endif
   fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
-  fprintf(stdout,"Frame    POC   QP  SnrY    SnrU    SnrV   Time(ms)\n");
+    fprintf(stdout,"Frame    POC Pic#  QP  SnrY    SnrU    SnrV    Y:U:V  Time(ms)\n");
 }
 
 /*!
@@ -361,6 +407,7 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   #define OUTSTRING_SIZE 255
   char string[OUTSTRING_SIZE];
   FILE *p_log;
+  char yuv_formats[4][4]= { {"400"}, {"420"}, {"422"}, {"444"} };
 
 #ifndef WIN32
   time_t  now;
@@ -375,7 +422,7 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   fprintf(stdout," SNR V(dB)           : %5.2f\n",snr->snr_va);
   fprintf(stdout," Total decoding time : %.3f sec \n",tot_time*0.001);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
-  fprintf(stdout," Exit JM %s decoder, ver %s ",JM,VERSION);
+  fprintf(stdout," Exit JM %s decoder, ver %s ",JM, VERSION);
   fprintf(stdout,"\n");
   // write to log file
 
@@ -389,11 +436,11 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
     }
     else                                              // Create header to new file
     {
-      fprintf(p_log," ------------------------------------------------------------------------------------------\n");
+      fprintf(p_log," -------------------------------------------------------------------------------------------------------------------\n");
       fprintf(p_log,"|  Decoder statistics. This file is made first time, later runs are appended               |\n");
-      fprintf(p_log," ------------------------------------------------------------------------------------------ \n");
-      fprintf(p_log,"| Date  | Time  |    Sequence        |#Img|Format|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|\n");
-      fprintf(p_log," ------------------------------------------------------------------------------------------\n");
+      fprintf(p_log," ------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log,"|   ver  | Date  | Time  |    Sequence        |#Img| Format  | YUV |Coding|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|\n");
+      fprintf(p_log," -------------------------------------------------------------------------------------------------------------------\n");
     }
   }
   else
@@ -402,6 +449,8 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
     p_log=fopen(string,"a");                    // File exist,just open for appending
   }
 
+  fprintf(p_log,"|%s/%-4s", VERSION, EXT_VERSION);
+  
 #ifdef WIN32
   _strdate( timebuf );
   fprintf(p_log,"| %1.5s |",timebuf );
@@ -422,6 +471,14 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   fprintf(p_log,"%20.20s|",inp->infile);
 
   fprintf(p_log,"%3d |",img->number);
+  fprintf(p_log,"%4dx%-4d|", img->width, img->height);
+  fprintf(p_log," %s |", &(yuv_formats[img->yuv_format][0]));
+
+  if (active_pps->entropy_coding_mode_flag == UVLC)
+    fprintf(p_log," CAVLC|");
+  else
+    fprintf(p_log," CABAC|");
+
 
   fprintf(p_log,"%6.3f|",snr->snr_y1);
   fprintf(p_log,"%6.3f|",snr->snr_u1);
@@ -637,6 +694,7 @@ void free_slice(struct inp_par *inp, struct img_par *img)
 int init_global_buffers()
 {
   int memory_size=0;
+  int quad_range, i;
 
   if (global_init_done)
   {
@@ -644,8 +702,9 @@ int init_global_buffers()
   }
 
   // allocate memory for reference frame in find_snr
-  memory_size += get_mem2D(&imgY_ref, img->height, img->width);
-  memory_size += get_mem3D(&imgUV_ref, 2, img->height_cr, img->width_cr);
+  memory_size += get_mem2Dpel(&imgY_ref, img->height, img->width);
+  if (img->yuv_format != YUV400)
+    memory_size += get_mem3Dpel(&imgUV_ref, 2, img->height_cr, img->width_cr);
 
   // allocate memory in structure img
   if(((img->mb_data) = (Macroblock *) calloc(img->FrameSizeInMbs, sizeof(Macroblock))) == NULL)
@@ -663,10 +722,23 @@ int init_global_buffers()
   memory_size += get_mem4Dint(&(img->wbp_weight), 6, MAX_REFERENCE_PICTURES, MAX_REFERENCE_PICTURES, 3);
 
   // CAVLC mem
-  memory_size += get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 6);
+  memory_size += get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 4 + img->num_blk8x8_uv);
 
   memory_size += get_mem2Dint(&(img->siblock),img->PicWidthInMbs  , img->FrameHeightInMbs);
+  
+  if(img->max_imgpel_value > img->max_imgpel_value_uv || img->yuv_format == YUV400)
+    quad_range = (img->max_imgpel_value + 1) * 2;
+  else
+    quad_range = (img->max_imgpel_value_uv + 1) * 2;
 
+  if ((img->quad = (int*)calloc (quad_range, sizeof(int))) == NULL)
+    no_mem_exit ("init_img: img->quad");
+
+  for (i=0; i < quad_range/2; ++i)
+  {
+    img->quad[i]=i*i;
+  }
+  
   global_init_done = 1;
 
   img->oldFrameSizeInMbs = img->FrameSizeInMbs;
@@ -691,8 +763,9 @@ int init_global_buffers()
  */
 void free_global_buffers()
 {
-  free_mem2D (imgY_ref);
-  free_mem3D (imgUV_ref,2);
+  free_mem2Dpel (imgY_ref);
+  if (img->yuv_format != YUV400)
+    free_mem3Dpel (imgUV_ref,2);
 
   // CAVLC free mem
   free_mem3Dint(img->nz_coeff, img->oldFrameSizeInMbs);
@@ -711,6 +784,8 @@ void free_global_buffers()
   free_mem3Dint(img->wp_weight, 2);
   free_mem3Dint(img->wp_offset, 6);
   free_mem4Dint(img->wbp_weight, 6, MAX_REFERENCE_PICTURES);
+
+  free (img->quad);
 
   global_init_done = 0;
 

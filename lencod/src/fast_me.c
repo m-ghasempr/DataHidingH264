@@ -1,64 +1,34 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
+
 /*!
  ************************************************************************
+ *
+ * \file fast_me.c
+ *
  * \brief
- * Fast integer pel motion estimation and fractional pel motion estimation
- * algorithms are described in this file.
- * 1. get_mem_FME() and free_mem_FME() are functions for allocation and release
- *    of memories about motion estimation
- * 2. FME_BlockMotionSearch() is the function for fast integer pel motion 
- *    estimation and fractional pel motion estimation
- * 3. DefineThreshold() defined thresholds for early termination
- * \ Main contributors: (see contributors.h for copyright, address and affiliation details)
- *   Zhibo Chen         <chenzhibo@tsinghua.org.cn>
- *   JianFeng Xu        <fenax@video.mdc.tsinghua.edu.cn>  
- * \date   : 2003.8
+ *   Fast integer pel motion estimation and fractional pel motion estimation
+ *   algorithms are described in this file.
+ *   1. get_mem_FME() and free_mem_FME() are functions for allocation and release
+ *      of memories about motion estimation
+ *   2. FME_BlockMotionSearch() is the function for fast integer pel motion 
+ *      estimation and fractional pel motion estimation
+ *   3. DefineThreshold() defined thresholds for early termination
+ * \author 
+ *    Main contributors: (see contributors.h for copyright, address and affiliation details)
+ *    - Zhibo Chen         <chenzhibo@tsinghua.org.cn>
+ *    - JianFeng Xu        <fenax@video.mdc.tsinghua.edu.cn>  
+ * \date    
+ *    2003.8
  ************************************************************************
  */
 
 #include <stdlib.h>
-#include <math.h>
 #include <string.h>
-#include <memory.h>
-#include <assert.h>
 
-
+#include "global.h"
 
 #include "memalloc.h"
 #include "fast_me.h"
 #include "refbuf.h"
-#include "mbuffer.h"
-#include "image.h"
 
 #define Q_BITS          15
 
@@ -81,9 +51,6 @@ static const int quant_coef[6][4][4] = {
 
 void DefineThreshold()
 {
-  static float ThresholdFac[8] = {0,8,4,4,2.5,1.5,1.5,1}; 
-  static int ThreshUp[8] = {0, 1024,512,512,448,384,384,384};
-
   AlphaSec[1] = 0.01f;
   AlphaSec[2] = 0.01f;
   AlphaSec[3] = 0.01f;
@@ -135,7 +102,8 @@ void DefineThresholdMB()
  *    Dynamic memory allocation of all infomation needed for Fast ME
  * \par Input:
  * \return Number of allocated bytes
- * \Date: 2003/3
+ * \date 
+ *    2003/3
  ************************************************************************
  */
 
@@ -172,7 +140,8 @@ int get_mem_mincost (int****** mv)
  *    Dynamic memory allocation of all infomation needed for backward prediction
  * \par Input:
  * \return Number of allocated bytes
- * \Date: 2003/3
+ * \date 
+ *    2003/3
  *******************************************************************************
  */
 int get_mem_bwmincost (int****** mv)
@@ -219,7 +188,8 @@ int get_mem_FME()
  * \brief
  *    free the memory allocated for of all infomation needed for Fast ME
  * \par Input:
- * \Date: 2003/3
+ * \date 
+ *    2003/3
  ************************************************************************
  */
 void free_mem_mincost (int***** mv)
@@ -247,8 +217,8 @@ void free_mem_mincost (int***** mv)
  ***********************************************************************************
  * \brief
  *    free the memory allocated for of all infomation needed for backward prediction
- * \par Input:
- * \Date: 2003/3
+ * \date 
+ *    2003/3
  ***********************************************************************************
  */
 void free_mem_bwmincost (int***** mv)
@@ -332,10 +302,12 @@ int PartCalMad(pel_t *ref_pic,pel_t** orig_pic,pel_t *(*get_ref_line)(int, pel_t
  * 2. SEARCH_ONE_PIXEL: search one pixel in search range
  * 3. SEARCH_ONE_PIXEL1(value_iAbort): search one pixel in search range,
  *                                 but give a parameter to show if mincost refeshed
- * \ Main contributors: (see contributors.h for copyright, address and affiliation details)
- *   Zhibo Chen         <chenzhibo@tsinghua.org.cn>
- *   JianFeng Xu        <fenax@video.mdc.tsinghua.edu.cn>  
- * \date   : 2003.8
+ * \author
+ *   Main contributors: (see contributors.h for copyright, address and affiliation details)
+ *   - Zhibo Chen         <chenzhibo@tsinghua.org.cn>
+ *   - JianFeng Xu        <fenax@video.mdc.tsinghua.edu.cn>  
+ * \date   :
+ *   2003.8
  ************************************************************************
  */
 int                                     //  ==> minimum motion cost after search
@@ -364,8 +336,6 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
   pel_t *(*get_ref_line)(int, pel_t*, int, int, int, int);
   int   list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
   pel_t*  ref_pic       = listX[list+list_offset][ref]->imgY_11;//img->type==B_IMG? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
-  int   best_pos      = 0;                                        // position with minimum motion cost
-  int   max_pos       = (2*search_range+1)*(2*search_range+1);    // number of search positions
   int   lambda_factor = LAMBDA_FACTOR (lambda);                   // factor for determining lagragian motion cost
   int   mvshift       = 2;                  // motion vector shift for getting sub-pel units
   int   blocksize_y   = input->blc_size[blocktype][1];            // vertical block size
@@ -375,12 +345,11 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
   int   pred_y        = (pic_pix_y << mvshift) + pred_mv_y;       // predicted position y (in sub-pel units)
   int   center_x      = pic_pix_x + *mv_x;                        // center position x (in pel units)
   int   center_y      = pic_pix_y + *mv_y;                        // center position y (in pel units)
-  int    best_x, best_y;
-  int   check_for_00  = (blocktype==1 && !input->rdopt && img->type!=B_SLICE && ref==0);
+  int   best_x = 0, best_y = 0;
   int   search_step,iYMinNow, iXMinNow;
   int   i,m, iSADLayer; 
   int   iAbort;
-  int       N_Bframe = input->successive_Bframe;
+  int   N_Bframe = input->successive_Bframe;
   float betaSec,betaThird;
   int height=((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))?img->height/2:img->height;
    
@@ -643,9 +612,11 @@ third_step: // the third step with a small search pattern
  * Functions for fast fractional pel motion estimation.
  * 1. int AddUpSADQuarter() returns SADT of a fractiona pel MV
  * 2. int FastSubPelBlockMotionSearch () proceed the fast fractional pel ME
- * \authors: Zhibo Chen
- *           Dept.of EE, Tsinghua Univ.
- * \date   : 2003.4
+ * \authors  
+ *    Zhibo Chen
+ *    Dept.of EE, Tsinghua Univ.
+ * \date 
+ *    2003.4
  ************************************************************************
  */
 int AddUpSADQuarter(int pic_pix_x,int pic_pix_y,int blocksize_x,int blocksize_y,
@@ -740,14 +711,11 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
   int   mcost;
   int   cand_mv_x, cand_mv_y;
   
-  int   incr            = list==1 ? ((!img->fld_type)&&(enc_picture!=enc_frame_picture)&&(img->type==B_SLICE)) : (enc_picture==enc_frame_picture)&&(img->type==B_SLICE) ;
   int   list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
   StorablePicture *ref_picture = listX[list+list_offset][ref];
-  pel_t **ref_pic = ref_picture->imgY_ups;
   
   int   lambda_factor   = LAMBDA_FACTOR (lambda);
   int   mv_shift        = 0;
-  int   check_position0 = (blocktype==1 && *mv_x==0 && *mv_y==0 && input->hadamard && !input->rdopt && img->type!=B_SLICE && ref==0);
   int   blocksize_x     = input->blc_size[blocktype][0];
   int   blocksize_y     = input->blc_size[blocktype][1];
   int   pic4_pix_x      = (pic_pix_x << 2);
@@ -755,11 +723,8 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
   int   max_pos_x4      = ((ref_picture->size_x/*img->width*/-blocksize_x+1)<<2);
   int   max_pos_y4      = ((ref_picture->size_y/*img->height*/-blocksize_y+1)<<2);
   
-  int   min_pos2        = (input->hadamard ? 0 : 1);
-  int   max_pos2        = (input->hadamard ? max(1,search_pos2) : search_pos2);
   int   search_range_dynamic,iXMinNow,iYMinNow,i;
-  int   iSADLayer,m,currmv_x,currmv_y,iCurrSearchRange;
-  int   search_range = input->search_range;
+  int   iSADLayer,m,currmv_x = 0,currmv_y = 0,iCurrSearchRange;
   int   pred_frac_mv_x,pred_frac_mv_y,abort_search;
   int   mv_cost; 
   
@@ -841,7 +806,7 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
         if(!SearchState[cand_mv_y -*mv_y+ search_range_dynamic][cand_mv_x -*mv_x+ search_range_dynamic])
         {
           mv_cost = MV_COST (lambda_factor, mv_shift, cand_mv_x, cand_mv_y, pred_mv_x, pred_mv_y);    
-		      mcost = AddUpSADQuarter(pic_pix_x,pic_pix_y,blocksize_x,blocksize_y,cand_mv_x,cand_mv_y,ref_picture/*ref_pic*//*Wenfang Fu 2004.3.12*/,orig_pic,mv_cost,min_mcost,useABT);
+          mcost = AddUpSADQuarter(pic_pix_x,pic_pix_y,blocksize_x,blocksize_y,cand_mv_x,cand_mv_y,ref_picture/*ref_pic*//*Wenfang Fu 2004.3.12*/,orig_pic,mv_cost,min_mcost,useABT);
           SearchState[cand_mv_y - *mv_y + search_range_dynamic][cand_mv_x - *mv_x + search_range_dynamic] = 1;
           if (mcost < min_mcost)
           {
@@ -868,14 +833,15 @@ FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel val
 }
 
 /*!
-************************************************************************
-* \brief
-* Functions for SAD prediction of intra block cases.
-* 1. void   decide_intrabk_SAD() judges the block coding type(intra/inter) 
-*    of neibouring blocks
+ ************************************************************************
+ * \brief
+ * Functions for SAD prediction of intra block cases.
+ * 1. void   decide_intrabk_SAD() judges the block coding type(intra/inter) 
+ *    of neibouring blocks
  * 2. void skip_intrabk_SAD() set the SAD to zero if neigouring block coding 
  *    type is intra
-  * \date   : 2003.4
+ * \date
+ *    2003.4
  ************************************************************************
  */
 void   decide_intrabk_SAD()

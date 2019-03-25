@@ -3,6 +3,9 @@
  ************************************************************************
  * \file block.h
  *
+ * \brief
+ *    definitions for block decoding functions
+ *
  * \author
  *  Inge Lille-Langøy               <inge.lille-langoy@telenor.com>    \n
  *  Telenor Satellite Services                                         \n
@@ -22,6 +25,8 @@
 
 extern const byte QP_SCALE_CR[52] ;
 extern const int  dequant_coef[6][4][4];
+extern const unsigned char subblk_offset_x[3][8][4];
+extern const unsigned char subblk_offset_y[3][8][4];
 
 #endif
 

@@ -15,8 +15,6 @@
 #ifndef _MBUFFER_H_
 #define _MBUFFER_H_
 
-#include "global.h"
-
 #define MAX_LIST_SIZE 33
 
 //! definition a picture (field or frame)
@@ -33,6 +31,7 @@ typedef struct storable_picture
   int64       frm_ref_pic_num[6][MAX_LIST_SIZE];
   int64       top_ref_pic_num[6][MAX_LIST_SIZE];
   int64       bottom_ref_pic_num[6][MAX_LIST_SIZE];
+  unsigned    frame_num;
   int         pic_num;
   int         long_term_pic_num;
   int         long_term_frame_idx;
@@ -46,18 +45,17 @@ typedef struct storable_picture
   int         chroma_vector_adjustment;
   int         coded_frame;
   int         MbaffFrameFlag;
-  
-  byte **     imgY;          //!< Y picture component
-  byte *      imgY_11;       //!< Y picture component with padded borders
-  byte *      imgY_11_w;     //!< Y picture component with padded borders for weighted prediction
-  byte **     imgY_ups;      //!< Y picture component upsampled (Quarter pel)
-  byte **     imgY_ups_w;    //!< Y picture component upsampled (Quarter pel) for weighted prediction
-  byte ***    imgUV;         //!< U and V picture components
+
+  imgpel **     imgY;          //!< Y picture component
+  imgpel *      imgY_11;       //!< Y picture component with padded borders
+  imgpel *      imgY_11_w;     //!< Y picture component with padded borders for weighted prediction
+  imgpel **     imgY_ups;      //!< Y picture component upsampled (Quarter pel)
+  imgpel **     imgY_ups_w;    //!< Y picture component upsampled (Quarter pel) for weighted prediction
+  imgpel ***    imgUV;         //!< U and V picture components
 
   byte *      mb_field;      //!< field macroblock indicator
 
   int  ***    ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-                             //   [list][mb_nr][subblock_x][subblock_y]
 
   int64 ***    ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
                              //   (not  simply index) 

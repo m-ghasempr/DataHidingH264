@@ -28,6 +28,7 @@ NALU_t *GeneratePic_parameter_set_NALU ();
 
 // The following are local helpers, but may come handy in the future, hence public
 void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps, pic_parameter_set_rbsp_t *pps);
+int Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingList, short *UseDefaultScalingMatrix, DataPartition *partition);
 int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *buf);
 int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *buf);
 void FreeSPS (seq_parameter_set_rbsp_t *sps);

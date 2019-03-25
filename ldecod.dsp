@@ -203,6 +203,10 @@ SOURCE=.\ldecod\src\sei.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\transform8x8.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\vlc.c
 # End Source File
 # End Group
@@ -328,6 +332,10 @@ SOURCE=.\ldecod\inc\rtp.h
 # Begin Source File
 
 SOURCE=.\ldecod\inc\sei.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\transform8x8.h
 # End Source File
 # Begin Source File
 

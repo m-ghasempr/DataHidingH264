@@ -11,7 +11,12 @@
  ***************************************************************************************
  */
 
-void write_stored_frame(FrameStore *fs, FILE *p_out);
-void direct_output(StorablePicture *p, FILE *p_out);
+#ifndef _OUTPUT_H_
+#define _OUTPUT_H_
+
+void write_stored_frame(FrameStore *fs, int p_out);
+void direct_output(StorablePicture *p, int p_out);
 void init_out_buffer();
 void uninit_out_buffer();
+
+#endif //_OUTPUT_H_

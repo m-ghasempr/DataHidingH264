@@ -13,9 +13,8 @@
 */
 #include "contributors.h"
 
-#include <stdlib.h>
-#include <math.h>
 #include "global.h"
+
 #include "image.h"
 
 
@@ -112,13 +111,13 @@ void estimate_weighting_factor_P_slice()
         /* store weighted reference pic for motion estimation */
         for (i = 0; i < img->height * img->width; i++)
         {          
-          ref_pic_w[i] = Clip (0, 255, (((int) ref_pic[i] * weight[clist][n][0] + wp_luma_round) >> luma_log_weight_denom) + offset[clist][n][0]);
+          ref_pic_w[i] = Clip (0, img->max_imgpel_value , (((int) ref_pic[i] * weight[clist][n][0] + wp_luma_round) >> luma_log_weight_denom) + offset[clist][n][0]);
         }
         for (i = 0; i < 4*(img->height + 2*IMG_PAD_SIZE) ; i++)
         {
           for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
           {
-            listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip (0, 255, (((int) listX[LIST_0 ][n]->imgY_ups[i][j] * weight[clist][n][0] + wp_luma_round) >> luma_log_weight_denom) + offset[clist][n][0]);
+            listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip (0, img->max_imgpel_value, (((int) listX[LIST_0 ][n]->imgY_ups[i][j] * weight[clist][n][0] + wp_luma_round) >> luma_log_weight_denom) + offset[clist][n][0]);
           }
         }
       }
@@ -330,13 +329,13 @@ void estimate_weighting_factor_B_slice()
         /* store weighted reference pic for motion estimation */
         for (i = 0; i < img->height * img->width; i++)
         {
-          ref_pic_w[i] = Clip (0, 255, (((int) ref_pic[i] * wf_weight + wp_luma_round) >> luma_log_weight_denom) + wf_offset);
+          ref_pic_w[i] = Clip (0, img->max_imgpel_value, (((int) ref_pic[i] * wf_weight + wp_luma_round) >> luma_log_weight_denom) + wf_offset);
         }
         for (i = 0; i < 4*(img->height + 2*IMG_PAD_SIZE) ; i++)
         {
           for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
           {
-            listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip (0, 255, (((int) listX[LIST_0][n]->imgY_ups[i][j] * wf_weight + wp_luma_round) >> (luma_log_weight_denom)) + wf_offset );      	
+            listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip (0, img->max_imgpel_value, (((int) listX[LIST_0][n]->imgY_ups[i][j] * wf_weight + wp_luma_round) >> (luma_log_weight_denom)) + wf_offset );      	
           }
           
         }

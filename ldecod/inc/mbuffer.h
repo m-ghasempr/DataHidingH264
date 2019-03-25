@@ -52,8 +52,8 @@ typedef struct storable_picture
   unsigned    PicWidthInMbs;
   unsigned    PicSizeInMbs;
 
-  byte **     imgY;          //!< Y picture component
-  byte ***    imgUV;         //!< U and V picture components
+  imgpel **     imgY;          //!< Y picture component
+  imgpel ***    imgUV;         //!< U and V picture components
 
   byte *      mb_field;      //!< field macroblock indicator
 
@@ -71,7 +71,7 @@ typedef struct storable_picture
   
   byte **     moving_block;
   byte **     field_frame;         //!< indicates if co_located is field or frame.
-
+  
   struct storable_picture *top_field;     // for mb aff, if frame for referencing the top field
   struct storable_picture *bottom_field;  // for mb aff, if frame for referencing the bottom field
   struct storable_picture *frame;         // for mb aff, if field for referencing the combined frame
@@ -88,7 +88,8 @@ typedef struct storable_picture
   int         frame_cropping_rect_right_offset;
   int         frame_cropping_rect_top_offset;
   int         frame_cropping_rect_bottom_offset;
-
+  int         qp;
+  int         slice_qp_delta;
   DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //!< stores the memory management control operations
 
 } StorablePicture;

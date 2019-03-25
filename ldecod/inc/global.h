@@ -33,7 +33,20 @@
 #include "parsetcommon.h"
 
 #ifdef WIN32
-  #define  snprintf _snprintf
+#define  snprintf _snprintf
+#define  open     _open
+#define  close    _close
+#define  read     _read
+#define  write    _write
+#define  lseek    _lseeki64
+#define  fsync    _commit
+#define  OPENFLAGS_WRITE _O_WRONLY|_O_CREAT|_O_BINARY|_O_TRUNC
+#define  OPEN_PERMISSIONS _S_IREAD | _S_IWRITE
+#define  OPENFLAGS_READ  _O_RDONLY|_O_BINARY
+#else
+#define  OPENFLAGS_WRITE O_WRONLY|O_CREAT|O_TRUNC
+#define  OPENFLAGS_READ  O_RDONLY
+#define  OPEN_PERMISSIONS S_IRUSR | S_IWUSR
 #endif
 
 
@@ -41,8 +54,9 @@ typedef unsigned char   byte;                   //!<  8 bit unsigned
 typedef int             int32;
 typedef unsigned int    u_int32;
 
+#define imgpel unsigned short
 
-#ifdef WIN32
+#if defined(WIN32) && !defined(__GNUC__)
   typedef __int64   int64;
 # define INT64_MIN        (-9223372036854775807i64 - 1i64)
 #else
@@ -57,8 +71,8 @@ seq_parameter_set_rbsp_t *active_sps;
 // global picture format dependend buffers, mem allocation in decod.c ******************
 int  **refFrArr;                                //!< Array for reference frames of each block
 
-byte **imgY_ref;                                //!< reference frame find snr
-byte ***imgUV_ref;
+imgpel **imgY_ref;                                //!< reference frame find snr
+imgpel ***imgUV_ref;
 
 int  ReMapRef[20];
 // B pictures
@@ -71,6 +85,17 @@ int  g_nFrame;
 int  TopFieldForSkip_Y[16][16];
 int  TopFieldForSkip_UV[2][16][16];
 
+int  InvLevelScale4x4Luma_Intra[6][4][4];
+int  InvLevelScale4x4Chroma_Intra[2][6][4][4];
+
+int  InvLevelScale4x4Luma_Inter[6][4][4];
+int  InvLevelScale4x4Chroma_Inter[2][6][4][4];
+
+int  InvLevelScale8x8Luma_Intra[6][8][8];
+
+int  InvLevelScale8x8Luma_Inter[6][8][8];
+
+int  *qmatrix[8];
 
 #define ET_SIZE 300      //!< size of error text buffer
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
@@ -124,6 +149,7 @@ typedef enum {
   SE_DELTA_QUANT_INTRA,
   SE_BFRAME,
   SE_EOS,
+  SE_TRANSFORM_SIZE_FLAG,
   SE_MAX_ELEMENTS //!< number of maximum syntax elements, this MUST be the last one!
 } SE_type;        // substituting the definitions in element.h
 
@@ -218,6 +244,7 @@ typedef BiContextType *BiContextTypePtr;
 #define NUM_REF_NO_CTX   6
 #define NUM_DELTA_QP_CTX 4
 #define NUM_MB_AFF_CTX 4
+#define NUM_TRANSFORM_SIZE_CTX 3
 
 
 typedef struct
@@ -228,6 +255,8 @@ typedef struct
   BiContextType ref_no_contexts  [2][NUM_REF_NO_CTX];
   BiContextType delta_qp_contexts[NUM_DELTA_QP_CTX];
   BiContextType mb_aff_contexts  [NUM_MB_AFF_CTX];
+  BiContextType transform_size_contexts [NUM_TRANSFORM_SIZE_CTX];
+
 } MotionInfoContexts;
 
 #define NUM_IPR_CTX    2
@@ -314,7 +343,8 @@ typedef struct macroblock
   // some storage of macroblock syntax elements for global access
   int           mb_type;
   int           mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
-  int           cbp, cbp_blk ;
+  int           cbp;
+  int64       cbp_blk ;
   unsigned long cbp_bits;
 
   int           is_skip;
@@ -336,6 +366,8 @@ typedef struct macroblock
   int mbAddrA, mbAddrB, mbAddrC, mbAddrD;
   int mbAvailA, mbAvailB, mbAvailC, mbAvailD;
 
+  int           luma_transform_size_8x8_flag;
+  int           NoMbPartLessThan8x8Flag;
 } Macroblock;
 
 //! Bitstream
@@ -370,6 +402,7 @@ typedef struct
 {
   int                 ei_flag;       //!< 0 if the partArr[0] contains valid information
   int                 qp;
+  int                 slice_qp_delta;
   int                 picture_type;  //!< picture type
   PictureStructure    structure;     //!< Identify picture structure type
   int                 start_mb_nr;   //!< MUST be set by NAL even in case of ei_flag == 1
@@ -414,7 +447,7 @@ typedef struct img_par
   int qp;                                     //!< quant for the current frame
   int qpsp;                                   //!< quant for SP-picture predicted frame
   int sp_switch;                              //!< 1 for switching sp, 0 for normal sp
-  int direct_type;                            //!< 1 for Spatial Direct, 0 for Temporal
+  int direct_spatial_mv_pred_flag;            //!< 1 for Spatial Direct, 0 for Temporal
   int type;                                   //!< image type INTER/INTRA
   int width;
   int height;
@@ -430,13 +463,13 @@ typedef struct img_par
   int pix_c_x;
 
   int allrefzero;
-  int mpr[16][16];                            //!< predicted block
+  imgpel mpr[16][16];                         //!< predicted block
   int mvscale[6][MAX_REFERENCE_PICTURES];
   int m7[16][16];                             //!< final 4x4 block. Extended to 16x16 for ABT
-  int cof[4][6][4][4];                        //!< correction coefficients from predicted
-  int cofu[4];
-  int **ipredmode;                            //!< prediction type
-  int quad[256];
+  int cof[4][12][4][4];                       //!< correction coefficients from predicted   
+  int cofu[16];                                                                             
+  int **ipredmode;                            //!< prediction type [90][74]
+  int *quad;
   int ***nz_coeff;
   int **siblock;
   int cod_counter;                            //!< Current count of number of skipped macroblocks in a row
@@ -539,14 +572,36 @@ typedef struct img_par
 
   int last_has_mmco_5;
   int last_pic_bottom_field;
-  
+
   int model_number;
 
+  // Fidelity Range Extensions Stuff
+  int pic_unit_bitsize_on_disk;
+  int bitdepth_luma;
+  int bitdepth_chroma;
+  int bitdepth_luma_qp_scale;
+  int bitdepth_chroma_qp_scale;
+  unsigned int dc_pred_value;                 //!< value for DC prediction (depends on pel bit depth)
+  int max_imgpel_value;                       //!< max value that one luma picture element (pixel) can take (depends on pic_unit_bitdepth)
+  int max_imgpel_value_uv;                    //!< max value that one chroma picture element (pixel) can take (depends on pic_unit_bitdepth)
+  int AllowTransform8x8;        
+  int profile_idc;              
+  int yuv_format;
+  int lossless_qpprime_flag;
+  int num_blk8x8_uv;
+  int num_cdc_coeff;
+  int mb_cr_size_x;
+  int mb_cr_size_y;
+  int chroma_qp_offset[2];                    //!< offset for qp for chroma [0-Cb, 1-Cr] 
+  
   int idr_psnr_number;
   int psnr_number;
 
   time_t ltime_start;               // for time measurement
   time_t ltime_end;                 // for time measurement
+
+  // Residue Color Transform
+  int residue_transform_flag;
 
 #ifdef WIN32
   struct _timeb tstruct_start;
@@ -560,7 +615,8 @@ typedef struct img_par
 
 extern ImageParameters *img;
 extern struct snr_par  *snr;
-// signal to noice ratio parameters
+
+// signal to noise ratio parameters
 struct snr_par
 {
   float snr_y;                                 //!< current Y SNR
@@ -594,6 +650,7 @@ struct inp_par
   char LeakyBucketParamFile[100];         //!< LeakyBucketParamFile
 #endif
 
+  int LowPassForIntra8x8;
 };
 
 extern struct inp_par *input;
@@ -625,14 +682,19 @@ typedef struct old_slice_par
 extern OldSliceParams old_slice;
 
 // files
-FILE *p_out;                    //!< pointer to output YUV file
+int p_out;                    //!< file descriptor to output YUV file
 //FILE *p_out2;                    //!< pointer to debug output YUV file
-FILE *p_ref;                    //!< pointer to input original reference YUV file file
+int p_ref;                    //!< pointer to input original reference YUV file file
+
 FILE *p_log;                    //!< SNR file
 
 #if TRACE
 FILE *p_trace;
 #endif
+
+// Residue Color Transform
+int mprRGB[3][16][16];
+int rec_res[3][16][16];
 
 // prototypes
 void init_conf(struct inp_par *inp, char *config_filename);
@@ -661,10 +723,12 @@ void readMotionInfoFromNAL (struct img_par *img,struct inp_par *inp);
 void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp);
 void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct datapartition *dP);
 
+void readLumaCoeff8x8_CABAC (struct img_par *img,struct inp_par *inp, int b8);
+void itrans8x8(struct img_par *img, int ioff, int joff);
 
 void copyblock_sp(struct img_par *img,int block_x,int block_y);
 void itrans_sp_chroma(struct img_par *img,int ll);
-void itrans(struct img_par *img,int ioff,int joff,int i0,int j0);
+void itrans(struct img_par *img,int ioff,int joff,int i0,int j0, int chroma);
 void itrans_sp(struct img_par *img,int ioff,int joff,int i0,int j0);
 int  intrapred(struct img_par *img,int ioff,int joff,int i4,int j4);
 void itrans_2(struct img_par *img);
@@ -696,7 +760,6 @@ void field_postprocessing(struct img_par *img, struct inp_par *inp);
 int  bottom_field_picture(struct img_par *img,struct inp_par *inp);
 void decode_slice(struct img_par *img,struct inp_par *inp, int current_header);
 
-#define PAYLOAD_TYPE_IDERP 8
 int RBSPtoSODB(byte *streamBuffer, int last_byte_pos);
 int EBSPtoRBSP(byte *streamBuffer, int end_bytepos, int begin_bytepos);
 
@@ -721,5 +784,9 @@ void tracebits2(const char *trace_str, int len, int info);
 void init_decoding_engine_IPCM(struct img_par *img);
 void readIPCMBytes_CABAC(SyntaxElement *sym, Bitstream *currStream);
 
-
 #endif
+
+// For Q-matrix
+void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps);
+void CalculateQuantParam(void);
+void CalculateQuant8Param(void);

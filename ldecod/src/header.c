@@ -182,7 +182,7 @@ int RestOfSliceHeader()
 
   if(img->type==B_SLICE)
   {
-    img->direct_type = u_1 ("SH: direct_spatial_mv_pred_flag", currStream);
+    img->direct_spatial_mv_pred_flag = u_1 ("SH: direct_spatial_mv_pred_flag", currStream);
   }
 
   img->num_ref_idx_l0_active = active_pps->num_ref_idx_l0_active_minus1 + 1;
@@ -231,6 +231,9 @@ int RestOfSliceHeader()
 
   val = se_v("SH: slice_qp_delta", currStream);
   currSlice->qp = img->qp = 26 + active_pps->pic_init_qp_minus26 + val;
+
+  
+  currSlice->slice_qp_delta = val;  
 
   if(img->type==SP_SLICE || img->type == SI_SLICE) 
   {
@@ -652,8 +655,8 @@ void decode_poc(struct img_par *img)
     img->ExpectedDeltaPerPicOrderCntCycle=0;
 
     if(active_sps->num_ref_frames_in_pic_order_cnt_cycle)
-      for(i=0;i<(int) active_sps->num_ref_frames_in_pic_order_cnt_cycle;i++)
-        img->ExpectedDeltaPerPicOrderCntCycle += active_sps->offset_for_ref_frame[i];
+    for(i=0;i<(int) active_sps->num_ref_frames_in_pic_order_cnt_cycle;i++)
+      img->ExpectedDeltaPerPicOrderCntCycle += active_sps->offset_for_ref_frame[i];
 
     if(img->AbsFrameNum)
     {
@@ -687,7 +690,7 @@ void decode_poc(struct img_par *img)
 
     img->PreviousFrameNum=img->frame_num;
     img->PreviousFrameNumOffset=img->FrameNumOffset;
-    
+  
     break;
 
 

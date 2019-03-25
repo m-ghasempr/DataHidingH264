@@ -37,7 +37,7 @@
 void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b8ref)
 {
   int i,j,block_y,block_x,bx,by;
-  int ref_inx = (IMG_NUMBER-1)%img->num_reference_frames;
+  int ref_inx = (IMG_NUMBER-1)%img->num_ref_frames;
 
   int mv[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int resY_tmp[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
@@ -104,7 +104,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
         block_x = img->block_x+bx;
         block_y = img->block_y+by;
         if (img->type == B_SLICE && enc_picture != enc_frame_picture)
-          ref_inx = (IMG_NUMBER-b8ref-2)%img->num_reference_frames;
+          ref_inx = (IMG_NUMBER-b8ref-2)%img->num_ref_frames;
 
         Get_Reference_Block (decs->decref[decoder][ref_inx],
                              block_y, block_x,
@@ -118,7 +118,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
           if (decs->RefBlock[j][i] != UMVPelY_14 (mref[ref_inx],
                                                   (block_y*4+j)*4+mv[1][by][bx],
                                                   (block_x*4+i)*4+mv[0][by][bx]))
-          ref_inx = (img->number-ref-1)%img->num_reference_frames;
+          ref_inx = (img->number-ref-1)%img->num_ref_frames;
           */
           decs->decY[decoder][block_y*4+j][block_x*4+i] = resY_tmp[by*4+j][bx*4+i] + decs->RefBlock[j][i];
         }
@@ -176,12 +176,12 @@ void decode_one_mb (int decoder, Macroblock* currMB)
  *    Output: The prediction for the block (block_y, block_x)
  *************************************************************************************
  */
-void Get_Reference_Block(byte **imY, 
+void Get_Reference_Block(imgpel **imY, 
                          int block_y, 
                          int block_x, 
                          int mvhor, 
                          int mvver, 
-                         byte **out)
+                         imgpel **out)
 {
   int i,j,y,x;
 
@@ -204,7 +204,7 @@ void Get_Reference_Block(byte **imY,
  *    we just upsample when it is necessary.
  *************************************************************************************
  */
-byte Get_Reference_Pixel(byte **imY, int y_pos, int x_pos)
+byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
 {
 
   int dx, x;
@@ -242,7 +242,7 @@ byte Get_Reference_Pixel(byte **imY, int y_pos, int x_pos)
         result += imY[pres_y][pres_x]*COEF[x+2];
       }
 
-      result = max(0, min(255, (result+16)/32));
+      result = max(0, min(img->max_imgpel_value, (result+16)/32));
 
       if (dx == 1) {
         result = (result + imY[pres_y][max(0,min(maxold_x,x_pos))])/2;
@@ -259,7 +259,7 @@ byte Get_Reference_Pixel(byte **imY, int y_pos, int x_pos)
         result += imY[pres_y][pres_x]*COEF[y+2];
       }
 
-      result = max(0, min(255, (result+16)/32));
+      result = max(0, min(img->max_imgpel_value, (result+16)/32));
 
       if (dy == 1) {
         result = (result + imY[max(0,min(maxold_y,y_pos))][pres_x])/2;
@@ -285,13 +285,13 @@ byte Get_Reference_Pixel(byte **imY, int y_pos, int x_pos)
         result += tmp_res[y+2]*COEF[y+2];
       }
 
-      result = max(0, min(255, (result+512)/1024));
+      result = max(0, min(img->max_imgpel_value, (result+512)/1024));
 
       if (dy == 1) {
-        result = (result + max(0, min(255, (tmp_res[2]+16)/32)))/2;
+        result = (result + max(0, min(img->max_imgpel_value, (tmp_res[2]+16)/32)))/2;
       }
       else if (dy == 3) {
-        result = (result + max(0, min(255, (tmp_res[3]+16)/32)))/2;
+        result = (result + max(0, min(img->max_imgpel_value, (tmp_res[3]+16)/32)))/2;
       }
     }
     else if (dy == 2) {
@@ -311,13 +311,13 @@ byte Get_Reference_Pixel(byte **imY, int y_pos, int x_pos)
         result += tmp_res[x+2]*COEF[x+2];
       }
 
-      result = max(0, min(255, (result+512)/1024));
+      result = max(0, min(img->max_imgpel_value, (result+512)/1024));
 
       if (dx == 1) {
-        result = (result + max(0, min(255, (tmp_res[2]+16)/32)))/2;
+        result = (result + max(0, min(img->max_imgpel_value, (tmp_res[2]+16)/32)))/2;
       }
       else {
-        result = (result + max(0, min(255, (tmp_res[3]+16)/32)))/2;
+        result = (result + max(0, min(img->max_imgpel_value, (tmp_res[3]+16)/32)))/2;
       }
     }
     else {
@@ -331,7 +331,7 @@ byte Get_Reference_Pixel(byte **imY, int y_pos, int x_pos)
         result += imY[pres_y][pres_x]*COEF[x+2];
       }
 
-      result1 = max(0, min(255, (result+16)/32));
+      result1 = max(0, min(img->max_imgpel_value, (result+16)/32));
 
       result = 0;
       pres_x = dx == 1 ? x_pos : x_pos+1;
@@ -342,7 +342,7 @@ byte Get_Reference_Pixel(byte **imY, int y_pos, int x_pos)
         result += imY[pres_y][pres_x]*COEF[y+2];
       }
 
-      result2 = max(0, min(255, (result+16)/32));
+      result2 = max(0, min(img->max_imgpel_value, (result+16)/32));
       result = (result1+result2)/2;
     }
   }
@@ -383,12 +383,12 @@ void UpdateDecoders()
  *    The reference buffer
  *************************************************************************************
  */
-void DecOneForthPix(byte **dY, byte ***dref)
+void DecOneForthPix(imgpel **dY, imgpel ***dref)
 {
   int j, ref=IMG_NUMBER%img->buf_cycle;
 
   for (j=0; j<img->height; j++)
-    memcpy(dref[ref][j], dY[j], img->width);
+    memcpy(dref[ref][j], dY[j], img->width*sizeof(imgpel));
 }
 
 /*! 
@@ -491,7 +491,7 @@ void Build_Status_Map(byte **s_map)
  *    The set of reference frames - may be used for the error concealment.
  *************************************************************************************
  */
-void Error_Concealment(byte **inY, byte **s_map, byte ***refY)
+void Error_Concealment(imgpel **inY, byte **s_map, imgpel ***refY)
 {
   int mb_y, mb_x, mb_h, mb_w;
   mb_h = img->height/MB_BLOCK_SIZE;
@@ -511,10 +511,10 @@ void Error_Concealment(byte **inY, byte **s_map, byte ***refY)
  *    For the time there is no better EC...
  *************************************************************************************
  */
-void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map)
+void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_map)
 {
   int i,j,block_x, block_y;
-  int ref_inx = (IMG_NUMBER-1)%img->num_reference_frames;
+  int ref_inx = (IMG_NUMBER-1)%img->num_ref_frames;
   int pos_y = mb_y*MB_BLOCK_SIZE, pos_x = mb_x*MB_BLOCK_SIZE;
   int mv[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int resY[MB_BLOCK_SIZE][MB_BLOCK_SIZE];

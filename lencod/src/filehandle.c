@@ -14,18 +14,11 @@
 
 #include "contributors.h"
 
-#include <string.h>
-#include <math.h>
-#include <time.h>
-#include <sys/timeb.h>
 #include <stdlib.h>
-#include <assert.h>
-#include <string.h>
 
 #include "global.h"
-#include "header.h"
+
 #include "rtp.h"
-#include "nalu.h"
 #include "annexb.h"
 #include "parset.h"
 #include "mbuffer.h"
@@ -92,7 +85,7 @@ int start_sequence()
   FreeNALU (nalu);
 
 //  stat->bit_ctr_parametersets = len;
-    stat->bit_ctr_parametersets_n = len;
+    stats->bit_ctr_parametersets_n = len;
   return 0;
 }
 

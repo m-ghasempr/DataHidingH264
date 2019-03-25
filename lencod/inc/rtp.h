@@ -18,8 +18,6 @@
 #ifndef _RTP_H_
 #define _RTP_H_
 
-#include <stdio.h>
-#include "global.h"
 #include "nalu.h"
 
 #define MAXRTPPAYLOADLEN  (65536 - 40)    //!< Maximum payload size of an RTP packet

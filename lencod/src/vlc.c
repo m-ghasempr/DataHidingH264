@@ -16,12 +16,13 @@
 
 #include "contributors.h"
 
-#include <math.h>
 #include <stdlib.h>
+#include <math.h>
 #include <string.h>
 #include <assert.h>
 
-#include "elements.h"
+#include "global.h"
+
 #include "vlc.h"
 
 #if TRACE
@@ -151,7 +152,7 @@ int u_1 (char *tracestring, int value, DataPartition *part)
 /*! 
  *************************************************************************************
  * \brief
- *    u_v, writes a a n bit fixed length syntax element, returns the length in bits, 
+ *    u_v, writes a n bit fixed length syntax element, returns the length in bits, 
  *
  * \param n
  *    length in bits
@@ -227,7 +228,7 @@ void ue_linfo(int ue, int dummy, int *len,int *info)
  * \param se
  *    value to be mapped
  * \param dummy
- *    dummy argument
+ *    dummy parameter
  * \param len
  *    returns mapped value length
  * \param info
@@ -271,8 +272,8 @@ void se_linfo(int se, int dummy, int *len,int *info)
  */
 void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
 {
-  extern const int NCBP[48][2];
-  ue_linfo(NCBP[cbp][0], dummy, len, info);
+  extern const unsigned char NCBP[2][48][2];
+  ue_linfo(NCBP[img->yuv_format?1:0][cbp][0], dummy, len, info);
 }
 
 
@@ -286,8 +287,8 @@ void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
  */
 void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
 {
-  extern const int NCBP[48][2];
-  ue_linfo(NCBP[cbp][1], dummy, len, info);
+  extern const unsigned char NCBP[2][48][2];
+  ue_linfo(NCBP[img->yuv_format?1:0][cbp][1], dummy, len, info);
 }
 
 
@@ -353,9 +354,9 @@ void levrun_linfo_c2x2(int level,int run,int *len,int *info)
  * \brief
  *    Single scan coefficients
  * \par Input:
- *    level and run for coefficiets
+ *    level and run for coefficients
  * \par Output:
- *    lenght and info
+ *    length and info
  * \note
  *    see ITU document for bit assignment
  ************************************************************************
@@ -414,9 +415,9 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
  * \brief
  *    Double scan coefficients
  * \par Input:
- *    level and run for coefficiets
+ *    level and run for coefficients
  * \par Output:
- *    lenght and info
+ *    length and info
  * \note
  *    see ITU document for bit assignment
  ************************************************************************
@@ -715,7 +716,7 @@ int writeSyntaxElement_VLC(SyntaxElement *se, DataPartition *this_dataPart)
 
 int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *this_dataPart)
 {
-  int lentab[3][4][17] = 
+  static const int lentab[3][4][17] = 
   {
     {   // 0702
       { 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
@@ -738,7 +739,7 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *th
 
   };
 
-  int codtab[3][4][17] = 
+  static const int codtab[3][4][17] = 
   {
     {
       { 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7,4}, 
@@ -812,26 +813,50 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *th
  */
 int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataPartition *this_dataPart)
 {
-  int lentab[4][5] = 
+  static const int lentab[3][4][17] = 
   {
-    { 2, 6, 6, 6, 6,},          
-    { 0, 1, 6, 7, 8,}, 
-    { 0, 0, 3, 7, 8,}, 
-    { 0, 0, 0, 6, 7,},
+    //YUV420
+   {{ 2, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 1, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 0, 3, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 0, 0, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+    //YUV422
+   {{ 1, 7, 7, 9, 9,10,11,12,13, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 2, 7, 7, 9,10,11,12,12, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 0, 3, 7, 7, 9,10,11,12, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 0, 0, 5, 6, 7, 7,10,11, 0, 0, 0, 0, 0, 0, 0, 0}},
+    //YUV444
+   {{ 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
+    { 0, 2, 6, 8, 9,10,11,13,13,14,14,15,15,15,16,16,16},
+    { 0, 0, 3, 7, 8, 9,10,11,13,13,14,14,15,15,16,16,16},
+    { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16}}
   };
 
-  int codtab[4][5] = 
+  static const int codtab[3][4][17] = 
   {
-    {1,7,4,3,2},
-    {0,1,6,3,3},
-    {0,0,1,2,2},
-    {0,0,0,5,0},
+    //YUV420
+   {{ 1, 7, 4, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 1, 6, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 1, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+    //YUV422
+   {{ 1,15,14, 7, 6, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 1,13,12, 5, 6, 6, 6, 5, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 1,11,10, 4, 5, 5, 4, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 0, 1, 1, 9, 8, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0}},
+    //YUV444
+   {{ 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7, 4}, 
+    { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10, 6}, 
+    { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9, 5}, 
+    { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12, 8}}
+  
   };
+  int yuv = img->yuv_format - 1;
 
   // se->value1 : numcoeff
   // se->value2 : numtrailingones
-  se->len = lentab[se->value2][se->value1];
-  se->inf = codtab[se->value2][se->value1];
+  se->len = lentab[yuv][se->value2][se->value1];
+  se->inf = codtab[yuv][se->value2][se->value1];
 
   if (se->len == 0)
   {
@@ -860,7 +885,7 @@ int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataParti
  */
 int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPart)
 {
-  int lentab[TOTRUN_NUM][16] = 
+  static const int lentab[TOTRUN_NUM][16] = 
   {
     { 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},  
     { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},  
@@ -879,7 +904,7 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPar
     { 1,1},  
   };
 
-  int codtab[TOTRUN_NUM][16] = 
+  static const int codtab[TOTRUN_NUM][16] = 
   {
     {1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
     {7,6,5,4,3,5,4,3,2,3,2,3,2,1,0},
@@ -931,26 +956,77 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPar
  */
 int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this_dataPart)
 {
-  int lentab[3][4] = 
+  static const int lentab[3][TOTRUN_NUM][16] = 
   {
-    { 1, 2, 3, 3,},
-    { 1, 2, 2, 0,},
-    { 1, 1, 0, 0,}, 
+    //YUV420
+   {{ 1,2,3,3},
+    { 1,2,2},
+    { 1,1}},
+    //YUV422
+   {{ 1,3,3,4,4,4,5,5},
+    { 3,2,3,3,3,3,3},
+    { 3,3,2,2,3,3},
+    { 3,2,2,2,3},
+    { 2,2,2,2},
+    { 2,2,1},   
+    { 1,1}},
+    //YUV444
+   {{ 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},  
+    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},  
+    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},  
+    { 5,3,4,4,3,3,3,4,3,4,5,5,5},  
+    { 4,4,4,3,3,3,3,3,4,5,4,5},  
+    { 6,5,3,3,3,3,3,3,4,3,6},  
+    { 6,5,3,3,3,2,3,4,3,6},  
+    { 6,4,5,3,2,2,3,3,6},  
+    { 6,6,4,2,2,3,2,5},  
+    { 5,5,3,2,2,2,4},  
+    { 4,4,3,3,1,3},  
+    { 4,4,2,1,3},  
+    { 3,3,1,2},  
+    { 2,2,1},  
+    { 1,1}}  
   };
 
-  int codtab[3][4] = 
+  static const int codtab[3][TOTRUN_NUM][16] = 
   {
-    { 1, 1, 1, 0,},
-    { 1, 1, 0, 0,},
-    { 1, 0, 0, 0,},
+    //YUV420
+   {{ 1,1,1,0},
+    { 1,1,0},
+    { 1,0}},
+    //YUV422
+   {{ 1,2,3,2,3,1,1,0},
+    { 0,1,1,4,5,6,7},
+    { 0,1,1,2,6,7},
+    { 6,0,1,2,7},
+    { 0,1,2,3},
+    { 0,1,1},   
+    { 0,1}},
+    //YUV444
+   {{1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
+    {7,6,5,4,3,5,4,3,2,3,2,3,2,1,0},
+    {5,7,6,5,4,3,4,3,2,3,2,1,1,0},
+    {3,7,5,4,6,5,4,3,3,2,2,1,0},
+    {5,4,3,7,6,5,4,3,2,1,1,0},
+    {1,1,7,6,5,4,3,2,1,1,0},
+    {1,1,5,4,3,3,2,1,1,0},
+    {1,1,1,3,3,2,2,1,0},
+    {1,0,1,3,2,1,1,1,},
+    {1,0,1,3,2,1,1,},
+    {0,1,1,2,1,3},
+    {0,1,1,1,1},
+    {0,1,1,1},
+    {0,1,1},
+    {0,1}}  
   };
   int vlcnum;
-
+  int yuv = img->yuv_format - 1;
+  
   vlcnum = se->len;
 
   // se->value1 : TotalZeros
-  se->len = lentab[vlcnum][se->value1];
-  se->inf = codtab[vlcnum][se->value1];
+  se->len = lentab[yuv][vlcnum][se->value1];
+  se->inf = codtab[yuv][vlcnum][se->value1];
 
   if (se->len == 0)
   {
@@ -978,7 +1054,7 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this
  */
 int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart)
 {
-  int lentab[TOTRUN_NUM][16] = 
+  static const int lentab[TOTRUN_NUM][16] = 
   {
     {1,1},
     {1,2,2},
@@ -989,7 +1065,7 @@ int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart)
     {3,3,3,3,3,3,3,4,5,6,7,8,9,10,11},
   };
 
-  int codtab[TOTRUN_NUM][16] = 
+  static const int codtab[TOTRUN_NUM][16] = 
   {
     {1,0},
     {1,1,0},
@@ -1182,7 +1258,7 @@ void writeVlcByteAlign(Bitstream* currStream)
   if (currStream->bits_to_go < 8)
   { // trailing bits to process
     currStream->byte_buf = (currStream->byte_buf <<currStream->bits_to_go) | (0xff >> (8 - currStream->bits_to_go));
-    stat->bit_use_stuffingBits[img->type]+=currStream->bits_to_go;
+    stats->bit_use_stuffingBits[img->type]+=currStream->bits_to_go;
     currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
     currStream->bits_to_go = 8;
   }

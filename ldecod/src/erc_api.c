@@ -198,7 +198,7 @@ void ercClose( ercVariables_t *errorVar )
     free( errorVar );
     errorVar = NULL;
   }
-
+  
   if (erc_object_list)
   {
     free(erc_object_list);

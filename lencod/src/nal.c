@@ -18,14 +18,9 @@
 
 #include "contributors.h"
 
-#include <string.h>
-#include <math.h>
-#include <time.h>
-#include <sys/timeb.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <string.h>
-#include "defines.h"
+
 #include "global.h"
 
  /*!
@@ -109,7 +104,7 @@ int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_n
     streamBuffer[j+1] = 0x00;
     streamBuffer[j+2] = 0x03;
     j += 3;
-    stat->bit_use_stuffingBits[img->type]+=16;
+    stats->bit_use_stuffingBits[img->type]+=16;
   }
   return j;
 }

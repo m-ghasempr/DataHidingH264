@@ -101,6 +101,11 @@ typedef struct
   unsigned  pic_parameter_set_id;                             // ue(v)
   unsigned  seq_parameter_set_id;                             // ue(v)
   Boolean   entropy_coding_mode_flag;                         // u(1)
+
+  Boolean   transform_8x8_mode_flag;                          // u(1)
+  Boolean   pic_scaling_matrix_present_flag;                  // u(1)
+  int       pic_scaling_list_present_flag[8];                 // u(1)
+
   // if( pic_order_cnt_type < 2 )  in the sequence parameter set
   Boolean      pic_order_present_flag;                           // u(1)
   unsigned  num_slice_groups_minus1;                          // ue(v)
@@ -124,6 +129,10 @@ typedef struct
   int       pic_init_qp_minus26;                              // se(v)
   int       pic_init_qs_minus26;                              // se(v)
   int       chroma_qp_index_offset;                           // se(v)
+
+  int       cb_qp_index_offset;                               // se(v)
+  int       cr_qp_index_offset;                               // se(v)
+
   Boolean   deblocking_filter_control_present_flag;           // u(1)
   Boolean   constrained_intra_pred_flag;                      // u(1)
   Boolean   redundant_pic_cnt_present_flag;                   // u(1)
@@ -140,8 +149,15 @@ typedef struct
   Boolean   constrained_set0_flag;                            // u(1)
   Boolean   constrained_set1_flag;                            // u(1)
   Boolean   constrained_set2_flag;                            // u(1)
+  Boolean   constrained_set3_flag;                            // u(1)
   unsigned  level_idc;                                        // u(8)
   unsigned  seq_parameter_set_id;                             // ue(v)
+
+  Boolean   seq_scaling_matrix_present_flag;                  // u(1)
+  int       seq_scaling_list_present_flag[8];                 // u(1)
+
+  unsigned  bit_depth_luma_minus8;                            // ue(v)
+  unsigned  bit_depth_chroma_minus8;                          // ue(v)
   unsigned  log2_max_frame_num_minus4;                        // ue(v)
   unsigned pic_order_cnt_type;
   // if( pic_order_cnt_type == 0 ) 

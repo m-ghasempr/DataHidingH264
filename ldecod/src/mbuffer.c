@@ -180,7 +180,7 @@ void init_dpb()
 
   dpb.ref_frames_in_buffer = 0;
   dpb.ltref_frames_in_buffer = 0;
-
+  
   dpb.fs = calloc(dpb.size, sizeof (FrameStore*));
   if (NULL==dpb.fs) 
     no_mem_exit("init_dpb: dpb->fs");
@@ -331,9 +331,11 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   }
 
   s->PicSizeInMbs                  = (size_x*size_y)/256;
+  s->imgUV = NULL;
 
-  get_mem2D (&(s->imgY), size_y, size_x);
-  get_mem3D (&(s->imgUV), 2, size_y_cr, size_x_cr );
+  get_mem2Dpel (&(s->imgY), size_y, size_x);
+  if (img->yuv_format != YUV400)
+    get_mem3Dpel (&(s->imgUV), 2, size_y_cr, size_x_cr);
 
   s->mb_field = calloc (s->PicSizeInMbs, sizeof(int));
 
@@ -434,7 +436,7 @@ void free_storable_picture(StorablePicture* p)
       free_mem2D (p->moving_block);
       p->moving_block=NULL;
     }
-
+    
     if (p->field_frame)
     {
       free_mem2D (p->field_frame);
@@ -444,12 +446,12 @@ void free_storable_picture(StorablePicture* p)
     
     if (p->imgY)
     {
-      free_mem2D (p->imgY);
+      free_mem2Dpel (p->imgY);
       p->imgY=NULL;
     }
     if (p->imgUV)
     {
-      free_mem3D (p->imgUV, 2);
+      free_mem3Dpel (p->imgUV, 2);
       p->imgUV=NULL;
     }
     
@@ -2287,7 +2289,7 @@ static void insert_picture_in_dpb(FrameStore* fs, StorablePicture* p)
 
   if (fs->is_used==3)
   {
-    if (p_ref)
+    if (-1!=p_ref)
       find_snr(snr, fs->frame, p_ref);
   }
 }
@@ -2445,7 +2447,7 @@ static void remove_frame_from_dpb(int pos)
   fs->is_reference = 0;
   fs->is_orig_reference = 0;
 
-  // move empty frame store to end of buffer
+  // move empty framestore to end of buffer
   tmp = dpb.fs[pos];
 
   for (i=pos; i<dpb.used_size-1;i++)
@@ -2614,24 +2616,24 @@ void dpb_split_field(FrameStore *fs)
 
   for (i=0; i<fs->frame->size_y/2; i++)
   {
-    memcpy(fs->top_field->imgY[i], fs->frame->imgY[i*2], fs->frame->size_x);
+    memcpy(fs->top_field->imgY[i], fs->frame->imgY[i*2], fs->frame->size_x*sizeof(imgpel));
   }
 
   for (i=0; i<fs->frame->size_y_cr/2; i++)
   {
-    memcpy(fs->top_field->imgUV[0][i], fs->frame->imgUV[0][i*2], fs->frame->size_x_cr);
-    memcpy(fs->top_field->imgUV[1][i], fs->frame->imgUV[1][i*2], fs->frame->size_x_cr);
+    memcpy(fs->top_field->imgUV[0][i], fs->frame->imgUV[0][i*2], fs->frame->size_x_cr*sizeof(imgpel));
+    memcpy(fs->top_field->imgUV[1][i], fs->frame->imgUV[1][i*2], fs->frame->size_x_cr*sizeof(imgpel));
   }
 
   for (i=0; i<fs->frame->size_y/2; i++)
   {
-    memcpy(fs->bottom_field->imgY[i], fs->frame->imgY[i*2 + 1], fs->frame->size_x);
+    memcpy(fs->bottom_field->imgY[i], fs->frame->imgY[i*2 + 1], fs->frame->size_x*sizeof(imgpel));
   }
 
   for (i=0; i<fs->frame->size_y_cr/2; i++)
   {
-    memcpy(fs->bottom_field->imgUV[0][i], fs->frame->imgUV[0][i*2 + 1], fs->frame->size_x_cr);
-    memcpy(fs->bottom_field->imgUV[1][i], fs->frame->imgUV[1][i*2 + 1], fs->frame->size_x_cr);
+    memcpy(fs->bottom_field->imgUV[0][i], fs->frame->imgUV[0][i*2 + 1], fs->frame->size_x_cr*sizeof(imgpel));
+    memcpy(fs->bottom_field->imgUV[1][i], fs->frame->imgUV[1][i*2 + 1], fs->frame->size_x_cr*sizeof(imgpel));
   }
 
   fs->poc = fs->top_field->poc 
@@ -2668,23 +2670,23 @@ void dpb_split_field(FrameStore *fs)
   if (!fs->frame->frame_mbs_only_flag)
   {
     for (j=0; j<=fs->frame->max_slice_id; j++)
-    {
-      for (i=0;i<listXsize[LIST_1];i++)
-      {
+  {
+  for (i=0;i<listXsize[LIST_1];i++)
+  {
         fs->top_field->ref_pic_num[j][LIST_1][2*i]     =fs->frame->ref_pic_num[j][2 + LIST_1][2*i];
         fs->top_field->ref_pic_num[j][LIST_1][2*i + 1] =fs->frame->ref_pic_num[j][2 + LIST_1][2*i+1];
         fs->bottom_field->ref_pic_num[j][LIST_1][2*i]  =fs->frame->ref_pic_num[j][4 + LIST_1][2*i];
         fs->bottom_field->ref_pic_num[j][LIST_1][2*i+1]=fs->frame->ref_pic_num[j][4 + LIST_1][2*i+1] ;
-      }
-      
-      for (i=0;i<listXsize[LIST_0];i++)
-      {
+  }
+
+  for (i=0;i<listXsize[LIST_0];i++)
+  {
         fs->top_field->ref_pic_num[j][LIST_0][2*i]     =fs->frame->ref_pic_num[j][2 + LIST_0][2*i];
         fs->top_field->ref_pic_num[j][LIST_0][2*i + 1] =fs->frame->ref_pic_num[j][2 + LIST_0][2*i+1];
         fs->bottom_field->ref_pic_num[j][LIST_0][2*i]  =fs->frame->ref_pic_num[j][4 + LIST_0][2*i];
         fs->bottom_field->ref_pic_num[j][LIST_0][2*i+1]=fs->frame->ref_pic_num[j][4 + LIST_0][2*i+1] ;
       }
-    }
+  }
   }
 
   for (j=0 ; j<fs->frame->size_y/4 ; j++)      
@@ -2718,7 +2720,7 @@ void dpb_split_field(FrameStore *fs)
 
   if (!fs->frame->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)      
   {    
-    for (i=0 ; i<fs->frame->size_x/4 ; i++)
+  for (i=0 ; i<fs->frame->size_x/4 ; i++)
     {                
       for (j=0 ; j<fs->frame->size_y/8; j++)      
       { 
@@ -2727,7 +2729,7 @@ void dpb_split_field(FrameStore *fs)
         int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
         // Assign field mvs attached to MB-Frame buffer to the proper buffer
         if (fs->frame->MbaffFrameFlag && img->mb_data[currentmb].mb_field)
-        {              
+          {
           fs->bottom_field->field_frame[i][j] = fs->top_field->field_frame[i][j]=1;
           fs->frame->field_frame[i][2*j] = fs->frame->field_frame[i][2*j+1]=1;
 
@@ -2740,7 +2742,7 @@ void dpb_split_field(FrameStore *fs)
           fs->bottom_field->ref_id[LIST_0][i][j] = fs->frame->ref_id[LIST_0+4][i][(j/4)*8 + j%4 + 4];
           fs->bottom_field->ref_id[LIST_1][i][j] = fs->frame->ref_id[LIST_1+4][i][(j/4)*8 + j%4 + 4];
 
-
+            
           fs->top_field->mv[LIST_0][i][j][0] = fs->frame->mv[LIST_0][i][(j/4)*8 + j%4][0];
           fs->top_field->mv[LIST_0][i][j][1] = fs->frame->mv[LIST_0][i][(j/4)*8 + j%4][1];
           fs->top_field->mv[LIST_1][i][j][0] = fs->frame->mv[LIST_1][i][(j/4)*8 + j%4][0];
@@ -2754,7 +2756,7 @@ void dpb_split_field(FrameStore *fs)
       }
     }             
   }
-    
+          
   //! Generate field MVs from Frame MVs
   for (i=0 ; i<fs->frame->size_x/4 ; i++)
   {
@@ -2841,16 +2843,16 @@ void dpb_combine_field(FrameStore *fs)
 
   for (i=0; i<fs->top_field->size_y; i++)
   {
-    memcpy(fs->frame->imgY[i*2],     fs->top_field->imgY[i]   , fs->top_field->size_x);     // top field
-    memcpy(fs->frame->imgY[i*2 + 1], fs->bottom_field->imgY[i], fs->bottom_field->size_x); // bottom field
+    memcpy(fs->frame->imgY[i*2],     fs->top_field->imgY[i]   , fs->top_field->size_x*sizeof(imgpel));     // top field
+    memcpy(fs->frame->imgY[i*2 + 1], fs->bottom_field->imgY[i], fs->bottom_field->size_x*sizeof(imgpel)); // bottom field
   }
 
   for (i=0; i<fs->top_field->size_y_cr; i++)
   {
-    memcpy(fs->frame->imgUV[0][i*2],     fs->top_field->imgUV[0][i],    fs->top_field->size_x_cr);
-    memcpy(fs->frame->imgUV[0][i*2 + 1], fs->bottom_field->imgUV[0][i], fs->bottom_field->size_x_cr);
-    memcpy(fs->frame->imgUV[1][i*2],     fs->top_field->imgUV[1][i],    fs->top_field->size_x_cr);
-    memcpy(fs->frame->imgUV[1][i*2 + 1], fs->bottom_field->imgUV[1][i], fs->bottom_field->size_x_cr);
+    memcpy(fs->frame->imgUV[0][i*2],     fs->top_field->imgUV[0][i],    fs->top_field->size_x_cr*sizeof(imgpel));
+    memcpy(fs->frame->imgUV[0][i*2 + 1], fs->bottom_field->imgUV[0][i], fs->bottom_field->size_x_cr*sizeof(imgpel));
+    memcpy(fs->frame->imgUV[1][i*2],     fs->top_field->imgUV[1][i],    fs->top_field->size_x_cr*sizeof(imgpel));
+    memcpy(fs->frame->imgUV[1][i*2 + 1], fs->bottom_field->imgUV[1][i], fs->bottom_field->size_x_cr*sizeof(imgpel));
   }
 
 
@@ -2870,7 +2872,7 @@ void dpb_combine_field(FrameStore *fs)
 
   fs->frame->top_field    = fs->top_field;
   fs->frame->bottom_field = fs->bottom_field;
-
+  
   fs->frame->coded_frame = 0;
 
   fs->frame->frame_cropping_flag = fs->top_field->frame_cropping_flag;
@@ -2887,17 +2889,17 @@ void dpb_combine_field(FrameStore *fs)
   //combine field for frame
   for (j=0; j<=(max(fs->top_field->max_slice_id, fs->bottom_field->max_slice_id)); j++)
   {
-    for (i=0;i<(listXsize[LIST_1]+1)/2;i++)
-    {
+  for (i=0;i<(listXsize[LIST_1]+1)/2;i++)
+  {
       fs->frame->ref_pic_num[j][LIST_1][i]=   min ((fs->top_field->ref_pic_num[j][LIST_1][2*i]/2)*2, (fs->bottom_field->ref_pic_num[j][LIST_1][2*i]/2)*2);
-    }
-    
-    for (i=0;i<(listXsize[LIST_0]+1)/2;i++)
-    {
+  }
+
+  for (i=0;i<(listXsize[LIST_0]+1)/2;i++)
+  {
       fs->frame->ref_pic_num[j][LIST_0][i] =   min ((fs->top_field->ref_pic_num[j][LIST_0][2*i]/2)*2, (fs->bottom_field->ref_pic_num[j][LIST_0][2*i]/2)*2);  
     }
   }
-
+  
    //! Use inference flag to remap mvs/references 
 
   //! Generate Frame parameters from field information.
@@ -3094,16 +3096,12 @@ void fill_frame_num_gap(ImageParameters *img)
  * \brief
  *    Allocate co-located memory 
  *
- * \param structure
- *    picture structure
  * \param size_x
  *    horizontal luma size
  * \param size_y
  *    vertical luma size
- * \param size_x_cr
- *    horizontal chroma size
- * \param size_y_cr
- *    vertical chroma size
+ * \param mb_adaptive_frame_field_flag
+ *    flag that indicates macroblock adaptive frame/field coding
  *
  * \return
  *    the allocated StorablePicture structure
@@ -3340,7 +3338,7 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
           
           p->is_long_term             = fs->is_long_term;
           
-          if (img->direct_type ==1)
+          if (img->direct_spatial_mv_pred_flag ==1)
           p->moving_block[i][j] = 
             !((!p->is_long_term &&((p->ref_idx[LIST_0][i][j] == 0) && 
             (abs(p->mv[LIST_0][i][j][0])>>1 == 0) && 
@@ -3362,7 +3360,7 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
           p->bottom_ref_pic_id[LIST_0][i][j] = fs_bottom->ref_id[LIST_0][RSD(i)][RSD(j)]; 
           p->bottom_ref_pic_id[LIST_1][i][j] = fs_bottom->ref_id[LIST_1][RSD(i)][RSD(j)]; 
 
-          if (img->direct_type ==1)
+          if (img->direct_spatial_mv_pred_flag ==1)
           p->bottom_moving_block[i][j] = 
             !((!fs_bottom->is_long_term && ((p->bottom_ref_idx[LIST_0][i][j] == 0) && 
             (abs(p->bottom_mv[LIST_0][i][j][0])>>1 == 0) && 
@@ -3382,7 +3380,7 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
           p->top_ref_pic_id[LIST_0][i][j] = fs_top->ref_id[LIST_0][RSD(i)][RSD(j)]; 
           p->top_ref_pic_id[LIST_1][i][j] = fs_top->ref_id[LIST_1][RSD(i)][RSD(j)]; 
 
-          if (img->direct_type ==1)
+          if (img->direct_spatial_mv_pred_flag ==1)
           p->top_moving_block[i][j] = 
             !((!fs_top->is_long_term && ((p->top_ref_idx[LIST_0][i][j] == 0) && 
             (abs(p->top_mv[LIST_0][i][j][0])>>1 == 0) && 
@@ -3392,7 +3390,7 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
             (abs(p->top_mv[LIST_1][i][j][0])>>1 == 0) && 
             (abs(p->top_mv[LIST_1][i][j][1])>>1 == 0)));
           
-          if (img->direct_type==0 && !fs->field_frame[i][2*j])
+          if (img->direct_spatial_mv_pred_flag==0 && !fs->field_frame[i][2*j])
           {
             p->top_mv[LIST_0][i][j][1] /= 2;        
             p->top_mv[LIST_1][i][j][1] /= 2;
@@ -3484,7 +3482,7 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
         
       }
       p->is_long_term             = fs->is_long_term;
-      if (img->direct_type ==1)
+      if (img->direct_spatial_mv_pred_flag ==1)
       p->moving_block[i][j]= 
         !((!p->is_long_term && ((p->ref_idx[LIST_0][i][j] == 0) && 
         (abs(p->mv[LIST_0][i][j][0])>>1 == 0) && 
@@ -3497,7 +3495,7 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
   }
 
 
-  if (img->direct_type ==0)
+  if (img->direct_spatial_mv_pred_flag ==0)
   {
     for (j=0 ; j<fs->size_y/4 ; j++)      
     {                

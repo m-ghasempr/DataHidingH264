@@ -14,14 +14,10 @@
  *    Stephan Wenger   stewe@cs.tu-berlin.de
  *****************************************************************************/
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
-#include <memory.h>
-#include <malloc.h>
 
-#include "intrarefresh.h"
+#include "global.h"
 
 static int *RefreshPattern;
 static int *IntraMBs;

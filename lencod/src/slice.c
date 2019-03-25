@@ -12,31 +12,24 @@
  *      - Thomas Stockhammer            <stockhammer@ei.tum.de>
  *      - Detlev Marpe                  <marpe@hhi.de>
  *      - Stephan Wenger                <stewe@cs.tu-berlin.de>
+ *      - Alexis Michael Tourapis       <alexismt@ieee.org>
  ***************************************************************************************
  */
 
 #include "contributors.h"
 
-#include <string.h>
-#include <math.h>
-#include <time.h>
-#include <sys/timeb.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <string.h>
 
 #include "global.h"
+
 #include "header.h"
 #include "rtp.h"
-#include "nalu.h"
-#include "annexb.h"
-#include "parset.h"
 #include "fmo.h"
 #include "vlc.h"
 #include "image.h"
 #include "cabac.h"
 #include "elements.h"
-#include "mbuffer.h"
 
 // Local declarations
 
@@ -46,6 +39,7 @@ static void  init_slice(int start_mb_addr);
 static void set_ref_pic_num();
 extern ColocatedParams *Co_located;
 extern StorablePicture **listX[6];
+void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active, int *remapping_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int weighted_prediction, int list_no);
 
 /*!
  ************************************************************************
@@ -84,13 +78,11 @@ int start_slice()
   int i;
   int NumberOfPartitions = (input->partition_mode == PAR_DP_1?1:3);
 
-	//one  partition for IDR img
-	if(img->currentPicture->idr_flag)
-	{
+  //one  partition for IDR img
+  if(img->currentPicture->idr_flag)
+  {
      NumberOfPartitions = 1;
-	}
-
-  init_ref_pic_list_reordering();
+  }
 
   RTPUpdateTimestamp (img->tr);   // this has no side effects, just leave it for all NALs
 
@@ -159,7 +151,7 @@ int terminate_slice()
       SODBtoRBSP(currStream);
       byte_pos_before_startcode_emu_prevention = currStream->byte_pos;
       currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, 0 , currStream->byte_pos, 0);
-      *(stat->em_prev_bits) += (currStream->byte_pos - byte_pos_before_startcode_emu_prevention) * 8;
+      *(stats->em_prev_bits) += (currStream->byte_pos - byte_pos_before_startcode_emu_prevention) * 8;
     }
     else     // CABAC
     {
@@ -171,7 +163,7 @@ int terminate_slice()
       bytes_written = currStream->byte_pos;
       byte_pos_before_startcode_emu_prevention= currStream->byte_pos;
       currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, 0, currStream->byte_pos, eep->E);
-      *(stat->em_prev_bits) += (currStream->byte_pos - byte_pos_before_startcode_emu_prevention) * 8;
+      *(stats->em_prev_bits) += (currStream->byte_pos - byte_pos_before_startcode_emu_prevention) * 8;
     }           // CABAC
   }           // partition loop
   if( input->symbol_mode == CABAC )
@@ -183,13 +175,13 @@ int terminate_slice()
 }
 
 /*!
- ************************************************************************
- * \brief
- *    Encodes one slice
- * \par
- *   returns the number of coded MBs in the SLice 
- ************************************************************************
- */
+************************************************************************
+* \brief
+*    Encodes one slice
+* \par
+*   returns the number of coded MBs in the SLice 
+************************************************************************
+*/
 int encode_one_slice (int SliceGroupId, Picture *pic)
 {
   Boolean end_of_slice = FALSE;
@@ -198,13 +190,8 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
   int NumberOfCodedMBs = 0;
   int CurrentMbAddr;
   double FrameRDCost, FieldRDCost;
-
+  
   img->cod_counter = 0;
-
-  set_ref_pic_num();
-
-  if (img->type == B_SLICE)
-      compute_collocated(Co_located, listX);
 
   CurrentMbAddr = FmoGetFirstMacroblockInSlice (SliceGroupId);
 // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", img->tr, SliceGroupId, img->current_slice_nr, CurrentMbInScanOrder);
@@ -250,8 +237,8 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
     }
 */
   // Update statistics
-  stat->bit_slice += len;
-  stat->bit_use_header[img->type] += len;
+  stats->bit_slice += len;
+  stats->bit_use_header[img->type] += len;
 // printf ("\n\n");
 
   while (end_of_slice == FALSE) // loop over macroblocks
@@ -265,6 +252,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       start_macroblock (CurrentMbAddr, FALSE);
       encode_one_macroblock ();
       write_one_macroblock (1);
+
       terminate_macroblock (&end_of_slice, &recode_macroblock);
 
 // printf ("encode_one_slice: mb %d,  slice %d,   bitbuf bytepos %d EOS %d\n", 
@@ -327,7 +315,8 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
 
       if (input->MbInterlace == ADAPTIVE_CODING)
       {
-        // code MB pair as frame MB 
+        //================ code MB pair as frame MB ================
+        //----------------------------------------------------------
         recode_macroblock = FALSE;
         
         
@@ -344,7 +333,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         encode_one_macroblock ();     // code the MB as frame
         FrameRDCost = rdopt->min_rdcost;
         //***   Top MB coded as frame MB ***//
-        
+
         //Rate control
         img->bot_MB = 1; //for Rate control
         
@@ -355,7 +344,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         rdopt = &rddata_bot_frame_mb; // store data in top frame MB
         encode_one_macroblock ();     // code the MB as frame
         FrameRDCost += rdopt->min_rdcost;
-        
+
         //***   Bottom MB coded as frame MB ***//
       }
 
@@ -364,11 +353,12 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         //Rate control
         img->bot_MB = 0; 
         
-        // start coding the MB pair as a field MB pair
+        //=========== start coding the MB pair as a field MB pair =============
+        //---------------------------------------------------------------------
         img->field_mode = 1;  // MB coded as frame
         img->top_field = 1;   // Set top field to 1
         img->buf_cycle <<= 1;
-        input->num_reference_frames <<= 1;
+        input->num_ref_frames <<= 1;
         img->num_ref_idx_l0_active <<= 1;
         img->num_ref_idx_l0_active += 1;
         start_macroblock (CurrentMbAddr, TRUE);
@@ -393,13 +383,13 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       //Rate control
       img->write_macroblock_frame = 0;  //Rate control
 
-      
-      // decide between frame/field MB pair
+      //=========== decide between frame/field MB pair ============
+      //-----------------------------------------------------------
       if ((input->MbInterlace == ADAPTIVE_CODING) && (FrameRDCost < FieldRDCost))
       {
         img->field_mode = 0;
         img->buf_cycle >>= 1;
-        input->num_reference_frames >>= 1;
+        input->num_ref_frames >>= 1;
         MBPairIsField = 0;
         img->num_ref_idx_l0_active -= 1;
         img->num_ref_idx_l0_active >>= 1;
@@ -451,7 +441,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       if (MBPairIsField)    // if MB Pair was coded as field the buffer size variables back to frame mode
       {
         img->buf_cycle >>= 1;
-        input->num_reference_frames >>= 1;
+        input->num_ref_frames >>= 1;
         img->num_ref_idx_l0_active -= 1;
         img->num_ref_idx_l0_active >>= 1;
       }
@@ -463,7 +453,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
       
       if (CurrentMbAddr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (CurrentMbAddr)))
-        end_of_slice = TRUE;        // just in case it does n't get set in terminate_macroblock  
+        end_of_slice = TRUE;        // just in case it does n't get set in terminate_macroblock
     }
   }  
 /*
@@ -496,9 +486,9 @@ static void init_slice (int start_mb_addr)
 {
   int i;
   Picture *currPic = img->currentPicture;
-  Slice *curr_slice;
   DataPartition *dataPart;
   Bitstream *currStream;
+  Slice *currSlice;
 
   img->current_mb_nr = start_mb_addr;
 
@@ -507,18 +497,20 @@ static void init_slice (int start_mb_addr)
   currPic->no_slices++;
   if (currPic->no_slices >= MAXSLICEPERPICTURE)
     error ("Too many slices per picture, increase MAXLSICESPERPICTURE in global.h.", -1);
+
   currPic->slices[currPic->no_slices-1] = malloc_slice();
-  curr_slice = currPic->slices[currPic->no_slices-1];
-  img->currentSlice = curr_slice;
+  currSlice = currPic->slices[currPic->no_slices-1];
 
-  curr_slice->picture_id = img->tr % 256;
-  curr_slice->qp = img->qp;
-  curr_slice->start_mb_nr = start_mb_addr;
-  curr_slice->slice_too_big = dummy_slice_too_big;
+  img->currentSlice = currSlice;
 
-  for (i = 0; i < curr_slice->max_part_nr; i++)
+  currSlice->picture_id = img->tr % 256;
+  currSlice->qp = img->qp;
+  currSlice->start_mb_nr = start_mb_addr;
+  currSlice->slice_too_big = dummy_slice_too_big;
+
+  for (i = 0; i < currSlice->max_part_nr; i++)
   {
-    dataPart = &(curr_slice->partArr[i]);
+    dataPart = &(currSlice->partArr[i]);
     if (input->symbol_mode == UVLC)
       dataPart->writeSyntaxElement = writeSyntaxElement_UVLC;
     else
@@ -529,13 +521,141 @@ static void init_slice (int start_mb_addr)
     currStream->byte_pos = 0;
     currStream->byte_buf = 0;
   }
+
+    // restrict list 1 size
+//  img->num_ref_idx_l0_active = max(1, (img->type==B_SLICE ? active_pps->num_ref_idx_l0_active_minus1 + 1: active_pps->num_ref_idx_l0_active_minus1 +1 )); 
+//  img->num_ref_idx_l1_active = (img->type==B_SLICE ? active_pps->num_ref_idx_l1_active_minus1 + 1 : 0);
+  img->num_ref_idx_l0_active = active_pps->num_ref_idx_l0_active_minus1 + 1; 
+  img->num_ref_idx_l1_active = active_pps->num_ref_idx_l1_active_minus1 + 1;
+
+  // generate reference picture lists
+  init_lists(img->type, img->structure);
+
+  // assign list 0 size from list size
+  img->num_ref_idx_l0_active = listXsize[0];
+  img->num_ref_idx_l1_active = listXsize[1];
+
+  //if (!img->MbaffFrameFlag)
+  {
+    if ((img->type == P_SLICE || img->type == SP_SLICE) && input->P_List0_refs)
+    {
+      img->num_ref_idx_l0_active = min(img->num_ref_idx_l0_active, input->P_List0_refs);
+      listXsize[0] = min(listXsize[0], input->P_List0_refs);  
+    }
+    if (img->type == B_SLICE )
+    {
+      
+      if (input->B_List0_refs)
+      {
+        img->num_ref_idx_l0_active = min(img->num_ref_idx_l0_active, input->B_List0_refs);
+        listXsize[0] = min(listXsize[0], input->B_List0_refs);  
+      }
+      if (input->B_List1_refs)
+      {
+        
+        img->num_ref_idx_l1_active = min(img->num_ref_idx_l1_active, input->B_List1_refs);
+        listXsize[1] = min(listXsize[1], input->B_List1_refs);  
+      }
+    }
+  } 
+
+  //Perform memory management based on poc distances for PyramidCoding
+  if (img->nal_reference_idc  && input->PyramidCoding && input->PocMemoryManagement && dpb.used_size == dpb.size)
+  {    
+    poc_based_ref_management(img->frame_num);
+  }
+
+  init_ref_pic_list_reordering();
+
+  //Perform reordering based on poc distances for PyramidCoding
+  if (img->type==P_SLICE && input->PyramidCoding && input->PyramidRefReorder)
+  {
+    
+    int i, num_ref;
+
+    alloc_ref_pic_list_reordering_buffer(currSlice);
+    
+    if ((img->type != I_SLICE) && (img->type !=SI_SLICE))
+    {
+      for (i=0; i<img->num_ref_idx_l0_active + 1; i++)
+      {
+        currSlice->remapping_of_pic_nums_idc_l0[i] = 3;
+        currSlice->abs_diff_pic_num_minus1_l0[i] = 0;
+        currSlice->long_term_pic_idx_l0[i] = 0;
+      }
+      
+      if (img->type == B_SLICE)
+      {
+        for (i=0; i<img->num_ref_idx_l1_active + 1; i++)
+        {
+          currSlice->remapping_of_pic_nums_idc_l1[i] = 3;
+          currSlice->abs_diff_pic_num_minus1_l1[i] = 0;
+          currSlice->long_term_pic_idx_l1[i] = 0;
+        }
+      }
+    }
+    
+    if ((img->type != I_SLICE) && (img->type !=SI_SLICE))
+    {
+      num_ref = img->num_ref_idx_l0_active;
+      poc_ref_pic_reorder(listX[LIST_0], 
+                          num_ref, 
+                          currSlice->remapping_of_pic_nums_idc_l0, 
+                          currSlice->abs_diff_pic_num_minus1_l0, 
+                          currSlice->long_term_pic_idx_l0, 0, LIST_0);
+      
+      //reference picture reordering
+      reorder_ref_pic_list(listX[LIST_0], &listXsize[LIST_0], 
+                           img->num_ref_idx_l0_active - 1, 
+                           currSlice->remapping_of_pic_nums_idc_l0, 
+                           currSlice->abs_diff_pic_num_minus1_l0, 
+                           currSlice->long_term_pic_idx_l0);
+      
+		// This is not necessary since order is already poc based...  
+      if (img->type == B_SLICE)
+      {
+        num_ref = img->num_ref_idx_l1_active;
+        poc_ref_pic_reorder(listX[LIST_1], 
+                            num_ref, 
+                            currSlice->remapping_of_pic_nums_idc_l1, 
+                            currSlice->abs_diff_pic_num_minus1_l1, 
+                            currSlice->long_term_pic_idx_l1, 0, LIST_1);
+        
+        //reference picture reordering
+        reorder_ref_pic_list(listX[LIST_1], &listXsize[LIST_1], 
+                             img->num_ref_idx_l1_active - 1, 
+                             currSlice->remapping_of_pic_nums_idc_l1, 
+                             currSlice->abs_diff_pic_num_minus1_l1, 
+                             currSlice->long_term_pic_idx_l1);
+      }
+    }
+  }
+
+
+  //if (img->MbaffFrameFlag)
+  if (img->structure==FRAME)
+    init_mbaff_lists();
+
+  if (img->type != I_SLICE && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_SLICE))))
+  {
+  	if (img->type==P_SLICE || img->type==SP_SLICE)
+       estimate_weighting_factor_P_slice ();
+    else
+       estimate_weighting_factor_B_slice ();
+  }
+
+  set_ref_pic_num();
+
+  if (img->type == B_SLICE)
+    compute_collocated(Co_located, listX);
+
 }
 
 
 /*!
  ************************************************************************
  * \brief
- *    Allocates a slice structure along with its dependentdata structures
+ *    Allocates a slice structure along with its dependent data structures
  * \return
  *    Pointer to a Slice
  ************************************************************************
@@ -547,7 +667,7 @@ static Slice *malloc_slice()
   Slice *slice;
   const int buffer_size = (img->width * img->height * 4); // AH 190202: There can be data expansion with 
                                                           // low QP values. So, we make sure that buffer 
-                                                          // does not everflow. 4 is probably safe multiplier.
+                                                          // does not overflow. 4 is probably safe multiplier.
 
   if ((slice = (Slice *) calloc(1, sizeof(Slice))) == NULL) no_mem_exit ("malloc_slice: slice structure");
 
@@ -560,17 +680,17 @@ static Slice *malloc_slice()
 
   slice->max_part_nr = input->partition_mode==0?1:3;
 
-	//for IDR img there should be only one partition
-	if(img->currentPicture->idr_flag)
-		slice->max_part_nr = 1;
+  //for IDR img there should be only one partition
+  if(img->currentPicture->idr_flag)
+    slice->max_part_nr = 1;
   
   assignSE2partition[0] = assignSE2partition_NoDP;
-	//ZL 
-	//for IDR img all the syntax element shoulde be mapped to one partition        
+  //ZL 
+  //for IDR img all the syntax element should be mapped to one partition        
   if(!img->currentPicture->idr_flag&&input->partition_mode==1)
     assignSE2partition[1] =  assignSE2partition_DP;
-	else
-    assignSE2partition[1] =  assignSE2partition_NoDP;    		 
+  else
+    assignSE2partition[1] =  assignSE2partition_NoDP;        
 
 
 
@@ -693,4 +813,185 @@ void set_ref_pic_num()
         enc_picture->bottom_ref_pic_num[j][i] = listX[j][i]->bottom_poc * 2 + 1;
       }
 
+}
+
+/*!
+************************************************************************
+* \brief
+*    decide reference picture reordering, Frame only
+************************************************************************
+*/
+void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active, int *remapping_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int weighted_prediction, int list_no)
+{
+  unsigned i,j,k;
+  
+  int currPicNum, picNumLXPred;
+
+  int default_order[32];
+  int re_order[32];
+  int tmp_reorder[32];
+  int list_sign[32];
+  int reorder_stop, no_reorder;
+  int poc_diff[32];
+  int tmp_value, diff;  
+
+  int abs_poc_dist;
+  
+  if (img->structure==FRAME)
+  {
+    currPicNum = img->frame_num;
+  }
+  else
+  {
+    currPicNum = 2 * img->frame_num + 1;
+  }
+  
+  picNumLXPred = currPicNum;
+  
+  // First assign default list order. 
+  for (i=0; i<num_ref_idx_lX_active; i++)
+  {
+    default_order[i] = list[i]->pic_num;
+  }
+  
+  // Now access all references in buffer and assign them
+  // to a pottential reordering list. For each one of these 
+  // references compute the poc distance compared to current
+  // frame.
+  for (i=0; i<dpb.ref_frames_in_buffer; i++)
+  {
+    re_order[i] = dpb.fs_ref[i]->frame->pic_num;
+  
+    if (dpb.fs_ref[i]->is_used==3 && (dpb.fs_ref[i]->frame->used_for_reference)&&(!dpb.fs_ref[i]->frame->is_long_term))
+    {
+      abs_poc_dist = abs(dpb.fs_ref[i]->frame->poc - enc_picture->poc) ;
+      poc_diff[i] = abs_poc_dist;
+      if (list_no == LIST_0)
+      {
+        if ( enc_picture->poc < dpb.fs_ref[i]->frame->poc)
+        {
+          list_sign[i] = +1;
+        }
+        else
+        {
+          list_sign[i] = -1;
+        }
+      }
+      else
+      {
+        if (enc_picture->poc > dpb.fs_ref[i]->frame->poc)
+        {
+          list_sign[i] = +1;
+        }
+        else
+        {
+          list_sign[i] = -1;
+        }
+      }
+    }
+  }
+  
+  
+  // now sort these references based on poc (temporal) distance
+  for (i=0; i< dpb.ref_frames_in_buffer-1; i++)
+  {
+    for (j=i+1; j< dpb.ref_frames_in_buffer; j++)
+    {
+      
+      if (poc_diff[i]>poc_diff[j] || (poc_diff[i] == poc_diff[j] && list_sign[j] > list_sign[i]))
+      {
+        
+        tmp_value = poc_diff[i];
+        poc_diff[i] = poc_diff[j];
+        poc_diff[j] = tmp_value;
+        tmp_value  = re_order[i];
+        re_order[i] = re_order[j];
+        re_order[j] = tmp_value ;
+        tmp_value  = list_sign[i];
+        list_sign[i] = list_sign[j];        
+        list_sign[j] = tmp_value ;
+      }
+    }
+  }
+  
+  // Check versus default list to see if any
+  // change has happened
+  no_reorder = 1;
+  for (i=0; i<num_ref_idx_lX_active; i++)
+  {
+    if (default_order[i] != re_order[i])
+    {
+      no_reorder = 0;
+    }
+  }
+  
+  // If different, then signal reordering
+  if (no_reorder==0)
+  {
+    for (i=0; i<num_ref_idx_lX_active; i++)
+    {
+      diff = re_order[i]-picNumLXPred;
+      if (diff <= 0)
+      {
+        remapping_of_pic_nums_idc[i] = 0;
+        abs_diff_pic_num_minus1[i] = abs(diff)-1;
+      }
+      else
+      {
+        remapping_of_pic_nums_idc[i] = 1;
+        abs_diff_pic_num_minus1[i] = abs(diff)-1;
+      }
+      picNumLXPred = re_order[i];
+      
+      tmp_reorder[i] = re_order[i];
+      
+      k = i;
+      for (j=i; j<num_ref_idx_lX_active; j++)
+      {
+        if (default_order[j] != re_order[i])
+        {
+          ++k;
+          tmp_reorder[k] = default_order[j];
+        }
+      }
+      reorder_stop = 1;
+      for(j=i+1; j<num_ref_idx_lX_active; j++)
+      {
+        if (tmp_reorder[j] != re_order[j])
+        {
+          reorder_stop = 0;
+          break;
+        }
+      }
+      
+      if (reorder_stop==1)
+      {
+        ++i;
+        break;
+      }
+      
+      
+      for(j=0; j<num_ref_idx_lX_active; j++)
+      {
+        default_order[j] = tmp_reorder[j];
+      }
+      
+      
+    }
+    remapping_of_pic_nums_idc[i] = 3;
+    
+    for(j=0; j<num_ref_idx_lX_active; j++)
+    {
+      default_order[j] = tmp_reorder[j];
+    }
+    
+    if (list_no==0)
+    {
+      img->currentSlice->ref_pic_list_reordering_flag_l0=1;
+    }
+    else
+    {
+      img->currentSlice->ref_pic_list_reordering_flag_l1=1;
+    }
+  }
 }

@@ -13,21 +13,15 @@
  **************************************************************************************
  */
 
-#include <assert.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <memory.h>
-#include <malloc.h>
-#include <string.h>
+#include <assert.h>
  
 #include "global.h"
+
 #include "contributors.h"
-#include "parsetcommon.h"
-#include "nalu.h"
-#include "parset.h"
-#include "fmo.h"
-#include "vlc.h"
 #include "mbuffer.h"
+#include "parset.h"
+#include "vlc.h"
 
 // Local helpers
 static int IdentifyProfile();
@@ -189,6 +183,11 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
                                  pic_parameter_set_rbsp_t *pps)
 {
   unsigned i;
+  int frext_profile = ((IdentifyProfile()==FREXT_HP) || 
+                      (IdentifyProfile()==FREXT_Hi10P) ||
+                      (IdentifyProfile()==FREXT_Hi422) ||
+                      (IdentifyProfile()==FREXT_Hi444));
+
   // *************************************************************************
   // Sequence Parameter Set
   // *************************************************************************
@@ -203,10 +202,17 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   sps->constrained_set0_flag = 0;
   sps->constrained_set1_flag = 0;
   sps->constrained_set2_flag = 0;
+  sps->constrained_set3_flag = 0;
 
-  // Parameter Set ID hardcoded to zero
+  // Parameter Set ID hard coded to zero
   sps->seq_parameter_set_id = 0;
 
+  // Fidelity Range Extensions stuff
+  sps->bit_depth_luma_minus8   = input->BitDepthLuma - 8;
+  sps->bit_depth_chroma_minus8 = input->BitDepthChroma - 8;
+  img->lossless_qpprime_flag = input->lossless_qpprime_y_zero_flag & (sps->profile_idc==FREXT_Hi444);
+  img->residue_transform_flag = input->residue_transform_flag;
+  
   //! POC stuff:
   //! The following values are hard-coded in init_poc().  Apparently,
   //! the poc implementation covers only a subset of the poc functionality.
@@ -242,10 +248,10 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   // a couple of flags, simple
   sps->mb_adaptive_frame_field_flag = (FRAME_CODING != input->MbInterlace);
   sps->direct_8x8_inference_flag = input->directInferenceFlag;
-
-  // Sequence VUI not implemented, signalled as not present
-  sps->vui_parameters_present_flag = FALSE;
   
+  // Sequence VUI not implemented, signalled as not present
+  sps->vui_parameters_present_flag = (input->rgb_input_flag && input->yuv_format==3);
+
   {
     int PicWidthInMbs, PicHeightInMapUnits, FrameHeightInMbs;
     int width, height;
@@ -266,6 +272,52 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   pps->seq_parameter_set_id = 0;
   pps->pic_parameter_set_id = 0;
   pps->entropy_coding_mode_flag = (input->symbol_mode==UVLC?0:1);
+
+  // Fidelity Range Extensions stuff
+  if(frext_profile)
+  {
+    pps->transform_8x8_mode_flag = input->AllowTransform8x8 ? 1:0;
+
+    sps->seq_scaling_matrix_present_flag = (input->ScalingMatrixPresentFlag&1);
+    for(i=0; i<8; i++)
+    {
+      if(i<6)
+        sps->seq_scaling_list_present_flag[i] = (input->ScalingListPresentFlag[i]&1);
+      else
+      {
+        if(pps->transform_8x8_mode_flag)
+          sps->seq_scaling_list_present_flag[i] = (input->ScalingListPresentFlag[i]&1);
+        else
+          sps->seq_scaling_list_present_flag[i] = 0;
+      }
+    }
+
+    pps->pic_scaling_matrix_present_flag = (input->ScalingMatrixPresentFlag&2)>>1;
+    for(i=0; i<8; i++)
+    {
+      if(i<6)
+        pps->pic_scaling_list_present_flag[i] = (input->ScalingListPresentFlag[i]&2)>>1;
+      else
+      {
+        if(pps->transform_8x8_mode_flag)
+          pps->pic_scaling_list_present_flag[i] = (input->ScalingListPresentFlag[i]&2)>>1;
+        else
+          pps->pic_scaling_list_present_flag[i] = 0;
+      }
+    }
+  }
+  else
+  {
+    sps->seq_scaling_matrix_present_flag = 0;
+    for(i=0; i<8; i++)
+      sps->seq_scaling_list_present_flag[i] = 0;
+
+    pps->pic_scaling_matrix_present_flag = 0;
+    for(i=0; i<8; i++)
+      pps->pic_scaling_list_present_flag[i] = 0;
+
+    pps->transform_8x8_mode_flag = input->AllowTransform8x8 = 0;
+  }
 
   // JVT-Fxxx (by Stephan Wenger, make this flag unconditional
   pps->pic_order_present_flag = img->pic_order_present_flag;
@@ -336,6 +388,13 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   pps->pic_init_qs_minus26 = 0;
 
   pps->chroma_qp_index_offset = input->chroma_qp_index_offset;      // double check: is this chroma fidelity thing already implemented???
+  if (frext_profile)
+  {
+    pps->cb_qp_index_offset     = input->cb_qp_index_offset;
+    pps->cr_qp_index_offset     = input->cr_qp_index_offset;
+  }
+  else
+    pps->cb_qp_index_offset = pps->cr_qp_index_offset = pps->chroma_qp_index_offset;
 
   pps->deblocking_filter_control_present_flag = input->LFSendParameters;
   pps->constrained_intra_pred_flag = input->UseConstrainedIntraPred;
@@ -347,6 +406,59 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   sps->frame_cropping_flag = FALSE;
 };
 
+/*! 
+ *************************************************************************************
+ * \brief
+ *    syntax for scaling list matrix values
+ *
+ * \param scalingListinput
+ *    input scaling list
+ * \param scalingList
+ *    scaling list to be used
+ * \param sizeOfScalingList
+ *    size of the scaling list
+ * \param UseDefaultScalingMatrix
+ *    usage of default Scaling Matrix
+ * \param partition
+ *    partition info for writing syntax
+ *
+ * \return
+ *    size of the RBSP in bytes
+ *
+ *************************************************************************************
+ */
+int Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingList, short *UseDefaultScalingMatrix, DataPartition *partition)
+{
+  int j, scanj;
+  int len=0;
+  int delta_scale, lastScale, nextScale;
+
+  lastScale = 8;
+  nextScale = 8;
+
+  for(j=0; j<sizeOfScalingList; j++)
+  {
+    scanj = (sizeOfScalingList==16) ? ZZ_SCAN[j]:ZZ_SCAN8[j];
+
+    if(nextScale!=0)
+    {
+      delta_scale = scalingListinput[scanj]-lastScale; // Calculate delta from the scalingList data from the input file
+      if(delta_scale>127)
+        delta_scale=delta_scale-256;
+      else if(delta_scale<-128)
+        delta_scale=delta_scale+256;
+
+      len+=se_v ("   : delta_sl   ",                      delta_scale,                       partition);
+      nextScale = scalingListinput[scanj];
+      *UseDefaultScalingMatrix|=(scanj==0 && nextScale==0); // Check first matrix value for zero
+    }
+
+    scalingList[scanj] = (nextScale==0) ? lastScale:nextScale; // Update the actual scalingList matrix with the correct values
+    lastScale = scalingList[scanj];
+  }
+
+  return len;
+}
 
 
 /*! 
@@ -367,7 +479,6 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
  *    an exit (-1)
  *************************************************************************************
  */
- 
 int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
 {
   DataPartition *partition;
@@ -389,14 +500,48 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
   len+=u_1  ("SPS: constrained_set0_flag",                      sps->constrained_set0_flag,    partition);
   len+=u_1  ("SPS: constrained_set1_flag",                      sps->constrained_set1_flag,    partition);
   len+=u_1  ("SPS: constrained_set2_flag",                      sps->constrained_set2_flag,    partition);
-  len+=u_v  (5, "SPS: reserved_zero",                           0,                             partition);
+  len+=u_1  ("SPS: constrained_set3_flag",                      sps->constrained_set3_flag,    partition);
+  len+=u_v  (4, "SPS: reserved_zero_4bits",                     0,                             partition);
 
   len+=u_v  (8, "SPS: level_idc",                               sps->level_idc,                                 partition);
 
   len+=ue_v ("SPS: seq_parameter_set_id",                    sps->seq_parameter_set_id,                      partition);
+
+  // Fidelity Range Extensions stuff
+  if((sps->profile_idc==FREXT_HP) || 
+     (sps->profile_idc==FREXT_Hi10P) ||
+     (sps->profile_idc==FREXT_Hi422) ||
+     (sps->profile_idc==FREXT_Hi444))
+  {
+    len+=ue_v ("SPS: chroma_format_idc",                        img->yuv_format,                                 partition);
+    if(img->yuv_format == 3)
+      len+=u_1  ("SPS: residue_transform_flag",                 img->residue_transform_flag,                     partition);
+    len+=ue_v ("SPS: bit_depth_luma_minus8",                    sps->bit_depth_luma_minus8,                      partition);
+    len+=ue_v ("SPS: bit_depth_chroma_minus8",                  sps->bit_depth_chroma_minus8,                    partition);
+    len+=u_1  ("SPS: lossless_qpprime_y_zero_flag",             img->lossless_qpprime_flag,                      partition);
+    //other chroma info to be added in the future
+
+    len+=u_1 ("SPS: seq_scaling_matrix_present_flag",           sps->seq_scaling_matrix_present_flag,            partition);
+
+    if(sps->seq_scaling_matrix_present_flag)
+    {
+      for(i=0; i<8; i++)
+      {
+        len+=u_1 ("SPS: seq_scaling_list_present_flag",         sps->seq_scaling_list_present_flag[i],           partition);
+        if(sps->seq_scaling_list_present_flag[i])
+        {
+          if(i<6)
+            len+=Scaling_List(ScalingList4x4input[i], ScalingList4x4[i], 16, &UseDefaultScalingMatrix4x4Flag[i], partition);
+          else
+            len+=Scaling_List(ScalingList8x8input[i-6], ScalingList8x8[i-6], 64, &UseDefaultScalingMatrix8x8Flag[i-6], partition);
+        }
+      }
+    }
+  }
+
   len+=ue_v ("SPS: log2_max_frame_num_minus4",               sps->log2_max_frame_num_minus4,                 partition);
   len+=ue_v ("SPS: pic_order_cnt_type",                      sps->pic_order_cnt_type,                        partition);
-  // POC200301
+
   if (sps->pic_order_cnt_type == 0)
     len+=ue_v ("SPS: log2_max_pic_order_cnt_lsb_minus4",     sps->log2_max_pic_order_cnt_lsb_minus4,         partition);
   else if (sps->pic_order_cnt_type == 1)
@@ -430,7 +575,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
 
   len+=u_1  ("SPS: vui_parameters_present_flag",             sps->vui_parameters_present_flag,               partition);
   if (sps->vui_parameters_present_flag)
-    len+=GenerateVUISequenceParameters();    // currently a dummy, asserting
+    len+=GenerateVUISequenceParameters(partition);    // currently a dummy, asserting
 
   SODBtoRBSP(partition->bitstream);     // copies the last couple of bits into the byte buffer
   
@@ -468,6 +613,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
   int len = 0, LenInBytes;
   unsigned i;
   unsigned NumberBitsPerSliceGroupId;
+  int profile_idc;
 
   assert (rbsp != NULL);
 
@@ -522,7 +668,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
         
       len+=ue_v ("PPS: pic_size_in_map_units_minus1",          pps->pic_size_in_map_units_minus1,             partition);
       for(i=0; i<=pps->pic_size_in_map_units_minus1; i++)
-        len+= u_v  (NumberBitsPerSliceGroupId, "PPS: >slice_group_id[i]",   pps->slice_group_id[i],           partition);			
+        len+= u_v  (NumberBitsPerSliceGroupId, "PPS: >slice_group_id[i]",                            pps->slice_group_id[i],                         partition);
     }
   }
   // End of FMO stuff
@@ -533,10 +679,47 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
   len+=u_v  (2, "PPS: weighted_bipred_idc",                   pps->weighted_bipred_idc,                       partition);
   len+=se_v ("PPS: pic_init_qp_minus26",                      pps->pic_init_qp_minus26,                       partition);
   len+=se_v ("PPS: pic_init_qs_minus26",                      pps->pic_init_qs_minus26,                       partition);
-  len+=se_v ("PPS: chroma_qp_index_offset",                   pps->chroma_qp_index_offset,                    partition);
+
+  profile_idc = IdentifyProfile();
+  if((profile_idc==FREXT_HP) || 
+     (profile_idc==FREXT_Hi10P) ||
+     (profile_idc==FREXT_Hi422) ||
+     (profile_idc==FREXT_Hi444))
+    len+=se_v ("PPS: chroma_qp_index_offset",                 pps->cb_qp_index_offset,                        partition);
+  else
+    len+=se_v ("PPS: chroma_qp_index_offset",                 pps->chroma_qp_index_offset,                    partition);
+
   len+=u_1  ("PPS: deblocking_filter_control_present_flag",   pps->deblocking_filter_control_present_flag,    partition);
   len+=u_1  ("PPS: constrained_intra_pred_flag",              pps->constrained_intra_pred_flag,               partition);
   len+=u_1  ("PPS: redundant_pic_cnt_present_flag",           pps->redundant_pic_cnt_present_flag,            partition);
+
+  // Fidelity Range Extensions stuff
+  if((profile_idc==FREXT_HP) || 
+     (profile_idc==FREXT_Hi10P) ||
+     (profile_idc==FREXT_Hi422) ||
+     (profile_idc==FREXT_Hi444))
+  {
+    len+=u_1  ("PPS: transform_8x8_mode_flag",                pps->transform_8x8_mode_flag,                   partition);
+    
+    len+=u_1  ("PPS: pic_scaling_matrix_present_flag",        pps->pic_scaling_matrix_present_flag,           partition);
+
+    if(pps->pic_scaling_matrix_present_flag)
+    {
+      for(i=0; i<(6+((unsigned)pps->transform_8x8_mode_flag<<1)); i++)
+      {
+        len+=u_1  ("PPS: pic_scaling_list_present_flag",      pps->pic_scaling_list_present_flag[i],          partition);
+
+        if(pps->pic_scaling_list_present_flag[i])
+        {
+          if(i<6)
+            len+=Scaling_List(ScalingList4x4input[i], ScalingList4x4[i], 16, &UseDefaultScalingMatrix4x4Flag[i], partition);
+          else
+            len+=Scaling_List(ScalingList8x8input[i-6], ScalingList8x8[i-6], 64, &UseDefaultScalingMatrix8x8Flag[i-6], partition);
+        }
+      }
+    }
+    len+=se_v ("PPS: second_chroma_qp_index_offset",          pps->cr_qp_index_offset,                        partition);
+  }
 
   SODBtoRBSP(partition->bitstream);     // copies the last couple of bits into the byte buffer
   
@@ -602,7 +785,7 @@ int IdentifyLevel()
  *    Number of reference frame buffers used
  *
  * \note
- *    This function currently maps to input->num_reference_frames.  With all this interlace
+ *    This function currently maps to input->num_ref_frames.  With all this interlace
  *    stuff this may or may not be correct.  If you determine a problem with the
  *    memory management for Interlace, then this could be one possible problem.
  *    However, so far no problem have been determined by my limited testing of
@@ -612,9 +795,9 @@ int IdentifyLevel()
 
 int IdentifyNumRefFrames()
 {
-  if(input->num_reference_frames > 16)error("no ref frames too large",-100);
+  if(input->num_ref_frames > 16)error("no ref frames too large",-100);
   
-  return input->num_reference_frames;
+  return input->num_ref_frames;
 }
 
 
@@ -627,9 +810,37 @@ int IdentifyNumRefFrames()
  *    exits with error message
  *************************************************************************************
  */
-static int GenerateVUISequenceParameters()
+static int GenerateVUISequenceParameters(DataPartition *partition)
 {
-  printf ("Sequence Parameter VUI not yet implemented, this should never happen, exit\n");
-  exit (-1);
+  int len=0;
+
+  // special case to signal the RGB format
+  if(input->rgb_input_flag && input->yuv_format==3)
+  { 
+    //still pretty much a dummy VUI
+    printf ("test: writing Sequence Parameter VUI to signal RGB format\n");
+    len+=u_1 ("VUI: aspect_ratio_info_present_flag", 0, partition);
+    len+=u_1 ("VUI: overscan_info_present_flag", 0, partition);
+    len+=u_1 ("VUI: video_signal_type_present_flag", 1, partition);
+    len+=u_v (3, "VUI: video format", 2, partition);
+    len+=u_1 ("VUI: video_full_range_flag", 1, partition);
+    len+=u_1 ("VUI: color_description_present_flag", 1, partition);
+    len+=u_v (8, "VUI: colour primaries", 2, partition);
+    len+=u_v (8, "VUI: transfer characteristics", 2, partition);
+    len+=u_v (8, "VUI: matrix coefficients", 0, partition);
+    len+=u_1 ("VUI: chroma_loc_info_present_flag", 0, partition);
+    len+=u_1 ("VUI: timing_info_present_flag", 0, partition);
+    len+=u_1 ("VUI: nal_hrd_parameters_present_flag", 0, partition);
+    len+=u_1 ("VUI: vcl_hrd_parameters_present_flag", 0, partition);
+    len+=u_1 ("VUI: pic_struc_present_flag", 0, partition);
+    len+=u_1 ("VUI: bitstream_restriction_flag", 0, partition);
+
+    return len;
+  }
+  else 
+  {
+    printf ("Sequence Parameter VUI not yet implemented, this should never happen, exit\n");
+    exit (-1);
+  }
 }
 

@@ -42,7 +42,7 @@ RSC=rc.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /c
-# ADD CPP /nologo /W3 /GX /Zi /O2 /Ob2 /I "lencod\inc" /I "lcommon\inc" /D "WIN32" /D "DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
+# ADD CPP /nologo /W3 /GX /Zi /O2 /Ob2 /I "lencod\inc" /I "lcommon\inc" /D "WIN32" /D "DEBUG" /D "_CONSOLE" /D "_MBCS" /Fr /YX /FD /c
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
 # ADD RSC /l 0x409 /d "NDEBUG"
 BSC32=bscmake.exe
@@ -112,6 +112,10 @@ SOURCE=.\lencod\src\context_ini.c
 # Begin Source File
 
 SOURCE=.\lencod\src\decoder.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\explicit_gop.c
 # End Source File
 # Begin Source File
 
@@ -195,6 +199,10 @@ SOURCE=.\lencod\src\parsetcommon.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\q_matrix.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\ratectl.c
 # End Source File
 # Begin Source File
@@ -220,6 +228,10 @@ SOURCE=.\lencod\src\sei.c
 # Begin Source File
 
 SOURCE=.\lencod\src\slice.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\transform8x8.c
 # End Source File
 # Begin Source File
 
@@ -275,7 +287,7 @@ SOURCE=.\lencod\inc\elements.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lencod\inc\encodeiff.h
+SOURCE=.\lencod\inc\explicit_gop.h
 # End Source File
 # Begin Source File
 
@@ -323,6 +335,10 @@ SOURCE=.\lencod\inc\memalloc.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\minmax.h
+# End Source File
+# Begin Source File
+
 SOURCE=".\lencod\inc\mv-search.h"
 # End Source File
 # Begin Source File
@@ -347,6 +363,10 @@ SOURCE=.\lencod\inc\parsetcommon.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\q_matrix.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\ratectl.h
 # End Source File
 # Begin Source File
@@ -367,20 +387,24 @@ SOURCE=.\lencod\inc\sei.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\transform8x8.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\vlc.h
 # End Source File
 # End Group
 # Begin Source File
 
-SOURCE=.\bin\encoder_baseline.cfg
+SOURCE=.\bin\encoder.cfg
 # End Source File
 # Begin Source File
 
-SOURCE=.\bin\encoder_extended.cfg
+SOURCE=.\bin\encoder_yuv422.cfg
 # End Source File
 # Begin Source File
 
-SOURCE=.\bin\encoder_main.cfg
+SOURCE=.\bin\encoder_yuv444.cfg
 # End Source File
 # End Target
 # End Project

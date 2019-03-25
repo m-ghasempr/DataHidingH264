@@ -1,17 +1,26 @@
+
 /*!
  ************************************************************************
+ *
+ * \file fast_me.h
+ *
  * \brief
- * Macro definitions and global variables for fast integer pel motion 
- * estimation and fractional pel motio estimation
- * \ Main contributors: (see contributors.h for copyright, address and affiliation details)
- *   Zhibo Chen         <chenzhibo@tsinghua.org.cn>
- *   JianFeng Xu        <fenax@video.mdc.tsinghua.edu.cn>  
- * \date   : 2003.4
+ *   Macro definitions and global variables for fast integer pel motion 
+ *   estimation and fractional pel motion estimation
+ *
+ * \author
+ *   Main contributors: (see contributors.h for copyright, address and affiliation details)
+ *    - Zhibo Chen         <chenzhibo@tsinghua.org.cn>
+ *    - JianFeng Xu        <fenax@video.mdc.tsinghua.edu.cn>  
+ *
+ * \date
+ *   Apr. 2003
  ************************************************************************
  */
+
 #ifndef _FAST_ME_H_
 #define _FAST_ME_H_
-#include "global.h"
+
 #include "mbuffer.h"
 
 #define EARLY_TERMINATION  if(ref>0)  \
@@ -93,7 +102,7 @@ int  flag_intra_SAD;
 void DefineThreshold();
 void DefineThresholdMB();
 
-char **SearchState; //state for fractional pel search
+byte **SearchState; //state for fractional pel search
 void DefineThreshold();
 void DefineThresholdMB();
 int get_mem_mincost (int****** mv);
@@ -178,4 +187,3 @@ noFME_BlockMotionSearch (int       ref,          //!< reference idx
                          double    lambda        //!< lagrangian parameter for determining motion cost
                          );
 #endif
-

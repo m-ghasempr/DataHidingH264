@@ -15,24 +15,13 @@
  *    Stephan Wenger   stewe@cs.tu-berlin.de
  *****************************************************************************/
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include <memory.h>
-#include <malloc.h>
-
-#include "rtp.h"
-#include "elements.h"
-#include "defines.h"
-#include "header.h"
 
 #include "global.h"
-#include "fmo.h"
-#include "parsetcommon.h"
-#include "parset.h"
-#include "nalucommon.h"
 
+#include "rtp.h"
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE

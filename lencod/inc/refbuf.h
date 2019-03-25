@@ -10,10 +10,6 @@
 #ifndef _REBUF_H_
 #define _REBUF_H_
 
-
-#include "global.h"
-
-
 pel_t UMVPelY_14 (pel_t **Pic, int y, int x, int height, int width);
 pel_t FastPelY_14 (pel_t **Pic, int y, int x, int height, int width);
 

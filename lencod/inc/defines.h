@@ -27,6 +27,17 @@
 
 typedef unsigned char byte;    //!< byte type definition
 
+//FREXT Profile IDC definitions
+#define FREXT_HP        100      //!< YUV 4:2:0/8 "High"
+#define FREXT_Hi10P     110      //!< YUV 4:2:0/10 "High 10"
+#define FREXT_Hi422     122      //!< YUV 4:2:2/10 "High 4:2:2"
+#define FREXT_Hi444     144      //!< YUV 4:4:4/12 "High 4:4:4"
+
+#define YUV400 0
+#define YUV420 1
+#define YUV422 2
+#define YUV444 3
+
 #define LIST_0 0
 #define LIST_1 1
 #define ZEROSNR 1
@@ -39,6 +50,9 @@ typedef unsigned char byte;    //!< byte type definition
 #define TOTRUN_NUM    15
 #define RUNBEFORE_NUM  7
 
+#define CAVLC_LEVEL_LIMIT 2063
+
+
 //--- block types for CABAC
 #define LUMA_16DC       0
 #define LUMA_16AC       1
@@ -48,7 +62,9 @@ typedef unsigned char byte;    //!< byte type definition
 #define LUMA_4x4        5
 #define CHROMA_DC       6
 #define CHROMA_AC       7
-#define NUM_BLOCK_TYPES 8
+#define CHROMA_DC_2x4   8
+#define CHROMA_DC_4x4   9
+#define NUM_BLOCK_TYPES 10
 
 
 #define _FAST_FULL_ME_
@@ -64,6 +80,8 @@ typedef unsigned char byte;    //!< byte type definition
 // Recommend that _CHROMA_COEFF_COST_ be low to improve chroma quality
 #define _LUMA_COEFF_COST_       4 //!< threshold for luma coeffs
 #define _CHROMA_COEFF_COST_     4 //!< threshold for chroma coeffs, used to be 7
+#define _LUMA_MB_COEFF_COST_    5 //!< threshold for luma coeffs of inter Macroblocks
+#define _LUMA_8x8_COEFF_COST_   5 //!< threshold for luma coeffs of 8x8 Inter Partition
 
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 
@@ -72,7 +90,8 @@ typedef unsigned char byte;    //!< byte type definition
 
 #define INVALIDINDEX  (-135792468)
 
-#define Clip1(a)            ((a)>255?255:((a)<0?0:(a)))
+#define Clip1(a)            ((a)>img->max_imgpel_value?img->max_imgpel_value:((a)<0?0:(a)))
+#define Clip1_Chr(a)        ((a)>img->max_imgpel_value_uv?img->max_imgpel_value_uv:((a)<0?0:(a)))
 #define Clip3(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
 
 #define P8x8    8
@@ -80,8 +99,9 @@ typedef unsigned char byte;    //!< byte type definition
 #define I16MB   10
 #define IBLOCK  11
 #define SI4MB   12
-#define MAXMODE 15
+#define I8MB    13
 #define IPCM    14
+#define MAXMODE 15
 
 
 #define  LAMBDA_ACCURACY_BITS         16
@@ -92,13 +112,14 @@ typedef unsigned char byte;    //!< byte type definition
 
 #define  REF_COST(f,ref,list_offset) (WEIGHTED_COST(f,((listXsize[list_offset]<=1)? 0:refbits[(ref)])))
 
-#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB)
+#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB)
 #define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB)
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
-#define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB)
-#define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB  && (MB)->mb_type!=0)
-#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img ->   type==B_SLICE))
-#define IS_COPY(MB)     ((MB)->mb_type==0     && (img ->type==P_SLICE||img ->type==SP_SLICE));
+
+#define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB)
+#define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=0)
+#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->type==B_SLICE))
+#define IS_COPY(MB)     ((MB)->mb_type==0     && (img->type==P_SLICE||img ->type==SP_SLICE));
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
 
 // Quantization parameter range
@@ -143,7 +164,7 @@ typedef unsigned char byte;    //!< byte type definition
 #define VERT_PRED_8     2
 #define PLANE_8         3
 
-#define INIT_FRAME_RATE 30
+#define INIT_FRAME_RATE 30.0
 #define EOS             1         //!< End Of Sequence
 
 

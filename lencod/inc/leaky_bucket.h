@@ -15,7 +15,6 @@
 #ifndef _LEAKY_BUCKET_H_
 #define _LEAKY_BUCKET_H_
 
-#include "global.h"
 
 /* Leaky Bucket Parameter Optimization */
 #ifdef _LEAKYBUCKET_

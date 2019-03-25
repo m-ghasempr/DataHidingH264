@@ -15,8 +15,10 @@
  **************************************************************************/
 
 #include <stdlib.h>
-#include <math.h>
 #include <memory.h>
+
+#include "global.h"
+
 #include "rdopt_coding_state.h"
 #include "cabac.h"
 
@@ -183,7 +185,7 @@ reset_coding_state (CSptr cs)
   if (cs->symbol_mode==CABAC) 
   {
   //=== important variables of data partition array ===
-	//only one partition for IDR img
+  //only one partition for IDR img
   for (i = 0; i <(img->currentPicture->idr_flag? 1:cs->no_part); i++)
   {
     ee_dest = &(img->currentSlice->partArr[i].ee_cabac);

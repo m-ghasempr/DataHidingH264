@@ -14,7 +14,9 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <memory.h>
+
 #include "global.h"
+
 #include "memalloc.h"
 #include "rtp.h"
 #include "mbuffer.h"
@@ -132,7 +134,7 @@ Boolean HaveAggregationSEI()
  *  \brief
  *     write one sei payload to the sei message
  *  \param id
- *    0, if this is the normal packet \n
+ *    0, if this is the normal packet\n
  *    1, if this is a aggregation packet
  *  \param payload
  *    a pointer that point to the sei payload. Note that the bitstream
@@ -553,7 +555,7 @@ void ComposeSparePictureMessage(int delta_spare_frame_num, int ref_area_indicato
  *      pointer to a buffer to save the payload
  *  \return
  *      TRUE: If it is compressed version, \n
- *      FALSE: If it is not compressed.
+ *             FALSE: If it is not compressed.
  ************************************************************************
  */
 Boolean CompressSpareMBMap(unsigned char **map_sp, Bitstream *bitstream)

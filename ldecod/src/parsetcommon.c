@@ -78,7 +78,7 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  }
 
  
-/*! 
+ /*! 
  *************************************************************************************
  * \brief
  *    Frees a sps
@@ -88,11 +88,11 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  *************************************************************************************
  */
  
-void FreeSPS (seq_parameter_set_rbsp_t *sps)
-{
-  assert (sps != NULL);
-  free (sps); 
-}
+ void FreeSPS (seq_parameter_set_rbsp_t *sps)
+ {
+   assert (sps != NULL);
+   free (sps); 
+ }
  
  
 int sps_is_equal(seq_parameter_set_rbsp_t *sps1, seq_parameter_set_rbsp_t *sps2)

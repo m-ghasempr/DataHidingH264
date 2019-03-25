@@ -12,13 +12,13 @@
  *
  **************************************************************************************
  */
-#include <assert.h>
-#include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <memory.h>
 
-#include "parsetcommon.h"
+#include "global.h"
 #include "memalloc.h"
+
 /*! 
  *************************************************************************************
  * \brief
@@ -28,7 +28,6 @@
  *    pointer to a pps
  *************************************************************************************
  */
- 
 pic_parameter_set_rbsp_t *AllocPPS ()
  {
    pic_parameter_set_rbsp_t *p;
@@ -50,7 +49,6 @@ pic_parameter_set_rbsp_t *AllocPPS ()
  *    pointer to a sps
  *************************************************************************************
  */
- 
 seq_parameter_set_rbsp_t *AllocSPS ()
  {
    seq_parameter_set_rbsp_t *p;

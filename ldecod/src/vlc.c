@@ -238,10 +238,11 @@ void linfo_se(int len,  int info, int *value1, int *dummy)
  */
 void linfo_cbp_intra(int len,int info,int *cbp, int *dummy)
 {
-  extern const byte NCBP[48][2];
-    int cbp_idx;
+  extern const byte NCBP[2][48][2];
+  int cbp_idx;
+
   linfo_ue(len,info,&cbp_idx,dummy);
-    *cbp=NCBP[cbp_idx][0];
+  *cbp=NCBP[img->yuv_format?1:0][cbp_idx][0];
 }
 
 /*!
@@ -254,10 +255,11 @@ void linfo_cbp_intra(int len,int info,int *cbp, int *dummy)
  */
 void linfo_cbp_inter(int len,int info,int *cbp, int *dummy)
 {
-  extern const byte NCBP[48][2];
+  extern const byte NCBP[2][48][2];
   int cbp_idx;
+
   linfo_ue(len,info,&cbp_idx,dummy);
-    *cbp=NCBP[cbp_idx][1];
+  *cbp=NCBP[img->yuv_format?1:0][cbp_idx][1];
 }
 
 /*!
@@ -795,28 +797,51 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPart
   int retval;
   int code, *ct, *lt;
 
-  int lentab[4][5] = 
+  int lentab[3][4][17] = 
   {
-    { 2, 6, 6, 6, 6,},          
-    { 0, 1, 6, 7, 8,}, 
-    { 0, 0, 3, 7, 8,}, 
-    { 0, 0, 0, 6, 7,},
+    //YUV420
+   {{ 2, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 1, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 0, 3, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 0, 0, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+    //YUV422
+   {{ 1, 7, 7, 9, 9,10,11,12,13, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 2, 7, 7, 9,10,11,12,12, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 0, 3, 7, 7, 9,10,11,12, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 0, 0, 5, 6, 7, 7,10,11, 0, 0, 0, 0, 0, 0, 0, 0}},
+    //YUV444
+   {{ 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
+    { 0, 2, 6, 8, 9,10,11,13,13,14,14,15,15,15,16,16,16},
+    { 0, 0, 3, 7, 8, 9,10,11,13,13,14,14,15,15,16,16,16},
+    { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16}}
   };
 
-  int codtab[4][5] = 
+  int codtab[3][4][17] = 
   {
-    {1,7,4,3,2},
-    {0,1,6,3,3},
-    {0,0,1,2,2},
-    {0,0,0,5,0},
+    //YUV420
+   {{ 1, 7, 4, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 1, 6, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 1, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+    //YUV422
+   {{ 1,15,14, 7, 6, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 1,13,12, 5, 6, 6, 6, 5, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 1,11,10, 4, 5, 5, 4, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 0, 1, 1, 9, 8, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0}},
+    //YUV444
+   {{ 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7, 4}, 
+    { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10, 6}, 
+    { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9, 5}, 
+    { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12, 8}}
+  
   };
+  int yuv = img->yuv_format - 1;
+  //ADD-VG-14052004-END
 
+  lt = &lentab[yuv][0][0];
+  ct = &codtab[yuv][0][0];
 
-
-  lt = &lentab[0][0];
-  ct = &codtab[0][0];
-
-  retval = code_from_bitstream_2d(sym, dP, lt, ct, 5, 4, &code);
+  retval = code_from_bitstream_2d(sym, dP, lt, ct, 17, 4, &code);
 
   if (retval)
   {
@@ -851,7 +876,8 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP)
   int frame_bitoffset = currStream->frame_bitoffset;
   byte *buf = currStream->streamBuffer;
   int BitstreamLengthInBytes = currStream->bitstream_length;
-  int len, sign, level, code;
+  int len, sign=0, level=0, code;
+  int offset, addbit;
 
   len = 0;
   while (!ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, 1))
@@ -875,19 +901,18 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP)
     sign = (code & 1);
     level = ((code >> 1) & 0x7) + 8;
   }
-  else if (len == 16)
+  else if (len >= 16)
   {
     // escape code
-    code = (code << 12) | ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, 12);
-    len += 12;
-    frame_bitoffset += 12;
+    addbit=len-16;
+    code = ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, (len-4));
+    len  = (len-4);
+    frame_bitoffset += len;
     sign =  (code & 1);
-    level = ((code >> 1) & 0x7ff) + 16;
-  }
-  else
-  {
-    printf("ERROR reading Level code\n");
-    exit(-1);
+
+    offset=(2048<<addbit)+16-2048;
+    level = (code >> 1) + offset;
+    code |= (1 << (len)); // for display purpose only
   }
 
   if (sign)
@@ -925,6 +950,7 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartiti
   int numPrefix;
   int shift = vlc-1;
   int escape = (15<<shift)+1;
+  int addbit, offset;
   
   // read pre zeros
   numPrefix = 0;
@@ -953,16 +979,17 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartiti
     code = (code << 1)| sign;
     len ++;
   }
-  else  // escape
+  else // escape
   {
-    // read 11 bits -> levabs
-    // levabs += escape
-    sb = ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, 11);
-    code = (code << 11 )| sb;
-    
-    levabs =  sb + escape;
-    len+=11;
-    
+    addbit = numPrefix - 15;
+
+    sb = ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, (11+addbit));
+    code = (code << (11+addbit) )| sb;
+
+    len   += (11+addbit);
+    offset = (2048<<addbit)+escape-2048;
+    levabs = sb + offset;
+
     // read 1 bit -> sign
     sign = ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, 1);
     code = (code << 1)| sign;
@@ -975,7 +1002,7 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartiti
   currStream->frame_bitoffset = frame_bitoffset+len;
   
 #if TRACE
-  tracebits2(sym->tracestring, sym->len, code);
+  tracebits2(sym->tracestring, sym->len, sym->inf);
 #endif
   
   return 0;
@@ -1063,26 +1090,77 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
   int vlcnum, retval;
   int code, *ct, *lt;
 
-  int lentab[3][4] = 
+  int lentab[3][TOTRUN_NUM][16] = 
   {
-    { 1, 2, 3, 3,},
-    { 1, 2, 2, 0,},
-    { 1, 1, 0, 0,}, 
+    //YUV420
+   {{ 1,2,3,3},
+    { 1,2,2},
+    { 1,1}},
+    //YUV422
+   {{ 1,3,3,4,4,4,5,5},
+    { 3,2,3,3,3,3,3},
+    { 3,3,2,2,3,3},
+    { 3,2,2,2,3},
+    { 2,2,2,2},
+    { 2,2,1},   
+    { 1,1}},
+    //YUV444
+   {{ 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},  
+    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},  
+    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},  
+    { 5,3,4,4,3,3,3,4,3,4,5,5,5},  
+    { 4,4,4,3,3,3,3,3,4,5,4,5},  
+    { 6,5,3,3,3,3,3,3,4,3,6},  
+    { 6,5,3,3,3,2,3,4,3,6},  
+    { 6,4,5,3,2,2,3,3,6},  
+    { 6,6,4,2,2,3,2,5},  
+    { 5,5,3,2,2,2,4},  
+    { 4,4,3,3,1,3},  
+    { 4,4,2,1,3},  
+    { 3,3,1,2},  
+    { 2,2,1},  
+    { 1,1}}  
   };
 
-  int codtab[3][4] = 
+  int codtab[3][TOTRUN_NUM][16] = 
   {
-    { 1, 1, 1, 0,},
-    { 1, 1, 0, 0,},
-    { 1, 0, 0, 0,},
+    //YUV420
+   {{ 1,1,1,0},
+    { 1,1,0},
+    { 1,0}},
+    //YUV422
+   {{ 1,2,3,2,3,1,1,0},
+    { 0,1,1,4,5,6,7},
+    { 0,1,1,2,6,7},
+    { 6,0,1,2,7},
+    { 0,1,2,3},
+    { 0,1,1},   
+    { 0,1}},
+    //YUV444
+   {{1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
+    {7,6,5,4,3,5,4,3,2,3,2,3,2,1,0},
+    {5,7,6,5,4,3,4,3,2,3,2,1,1,0},
+    {3,7,5,4,6,5,4,3,3,2,2,1,0},
+    {5,4,3,7,6,5,4,3,2,1,1,0},
+    {1,1,7,6,5,4,3,2,1,1,0},
+    {1,1,5,4,3,3,2,1,1,0},
+    {1,1,1,3,3,2,2,1,0},
+    {1,0,1,3,2,1,1,1,},
+    {1,0,1,3,2,1,1,},
+    {0,1,1,2,1,3},
+    {0,1,1,1,1},
+    {0,1,1,1},
+    {0,1,1},
+    {0,1}}  
   };
+  int yuv = img->yuv_format - 1;
 
   vlcnum = sym->value1;
 
-  lt = &lentab[vlcnum][0];
-  ct = &codtab[vlcnum][0];
+  lt = &lentab[yuv][vlcnum][0];
+  ct = &codtab[yuv][vlcnum][0];
 
-  retval = code_from_bitstream_2d(sym, dP, lt, ct, 4, 1, &code);
+  retval = code_from_bitstream_2d(sym, dP, lt, ct, 16, 1, &code);
 
   if (retval)
   {

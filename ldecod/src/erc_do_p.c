@@ -28,16 +28,20 @@ struct img_par *erc_img;
 // static function declarations
 static int concealByCopy(frame *recfr, int currMBNum,
   objectBuffer_t *object_list, int32 picSizeX);
-static int concealByTrial(frame *recfr, byte *predMB, 
+static int concealByTrial(frame *recfr, imgpel *predMB, 
                           int currMBNum, objectBuffer_t *object_list, int predBlocks[], 
                           int32 picSizeX, int32 picSizeY, int *yCondition);
-static int edgeDistortion (int predBlocks[], int currYBlockNum, byte *predMB, 
-                           byte *recY, int32 picSizeX, int32 regionSize);
+static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB, 
+                           imgpel *recY, int32 picSizeX, int32 regionSize);
 static void copyBetweenFrames (frame *recfr, 
    int currYBlockNum, int32 picSizeX, int32 regionSize);
-static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byte *predMB);
-static void copyPredMB (int currYBlockNum, byte *predMB, frame *recfr, 
+static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, imgpel *predMB);
+static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr, 
                         int32 picSizeX, int32 regionSize);
+
+extern const unsigned char subblk_offset_y[3][8][4];
+extern const unsigned char subblk_offset_x[3][8][4];
+static int uv_div[2][4] = {{0, 1, 1, 0}, {0, 1, 0, 0}}; //[x/y][yuv_format]
 
 /*!
  ************************************************************************
@@ -64,7 +68,7 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
   int lastColumn = 0, lastRow = 0, predBlocks[8];
   int lastCorruptedRow = -1, firstCorruptedRow = -1, currRow = 0, 
     row, column, columnInd, areaHeight = 0, i = 0;
-  byte *predMB;
+  imgpel *predMB;
   
   /* if concealment is on */
   if ( errorVar && errorVar->concealment ) 
@@ -72,8 +76,11 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
     /* if there are segments to be concealed */
     if ( errorVar->nOfCorruptedSegments ) 
     {
+      if (img->yuv_format != YUV400)
+        predMB = (imgpel *) malloc(256 + (img->mb_cr_size_x*img->mb_cr_size_y)*2);
+      else
+        predMB = (imgpel *) malloc(256);
       
-      predMB = (byte *) malloc(DEF_REGION_SIZE);
       if ( predMB == NULL ) no_mem_exit("ercConcealInterFrame: predMB");
       
       lastRow = (int) (picSizeY>>4);
@@ -255,7 +262,7 @@ static void copyBetweenFrames (frame *recfr,
 {
   int j, k, location, xmin, ymin;
   StorablePicture* refPic = listX[0][0];
-   
+
   /* set the position of the region to be copied */
   xmin = (xPosYBlock(currYBlockNum,picSizeX)<<3);
   ymin = (yPosYBlock(currYBlockNum,picSizeX)<<3);
@@ -268,10 +275,12 @@ static void copyBetweenFrames (frame *recfr,
       recfr->yptr[location] = refPic->imgY[j][k];
     }
      
-    for (j = ymin / 2; j < (ymin + regionSize) / 2; j++)
-      for (k = xmin / 2; k < (xmin + regionSize) / 2; k++)
+    for (j = ymin >> uv_div[1][img->yuv_format]; j < (ymin + regionSize) >> uv_div[1][img->yuv_format]; j++)
+      for (k = xmin >> uv_div[0][img->yuv_format]; k < (xmin + regionSize) >> uv_div[0][img->yuv_format]; k++)
       {
-        location = j * picSizeX / 2 + k;
+//        location = j * picSizeX / 2 + k;
+        location = ((j * picSizeX) >> uv_div[0][img->yuv_format]) + k;
+        
 //th        recfr->uptr[location] = dec_picture->imgUV[0][j][k];
 //th        recfr->vptr[location] = dec_picture->imgUV[1][j][k];
         recfr->uptr[location] = refPic->imgUV[0][j][k];
@@ -306,7 +315,7 @@ static void copyBetweenFrames (frame *recfr,
  *      array for conditions of Y blocks from ercVariables_t
  ************************************************************************
  */
-static int concealByTrial(frame *recfr, byte *predMB, 
+static int concealByTrial(frame *recfr, imgpel *predMB, 
                           int currMBNum, objectBuffer_t *object_list, int predBlocks[], 
                           int32 picSizeX, int32 picSizeY, int *yCondition)
 {
@@ -502,26 +511,26 @@ static int concealByTrial(frame *recfr, byte *predMB,
 }
 
 /*!
- ************************************************************************
- * \brief
- *      Builds the motion prediction pixels from the given location (in 1/4 pixel units) 
- *      of the reference frame. It not only copies the pixel values but builds the interpolation 
- *      when the pixel positions to be copied from is not full pixel (any 1/4 pixel position).
- *      It copies the resulting pixel vlaues into predMB.
- * \param img
- *      The pointer of img_par struture of current frame
- * \param mv
- *      The pointer of the predicted MV of the current (being concealed) MB
- * \param x
- *      The x-coordinate of the above-left corner pixel of the current MB
- * \param y
- *      The y-coordinate of the above-left corner pixel of the current MB
- * \param predMB
- *      memory area for storing temporary pixel values for a macroblock
- *      the Y,U,V planes are concatenated y = predMB, u = predMB+256, v = predMB+320
- ************************************************************************
- */
-static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byte *predMB)
+************************************************************************
+* \brief
+*      Builds the motion prediction pixels from the given location (in 1/4 pixel units) 
+*      of the reference frame. It not only copies the pixel values but builds the interpolation 
+*      when the pixel positions to be copied from is not full pixel (any 1/4 pixel position).
+*      It copies the resulting pixel vlaues into predMB.
+* \param img
+*      The pointer of img_par struture of current frame
+* \param mv
+*      The pointer of the predicted MV of the current (being concealed) MB
+* \param x
+*      The x-coordinate of the above-left corner pixel of the current MB
+* \param y
+*      The y-coordinate of the above-left corner pixel of the current MB
+* \param predMB
+*      memory area for storing temporary pixel values for a macroblock
+*      the Y,U,V planes are concatenated y = predMB, u = predMB+256, v = predMB+320
+************************************************************************
+*/
+static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, imgpel *predMB)
 {
   int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
   int i=0,j=0,ii=0,jj=0,i1=0,j1=0,j4=0,i4=0;
@@ -529,27 +538,27 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byt
   int uv;
   int vec1_x=0,vec1_y=0;
   int ioff,joff;
-  byte *pMB = predMB;
-
+  imgpel *pMB = predMB;
+  
   int ii0,jj0,ii1,jj1,if1,jf1,if0,jf0;
-  int mv_mul,f1,f2,f3,f4;
-
+  int mv_mul;
+  
+  //FRExt
+  int f1_x, f1_y, f2_x, f2_y, f3, f4, ifx;
+  int b8, b4;
+  int yuv = img->yuv_format - 1;
+  
   int ref_frame = mv[2];
 
   /* Update coordinates of the current concealed macroblock */
   img->mb_x = x/MB_BLOCK_SIZE;
   img->mb_y = y/MB_BLOCK_SIZE;
   img->block_y = img->mb_y * BLOCK_SIZE;
-  img->pix_c_y = img->mb_y * MB_BLOCK_SIZE/2;
+  img->pix_c_y = img->mb_y * img->mb_cr_size_y;
   img->block_x = img->mb_x * BLOCK_SIZE;
-  img->pix_c_x = img->mb_x * MB_BLOCK_SIZE/2;
+  img->pix_c_x = img->mb_x * img->mb_cr_size_x;
 
   mv_mul=4;
-  f1=8;
-  f2=7;
-
-  f3=f1*f1;
-  f4=f3/2;
 
   // luma *******************************************************
 
@@ -582,55 +591,68 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byt
   }
   pMB += 256;
 
-  // chroma *******************************************************
-  for(uv=0;uv<2;uv++)
+  if (img->yuv_format != YUV400)
   {
-    for (j=4;j<6;j++)
+    // chroma *******************************************************
+    f1_x = 64/img->mb_cr_size_x;
+    f2_x=f1_x-1;
+
+    f1_y = 64/img->mb_cr_size_y;
+    f2_y=f1_y-1;
+
+    f3=f1_x*f1_y;
+    f4=f3>>1;
+
+    for(uv=0;uv<2;uv++)
     {
-      joff=(j-4)*4;
-      j4=img->pix_c_y+joff;
-      for(i=0;i<2;i++)
+      for (b8=0;b8<(img->num_blk8x8_uv/2);b8++)
       {
-        ioff=i*4;
-        i4=img->pix_c_x+ioff;
-        for(jj=0;jj<4;jj++)
+        for(b4=0;b4<4;b4++)
         {
-          jf=(j4+jj)/2;
-          for(ii=0;ii<4;ii++)
+          joff = subblk_offset_y[yuv][b8][b4];
+          j4=img->pix_c_y+joff;
+          ioff = subblk_offset_x[yuv][b8][b4];
+          i4=img->pix_c_x+ioff;
+
+          for(jj=0;jj<4;jj++)
           {
-            if1=(i4+ii)/2;
-            i1=(img->pix_c_x+ii+ioff)*f1+mv[0];
-            j1=(img->pix_c_y+jj+joff)*f1+mv[1];
+            jf=(j4+jj)/(img->mb_cr_size_y/4);     // jf  = Subblock_y-coordinate
+            for(ii=0;ii<4;ii++)
+            {
+              ifx=(i4+ii)/(img->mb_cr_size_x/4);  // ifx = Subblock_x-coordinate
 
-
-            ii0=max (0, min (i1/f1, dec_picture->size_x_cr-1));
-            jj0=max (0, min (j1/f1, dec_picture->size_y_cr-1));
-            ii1=max (0, min ((i1+f2)/f1, dec_picture->size_x_cr-1));
-            jj1=max (0, min ((j1+f2)/f1, dec_picture->size_y_cr-1));
-
-            if1=(i1 & f2);
-            jf1=(j1 & f2);
-            if0=f1-if1;
-            jf0=f1-jf1;
-            img->mpr[ii+ioff][jj+joff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
-              if1*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii1]+
-              if0*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii0]+
-              if1*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
-
+              i1=(i4+ii)*f1_x + mv[0];
+              j1=(j4+jj)*f1_y + mv[1];
+            
+              ii0=max (0, min (i1/f1_x,   dec_picture->size_x_cr-1));
+              jj0=max (0, min (j1/f1_y,   dec_picture->size_y_cr-1));
+              ii1=max (0, min ((i1+f2_x)/f1_x, dec_picture->size_x_cr-1));
+              jj1=max (0, min ((j1+f2_y)/f1_y, dec_picture->size_y_cr-1));
+            
+              if1=(i1 & f2_x);
+              jf1=(j1 & f2_y);
+              if0=f1_x-if1;
+              jf0=f1_y-jf1;
+            
+              img->mpr[ii+ioff][jj+joff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
+                                          if1*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii1]+
+                                          if0*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii0]+
+                                          if1*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
+            }
           }
         }
       }
-    }
 
-    for (i = 0; i < 8; i++)
-    {
-      for (j = 0; j < 8; j++)
+      for (i = 0; i < 8; i++)
       {
-        pMB[i*8+j] = img->mpr[j][i];
+        for (j = 0; j < 8; j++)
+        {
+          pMB[i*8+j] = img->mpr[j][i];
+        }
       }
-    }
-    pMB += 64;
+      pMB += 64;
 
+    }
   }
 }
 /*!
@@ -652,12 +674,14 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byt
  *      can be 16 or 8 to tell the dimension of the region to copy
  ************************************************************************
  */
-static void copyPredMB (int currYBlockNum, byte *predMB, frame *recfr, 
+static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr, 
                         int32 picSizeX, int32 regionSize) 
 {
   
   int j, k, xmin, ymin, xmax, ymax;
   int32 locationTmp, locationPred;
+  int uv_x = uv_div[0][img->yuv_format];
+  int uv_y = uv_div[1][img->yuv_format];
   
   xmin = (xPosYBlock(currYBlockNum,picSizeX)<<3);
   ymin = (yPosYBlock(currYBlockNum,picSizeX)<<3);
@@ -674,17 +698,20 @@ static void copyPredMB (int currYBlockNum, byte *predMB, frame *recfr,
     }
   }
   
-  for (j = (ymin>>1); j <= (ymax>>1); j++) 
+  if (img->yuv_format != YUV400)
   {
-    for (k = (xmin>>1); k <= (xmax>>1); k++)
+    for (j = (ymin>>uv_y); j <= (ymax>>uv_y); j++) 
     {
-      locationPred = j * picSizeX / 2 + k;
-      locationTmp = (j-(ymin>>1)) * 8 + (k-(xmin>>1)) + 256;
-      dec_picture->imgUV[0][j][k] = predMB[locationTmp];
-      
-      locationTmp += 64;
-      
-      dec_picture->imgUV[1][j][k] = predMB[locationTmp];
+      for (k = (xmin>>uv_x); k <= (xmax>>uv_x); k++)
+      {
+        locationPred = ((j * picSizeX) >> uv_x) + k;
+        locationTmp = (j-(ymin>>uv_y)) * img->mb_cr_size_x + (k-(xmin>>1)) + 256;
+        dec_picture->imgUV[0][j][k] = predMB[locationTmp];
+        
+        locationTmp += 64;
+        
+        dec_picture->imgUV[1][j][k] = predMB[locationTmp];
+      }
     }
   }
 }
@@ -716,11 +743,11 @@ static void copyPredMB (int currYBlockNum, byte *predMB, frame *recfr,
  *      can be 16 or 8 to tell the dimension of the region to copy
  ************************************************************************
  */
-static int edgeDistortion (int predBlocks[], int currYBlockNum, byte *predMB, 
-                           byte *recY, int32 picSizeX, int32 regionSize)
+static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB, 
+                           imgpel *recY, int32 picSizeX, int32 regionSize)
 {
   int i, j, distortion, numOfPredBlocks, threshold = ERC_BLOCK_OK;
-  byte *currBlock = NULL, *neighbor = NULL;
+  imgpel *currBlock = NULL, *neighbor = NULL;
   int32 currBlockOffset = 0;
   
   currBlock = recY + (yPosYBlock(currYBlockNum,picSizeX)<<3)*picSizeX + (xPosYBlock(currYBlockNum,picSizeX)<<3);
@@ -743,14 +770,14 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, byte *predMB,
           neighbor = currBlock - picSizeX;
           for ( i = 0; i < regionSize; i++ ) 
           {
-            distortion += mabs(predMB[i] - neighbor[i]);
+            distortion += mabs((int)(predMB[i] - neighbor[i]));
           }
           break;          
         case 5:
           neighbor = currBlock - 1;
           for ( i = 0; i < regionSize; i++ ) 
           {
-            distortion += mabs(predMB[i*16] - neighbor[i*picSizeX]);
+            distortion += mabs((int)(predMB[i*16] - neighbor[i*picSizeX]));
           }
           break;                
         case 6:
@@ -758,7 +785,7 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, byte *predMB,
           currBlockOffset = (regionSize-1)*16;
           for ( i = 0; i < regionSize; i++ ) 
           {
-            distortion += mabs(predMB[i+currBlockOffset] - neighbor[i]);
+            distortion += mabs((int)(predMB[i+currBlockOffset] - neighbor[i]));
           }
           break;                
         case 7:
@@ -766,7 +793,7 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, byte *predMB,
           currBlockOffset = regionSize-1;
           for ( i = 0; i < regionSize; i++ ) 
           {
-            distortion += mabs(predMB[i*16+currBlockOffset] - neighbor[i*picSizeX]);
+            distortion += mabs((int)(predMB[i*16+currBlockOffset] - neighbor[i*picSizeX]));
           }
           break;
         }

@@ -16,13 +16,9 @@
 #define CONTEXT_INI_C
 
 #include <stdlib.h>
-#include <assert.h>
 #include <math.h>
-#include <string.h>
 
-#include "defines.h"
 #include "global.h"
-
 
 #include "ctx_tables.h"
 #include "cabac.h"
@@ -217,7 +213,8 @@ void init_contexts ()
   BIARI_CTX_INIT2 (2, NUM_REF_NO_CTX,    mc->ref_no_contexts,      INIT_REF_NO,     img->model_number);
   BIARI_CTX_INIT1 (   NUM_DELTA_QP_CTX,  mc->delta_qp_contexts,    INIT_DELTA_QP,   img->model_number);
   BIARI_CTX_INIT1 (   NUM_MB_AFF_CTX,    mc->mb_aff_contexts,      INIT_MB_AFF,     img->model_number);
-
+  BIARI_CTX_INIT1 (   NUM_TRANSFORM_SIZE_CTX,  mc->transform_size_contexts,    INIT_TRANSFORM_SIZE,   img->model_number);
+  
   //--- texture coding contexts ---
   BIARI_CTX_INIT1 (                 NUM_IPR_CTX,  tc->ipr_contexts,     INIT_IPR,       img->model_number);
   BIARI_CTX_INIT1 (                 NUM_CIPR_CTX, tc->cipr_contexts,    INIT_CIPR,      img->model_number);
@@ -239,7 +236,7 @@ double XRate (BiContextTypePtr ctx, const int* model)
 {
   int     ctx_state, mod_state;
   double  weight, xr = 0.0;
-  int     qp = img->qp;
+  int     qp = max(0,img->qp);
 
   weight    = min (1.0, (double)ctx->count/(double)RELIABLE_COUNT);
 
@@ -288,6 +285,8 @@ void GetCtxModelNumber (int* mnumber, MotionInfoContexts* mc, TextureInfoContext
     ADD_XRATE2 (2, NUM_REF_NO_CTX,    mc->ref_no_contexts,      INIT_REF_NO,    model);
     ADD_XRATE1 (   NUM_DELTA_QP_CTX,  mc->delta_qp_contexts,    INIT_DELTA_QP,  model);
     ADD_XRATE1 (   NUM_MB_AFF_CTX,    mc->mb_aff_contexts,      INIT_MB_AFF,    model);
+    ADD_XRATE1 (   NUM_TRANSFORM_SIZE_CTX,  mc->transform_size_contexts, INIT_TRANSFORM_SIZE,  model);
+
     //--- texture coding contexts ---
     ADD_XRATE1 (                  NUM_IPR_CTX,  tc->ipr_contexts,       INIT_IPR,       model);
     ADD_XRATE1 (                  NUM_CIPR_CTX, tc->cipr_contexts,      INIT_CIPR,      model);

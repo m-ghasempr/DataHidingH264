@@ -49,6 +49,8 @@ int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
              int numbits);
 int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits);
 
+int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount);
+
 
 #endif
 

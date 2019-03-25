@@ -94,6 +94,7 @@
 				ObjectFile=".\lencod\Release/"
 				ProgramDataBaseFileName=".\lencod\Release/"
 				BrowseInformation="1"
+				BrowseInformationFile=".\lencod\Release/"
 				WarningLevel="3"
 				SuppressStartupBanner="TRUE"
 				DebugInformationFormat="3"
@@ -294,6 +295,9 @@
 						PreprocessorDefinitions=""
 						BrowseInformation="1"/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\lencod\src\explicit_gop.c">
 			</File>
 			<File
 				RelativePath="lencod\src\fast_me.c">
@@ -736,6 +740,28 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="lencod\src\q_matrix.c">
+				<FileConfiguration
+					Name="Debug|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="0"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BasicRuntimeChecks="3"
+						BrowseInformation="1"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="2"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BrowseInformation="1"/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath="lencod\src\ratectl.c">
 				<FileConfiguration
 					Name="Debug|Win32">
@@ -890,6 +916,28 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="lencod\src\transform8x8.c">
+				<FileConfiguration
+					Name="Debug|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="0"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BasicRuntimeChecks="3"
+						BrowseInformation="1"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="2"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BrowseInformation="1"/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath="lencod\src\vlc.c">
 				<FileConfiguration
 					Name="Debug|Win32">
@@ -968,7 +1016,7 @@
 				RelativePath="lencod\inc\elements.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\encodeiff.h">
+				RelativePath=".\lencod\inc\explicit_gop.h">
 			</File>
 			<File
 				RelativePath="lencod\inc\fast_me.h">
@@ -1004,6 +1052,9 @@
 				RelativePath="lencod\inc\memalloc.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\minmax.h">
+			</File>
+			<File
 				RelativePath="lencod\inc\mv-search.h">
 			</File>
 			<File
@@ -1022,6 +1073,9 @@
 				RelativePath="lencod\inc\parsetcommon.h">
 			</File>
 			<File
+				RelativePath="lencod\inc\q_matrix.h">
+			</File>
+			<File
 				RelativePath="lencod\inc\ratectl.h">
 			</File>
 			<File
@@ -1037,9 +1091,15 @@
 				RelativePath="lencod\inc\sei.h">
 			</File>
 			<File
+				RelativePath="lencod\inc\transform8x8.h">
+			</File>
+			<File
 				RelativePath="lencod\inc\vlc.h">
 			</File>
 		</Filter>
+		<File
+			RelativePath=".\bin\encoder.cfg">
+		</File>
 		<File
 			RelativePath="bin\encoder_baseline.cfg">
 		</File>
@@ -1048,6 +1108,12 @@
 		</File>
 		<File
 			RelativePath="bin\encoder_main.cfg">
+		</File>
+		<File
+			RelativePath="bin\encoder_yuv422.cfg">
+		</File>
+		<File
+			RelativePath="bin\encoder_yuv444.cfg">
 		</File>
 	</Files>
 	<Globals>

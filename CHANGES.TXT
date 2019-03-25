@@ -1,3 +1,33 @@
+Changes for Version JM 9.0 to JM 8.6
+------------------------------------
+
+New Features:
+- import FRExt branch (KS)
+- encoder: pyramid encoding structure (AT)
+- encoder/decoder: YUV 4:0:0 support (VG)
+- encoder: thresholding control (AT)
+
+Fixes/Upates:
+- encoder: clean up includes (KS)
+- encoder: increase maximum file name length (KS)
+- encoder: fix failed merge of temporal direct fix (LP)
+- encoder: fix RCT enc/dec mismatch (WK)
+- encoder: fix for CAVLC neighbouring total coeff (for RDopt) (SN)
+- encoder: fix for CAVLC level limit for small QP (SN)
+- encoder: fix memory leaks (CS/KS)
+- encoder: disallow RDOptimazation=2 (KS)
+- encoder: improve parameter names(AT)
+- encoder: fix rate control diff calculation (SM)
+- decoder: fix QP output (AT)
+- decoder: fix paired field output for increased bit depth (KS)
+- decoder: fix img->quad allocation (KS)
+- decoder: fix RGB file output (KS)
+- decoder: don't crash on PicTiming SEI when no SPS is active (KS)
+- encoder/decoder: fix gcc compiler warnings (KS)
+- encoder/decoder: fix inverse DC transform (WZ/KS)
+- encoder/decoder: reduce memory usage by making imgpel "unsinged short" (KS)
+
+
 Changes for Version JM 8.6 to JM 8.5
 ------------------------------------
 - encoder: fix command line checking order (KS)
@@ -852,6 +882,7 @@ AT      Alexis Michael Tourapis alexismt@ieee.org
 AW      Armand Wemelsfelder     wemel@planet.nl
 BH      Barry Haskell           bhaskell@apple.com
 CG      Cristina Gomila         GomilaC@tce.com
+CS	Christian Schmidt	schmidt@ece.ucsb.edu
 DC      Doug Chin               dougchin@sandvideo.com
 DD      Dmitriy Demin           Dmitriy.Demin@Sun.COM
 DH      Dzung Hoang             dzung.hoang@conexant.com
@@ -882,6 +913,7 @@ KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LW      Limin Wang              liwang@gi.com
 LWi     Lowell Winger           lwinger@videolocus.com
+LP	Luca Pezzoni		luca.pezzoni@st.com
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
 ML      Maxim Lobasso           lobasso@hotmail.com
@@ -916,7 +948,9 @@ TWa     Toby Walker             tobyw@usrl.sony.com
 VG      Valeri George           valeri.george@hhi.fraunhofer.de
 VV      Viktor Varsa            viktor.varsa@nokia.com
 WF	Wenfang Fu		fwf@video.mdc.tsinghua.edu.cn
+WK	Woo-Shik Kim		wskim@sait.samsung.co.kr
 WYK     Ye-Kui Wang             wyk@ieee.org
+WZ      Weimin Zeng		wzeng@wischip.com
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             wyk@ieee.org

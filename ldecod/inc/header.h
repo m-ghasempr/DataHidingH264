@@ -17,7 +17,7 @@ int RestOfSliceHeader();
 void dec_ref_pic_marking(Bitstream *currStream);
 
 void decode_poc(struct img_par *img);
-int  dumppoc   (struct img_par *img);
+int dumppoc(struct img_par *img);
 
 #endif
 

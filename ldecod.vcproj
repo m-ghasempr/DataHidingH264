@@ -749,6 +749,27 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="ldecod\src\transform8x8.c">
+				<FileConfiguration
+					Name="Debug|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="0"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BrowseInformation="1"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="2"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BrowseInformation="1"/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath="ldecod\src\vlc.c">
 				<FileConfiguration
 					Name="Debug|Win32">
@@ -862,6 +883,9 @@
 			</File>
 			<File
 				RelativePath="ldecod\inc\sei.h">
+			</File>
+			<File
+				RelativePath="ldecod\inc\transform8x8.h">
 			</File>
 			<File
 				RelativePath="ldecod\inc\vlc.h">

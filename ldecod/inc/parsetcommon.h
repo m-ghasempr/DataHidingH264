@@ -34,6 +34,7 @@
 
 #define MAXSPS  32
 #define MAXPPS  256
+
 //! Boolean Type
 #ifdef FALSE
 #  define Boolean int
@@ -47,12 +48,12 @@ typedef enum {
 #define MAXIMUMVALUEOFcpb_cnt   32
 typedef struct
 {
-  unsigned  cpb_cnt;                                          // ue(v)
+  unsigned  cpb_cnt_minus1;                                   // ue(v)
   unsigned  bit_rate_scale;                                   // u(4)
   unsigned  cpb_size_scale;                                   // u(4)
-    unsigned  bit_rate_value [MAXIMUMVALUEOFcpb_cnt];         // ue(v)
-    unsigned  cpb_size_value[MAXIMUMVALUEOFcpb_cnt];          // ue(v)
-    unsigned  vbr_cbr_flag[MAXIMUMVALUEOFcpb_cnt];            // u(1)
+    unsigned  bit_rate_value_minus1 [MAXIMUMVALUEOFcpb_cnt];  // ue(v)
+    unsigned  cpb_size_value_minus1 [MAXIMUMVALUEOFcpb_cnt];  // ue(v)
+    unsigned  cbr_flag              [MAXIMUMVALUEOFcpb_cnt];  // u(1)
   unsigned  initial_cpb_removal_delay_length_minus1;          // u(5)
   unsigned  cpb_removal_delay_length_minus1;                  // u(5)
   unsigned  dpb_output_delay_length_minus1;                   // u(5)
@@ -76,8 +77,8 @@ typedef struct
       unsigned  transfer_characteristics;                     // u(8)
       unsigned  matrix_coefficients;                          // u(8)
   Boolean      chroma_location_info_present_flag;                // u(1)
-    unsigned  chroma_location_frame;                          // ue(v)
-    unsigned  chroma_location_field;                          // ue(v)
+    unsigned   chroma_sample_loc_type_top_field;               // ue(v)
+    unsigned   chroma_sample_loc_type_bottom_field;            // ue(v)
   Boolean      timing_info_present_flag;                         // u(1)
     unsigned  num_units_in_tick;                              // u(32)
     unsigned  time_scale;                                     // u(32)
@@ -88,13 +89,14 @@ typedef struct
     hrd_parameters_t vcl_hrd_parameters;                      // hrd_paramters_t
   // if ((nal_hrd_parameters_present_flag || (vcl_hrd_parameters_present_flag))
     Boolean      low_delay_hrd_flag;                             // u(1)
+  Boolean      pic_struct_present_flag;                        // u(1)
   Boolean      bitstream_restriction_flag;                       // u(1)
     Boolean      motion_vectors_over_pic_boundaries_flag;        // u(1)
     unsigned  max_bytes_per_pic_denom;                        // ue(v)
     unsigned  max_bits_per_mb_denom;                          // ue(v)
     unsigned  log2_max_mv_length_vertical;                    // ue(v)
     unsigned  log2_max_mv_length_horizontal;                  // ue(v)
-    unsigned  max_dec_frame_reordering;                       // ue(v)
+    unsigned  num_reorder_frames;                             // ue(v)
     unsigned  max_dec_frame_buffering;                        // ue(v)
 } vui_seq_parameters_t;
 
@@ -106,6 +108,16 @@ typedef struct
   unsigned  pic_parameter_set_id;                             // ue(v)
   unsigned  seq_parameter_set_id;                             // ue(v)
   Boolean   entropy_coding_mode_flag;                         // u(1)
+
+  Boolean   transform_8x8_mode_flag;                          // u(1)
+
+  Boolean   pic_scaling_matrix_present_flag;                  // u(1)
+  int       pic_scaling_list_present_flag[8];                 // u(1)
+  int       ScalingList4x4[6][16];                            // se(v)
+  int       ScalingList8x8[2][64];                            // se(v)
+  Boolean   UseDefaultScalingMatrix4x4Flag[6];
+  Boolean   UseDefaultScalingMatrix8x8Flag[2];
+
   // if( pic_order_cnt_type < 2 )  in the sequence parameter set
   Boolean      pic_order_present_flag;                           // u(1)
   unsigned  num_slice_groups_minus1;                          // ue(v)
@@ -128,6 +140,10 @@ typedef struct
   int       pic_init_qp_minus26;                              // se(v)
   int       pic_init_qs_minus26;                              // se(v)
   int       chroma_qp_index_offset;                           // se(v)
+
+  int       cb_qp_index_offset;                               // se(v)
+  int       cr_qp_index_offset;                               // se(v)
+
   Boolean   deblocking_filter_control_present_flag;           // u(1)
   Boolean   constrained_intra_pred_flag;                      // u(1)
   Boolean   redundant_pic_cnt_present_flag;                   // u(1)
@@ -143,8 +159,20 @@ typedef struct
   Boolean   constrained_set0_flag;                            // u(1)
   Boolean   constrained_set1_flag;                            // u(1)
   Boolean   constrained_set2_flag;                            // u(1)
+  Boolean   constrained_set3_flag;                            // u(1)
   unsigned  level_idc;                                        // u(8)
   unsigned  seq_parameter_set_id;                             // ue(v)
+
+  Boolean  seq_scaling_matrix_present_flag;                   // u(1)
+  int      seq_scaling_list_present_flag[8];                  // u(1)
+  int      ScalingList4x4[6][16];                             // se(v)
+  int      ScalingList8x8[2][64];                             // se(v)
+  Boolean  UseDefaultScalingMatrix4x4Flag[6];
+  Boolean  UseDefaultScalingMatrix8x8Flag[2];
+
+  unsigned  bit_depth_luma_minus8;                            // ue(v)
+  unsigned  bit_depth_chroma_minus8;                          // ue(v)
+
   unsigned  log2_max_frame_num_minus4;                        // ue(v)
   unsigned pic_order_cnt_type;
   // if( pic_order_cnt_type == 0 ) 
@@ -172,6 +200,7 @@ typedef struct
   Boolean   vui_parameters_present_flag;                      // u(1)
     vui_seq_parameters_t vui_seq_parameters;                  // vui_seq_parameters_t
 } seq_parameter_set_rbsp_t;
+
 
 pic_parameter_set_rbsp_t *AllocPPS ();
 seq_parameter_set_rbsp_t *AllocSPS ();

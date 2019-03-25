@@ -20,9 +20,6 @@
 #ifndef _CABAC_H_
 #define _CABAC_H_
 
-#include "global.h"
-
-
 // CABAC
 void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len, /* int *last_startcode, */int slice_type);
 int  arienco_bits_written(EncodingEnvironmentPtr eep);
@@ -57,6 +54,9 @@ void writeFieldModeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter, EncodingEnvironmentPtr eep_dp);
 void cabac_new_slice();
 void CheckAvailabilityOfNeighborsCABAC();
+
+void writeMB_transform_size_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+
 
 #endif  // CABAC_H
 

@@ -19,6 +19,12 @@
 #include "parsetcommon.h"
 #include "nalucommon.h"
 
+void Scaling_List(int *scalingList, int sizeOfScalingList, Boolean *UseDefaultScalingMatrix, Bitstream *s);
+
+void InitVUI(seq_parameter_set_rbsp_t *sps);
+int  ReadVUI(DataPartition *p, seq_parameter_set_rbsp_t *sps);
+int  ReadHRDParameters(DataPartition *p, hrd_parameters_t *hrd);
+
 void PPSConsistencyCheck (pic_parameter_set_rbsp_t *pps);
 void SPSConsistencyCheck (seq_parameter_set_rbsp_t *sps);
 

@@ -503,6 +503,50 @@ void readMB_skip_flagInfo_CABAC( SyntaxElement *se,
   }
   return;
 }
+
+/*!
+***************************************************************************
+* \brief
+*    This function is used to arithmetically decode the macroblock
+*    intra_pred_size flag info of a given MB.
+***************************************************************************
+*/
+
+void readMB_transform_size_flag_CABAC( SyntaxElement *se,
+                                  struct inp_par *inp,
+                                  struct img_par *img,
+                                  DecodingEnvironmentPtr dep_dp)
+{
+  int a, b;
+  int act_ctx = 0;
+  int act_sym;
+  
+  MotionInfoContexts *ctx         = (img->currentSlice)->mot_ctx;
+  Macroblock         *currMB      = &img->mb_data[img->current_mb_nr];
+  
+  if (currMB->mb_available_up == NULL)
+    b = 0;
+  else 
+    b = currMB->mb_available_up->luma_transform_size_8x8_flag;
+  
+  if (currMB->mb_available_left == NULL)
+    a = 0;
+  else 
+    a = currMB->mb_available_left->luma_transform_size_8x8_flag;
+  
+  act_ctx     = a + b;
+  
+  
+  act_sym = biari_decode_symbol(dep_dp, ctx->transform_size_contexts + act_ctx );
+  se->value1 = act_sym;
+  
+#if TRACE
+  fprintf(p_trace, "@%d %s\t\t%d\t%d %d\n",symbolCount++, se->tracestring, se->value1,a,b);
+  fflush(p_trace);
+#endif
+  
+}
+
 /*!
  ************************************************************************
  * \brief
@@ -532,12 +576,13 @@ void readMB_typeInfo_CABAC( SyntaxElement *se,
     if (currMB->mb_available_up == NULL)
       b = 0;
     else 
-      b = (( (currMB->mb_available_up)->mb_type != I4MB) ? 1 : 0 );
+      b = (((currMB->mb_available_up)->mb_type != I4MB && currMB->mb_available_up->mb_type != I8MB) ? 1 : 0 );
+
     if (currMB->mb_available_left == NULL)
       a = 0;
     else 
-      a = (( (currMB->mb_available_left)->mb_type != I4MB) ? 1 : 0 );
-
+      a = (((currMB->mb_available_left)->mb_type != I4MB && currMB->mb_available_left->mb_type != I8MB) ? 1 : 0 );
+      
     act_ctx = a + b;
     act_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx);
     se->context = act_ctx; // store context
@@ -1010,64 +1055,62 @@ void readCBP_CABAC(SyntaxElement *se,
   }
 
 
-  if ( se->type == SE_CBP_INTRA )
-    curr_cbp_idx = 0;
-  else
-    curr_cbp_idx = 1;
-
-  // coding of chroma part
-  // CABAC decoding for BinIdx 0
-  b = 0;
-  if (currMB->mb_available_up != NULL)
+  if (img->yuv_format != YUV400)
   {
-    if((currMB->mb_available_up)->mb_type==IPCM)
-      b=1;
-    else
-      b = ((currMB->mb_available_up)->cbp > 15) ? 1 : 0;
-  }
-
-
-  a = 0;
-  if (currMB->mb_available_left != NULL)
-  {
-    if((currMB->mb_available_left)->mb_type==IPCM)
-      a=1;
-    else
-      a = ((currMB->mb_available_left)->cbp > 15) ? 1 : 0;
-  }
-
-
-  curr_cbp_ctx = a+2*b;
-  cbp_bit = biari_decode_symbol(dep_dp, ctx->cbp_contexts[1] + curr_cbp_ctx );
-
-  // CABAC decoding for BinIdx 1 
-  if (cbp_bit) // set the chroma bits
-  {
+    // coding of chroma part
+    // CABAC decoding for BinIdx 0
     b = 0;
     if (currMB->mb_available_up != NULL)
     {
       if((currMB->mb_available_up)->mb_type==IPCM)
         b=1;
       else
-        if ((currMB->mb_available_up)->cbp > 15)
-          b = (( ((currMB->mb_available_up)->cbp >> 4) == 2) ? 1 : 0);
+        b = ((currMB->mb_available_up)->cbp > 15) ? 1 : 0;
     }
-
-
+    
+    
     a = 0;
     if (currMB->mb_available_left != NULL)
     {
       if((currMB->mb_available_left)->mb_type==IPCM)
         a=1;
       else
-        if ((currMB->mb_available_left)->cbp > 15)
-          a = (( ((currMB->mb_available_left)->cbp >> 4) == 2) ? 1 : 0);
+        a = ((currMB->mb_available_left)->cbp > 15) ? 1 : 0;
     }
     
-
+    
     curr_cbp_ctx = a+2*b;
-    cbp_bit = biari_decode_symbol(dep_dp, ctx->cbp_contexts[2] + curr_cbp_ctx );
-    cbp += (cbp_bit == 1) ? 32 : 16;
+    cbp_bit = biari_decode_symbol(dep_dp, ctx->cbp_contexts[1] + curr_cbp_ctx );
+    
+    // CABAC decoding for BinIdx 1 
+    if (cbp_bit) // set the chroma bits
+    {
+      b = 0;
+      if (currMB->mb_available_up != NULL)
+      {
+        if((currMB->mb_available_up)->mb_type==IPCM)
+          b=1;
+        else
+          if ((currMB->mb_available_up)->cbp > 15)
+            b = (( ((currMB->mb_available_up)->cbp >> 4) == 2) ? 1 : 0);
+      }
+      
+      
+      a = 0;
+      if (currMB->mb_available_left != NULL)
+      {
+        if((currMB->mb_available_left)->mb_type==IPCM)
+          a=1;
+        else
+          if ((currMB->mb_available_left)->cbp > 15)
+            a = (( ((currMB->mb_available_left)->cbp >> 4) == 2) ? 1 : 0);
+      }
+      
+      
+      curr_cbp_ctx = a+2*b;
+      cbp_bit = biari_decode_symbol(dep_dp, ctx->cbp_contexts[2] + curr_cbp_ctx );
+      cbp += (cbp_bit == 1) ? 32 : 16;
+    }
   }
 
   se->value1 = cbp;
@@ -1139,38 +1182,36 @@ void readCIPredMode_CABAC(SyntaxElement *se,
 
 }
 
+static const int maxpos       [] = {16, 15, 64, 32, 32, 16,  4, 15,  8, 16};
+static const int c1isdc       [] = { 1,  0,  1,  1,  1,  1,  1,  0,  1,  1};
 
-static const int maxpos       [] = {16, 15, 64, 32, 32, 16,  4, 15};
-static const int c1isdc       [] = { 1,  0,  1,  1,  1,  1,  1,  0};
-
-static const int type2ctx_bcbp[] = { 0,  1,  2,  2,  3,  4,  5,  6}; // 7
-static const int type2ctx_map [] = { 0,  1,  2,  3,  4,  5,  6,  7}; // 8
-static const int type2ctx_last[] = { 0,  1,  2,  3,  4,  5,  6,  7}; // 8
-static const int type2ctx_one [] = { 0,  1,  2,  3,  3,  4,  5,  6}; // 7
-static const int type2ctx_abs [] = { 0,  1,  2,  3,  3,  4,  5,  6}; // 7
-
-
-
+static const int type2ctx_bcbp[] = { 0,  1,  2,  2,  3,  4,  5,  6,  5,  5}; // 7
+static const int type2ctx_map [] = { 0,  1,  2,  3,  4,  5,  6,  7,  6,  6}; // 8
+static const int type2ctx_last[] = { 0,  1,  2,  3,  4,  5,  6,  7,  6,  6}; // 8
+static const int type2ctx_one [] = { 0,  1,  2,  3,  3,  4,  5,  6,  5,  5}; // 7
+static const int type2ctx_abs [] = { 0,  1,  2,  3,  3,  4,  5,  6,  5,  5}; // 7
+static const int max_c2       [] = { 4,  4,  4,  4,  4,  4,  3,  4,  3,  3}; // 9
 
 /*!
  ************************************************************************
  * \brief
  *    Read CBP4-BIT
  ************************************************************************
- */
+*/
 int read_and_store_CBP_block_bit (Macroblock              *currMB,
                                   DecodingEnvironmentPtr  dep_dp,
                                   struct img_par          *img,
                                   int                     type)
 {
 #define BIT_SET(x,n)  ((int)(((x)&(1<<(n)))>>(n)))
-
+  
   int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4);
   int y_dc        = (type==LUMA_16DC);
   int u_ac        = (type==CHROMA_AC && !img->is_v_block);
   int v_ac        = (type==CHROMA_AC &&  img->is_v_block);
-  int u_dc        = (type==CHROMA_DC && !img->is_v_block);
-  int v_dc        = (type==CHROMA_DC &&  img->is_v_block);
+  int chroma_dc   = (type==CHROMA_DC || type==CHROMA_DC_2x4 || type==CHROMA_DC_4x4);
+  int u_dc        = (chroma_dc && !img->is_v_block);
+  int v_dc        = (chroma_dc &&  img->is_v_block);
   int j           = (y_ac || u_ac || v_ac ? img->subblock_y : 0);
   int i           = (y_ac || u_ac || v_ac ? img->subblock_x : 0);
   int bit         = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 23);
@@ -1280,9 +1321,13 @@ static const int  pos2ctx_map8x8 [] = { 0,  1,  2,  3,  4,  5,  5,  4,  4,  3,  
 static const int  pos2ctx_map8x4 [] = { 0,  1,  2,  3,  4,  5,  7,  8,  9, 10, 11,  9,  8,  6,  7,  8,
                                         9, 10, 11,  9,  8,  6, 12,  8,  9, 10, 11,  9, 13, 13, 14, 14}; // 15 CTX
 static const int  pos2ctx_map4x4 [] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 14}; // 15 CTX
+static const int  pos2ctx_map2x4c[] = { 0,  0,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2}; // 15 CTX
+static const int  pos2ctx_map4x4c[] = { 0,  0,  0,  0,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2}; // 15 CTX
 static const int* pos2ctx_map    [] = {pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8, pos2ctx_map8x4,
-                                       pos2ctx_map8x4, pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map4x4};
+                                       pos2ctx_map8x4, pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map4x4,
+                                       pos2ctx_map2x4c, pos2ctx_map4x4c};
 //--- interlace scan ----
+//taken from ABT
 static const int  pos2ctx_map8x8i[] = { 0,  1,  1,  2,  2,  3,  3,  4,  5,  6,  7,  7,  7,  8,  4,  5,
                                         6,  9, 10, 10,  8, 11, 12, 11,  9,  9, 10, 10,  8, 11, 12, 11,
                                         9,  9, 10, 10,  8, 11, 12, 11,  9,  9, 10, 10,  8, 13, 13,  9,
@@ -1292,7 +1337,8 @@ static const int  pos2ctx_map8x4i[] = { 0,  1,  2,  3,  4,  5,  6,  3,  4,  5,  
 static const int  pos2ctx_map4x8i[] = { 0,  1,  1,  1,  2,  3,  3,  4,  4,  4,  5,  6,  2,  7,  7,  8,
                                         8,  8,  5,  6,  9, 10, 10, 11, 11, 11, 12, 13, 13, 14, 14, 14}; // 15 CTX
 static const int* pos2ctx_map_int[] = {pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8i,pos2ctx_map8x4i,
-                                       pos2ctx_map4x8i,pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map4x4};
+                                       pos2ctx_map4x8i,pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map4x4,
+                                       pos2ctx_map2x4c, pos2ctx_map4x4c};
 
 
 //===== position -> ctx for LAST =====
@@ -1304,8 +1350,11 @@ static const int  pos2ctx_last8x4 [] = { 0,  1,  1,  1,  1,  1,  1,  1,  2,  2, 
                                          3,  3,  3,  3,  4,  4,  4,  4,  5,  5,  6,  6,  7,  7,  8,  8}; //  9 CTX
 
 static const int  pos2ctx_last4x4 [] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15}; // 15 CTX
+static const int  pos2ctx_last2x4c[] = { 0,  0,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2}; // 15 CTX
+static const int  pos2ctx_last4x4c[] = { 0,  0,  0,  0,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2}; // 15 CTX
 static const int* pos2ctx_last    [] = {pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last8x8, pos2ctx_last8x4,
-                                        pos2ctx_last8x4, pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last4x4};
+                                        pos2ctx_last8x4, pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last4x4,
+                                        pos2ctx_last2x4c, pos2ctx_last4x4c};
 
 
 
@@ -1342,7 +1391,7 @@ int read_significance_map (Macroblock              *currMB,
   for (i=i0; i<i1; i++) // if last coeff is reached, it has to be significant
   {
     //--- read significance symbol ---
-    if (img->structure!=FRAME)
+    if (img->structure!=FRAME || currMB->mb_field)
       sig = biari_decode_symbol   (dep_dp, map_ctx + pos2ctx_map_int [type][i]);
     else
       sig = biari_decode_symbol   (dep_dp, map_ctx + pos2ctx_map     [type][i]);
@@ -1397,7 +1446,7 @@ void read_significant_coefficients (Macroblock              *currMB,
       coeff[i] += biari_decode_symbol (dep_dp, img->currentSlice->tex_ctx->one_contexts[type2ctx_one[type]] + ctx);
       if (coeff[i]==2)
       {
-        ctx = min (c2,4);
+        ctx = min (c2, max_c2[type]);
         coeff[i] += unary_exp_golomb_level_decode (dep_dp, img->currentSlice->tex_ctx->abs_contexts[type2ctx_abs[type]]+ctx);
         c1=0;
         c2++;

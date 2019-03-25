@@ -8,7 +8,7 @@
  *      1.1
  *
  * \note
- *    Version 1.0 included three partition modes, no DP, 2 partitions per slice
+ *    Version 1.0 included three partition modes, no DP, 2 partitionsper slice
  *      and 4 partitions per slice.  As per document VCEG-N72 this is changed
  *      in version 1.1 to only two partition modes, one without DP and one with 
  *      3 partition per slice
@@ -21,8 +21,6 @@
 
 #ifndef _ELEMENTS_H_
 #define _ELEMENTS_H_
-
-#include "global.h"
 
 /*!
  *  definition of H.264 syntax elements
