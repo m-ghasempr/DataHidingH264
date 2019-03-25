@@ -65,33 +65,33 @@
 #include "fmo.h"
 #include "vlc.h"
 
-void SetMotionVectorPredictor (struct img_par  *img,
-                          int             *pmv_x,
-                          int             *pmv_y,
-                          int             ref_frame,
-                          int             **refFrArr,
-                          int             ***tmp_mv,
-                          int             block_x,
-                          int             block_y,
-                          int             blockshape_x,
-                          int             blockshape_y); // declare to avoid warnings. mwi
+static void SetMotionVectorPredictor (struct img_par  *img,
+                                      int             *pmv_x,
+                                      int             *pmv_y,
+                                      int             ref_frame,
+                                      int             **refFrArr,
+                                      int             ***tmp_mv,
+                                      int             block_x,
+                                      int             block_y,
+                                      int             blockshape_x,
+                                      int             blockshape_y);
 
 
-void setRealMB_nr (struct img_par *img) //GB
+void setMapMB_nr (struct img_par *img) //GB
 {
-        int max_mb_row, x;
-
-        if (img->mb_frame_field_flag)
-        {
-                max_mb_row = (img->width/16);
-                x = img->current_mb_nr/(2*max_mb_row);
-                if (img->current_mb_nr % 2) 
-                        img->map_mb_nr = img->current_mb_nr/2 + (x+1) * max_mb_row;
-                else
-                        img->map_mb_nr = img->current_mb_nr/2 + x * max_mb_row;
-        }
-        else
-                img->map_mb_nr = img->current_mb_nr;
+  int max_mb_row, x;
+  
+  if (img->mb_frame_field_flag)
+  {
+    max_mb_row = (img->width/16);
+    x = img->current_mb_nr/(2*max_mb_row);
+    if (img->current_mb_nr % 2) 
+      img->map_mb_nr = img->current_mb_nr/2 + (x+1) * max_mb_row;
+    else
+      img->map_mb_nr = img->current_mb_nr/2 + x * max_mb_row;
+  }
+  else
+    img->map_mb_nr = img->current_mb_nr;
 }
 /*!
  ************************************************************************
@@ -143,9 +143,9 @@ void CheckAvailabilityOfNeighbors(struct img_par *img)
 
 
   // Check MB above
-        check_value = (img->mb_frame_field_flag && img->mb_field) 
-                                                                ? (img->pix_y >= 2*MB_BLOCK_SIZE) 
-                                                                : (img->pix_y >= MB_BLOCK_SIZE);
+  check_value = (img->mb_frame_field_flag && img->mb_field) 
+                ? (img->pix_y >= 2*MB_BLOCK_SIZE) 
+                : (img->pix_y >= MB_BLOCK_SIZE);
   if(check_value) //GB
 
   {
@@ -169,9 +169,9 @@ void CheckAvailabilityOfNeighbors(struct img_par *img)
   }
 
   // Check MB left above
-        check_value = (img->mb_frame_field_flag && img->mb_field) 
-                                                                ? (img->pix_y >= 2*MB_BLOCK_SIZE && img->pix_x >= MB_BLOCK_SIZE ) 
-                                                                : (img->pix_x >= MB_BLOCK_SIZE && img->pix_y  >= MB_BLOCK_SIZE );
+  check_value = (img->mb_frame_field_flag && img->mb_field) 
+                ? (img->pix_y >= 2*MB_BLOCK_SIZE && img->pix_x >= MB_BLOCK_SIZE ) 
+                : (img->pix_x >= MB_BLOCK_SIZE && img->pix_y  >= MB_BLOCK_SIZE );
 
   if (check_value) //GB
   {
@@ -186,33 +186,11 @@ void CheckAvailabilityOfNeighbors(struct img_par *img)
       currMB->mb_available[0][2]=&(img->mb_data[mb_nr-mb_width+1]);
   }
 
-        if(img->mb_frame_field_flag)
-          currMB->mb_available[0][2] = NULL;    // set the prediction from top right MB to zero 
+  if(img->mb_frame_field_flag)
+    currMB->mb_available[0][2] = NULL;    // set the prediction from top right MB to zero 
 
 }
 
-//GB
-void CheckAvailabilityOfNeighborsForSkip(struct img_par *img)
-{
-  int i,j;
-  const int mb_width = img->width/MB_BLOCK_SIZE;
-  const int mb_nr = img->map_mb_nr;
-  Macroblock *currMB = &img->mb_data[mb_nr];
-
-  // mark all neighbors as unavailable
-  for (i=0; i<3; i++)
-    for (j=0; j<3; j++)
-      img->mb_data[mb_nr].skip_mb_available[i][j]=NULL;
-  img->mb_data[mb_nr].skip_mb_available[1][1]=currMB; // current MB
-
-  // Check MB to the left
-  if((img->pix_x >= MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr))
-                currMB->skip_mb_available[1][0]=&(img->mb_data[mb_nr-1]);
-
-  // Check MB above
-  if((img->pix_y >= MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-mb_width].slice_nr))
-                currMB->skip_mb_available[0][1]=&(img->mb_data[mb_nr-mb_width]);
-}
 
 void CheckAvailabilityOfNeighborsForAff(struct img_par *img)
 {
@@ -220,17 +198,17 @@ void CheckAvailabilityOfNeighborsForAff(struct img_par *img)
   const int mb_nr = img->map_mb_nr;
   Macroblock *currMB = &img->mb_data[mb_nr];
         
-        // Check Field to the left
-        if ((img->pix_x >= MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr))
-                currMB->field_available[1]=&(img->mb_data[mb_nr-1]);
-        else
-                currMB->field_available[1]=NULL;
-        
-        // Check Field above
-        if ((img->pix_y >= 2*MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-mb_width*2].slice_nr))
-                currMB->field_available[0]=&(img->mb_data[mb_nr-mb_width*2]);
-        else
-                currMB->field_available[0]=NULL;
+  // Check Field to the left
+  if ((img->pix_x >= MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr))
+    currMB->field_available[1]=&(img->mb_data[mb_nr-1]);
+  else
+    currMB->field_available[1]=NULL;
+  
+  // Check Field above
+  if ((img->pix_y >= 2*MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-mb_width*2].slice_nr))
+    currMB->field_available[0]=&(img->mb_data[mb_nr-mb_width*2]);
+  else
+    currMB->field_available[0]=NULL;
 
 }
 
@@ -755,8 +733,7 @@ void init_macroblock(struct img_par *img)
  *    Sets mode for 8x8 block
  ************************************************************************
  */
-void
-SetB8Mode (struct img_par* img, Macroblock* currMB, int value, int i)
+void SetB8Mode (struct img_par* img, Macroblock* currMB, int value, int i)
 {
   static const int p_v2b8 [ 5] = {4, 5, 6, 7, IBLOCK};
   static const int p_v2pd [ 5] = {0, 0, 0, 0, -1};
@@ -795,8 +772,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   DataPartition *dP;
   int *partMap = assignSE2partition[currSlice->dp_mode];
   int mb_width = img->width/16;
-  Macroblock *topMB;
-  int  skip;// = (img->current_mb_nr%2 && topMB->mb_type == 0); // && (img->type != INTER_IMG_1 || img->type != INTER_IMG_MULT);
+  Macroblock *topMB = NULL;
+  int  skip = 0;// = (img->current_mb_nr%2 && topMB->mb_type == 0); // && (img->type != INTER_IMG_1 || img->type != INTER_IMG_MULT);
   int  img_block_y;
   int read_top, read_bottom, check_bottom;
   
@@ -821,7 +798,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     if(img->type == B_IMG_1 || img->type == B_IMG_MULT) dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
     else                                                dP = &(currSlice->partArr[partMap[currSE.type]]);
 
-    if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo;
+    if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo_ue;
     else                                                      currSE.reading = readMB_typeInfoFromBuffer_CABAC;
  
     if(img->type == INTRA_IMG || img->type == SI_IMG) //GB
@@ -844,7 +821,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 #if TRACE
       strncpy(currSE.tracestring, "MB Type", TRACESTRING_SIZE);
 #endif
-                        currSE.reading = readMB_typeInfoFromBuffer_CABAC;
+      currSE.reading = readMB_typeInfoFromBuffer_CABAC;
       dP->readSyntaxElement(&currSE,img,inp,dP);
       currMB->mb_type = currSE.value1;
       if(!dP->bitstream->ei_flag)
@@ -855,18 +832,17 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 // START CABAC DECODING MB_SKIP_FLAG & MBTYPE ******************************************************* GB
     else if (active_pps->entropy_coding_mode == CABAC)
     {
-      
-      CheckAvailabilityOfNeighborsForSkip(img);
-      
+      if (img->structure==FRAME && img->mb_frame_field_flag)
+        CheckAvailabilityOfNeighbors(img); 
       // read MB skipflag
       currSE.reading = readMB_skip_flagInfoFromBuffer_CABAC;
 #if TRACE
       strncpy(currSE.tracestring, "MB skipflag", TRACESTRING_SIZE);
 #endif
-                        dP->readSyntaxElement(&currSE,img,inp,dP);
+      dP->readSyntaxElement(&currSE,img,inp,dP);
       currMB->mb_type = currSE.value1;
-                        if (img->type==B_IMG_1 || img->type==B_IMG_MULT)
-                                currMB->cbp = currSE.value2;
+      if (img->type==B_IMG_1 || img->type==B_IMG_MULT)
+        currMB->cbp = currSE.value2;
       if(!dP->bitstream->ei_flag)
         currMB->ei_flag = 0;
                         
@@ -904,8 +880,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
         
       }
       
-      if (img->structure==FRAME && img->mb_frame_field_flag)
-        CheckAvailabilityOfNeighbors(img); 
+//      if (img->structure==FRAME && img->mb_frame_field_flag)
+//        CheckAvailabilityOfNeighbors(img); 
       
       // read MB type
       if (currMB->mb_type != 0 )
@@ -966,9 +942,9 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
           if(img->cod_counter == 0 && (img->current_mb_nr%2 == 0))
           {
 #if TRACE
-          strncpy(currSE.tracestring, "Field mode", TRACESTRING_SIZE);
+            strncpy(currSE.tracestring, "Field mode", TRACESTRING_SIZE);
 #endif
-                                                peekSyntaxElement_UVLC(&currSE,img,inp,dP);
+            peekSyntaxElement_UVLC(&currSE,img,inp,dP);
             img->mb_field = currSE.value1;
           }
           else if(img->cod_counter > 0 && (img->current_mb_nr%2 == 0))
@@ -1011,7 +987,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
     for (i=0; i<4; i++)
     {
-      if (active_pps->entropy_coding_mode ==UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo;
+      if (active_pps->entropy_coding_mode ==UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_ue;
       else                                                  currSE.reading = readB8_typeInfoFromBuffer_CABAC;
 
 #if TRACE
@@ -1419,7 +1395,7 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
 #endif
     if(img->type == B_IMG_1 || img->type == B_IMG_MULT)     dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
     else                                                    dP = &(currSlice->partArr[partMap[currSE.type]]);
-    if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo;
+    if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_ue;
     else                                                    currSE.reading = readCIPredMode_FromBuffer_CABAC;
 
     dP->readSyntaxElement(&currSE,img,inp,dP);
@@ -1437,17 +1413,16 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
  *    Set motion vector predictor
  ************************************************************************
  */
-void
-SetMotionVectorPredictor (struct img_par  *img,
-                          int             *pmv_x,
-                          int             *pmv_y,
-                          int             ref_frame,
-                          int             **refFrArr,
-                          int             ***tmp_mv,
-                          int             block_x,
-                          int             block_y,
-                          int             blockshape_x,
-                          int             blockshape_y)
+static void SetMotionVectorPredictor (struct img_par  *img,
+                                      int             *pmv_x,
+                                      int             *pmv_y,
+                                      int             ref_frame,
+                                      int             **refFrArr,
+                                      int             ***tmp_mv,
+                                      int             block_x,
+                                      int             block_y,
+                                      int             blockshape_x,
+                                      int             blockshape_y)
 {
   int mb_x                 = 4*block_x;
   int mb_y                 = 4*block_y;
@@ -1483,7 +1458,11 @@ SetMotionVectorPredictor (struct img_par  *img,
         tmp_mv             = img->mv_bot;
       pic_block_x          = img->block_x + (mb_x>>2);
       pic_block_y          = (img->block_y-4)/2 + (mb_y>>2);
-      mb_available_upright = 0;         // Not sure if this is right
+
+      mb_available_up   = (img->mb_y == 1 ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width  ].slice_nr);
+      mb_available_upleft  = (img->mb_x == 0) ? 0 : ((img->mb_y == 1) ? 0 : 
+                                                     (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr));
+      mb_available_upright = 0;
     }
   }
   else
@@ -2103,7 +2082,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
     currSE.type = SE_REFFRAME;
     if (bframe)                                               dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
     else                                                      dP = &(currSlice->partArr[partMap[SE_REFFRAME]]);
-    if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo;
+    if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo_ue;
     else                                                      currSE.reading = readRefFrameFromBuffer_CABAC;
     
     for (j0=0; j0<4; j0+=step_v0)
@@ -2280,7 +2259,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   {
     currSE.type = SE_BFRAME;
     dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo;
+    if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo_ue;
     else                                                      currSE.reading = readBwdRefFrameFromBuffer_CABAC;
     
     for (j0=0; j0<4; j0+=step_v0)
@@ -2375,7 +2354,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   if (bframe)   dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
   else          dP = &(currSlice->partArr[partMap[SE_MVD]]);
 
-  if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_mvd;
+  if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_se;
   else if (bframe)                                        currSE.reading = readBiMVD2Buffer_CABAC;
   else                                                    currSE.reading = readMVDFromBuffer_CABAC;
 
@@ -2740,7 +2719,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   currSE.type = SE_MVD;
   dP          = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
-  if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_mvd;
+  if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_se;
   else                                                    currSE.reading = readBiMVD2Buffer_CABAC;
 
   img_block_y = img->block_y;
@@ -2923,13 +2902,11 @@ int predict_nnz(struct img_par *img, int i,int j)
     Left_block= img->nz_coeff [img->mb_x ][img->mb_y ][i-1][j];
   else
     Left_block= mb_available_left ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][3][j] : -1;
-//    Left_block= img->mb_x > 0 ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][3][j] : -1;
 
   if (j)
     Top_block=  img->nz_coeff [img->mb_x ][img->mb_y ][i][j-1];
   else
     Top_block=  mb_available_up ? img->nz_coeff [img->mb_x ][img->mb_y-1 ][i][3] : -1;
-//    Top_block=  img->mb_y > 0 ? img->nz_coeff [img->mb_x ][img->mb_y-1 ][i][3] : -1;
   
 //  if (img->mb_frame_field_flag)
 //    Top_block=0;
@@ -2972,13 +2949,11 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     Left_block= img->nz_coeff [img->mb_x ][img->mb_y ][i-1][j];
   else
     Left_block= mb_available_left ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][i+1][j] : -1;
-//    Left_block= img->mb_x > 0 ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][i+1][j] : -1;
 
   if (j==5)
     Top_block=  img->nz_coeff [img->mb_x ][img->mb_y ][i][j-1];
   else
     Top_block=  mb_available_up ? img->nz_coeff [img->mb_x ][img->mb_y-1 ][i][5] : -1;
-//    Top_block=  img->mb_y > 0 ? img->nz_coeff [img->mb_x ][img->mb_y-1 ][i][5] : -1;
 
 //  if (img->mb_frame_field_flag)
 //   Top_block=0;
@@ -3173,7 +3148,7 @@ void readCoeff4x4_CAVLC (struct img_par *img,struct inp_par *inp,
         TRACESTRING_SIZE, "%s trailing ones sign (%d,%d)", type, i, j);
 #endif
 
-      readSyntaxElement_FLC (&currSE, dP);
+      readSyntaxElement_FLC (&currSE, dP->bitstream);
 
       code = currSE.inf;
       ntr = numtrailingones;
@@ -3360,7 +3335,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
       
       if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag)
       {
-        currSE.mapping = linfo_dquant;
+        currSE.mapping = linfo_se;
       }
       else
                 currSE.reading= readDquant_FromBuffer_CABAC; //gabi
@@ -3394,7 +3369,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
     
     if (active_pps->entropy_coding_mode == UVLC || dP->bitstream->ei_flag)
     {
-      currSE.mapping = linfo_dquant;
+      currSE.mapping = linfo_se;
     }
     else
     {
@@ -4042,12 +4017,13 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
             {
               for(ii=0;ii<BLOCK_SIZE;ii++)
                 for(jj=0;jj<BLOCK_SIZE;jj++)  
-                  img->mpr[ii+ioff][jj+joff] = Clip1((img->wp_weight[0][fw_ref_idx][0] *  tmp_block[ii][jj] + img->wp_offset[0][fw_ref_idx][0] + img->wp_round_luma) >>img->luma_log_weight_denom);                        }
+                  img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[0][fw_ref_idx][0] *  tmp_block[ii][jj]+ img->wp_round_luma) >>img->luma_log_weight_denom)  + img->wp_offset[0][fw_ref_idx][0] );
+			}
             else if (img->apply_weights)
             {
               for(ii=0;ii<BLOCK_SIZE;ii++)
                 for(jj=0;jj<BLOCK_SIZE;jj++)  
-                  img->mpr[ii+ioff][jj+joff] = Clip1((img->wp_weight[1][bw_ref_idx][0] * tmp_block[ii][jj] + img->wp_offset[1][bw_ref_idx][0] + img->wp_round_luma)>>img->luma_log_weight_denom);
+                  img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[1][bw_ref_idx][0] * tmp_block[ii][jj]  + img->wp_round_luma)>>img->luma_log_weight_denom) + img->wp_offset[1][bw_ref_idx][0] );
             }
             else
             {
@@ -4550,7 +4526,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               {
                 for(ii=0;ii<BLOCK_SIZE;ii++)
                   for(jj=0;jj<BLOCK_SIZE;jj++)  
-                    img->mpr[ii+ioff][jj+joff] = Clip1((tmp_block[ii][jj] * img->wp_weight[0][fw_ref_idx][0] + img->wp_offset[0][fw_ref_idx][0] + img->wp_round_luma)>>img->luma_log_weight_denom);
+                    img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_block[ii][jj] * img->wp_weight[0][fw_ref_idx][0]  + img->wp_round_luma)>>img->luma_log_weight_denom) + img->wp_offset[0][fw_ref_idx][0]);
               }
               else
               {
@@ -4565,7 +4541,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               {
                 for(ii=0;ii<BLOCK_SIZE;ii++)
                   for(jj=0;jj<BLOCK_SIZE;jj++)  
-                    img->mpr[ii+ioff][jj+joff] = Clip1((tmp_blockbw[ii][jj] * img->wp_weight[1][bw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] + img->wp_round_luma)>>img->luma_log_weight_denom);
+                    img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_blockbw[ii][jj] * img->wp_weight[1][bw_ref_idx][0] + img->wp_round_luma)>>img->luma_log_weight_denom) + img->wp_offset[1][bw_ref_idx][0]);
                           }
               else
                           {
@@ -4581,7 +4557,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
                 for(ii=0;ii<BLOCK_SIZE;ii++)
                   for(jj=0;jj<BLOCK_SIZE;jj++)  
-                    img->mpr[ii+ioff][jj+joff] = (int)Clip1( (alpha_fw * tmp_block[ii][jj] + alpha_bw * tmp_blockbw[ii][jj] + img->wp_offset[0][fw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] + 2*img->wp_round_luma) >> (img->luma_log_weight_denom+1) );
+                    img->mpr[ii+ioff][jj+joff] = (int)Clip1(((alpha_fw * tmp_block[ii][jj] + alpha_bw * tmp_blockbw[ii][jj]  + 2*img->wp_round_luma) >> (img->luma_log_weight_denom+1)) + ((img->wp_offset[0][fw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] + 1) >>1));
             }
             else
             {
@@ -4800,17 +4776,9 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                          if0*jf1*mcef[refframe][uv][jj1][ii0]+
                          if1*jf1*mcef[refframe][uv][jj1][ii1]+f4)/f3;
                  if (!pred_dir)
-#ifdef SIMPLE_CHROMA_WP
-                   img->mpr[ii+ioff][jj+joff] = Clip1((img->wp_weight[0][fw_ref_idx][uv+1] * pred + img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_round_chroma)>>img->chroma_log_weight_denom);
-#else
-                   img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[0][fw_ref_idx][uv+1] * (pred - 128) + img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_round_chroma)>>img->chroma_log_weight_denom) + 128);
-#endif
+                   img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[0][fw_ref_idx][uv+1] * pred  + img->wp_round_chroma)>>img->chroma_log_weight_denom) + img->wp_offset[0][fw_ref_idx][uv+1]);
                  else
-#ifdef SIMPLE_CHROMA_WP
-                   img->mpr[ii+ioff][jj+joff] = Clip1((img->wp_weight[1][bw_ref_idx][uv+1] * pred + img->wp_offset[1][bw_ref_idx][uv+1] + img->wp_round_chroma)>>img->chroma_log_weight_denom);
-#else
-                   img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[1][bw_ref_idx][uv+1] * (pred - 128) + img->wp_offset[1][bw_ref_idx][uv+1] + img->wp_round_chroma)>>img->chroma_log_weight_denom) + 128);
-#endif
+                   img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[1][bw_ref_idx][uv+1] * pred  + img->wp_round_chroma)>>img->chroma_log_weight_denom) + img->wp_offset[1][bw_ref_idx][uv+1]);
                }
                else
                {
@@ -5028,30 +4996,18 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               {
                 if (img->direct_type && direct_pdir==1)
                                 {
-#ifdef SIMPLE_CHROMA_WP
-                  img->mpr[ii+ioff][jj+joff]= Clip1((img->wp_weight[1][bw_ref_idx][uv+1] * bw_pred + img->wp_offset[1][bw_ref_idx][uv+1] + img->wp_round_chroma)>>img->chroma_log_weight_denom);   //<! Replaced with integer only operations
-#else
-                  img->mpr[ii+ioff][jj+joff]= Clip1(((img->wp_weight[1][bw_ref_idx][uv+1] * (bw_pred-128) + img->wp_offset[1][bw_ref_idx][uv+1] + img->wp_round_chroma)>>img->chroma_log_weight_denom) + 128);   //<! Replaced with integer only operations
-#endif
+                  img->mpr[ii+ioff][jj+joff]= Clip1(((img->wp_weight[1][bw_ref_idx][uv+1] * bw_pred  + img->wp_round_chroma)>>img->chroma_log_weight_denom) + img->wp_offset[1][bw_ref_idx][uv+1]);   //<! Replaced with integer only operations
                                 }
                 else if (img->direct_type && direct_pdir==0)
                                 {
-#ifdef SIMPLE_CHROMA_WP
-                  img->mpr[ii+ioff][jj+joff]=Clip1((img->wp_weight[0][fw_ref_idx][uv+1] * fw_pred + img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_round_chroma)>>img->chroma_log_weight_denom);   //<! Replaced with integer only operations
-#else
-                  img->mpr[ii+ioff][jj+joff]=Clip1(((img->wp_weight[0][fw_ref_idx][uv+1] * (fw_pred - 128) + img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_round_chroma)>>img->chroma_log_weight_denom) + 128);   //<! Replaced with integer only operations
-#endif
+                  img->mpr[ii+ioff][jj+joff]=Clip1(((img->wp_weight[0][fw_ref_idx][uv+1] * fw_pred + img->wp_round_chroma)>>img->chroma_log_weight_denom) + img->wp_offset[0][fw_ref_idx][uv+1]);   //<! Replaced with integer only operations
                                 }
               else
               {
 
                 int alpha_fw = img->wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1];
                 int alpha_bw = img->wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1];
-#ifdef SIMPLE_CHROMA_WP
-                img->mpr[ii+ioff][jj+joff]= Clip1((alpha_fw * fw_pred + alpha_bw * bw_pred + img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_offset[1][bw_ref_idx][uv+1] + 2*img->wp_round_chroma) >> (img->chroma_log_weight_denom + 1));
-#else
-                img->mpr[ii+ioff][jj+joff]= Clip1(((alpha_fw * (fw_pred-128) + alpha_bw * (bw_pred-128) + img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_offset[1][bw_ref_idx][uv+1] + 2*img->wp_round_chroma) >> (img->chroma_log_weight_denom + 1)) + 128);
-#endif
+                img->mpr[ii+ioff][jj+joff]= Clip1(((alpha_fw * fw_pred + alpha_bw * bw_pred  + 2*img->wp_round_chroma) >> (img->chroma_log_weight_denom + 1))+ ((img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_offset[1][bw_ref_idx][uv+1] + 1)>>1) );
               }
             }
             else
@@ -5291,7 +5247,6 @@ void exit_super_macroblock(struct img_par *img,struct inp_par *inp)
   int chroma_y = offset_y/2;
   int chroma_x = offset_x/2;
   int field_c_y = field_y/2;
-  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
       
   if (img->mb_field==0)
     for (i=0;i<4;i++)
@@ -5571,13 +5526,13 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
                 {
                   for(ii=0;ii<BLOCK_SIZE;ii++)
                     for(jj=0;jj<BLOCK_SIZE;jj++)  
-                          img->mpr[ii+ioff][jj+joff] = Clip1((img->wp_weight[0][fw_ref_idx][0] * tmp_block[ii][jj] + img->wp_offset[0][fw_ref_idx][0] + img->wp_round_luma)>>(img->luma_log_weight_denom));
+                          img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[0][fw_ref_idx][0] * tmp_block[ii][jj] + img->wp_round_luma)>>(img->luma_log_weight_denom))  + img->wp_offset[0][fw_ref_idx][0]);
                 }
                 else if (img->apply_weights)
                 {
                   for(ii=0;ii<BLOCK_SIZE;ii++)
                     for(jj=0;jj<BLOCK_SIZE;jj++)  
-                          img->mpr[ii+ioff][jj+joff] = Clip1((img->wp_weight[1][bw_ref_idx][0] * tmp_block[ii][jj] + img->wp_offset[1][bw_ref_idx][0] + img->wp_round_luma)>>(img->luma_log_weight_denom));
+                          img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[1][bw_ref_idx][0] * tmp_block[ii][jj] + img->wp_round_luma)>>(img->luma_log_weight_denom)) + img->wp_offset[1][bw_ref_idx][0]);
                 }
                 else
                 {
@@ -5965,13 +5920,13 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
         {
           for(ii=0;ii<BLOCK_SIZE;ii++)
             for(jj=0;jj<BLOCK_SIZE;jj++)  
-                img->mpr[ii+ioff][jj+joff] = Clip1((tmp_block[ii][jj] * img->wp_weight[0][fw_ref_idx][0] + img->wp_offset[0][fw_ref_idx][0] + img->wp_round_luma)>>img->luma_log_weight_denom);
+                img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_block[ii][jj] * img->wp_weight[0][fw_ref_idx][0]  + img->wp_round_luma)>>img->luma_log_weight_denom) + img->wp_offset[0][fw_ref_idx][0]);
         }
         else if (mv_mode==0 && img->direct_type && direct_pdir==1)
         {              
           for(ii=0;ii<BLOCK_SIZE;ii++)
             for(jj=0;jj<BLOCK_SIZE;jj++)  
-                  img->mpr[ii+ioff][jj+joff] = Clip1((tmp_blockbw[ii][jj] * img->wp_weight[1][bw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] + img->wp_round_luma)>>img->luma_log_weight_denom);
+                  img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_blockbw[ii][jj] * img->wp_weight[1][bw_ref_idx][0]  + img->wp_round_luma)>>img->luma_log_weight_denom) + img->wp_offset[1][bw_ref_idx][0]);
         }
           else
         {
@@ -5980,7 +5935,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
 
             for(ii=0;ii<BLOCK_SIZE;ii++)
               for(jj=0;jj<BLOCK_SIZE;jj++)  
-                 img->mpr[ii+ioff][jj+joff] = (int)Clip1( (img->wbp_weight[0][fw_ref_idx][bw_ref_idx][0]* tmp_block[ii][jj] + img->wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * tmp_blockbw[ii][jj] + img->wp_offset[0][fw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] + 2*img->wp_round_luma) >> (img->luma_log_weight_denom+1) );
+                 img->mpr[ii+ioff][jj+joff] = (int)Clip1(((img->wbp_weight[0][fw_ref_idx][bw_ref_idx][0]* tmp_block[ii][jj] + img->wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * tmp_blockbw[ii][jj]  + 2*img->wp_round_luma) >> (img->luma_log_weight_denom+1) ) + ((img->wp_offset[0][fw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] +1)>>1) );
                   }
                 }
           else

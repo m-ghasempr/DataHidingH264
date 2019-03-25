@@ -169,6 +169,8 @@ void code_a_picture(Picture *pic)
  */
 int encode_one_frame ()
 {
+  static int prev_frame_no = 0; // POC200301
+  static int consecutive_non_reference_pictures = 0; // POC200301
 #ifdef _LEAKYBUCKET_
   extern long Bit_Buffer[10000];
   extern unsigned long total_frame_buffer;
@@ -253,6 +255,8 @@ int encode_one_frame ()
       dis_frm = frame_pic->distortion_y + frame_pic->distortion_u + frame_pic->distortion_v;
       
       img->fld_flag = picture_structure_decision (frame_pic, top_pic, bottom_pic);
+
+      update_field_frame_contexts (img->fld_flag);
     }
     else
       img->fld_flag = 0;
@@ -282,7 +286,15 @@ int encode_one_frame ()
     frame_mode_buffer (bits_frm, dis_frm_y, dis_frm_u, dis_frm_v);
     writeout_picture (frame_pic);
   }
-/*
+
+  if (frame_pic)
+    free_slice_list(frame_pic);
+  if (top_pic)
+    free_slice_list(top_pic);
+  if (bottom_pic)
+    free_slice_list(top_pic);
+
+  /*
   // Tian Dong (Sept 2002)
   // in frame mode, the newly reconstructed frame has been inserted to the mem buffer
   // and it is time to prepare the spare picture SEI payload.
@@ -331,6 +343,18 @@ int encode_one_frame ()
   Bit_Buffer[total_frame_buffer] = stat->bit_ctr - stat->bit_ctr_n;
   total_frame_buffer++;
 #endif
+
+  // POC200301: Verify that POC coding type 2 is not used if more than one consecutive 
+  // non-reference frame is requested or if decoding order is different from output order
+  if (img->pic_order_cnt_type == 2)
+  {
+    if (img->disposable_flag) consecutive_non_reference_pictures++;
+    else consecutive_non_reference_pictures = 0;
+
+    if (frame_no < prev_frame_no || consecutive_non_reference_pictures>1)
+      error("POC type 2 cannot be applied for the coding pattern where the encoding /decoding order of pictures are different from the output order.\n", -1);
+    prev_frame_no = frame_no;
+  }
 
   if (IMG_NUMBER == 0)
     ReportFirstframe(tmp_time);
@@ -394,25 +418,7 @@ int writeout_picture(Picture *pic)
       currStream = (currSlice->partArr[partition]).bitstream;
       assert (currStream->bits_to_go = 8);    //! should always be the case, the 
                                               //! byte alignment is done in terminate_slice
-      // if (UVLC) writeVlcTrailingBits (currSlice->partArr[i].bitstream);  //! unnecessary, see above assert()
       writeUnit (currSlice->partArr[partition].bitstream);
-    
-/*
-
-      if (input->symbol_mode == UVLC)
-      {
-        writeVlcTrailingBits (currSlice->partArr[i].bitstream);
-        writeUnit (currSlice->partArr[i].bitstream);
-
-        currStream->stored_bits_to_go = 8; // store bits_to_go
-        currStream->stored_byte_buf   = currStream->byte_buf;   // store current byte
-        currStream->stored_byte_pos   = 0; // reset byte position
-      }
-      else     // CABAC
-      {
-        writeUnit (currSlice->partArr[i].bitstream);
-      }           // CABAC
-*/
 
     }           // partition loop
   }           // slice loop
@@ -458,7 +464,7 @@ void frame_picture (Picture *frame)
     CopyBottomFieldToOldImgOrgVariables (srcframe);
   }
 
-  if (input->WeightedPrediction > 0 || (input->WeightedBiprediction > 0 && (img->type == B_IMG || img->type == BS_IMG)))
+  if (img->type != INTRA_IMG && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_IMG || img->type == BS_IMG))))
   {
     estimate_weighting_factor ();
   }
@@ -515,7 +521,7 @@ void field_picture (Picture *top, Picture *bottom)
 
   CopyTopFieldToOldImgOrgVariables (srcframe);
 
-  if (input->WeightedPrediction > 0 || (input->WeightedBiprediction > 0 && (img->type == B_IMG || img->type == BS_IMG)))
+  if (img->type != INTRA_IMG && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_IMG || img->type == BS_IMG))))
   {
     estimate_weighting_factor ();
   }
@@ -544,7 +550,7 @@ void field_picture (Picture *top, Picture *bottom)
 
   CopyBottomFieldToOldImgOrgVariables (srcframe);
 
-  if (input->WeightedPrediction > 0 || (input->WeightedBiprediction > 0 && (img->type == B_IMG || img->type == BS_IMG)))
+  if (img->type != INTRA_IMG && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_IMG || img->type == BS_IMG))))
   {
     estimate_weighting_factor ();
   }
@@ -631,25 +637,13 @@ int picture_structure_decision (Picture *frame, Picture *top, Picture *bot)
  *    Field Mode Buffer
  ************************************************************************
  */
-void field_mode_buffer (int bit_field, float snr_field_y, float snr_field_u,
-                        float snr_field_v)
+void field_mode_buffer (int bit_field, float snr_field_y, float snr_field_u, float snr_field_v)
 {
-
-//  int i;
-/*
-  for (i = 0; i < img->currentSlice->max_part_nr; i++)
-  {
-    if (0==img->fld_type)
-      ((img->currentSlice)->partArr[i]).bitstream = ((img->currentSlice)->partArr[i]).bitstream_topfld;      //temp
-    else
-      ((img->currentSlice)->partArr[i]).bitstream = ((img->currentSlice)->partArr[i]).bitstream_botfld;      //temp
-  }
-*/
   put_buffer_frame ();
   imgY = imgY_com;
   imgUV = imgUV_com;
 
-  if (img->type != B_IMG)       //all I- and P-frames   //    Krit: PLUS2, Change field buffer structure, 7/2
+  if (img->type != B_IMG)       //all I- and P-frames 
     interpolate_frame_to_fb ();
 
   input->no_fields += 1;
@@ -666,15 +660,8 @@ void field_mode_buffer (int bit_field, float snr_field_y, float snr_field_u,
  *    Frame Mode Buffer
  ************************************************************************
  */
-void
-frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame_u,
-                   float snr_frame_v)
+void frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame_u, float snr_frame_v)
 {
-//  int i;
-
-//  for (i = 0; i < img->currentSlice->max_part_nr; i++)
-//    ((img->currentSlice)->partArr[i]).bitstream = ((img->currentSlice)->partArr[i]).bitstream_frm;      //temp
-
   if (input->InterlaceCodingOption != FRAME_CODING)
     if (input->symbol_mode == CABAC)
       img->current_mb_nr = img->current_mb_nr * 2;      //! Why the heck is this dependent on CABAC???
@@ -724,6 +711,7 @@ frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame_u,
     }
 }
 
+
 /*!
  ************************************************************************
  * \brief
@@ -734,6 +722,7 @@ static void init_mmco()
 {
   img->mmco_buffer=NULL;
 }
+
 
 /*!
  ************************************************************************
@@ -765,105 +754,105 @@ void init_frame ()
   fb->num_short_used = fb->short_used;
 
   if (img->type != B_IMG)
-    {
-      img->refPicID_frm++;
-      img->refPicID = img->refPicID_frm;
-
-      img->tr = start_tr_in_this_IGOP + IMG_NUMBER * (input->jumpd + 1);
-
-      img->imgtr_last_P_frm = img->imgtr_next_P_frm;
-      img->imgtr_next_P_frm = img->tr;
-
+  {
+    img->refPicID_frm++;
+    img->refPicID = img->refPicID_frm;
+    
+    img->tr = start_tr_in_this_IGOP + IMG_NUMBER * (input->jumpd + 1);
+    
+    img->imgtr_last_P_frm = img->imgtr_next_P_frm;
+    img->imgtr_next_P_frm = img->tr;
+    
 #ifdef _ADAPT_LAST_GROUP_
-      if (input->last_frame && img->number + 1 == input->no_frames)
-        img->tr = input->last_frame;
+    if (input->last_frame && img->number + 1 == input->no_frames)
+      img->tr = input->last_frame;
 #endif
-
-      if (IMG_NUMBER != 0 && input->successive_Bframe != 0)     // B pictures to encode
-        nextP_tr_frm = img->tr;
-
-      if (img->type == INTRA_IMG)
-        img->qp = input->qp0;   // set quant. parameter for I-frame
-      else
-        {
-#ifdef _CHANGE_QP_
-          if (input->qp2start > 0 && img->tr >= input->qp2start)
-            img->qp = input->qpN2;
-          else
-#endif
-            img->qp = input->qpN;
-
-          if (img->types == SP_IMG)
-            {
-              img->qp = input->qpsp;
-              img->qpsp = input->qpsp_pred;
-            }
-
-        }
-
-      img->mb_y_intra = img->mb_y_upd;  //  img->mb_y_intra indicates which GOB to intra code for this frame
-
-      if (input->intra_upd > 0) // if error robustness, find next GOB to update
-        {
-          img->mb_y_upd =
-            (IMG_NUMBER / input->intra_upd) % (img->height / MB_BLOCK_SIZE);
-        }
-    }
-  else
+    
+    if (IMG_NUMBER != 0 && input->successive_Bframe != 0)     // B pictures to encode
+      nextP_tr_frm = img->tr;
+    
+    if (img->type == INTRA_IMG)
+      img->qp = input->qp0;   // set quant. parameter for I-frame
+    else
     {
-      img->p_interval = input->jumpd + 1;
-      prevP_no = start_tr_in_this_IGOP + (IMG_NUMBER - 1) * img->p_interval;
-      nextP_no = start_tr_in_this_IGOP + (IMG_NUMBER) * img->p_interval;
-
-#ifdef _ADAPT_LAST_GROUP_
-      last_P_no[0] = prevP_no;
-      for (i = 1; i < img->buf_cycle; i++)
-        last_P_no[i] = last_P_no[i - 1] - img->p_interval;
-
-      if (input->last_frame && img->number + 1 == input->no_frames)
-        {
-          nextP_no = input->last_frame;
-          img->p_interval = nextP_no - prevP_no;
-        }
-#endif
-
-      img->b_interval =
-        (int) ((float) (input->jumpd + 1) / (input->successive_Bframe + 1.0) +
-               0.49999);
-
-      img->tr = prevP_no + img->b_interval * img->b_frame_to_code;      // from prev_P
-      if (img->tr >= nextP_no)
-        img->tr = nextP_no - 1;
-
 #ifdef _CHANGE_QP_
       if (input->qp2start > 0 && img->tr >= input->qp2start)
-        img->qp = input->qpB2;
+        img->qp = input->qpN2;
       else
 #endif
-        img->qp = input->qpB;
-
-      // initialize arrays
-      for (k = 0; k < 2; k++)
-        for (i = 0; i < img->height / BLOCK_SIZE; i++)
-          for (j = 0; j < img->width / BLOCK_SIZE + 4; j++)
-            {
-              tmp_fwMV[k][i][j] = 0;
-              tmp_bwMV[k][i][j] = 0;
-              dfMV[k][i][j] = 0;
-              dbMV[k][i][j] = 0;
-            }
-      for (i = 0; i < img->height / BLOCK_SIZE; i++)
-        for (j = 0; j < img->width / BLOCK_SIZE; j++)
-          {
-            fw_refFrArr[i][j] = bw_refFrArr[i][j] = -1;
-          }
-
+        img->qp = input->qpN;
+      
+      if (img->types == SP_IMG)
+      {
+        img->qp = input->qpsp;
+        img->qpsp = input->qpsp_pred;
+      }
+      
     }
 
+    img->mb_y_intra = img->mb_y_upd;  //  img->mb_y_intra indicates which GOB to intra code for this frame
+    
+    if (input->intra_upd > 0) // if error robustness, find next GOB to update
+    {
+      img->mb_y_upd = (IMG_NUMBER / input->intra_upd) % (img->height / MB_BLOCK_SIZE);
+    }
+  }
+  else
+  {
+    img->p_interval = input->jumpd + 1;
+    prevP_no = start_tr_in_this_IGOP + (IMG_NUMBER - 1) * img->p_interval;
+    nextP_no = start_tr_in_this_IGOP + (IMG_NUMBER) * img->p_interval;
+    
+#ifdef _ADAPT_LAST_GROUP_
+    last_P_no[0] = prevP_no;
+    for (i = 1; i < img->buf_cycle; i++)
+      last_P_no[i] = last_P_no[i - 1] - img->p_interval;
+    
+    if (input->last_frame && img->number + 1 == input->no_frames)
+    {
+      nextP_no = input->last_frame;
+      img->p_interval = nextP_no - prevP_no;
+    }
+#endif
+    
+    img->b_interval =
+      (int) ((float) (input->jumpd + 1) / (input->successive_Bframe + 1.0) +
+      0.49999);
+    
+    img->tr = prevP_no + img->b_interval * img->b_frame_to_code;      // from prev_P
+
+    if (img->tr >= nextP_no)
+      img->tr = nextP_no - 1;
+    
+#ifdef _CHANGE_QP_
+    if (input->qp2start > 0 && img->tr >= input->qp2start)
+      img->qp = input->qpB2;
+    else
+#endif
+      img->qp = input->qpB;
+
+    // initialize arrays
+    for (k = 0; k < 2; k++)
+      for (i = 0; i < img->height / BLOCK_SIZE; i++)
+        for (j = 0; j < img->width / BLOCK_SIZE + 4; j++)
+        {
+          tmp_fwMV[k][i][j] = 0;
+          tmp_bwMV[k][i][j] = 0;
+          dfMV[k][i][j] = 0;
+          dbMV[k][i][j] = 0;
+        }
+    for (i = 0; i < img->height / BLOCK_SIZE; i++)
+      for (j = 0; j < img->width / BLOCK_SIZE; j++)
+      {
+        fw_refFrArr[i][j] = bw_refFrArr[i][j] = -1;
+      }
+
+  }
+  
   UpdateSubseqInfo (img->layer);        // Tian Dong (Sept 2002)
   UpdateSceneInformation (0, 0, 0, -1); // JVT-D099, scene information SEI, nothing included by default
-//! Commented out by StW, needs fixing in SEI.h to keep the trace file clean
 
+  //! Commented out by StW, needs fixing in SEI.h to keep the trace file clean
   //  PrepareAggregationSEIMessage ();
 
   // JVT-D097
@@ -879,7 +868,6 @@ void init_frame ()
   // End JVT-D097
   img->total_number_mb = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 
-  img->cabac_init_idc = 0;
   img->no_output_of_prior_pics_flag = 0;
   img->long_term_reference_flag = 0;
 
@@ -913,11 +901,6 @@ void init_field ()
   input->successive_Bframe *= 2;
   img->number /= 2;
   img->buf_cycle /= 2;
-
-#ifdef UMV
-  img->mhor = img->width * 4 - 1;
-  img->mvert = img->height * 4 - 1;
-#endif
 
   img->mb_y = img->mb_x = 0;
   img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
@@ -1075,42 +1058,37 @@ void init_field ()
  */
 void estimate_weighting_factor ()
 {
-  int frame_size = img->height * img->width * 3 / 2;
   int i, j, n;
+  int x,z;
   int dc_org = 0;
-  int dc_org_u = 0;
-  int dc_org_v = 0;
-//  int list
   int index;
   int comp;
-  int p0, p1, pt;
+  int p0, pt;
   int fwd_ref[MAX_REFERENCE_PICTURES], bwd_ref[MAX_REFERENCE_PICTURES];
-  int incr;
 
   int bframe = (img->type == B_IMG) || (img->type == BS_IMG);
-// int   max_ref = bframe? img->nb_references-1 : img->nb_references;
-  
-  //int max_ref = img->nb_references;
-  int max_ref = min (img->number-((mref==mref_fld)&&img->fld_type&&bframe), img->buf_cycle);
+  int num_ref = min (img->number-((mref==mref_fld)&&img->fld_type&&bframe), img->buf_cycle);
   int dc_ref[MAX_REFERENCE_PICTURES];
   int log_weight_denom;
-  int max_bwd_ref, max_fwd_ref;
+  int num_bwd_ref, num_fwd_ref;
   pel_t*  ref_pic;   
   pel_t*  ref_pic_w;   
+  int default_weight;
+  int default_weight_chroma;
 
-  luma_log_weight_denom = 7;
-  chroma_log_weight_denom = 7;
-  wp_luma_round = 64;
-  wp_chroma_round = 64;
-
-
+  luma_log_weight_denom = 5;
+  chroma_log_weight_denom = 5;
+  wp_luma_round = 1 << (luma_log_weight_denom - 1);
+  wp_chroma_round = 1 << (chroma_log_weight_denom - 1);
+  default_weight = 1<<luma_log_weight_denom;
+  default_weight_chroma = 1<<chroma_log_weight_denom;
 
   /* set all values to defaults */
   for (i = 0; i < 2; i++)
     for (j = 0; j < MAX_REFERENCE_PICTURES; j++)
       for (n = 0; n < 3; n++)
         {
-          wp_weight[i][j][n] = 128;
+          wp_weight[i][j][n] = default_weight;
           wp_offset[i][j][n] = 0;
         }
 
@@ -1121,78 +1099,82 @@ void estimate_weighting_factor ()
       }
 
 
-  for (n = 0; n < max_ref; n++)
+  for (n = 0; n < num_ref; n++)
     {
-//      int x, y;
-      // reference DC
       dc_ref[n] = 0;
 
-      ref_pic       = img->type==B_IMG? Refbuf11 [n+((mref==mref_fld)) +1] : Refbuf11[n];
-      ref_pic_w       = img->type==B_IMG? Refbuf11_w [n+((mref==mref_fld)) +1] : Refbuf11_w[n];
+      ref_pic       = img->type==B_IMG? Refbuf11 [n] : Refbuf11[n];
+      ref_pic_w       = img->type==B_IMG? Refbuf11_w [n] : Refbuf11_w[n];
 
       // Y
       for (i = 0; i < img->height * img->width; i++)
         {
           dc_ref[n] += ref_pic[i];
-//                if (Refbuf11[n][i] != 0)
-//                        printf("%d\n",Refbuf11[n][i]);
         }
 
       if (dc_ref[n] != 0)
         weight[n][0] =
-          (int) (128 * (double) dc_org / (double) dc_ref[n] + 0.5);
+          (int) (default_weight * (double) dc_org / (double) dc_ref[n] + 0.5);
       else
-        weight[n][0] = 512;
-      if (weight[n][0] >= 127 && weight[n][0] <= 129)
-        {
-          weight[n][0] = 128;   // don't bother to scale close ones
-          printf ("weight[%d] = %d\n", n, weight[n][0]);
-        }
-      else
-        printf ("weight[%d] = %d, dc_org = %d, dc_ref = %d,\n", n,
-                weight[n][0], dc_org / (img->height * img->width),
-                dc_ref[n] / (img->height * img->width));
+        weight[n][0] = 2*default_weight;  // only used when reference picture is black
 
-      /* for now always use 128 for chroma weight */
-      weight[n][1] = 128;
-      weight[n][2] = 128;
+	  printf("dc_org = %d, dc_ref = %d, weight[%d] = %d\n",dc_org, dc_ref[n],n,weight[n][0]);
+
+      /* for now always use default weight for chroma weight */
+      weight[n][1] = default_weight_chroma;
+      weight[n][2] = default_weight_chroma;
+
 
 
   /* store weighted reference pic for motion estimation */
   for (i = 0; i < img->height * img->width; i++)
   {
     ref_pic_w[i] =
-    Clip (0, 255, ((int) ref_pic[i] * weight[n][0] + 64) / 128);
+    Clip (0, 255, ((int) ref_pic[i] * weight[n][0] + wp_luma_round) / default_weight);
   }
   for (i = 0; i < 4*(img->height + 2*IMG_PAD_SIZE) ; i++)
   {
     for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
     {
-       mref_w[n][i][j] =   Clip (0, 255, ((int) mref[n][i][j] * weight[n][0] + 64) / 128);
+       mref_w[n][i][j] =   Clip (0, 255, ((int) mref[n][i][j] * weight[n][0] + wp_luma_round) / default_weight);
      }
   }
 }
 
+  if (img->type == INTER_IMG)
+  {
+	  num_bwd_ref = 0;
+	  num_fwd_ref = num_ref;
+  }
+  else
+  {
+    num_bwd_ref = (img->type == BS_IMG) ? num_ref : 1;
+    num_fwd_ref = (img->type == BS_IMG) ? num_ref+1 : num_ref;
+  }
+
+//	printf("num_fwd_ref = %d num_bwd_ref = %d\n",num_fwd_ref,num_bwd_ref);
 
   {                             /* forward list */
     if (img->type == INTER_IMG && input->WeightedPrediction)
       {
-        for (index = 0; index < max_ref; index++)
+        for (index = 0; index < num_ref; index++)
           {
             wp_weight[0][index][0] = weight[index][0];
             wp_weight[0][index][1] = weight[index][1];
             wp_weight[0][index][2] = weight[index][2];
+  //              printf ("wp weight[%d] = %d  \n", index,
+  //                      wp_weight[0][index][0]);
           }
       }
     else if (img->type == BS_IMG && (input->WeightedBiprediction == 1))
       {
-        for (index = 0; index < max_ref; index++)
+        for (index = 0; index < num_ref; index++)
           {
             wp_weight[0][index][0] = weight[index][0];
             wp_weight[0][index][1] = weight[index][1];
             wp_weight[0][index][2] = weight[index][2];
           }
-        for (index = 0; index < max_ref; index++)
+        for (index = 0; index < num_ref; index++)
           {                     /* backward list */
             if (index == 0)
               n = 1;
@@ -1200,14 +1182,11 @@ void estimate_weighting_factor ()
               n = 0;
             else
               n = index;
-            wp_weight[1][index][0] = weight[n][0];
-            wp_weight[1][index][1] = weight[n][1];
-            wp_weight[1][index][2] = weight[n][2];
           }
       }
     else if (img->type == B_IMG && (input->WeightedBiprediction == 1))
       {
-        for (index = 0; index < max_ref - 1; index++)
+        for (index = 0; index < num_ref - 1; index++)
           {
             wp_weight[0][index][0] = weight[index + 1][0];
             wp_weight[0][index][1] = weight[index + 1][1];
@@ -1219,7 +1198,7 @@ void estimate_weighting_factor ()
         }
     else
         {
-          for (index = 0; index < max_ref; index++)
+          for (index = 0; index < num_ref; index++)
             {
               wp_weight[0][index][0] = 1<<luma_log_weight_denom;
               wp_weight[0][index][1] = 1<<chroma_log_weight_denom;
@@ -1231,19 +1210,15 @@ void estimate_weighting_factor ()
         }
 
 
-  incr      = (n==-1 ? (!img->fld_type&&mref==mref_fld): direct_mode ? (!img->fld_type&&mref==mref_fld) : (mref==mref_fld)) ;
-  
-//  ref_pic   = img->type==B_IMG? mref [ref+1+incr] : mref [ref];
 
 
   if (input->WeightedBiprediction > 0 && (img->type == B_IMG || img->type == BS_IMG))
   {
     if (img->type == BS_IMG )
     {
-      for (index = 0; index < max_ref; index++)
+      for (index = 0; index < num_fwd_ref; index++)
       {
         fwd_ref[index] = index;
-      }
       if (index == 0)
         n = 1;
       else if (index == 1)
@@ -1251,10 +1226,11 @@ void estimate_weighting_factor ()
       else
         n = index;
       bwd_ref[index] = n;
+	  }
     }
     else if (img->type == B_IMG)
     {
-      for (index = 0; index < max_ref - 1; index++)
+      for (index = 0; index < num_fwd_ref; index++)
       {
         fwd_ref[index] = index+1;
       }
@@ -1265,12 +1241,10 @@ void estimate_weighting_factor ()
 
   if (img->type == B_IMG || img->type == BS_IMG) // need to fill in wbp_weight values
   { 
-    max_bwd_ref = (img->type == BS_IMG) ? max_ref : 1;
-    max_fwd_ref = (img->type == BS_IMG) ? max_ref : max_ref - 1;
 
-    for (i = 0; i < max_fwd_ref; i++)
+    for (i = 0; i < num_fwd_ref; i++)
     {
-      for (j = 0; j < max_bwd_ref; j++)
+      for (j = 0; j < num_bwd_ref; j++)
       {
         for (comp = 0; comp < 3; comp++)
         {
@@ -1281,25 +1255,28 @@ void estimate_weighting_factor ()
             wbp_weight[1][i][j][comp] = wp_weight[1][j][comp];
           }
           else if (input->WeightedBiprediction == 2)
-          {
+          { // implicit mode
             pt = poc_distance (fwd_ref[i], bwd_ref[j]);
             p0 = poc_distance (fwd_ref[i], -1);
-            p1 = poc_distance (-1, bwd_ref[j]);
             if (pt == 0)
             {
-              wbp_weight[0][i][j][comp] =  1 << log_weight_denom ;
-              wbp_weight[1][i][j][comp] =  1 << log_weight_denom ;
-            }
+              wbp_weight[1][i][j][comp] =  32 ;
+              wbp_weight[0][i][j][comp] = 32;
+            }	
             else
             {
-              wbp_weight[0][i][j][comp] = (p1 << (log_weight_denom+1)) / pt;
-              wbp_weight[1][i][j][comp] = (p0 << (log_weight_denom+1)) / pt;
-              if (comp == 0 && i == 0 && j == 0)
-                printf ("bpw weight[%d] = %d, %d\n", n,
-                        wbp_weight[0][i][j][0], wbp_weight[1][i][j][0]);
+			  x = (16384 + (pt>>1))/pt;
+			  z = Clip(-1024, 1023, (x*p0 + 32 )>>6);
+              wbp_weight[1][i][j][comp] = z>>2;
+			  if (wbp_weight[1][i][j][comp] < -64 || wbp_weight[1][i][j][comp] >128)
+				  wbp_weight[1][i][j][comp] = 32;
+              wbp_weight[0][i][j][comp] = 64 - wbp_weight[1][i][j][comp];
 
               }
-            }
+ //              if (comp == 0 )
+  //              printf ("bpw weight[%d][%d] = %d  , %d \n", i, j,
+  //                      wbp_weight[0][i][j][0], wbp_weight[1][i][j][0]);
+           }
           }
           }
       }
@@ -2628,7 +2605,7 @@ static void copy_mv_to_or_from_save (int direction)
     dummy = get_mem2Dint(&refFrArr_bot_save, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
   // Copy
-  if (direction = TO_SAVE)
+  if (direction == TO_SAVE)
   {
     for (i = 0; i < img->height / (2 * BLOCK_SIZE); i++)
       for (j = 0; j < img->width / BLOCK_SIZE; j++)
@@ -2942,7 +2919,6 @@ void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, Sourcefram
 
   const unsigned int bytes_y = xs*ys;
   const unsigned int bytes_uv = (xs*ys)/4;
-  const int xs_uv = xs/2;
   const int framesize_in_bytes = bytes_y + 2*bytes_uv;
 
   assert (xs % MB_BLOCK_SIZE == 0);

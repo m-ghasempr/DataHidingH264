@@ -582,11 +582,12 @@ static void PatchInp ()
     }
   }
 
-//  if (input->InterlaceCodingOption != FRAME_CODING && (input->of_mode == 1 || input->of_mode == 2))
-//  {
-//    snprintf(errortext, ET_SIZE, "AFF currently does not support RTP & IFF, check encoder.cfg");
-//    error (errortext, 400);
-//  }
+  if ((!input->rdopt)&&(input->InterlaceCodingOption==MB_CODING))
+  {
+    snprintf(errortext, ET_SIZE, "MB AFF is not compatible with non-rd-optimized coding.");
+    error (errortext, 500);
+  }
+
 
   // Tian Dong: May 31, 2002
   // The number of frames in one sub-seq in enhanced layer should not exceed
@@ -606,19 +607,23 @@ static void PatchInp ()
   // The AFF is not compatible with spare picture for the time being.
   if (input->InterlaceCodingOption != FRAME_CODING && input->SparePictureOption == TRUE)
   {
-    snprintf(errortext, ET_SIZE, "The AFF is not compatible with spare picture in JM 4.1b.");
+    snprintf(errortext, ET_SIZE, "The AFF is not compatible with spare picture.");
     error (errortext, 500);
   }
+
   // Only the RTP mode is compatible with spare picture for the time being.
   if (input->of_mode != PAR_OF_RTP && input->SparePictureOption == TRUE)
   {
-    snprintf(errortext, ET_SIZE, "Only RTP output mode is compatible with spare picture features in JM 4.1b.");
+    snprintf(errortext, ET_SIZE, "Only RTP output mode is compatible with spare picture features.");
     error (errortext, 500);
   }
   if (input->StoredBPictures > 0)
   {
-    input->direct_type = DIR_SPATIAL;
-    printf("Stored B Picture coding is not supported for temporal direct mode currently.");
+    if (input->direct_type != DIR_SPATIAL)
+    {
+      input->direct_type = DIR_SPATIAL;
+      printf("Stored B Picture coding is not supported for temporal direct mode currently. Using spatial direct mode.");
+    }
   }
   if( (input->StoredBPictures || input->WeightedBiprediction > 0) && input->successive_Bframe && input->direct_type == DIR_TEMPORAL)
   {

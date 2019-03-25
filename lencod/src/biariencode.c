@@ -194,6 +194,13 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   register unsigned int low = Elow;
   unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3];
 
+  extern int cabac_encoding;
+
+  if( cabac_encoding )
+  {
+    bi_ct->count++;
+  }
+
   /* covers all cases where code does not bother to shift down symbol to be 
    * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code symply 
    * masks off the bit position and passes in the resulting value */
@@ -333,21 +340,21 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
 void biari_init_context (BiContextTypePtr ctx, const int* ini)
 {
   int pstate;
-  
-  pstate = ((ini[0]*(img->qp-SHIFT_QP))>>4) + ini[1];
-  
-  if (img->type==INTRA_IMG) pstate = min (max (27, pstate),  74);  // states from 0 to 23
-  else                      pstate = min (max ( 0, pstate), 101);  // states from 0 to 50
-  
-  if (pstate>=51)
+
+  pstate = ((ini[0]*img->qp)>>4) + ini[1];
+  pstate = min (max ( 1, pstate), 126);
+
+  if ( pstate >= 64 )
   {
-    ctx->state  = pstate - 51;
+    ctx->state  = pstate - 64;
     ctx->MPS    = 1;
   }
   else
   {
-    ctx->state  = 50 - pstate;
+    ctx->state  = 63 - pstate;
     ctx->MPS    = 0;
   }
+  
+  ctx->count = 0;
 }
 

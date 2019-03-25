@@ -32,10 +32,10 @@
 
 /*!
  ************************************************************************
- * \file uvlc.c
+ * \file vlc.c
  *
  * \brief
- *    UVLC support functions
+ *    VLC support functions
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
@@ -69,7 +69,7 @@ extern void tracebits(const char *trace_str,  int len,  int info,int value1,
     int value2) ;
 
 
-extern int UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
+int UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
 
 // Note that all NA values are filled with 0
 
@@ -106,86 +106,158 @@ const byte NTAB3[2][2][2] =
   {{2,0},{1,1}},
 };
 
-
-int se_v (char *tracestring, DataPartition *part)
+/*! 
+ *************************************************************************************
+ * \brief
+ *    ue_v, reads an ue(v) syntax element, the length in bits is stored in 
+ *    the global UsedBits variable
+ *
+ * \param tracestring
+ *    the string for the trace file
+ *
+ * \param bitstream
+ *    the stream to be read from
+ *
+ * \return
+ *    the value of the coded syntax element
+ *
+ *************************************************************************************
+ */
+int ue_v (char *tracestring, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
 
-  assert (part->bitstream->streamBuffer != NULL);
+  assert (bitstream->streamBuffer != NULL);
   sym->type = SE_HEADER;
-  sym->mapping = linfo_dquant;   // Mapping rule: signed integer
+  sym->mapping = linfo_ue;   // Mapping rule
   SYMTRACESTRING(tracestring);
-  readSyntaxElement_UVLC (sym,img,input,part);
+  readSyntaxElement_VLC (sym, bitstream);
   UsedBits+=sym->len;
   return sym->value1;
 }
 
 
-int ue_v (char *tracestring, DataPartition *part)
+/*! 
+ *************************************************************************************
+ * \brief
+ *    ue_v, reads an se(v) syntax element, the length in bits is stored in 
+ *    the global UsedBits variable
+ *
+ * \param tracestring
+ *    the string for the trace file
+ *
+ * \param bitstream
+ *    the stream to be read from
+ *
+ * \return
+ *    the value of the coded syntax element
+ *
+ *************************************************************************************
+ */
+int se_v (char *tracestring, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
 
-  assert (part->bitstream->streamBuffer != NULL);
+  assert (bitstream->streamBuffer != NULL);
   sym->type = SE_HEADER;
-  sym->mapping = linfo;   // Mapping rule
+  sym->mapping = linfo_se;   // Mapping rule: signed integer
   SYMTRACESTRING(tracestring);
-  readSyntaxElement_UVLC (sym,img,input,part);
+  readSyntaxElement_VLC (sym, bitstream);
   UsedBits+=sym->len;
   return sym->value1;
 }
 
-                
-int u_1 (char *tracestring, DataPartition *part)
-{
-  return u_v (1, tracestring, part);
-}
 
-
-int u_v (int LenInBits, char*tracestring, DataPartition *part)
+/*! 
+ *************************************************************************************
+ * \brief
+ *    ue_v, reads an u(v) syntax element, the length in bits is stored in 
+ *    the global UsedBits variable
+ *
+ * \param tracestring
+ *    the string for the trace file
+ *
+ * \param bitstream
+ *    the stream to be read from
+ *
+ * \return
+ *    the value of the coded syntax element
+ *
+ *************************************************************************************
+ */
+int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
 
-  assert (part->bitstream->streamBuffer != NULL);
+  assert (bitstream->streamBuffer != NULL);
   sym->type = SE_HEADER;
-  sym->mapping = linfo;   // Mapping rule
+  sym->mapping = linfo_ue;   // Mapping rule
   sym->len = LenInBits;
   SYMTRACESTRING(tracestring);
-  readSyntaxElement_FLC (sym,part);
+  readSyntaxElement_FLC (sym, bitstream);
   UsedBits+=sym->len;
   return sym->inf;
 };
 
+                
+/*! 
+ *************************************************************************************
+ * \brief
+ *    ue_v, reads an u(1) syntax element, the length in bits is stored in 
+ *    the global UsedBits variable
+ *
+ * \param tracestring
+ *    the string for the trace file
+ *
+ * \param bitstream
+ *    the stream to be read from
+ *
+ * \return
+ *    the value of the coded syntax element
+ *
+ *************************************************************************************
+ */
+int u_1 (char *tracestring, Bitstream *bitstream)
+{
+  return u_v (1, tracestring, bitstream);
+}
+
+
+
 /*!
  ************************************************************************
  * \brief
- *    linfo
+ *    mapping rule for ue(v) syntax elements
  * \par Input:
  *    lenght and info
  * \par Output:
  *    number in the code table
  ************************************************************************
  */
-void linfo(int len, int info, int *value1, int *dummy)
+void linfo_ue(int len, int info, int *value1, int *dummy)
 {
   *value1 = (int)pow(2,(len/2))+info-1; // *value1 = (int)(2<<(len>>1))+info-1;
 }
 
 /*!
  ************************************************************************
+ * \brief
+ *    mapping rule for se(v) syntax elements
  * \par Input:
  *    lenght and info
  * \par Output:
  *    signed mvd
  ************************************************************************
  */
-void linfo_mvd(int len, int info, int *signed_mvd, int *dummy)
+void linfo_se(int len,  int info, int *value1, int *dummy)
 {
   int n;
   n = (int)pow(2,(len/2))+info-1;
-  *signed_mvd = (n+1)/2;
+  *value1 = (n+1)/2;
   if((n & 0x01)==0)                           // lsb is signed bit
-    *signed_mvd = -*signed_mvd;
+    *value1 = -*value1;
 }
+
 
 /*!
  ************************************************************************
@@ -199,7 +271,7 @@ void linfo_cbp_intra(int len,int info,int *cbp, int *dummy)
 {
   extern const byte NCBP[48][2];
     int cbp_idx;
-  linfo(len,info,&cbp_idx,dummy);
+  linfo_ue(len,info,&cbp_idx,dummy);
     *cbp=NCBP[cbp_idx][0];
 }
 
@@ -215,25 +287,8 @@ void linfo_cbp_inter(int len,int info,int *cbp, int *dummy)
 {
   extern const byte NCBP[48][2];
   int cbp_idx;
-  linfo(len,info,&cbp_idx,dummy);
+  linfo_ue(len,info,&cbp_idx,dummy);
     *cbp=NCBP[cbp_idx][1];
-}
-
-/*!
- ************************************************************************
- * \par Input:
- *    lenght and info
- * \par Output:
- *    signed mvd
- ************************************************************************
- */
-void linfo_dquant(int len,  int info, int *signed_dquant, int *dummy)
-{
-  int n;
-  n = (int)pow(2,(len/2))+info-1;
-  *signed_dquant = (n+1)/2;
-  if((n & 0x01)==0)                           // lsb is signed bit
-    *signed_dquant = -*signed_dquant;
 }
 
 /*!
@@ -302,86 +357,6 @@ void linfo_levrun_c2x2(int len, int info, int *level, int *irun)
     *level = 0;
 }
 
-
-/*!
- ************************************************************************
- * \brief
- *    readSliceUVLC
- *
- * \par
- *    Slice Headers can start on every byte aligned position, provided zero-stuffing.
- *    This is implemented here in such a way that a slice header can be trailed by
- *    any number of 0 bits.
- *
- * \return
- *    readSliceUVLC returns -1 in case of problems, or oen of SOP, SOS, EOS in case of success
- ************************************************************************
- */
-/*
-int readSliceUVLC(struct img_par *img, struct inp_par *inp)
-{
-  Slice *currSlice = img->currentSlice;
-  DataPartition *dP;
-  Bitstream *currStream = currSlice->partArr[0].bitstream;
-  int *partMap = assignSE2partition[currSlice->dp_mode];
-  SyntaxElement sym;
-  int dummy;
-  byte *buf = currStream->streamBuffer;
-  
-  int len;
-  int newframe = 0;   //WYK: Oct. 8, 2001, change the method to find a new frame
-  int startcodeprefix_len; //number of bytes taken by start code prefix
-
-  currStream->frame_bitoffset = 0;
-  
-  memset (buf, 0xff, MAX_CODED_FRAME_SIZE);   // this prevents a buffer full with zeros
-
-  currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(img, inp, buf, &startcodeprefix_len);
-  if (currStream->bitstream_length > startcodeprefix_len)  // More than just a start code
-  {
-
-    currStream->bitstream_length = EBSPtoRBSP(buf, currStream->bitstream_length, startcodeprefix_len);
-    currStream->bitstream_length = RBSPtoSODB(buf, currStream->bitstream_length);
-
-    sym.type = SE_HEADER;
-#if TRACE
-    strncpy(sym.tracestring, "\nHeaderinfo", TRACESTRING_SIZE);
-#endif
-
-    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)   dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else                                                  dP = &(currSlice->partArr[partMap[sym.type]]);
-    len = startcodeprefix_len * 8;
-    
-    currStream->frame_bitoffset +=len;
-    
-    // read the slice header
-    dummy = SliceHeader(img,inp);
-    
-    //WYK: Oct. 8, 2001, change the method to find a new frame
-    if(img->tr != img->tr_old)
-      newframe = 1;
-    else 
-      newframe = 0;
-    img->tr_old = img->tr;
-    
-    // PLUS2, 7/7 temp fix for AFF
-    if(img->structure != img->structure_old)        
-      newframe |= 1;
-    img->structure_old = img->structure; 
-
-  // if the TR of current slice is not identical to the TR  of previous received slice, we have a new frame
-    if(newframe)
-      return SOP;
-    else
-      return SOS;
-    
-  }
-  else    // less than four bytes in file -> cannot be a slice
-    return EOS;
-  return 0;
-}
-*/
-
 /*!
  ************************************************************************
  * \brief
@@ -389,9 +364,8 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
  *    map it to the corresponding syntax element
  ************************************************************************
  */
-int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP)
+int readSyntaxElement_VLC(SyntaxElement *sym, Bitstream *currStream)
 {
-  Bitstream   *currStream = dP->bitstream;
   int frame_bitoffset = currStream->frame_bitoffset;
   byte *buf = currStream->streamBuffer;
   int BitstreamLengthInBytes = currStream->bitstream_length;
@@ -407,6 +381,21 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
 #endif
 
   return 1;
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    read next UVLC codeword from UVLC-partition and
+ *    map it to the corresponding syntax element
+ ************************************************************************
+ */
+int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP)
+{
+  Bitstream   *currStream = dP->bitstream;
+
+  return (readSyntaxElement_VLC(sym, currStream));
 }
 
 /*!
@@ -487,61 +476,6 @@ int GetVLCSymbol_IntraMode (byte buffer[],int totbitoffset,int *info, int byteco
   return bitcounter;           // return absolute offset in bit from start of frame
 }
 
-/*!
- ************************************************************************
- * \brief
- *    read a fixed codeword from UVLC-partition and
- *    map it to the corresponding syntax element
- ************************************************************************
- */
-int readSyntaxElement_fixed(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP)
-{
-  Bitstream   *currStream = dP->bitstream;
-  int totbitoffset = currStream->frame_bitoffset;
-  byte *buffer = currStream->streamBuffer;
-  int bytecount = currStream->bitstream_length;
-
-  int *info = &(sym->inf);
-  register int inf;
-  long byteoffset;      // byte from start of buffer
-  int bitoffset;      // bit from start of byte
-  int bitcounter = 1;
-  int info_bit;
-
-  byteoffset = totbitoffset/8;
-  bitoffset = 8-(totbitoffset%8);
-  
-  inf = 0;
-  for (info_bit = 0; info_bit < sym->len; info_bit ++)
-  {
-    
-    bitcounter ++;
-    bitoffset -= 1;
-    if (bitoffset < 0)
-    {                 // finished with current byte ?
-      bitoffset = bitoffset+8;
-      byteoffset++;
-    }
-    if (byteoffset > bytecount)
-    {
-      return -1;
-    }
-    inf=(inf<<1);
-    if(buffer[byteoffset] & (0x01<<(bitoffset)))
-      inf |=1;
-  }
-
-  *info = inf;
-  currStream->frame_bitoffset += sym->len;
-
-#if TRACE
-//  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
-  tracebits2(sym->tracestring, sym->len, sym->inf);
-#endif
-
-  return bitcounter;           // return absolute offset in bit from start of frame
-}
-
 
 /*!
  ************************************************************************
@@ -562,7 +496,6 @@ int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
   long byteoffset;      // byte from start of buffer
   int bitoffset;      // bit from start of byte
   int ctr_bit=0;      // control bit for current bit posision
-  int bitcounter=1;
 
   int cnt=0;
 
@@ -603,21 +536,13 @@ int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
  */
 int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp, int dummy)
 {
-  Slice *currSlice = img->currentSlice;
-  int dp_Nr = assignSE2partition[currSlice->dp_mode][SE_MBTYPE];
-  DataPartition *dP = &(currSlice->partArr[dp_Nr]);
+  int dp_Nr = assignSE2partition[img->currentSlice->dp_mode][SE_MBTYPE];
+  DataPartition *dP = &(img->currentSlice->partArr[dp_Nr]);
   Bitstream   *currStream = dP->bitstream;
   byte *buf = currStream->streamBuffer;
-  int frame_bitoffset = currStream->frame_bitoffset;
-/*  int info;
-// printf ("uvlc_startcode_follows returns %d\n", (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length)));
-  if (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length))
-    return TRUE;
-  else
-    return FALSE;
-*/
-  //!KS: new function test for End of Buffer
-  return (!(more_rbsp_data(buf, frame_bitoffset,currStream->bitstream_length)));
+
+  //KS: new function test for End of Buffer
+  return (!(more_rbsp_data(buf, currStream->frame_bitoffset,currStream->bitstream_length)));
 }
 
 
@@ -707,45 +632,7 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
   return bitcounter;           // return absolute offset in bit from start of frame
 }
 
-int GetfixedSymbol (byte buffer[],int totbitoffset,int *info, int bytecount, int len)
-{
-
-  register int inf;
-  long byteoffset;      // byte from start of buffer
-  int bitoffset;      // bit from start of byte
-  int bitcounter=0;  
-  int info_bit;
-
-  byteoffset = totbitoffset/8;
-  bitoffset = 8-(totbitoffset%8);
-
-
-  // make infoword
-  inf=0;                          // shortest possible code is 1, then info is always 0
-  for(info_bit=0;(info_bit<len); info_bit++)
-  {    
-    bitcounter++;
-    bitoffset-=1;
-    if (bitoffset<0)
-    {                 // finished with current byte ?
-      bitoffset=bitoffset+8;
-      byteoffset++;
-    }
-    if (byteoffset > bytecount)
-    {
-      return -1;
-    }
-    inf=(inf<<1);
-    if(buffer[byteoffset] & (0x01<<(bitoffset)))
-      inf |=1;
-  }
-
-  *info = inf;
-  return bitcounter;           // return absolute offset in bit from start of frame
-}
-
 extern void tracebits2(const char *trace_str,  int len,  int info) ;
-
 
 /*!
  ************************************************************************
@@ -808,9 +695,8 @@ found_code:
  *    read FLC codeword from UVLC-partition 
  ************************************************************************
  */
-int readSyntaxElement_FLC(SyntaxElement *sym, struct datapartition *dP)
+int readSyntaxElement_FLC(SyntaxElement *sym, Bitstream *currStream)
 {
-  Bitstream   *currStream = dP->bitstream;
   int frame_bitoffset = currStream->frame_bitoffset;
   byte *buf = currStream->streamBuffer;
   int BitstreamLengthInBytes = currStream->bitstream_length;

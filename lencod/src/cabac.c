@@ -87,51 +87,6 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
 }
 
 
-/*!
- ************************************************************************
- * \brief
- *    Initializes an array of contexts models with some pre-defined
- *    counts (ini_flag = 1) or with a flat histogram (ini_flag = 0)
- ************************************************************************
- */
-#define INIT_CTX(jj,ii,ctx,ini) {for(j=0;j<jj;j++)for(i=0;i<ii;i++)biari_init_context((ctx)[j]+i,(ini)[j][i]);}
-
-
-void init_contexts_MotionInfo (MotionInfoContexts *enco_ctx)
-{
-  int i,j;
-
-  INIT_CTX (3, NUM_MB_TYPE_CTX,  enco_ctx->mb_type_contexts,  MB_TYPE_Ini );
-  INIT_CTX (2, NUM_B8_TYPE_CTX,  enco_ctx->b8_type_contexts,  B8_TYPE_Ini );
-  INIT_CTX (2, NUM_MV_RES_CTX,   enco_ctx->mv_res_contexts,   MV_RES_Ini  );
-  INIT_CTX (2, NUM_REF_NO_CTX,   enco_ctx->ref_no_contexts,   REF_NO_Ini  );    
-  INIT_CTX (1, NUM_DELTA_QP_CTX, &enco_ctx->delta_qp_contexts,  &DELTA_QP_Ini  );
-  INIT_CTX (1, NUM_MB_AFF_CTX,   &enco_ctx->mb_aff_contexts,            &MB_AFF_Ini  );
-
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Initializes an array of contexts models with some pre-defined
- *    counts (ini_flag = 1) or with a flat histogram (ini_flag = 0)
- ************************************************************************
- */
-void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx)
-{
-  int i,j;
-  int intra = (img->type==INTRA_IMG ? 1 : 0);
-
-  INIT_CTX (3, NUM_CBP_CTX,  enco_ctx->cbp_contexts,    CBP_Ini[!intra]);
-  INIT_CTX (1, NUM_IPR_CTX,  &enco_ctx->ipr_contexts,   &IPR_Ini   );
-  INIT_CTX (1, NUM_CIPR_CTX, &enco_ctx->cipr_contexts,  &CIPR_Ini  ); 
-
-  INIT_CTX (NUM_BLOCK_TYPES, NUM_BCBP_CTX,  enco_ctx->bcbp_contexts, BCBP_Ini[intra]);
-  INIT_CTX (NUM_BLOCK_TYPES, NUM_MAP_CTX,   enco_ctx->map_contexts,  MAP_Ini [intra]);
-  INIT_CTX (NUM_BLOCK_TYPES, NUM_LAST_CTX,  enco_ctx->last_contexts, LAST_Ini[intra]);
-  INIT_CTX (NUM_BLOCK_TYPES, NUM_ONE_CTX,   enco_ctx->one_contexts,  ONE_Ini [intra]);
-  INIT_CTX (NUM_BLOCK_TYPES, NUM_ABS_CTX,   enco_ctx->abs_contexts,  ABS_Ini [intra]);
-}
 
 
 /*!
@@ -242,14 +197,14 @@ void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPt
 
   if (bframe)
   {
-    if (currMB->skip_mb_available[0][1] == NULL)
+    if (currMB->mb_available[0][1] == NULL)
       b = 0;
     else
-      b = (currMB->skip_mb_available[0][1]->mb_type==0 && currMB->skip_mb_available[0][1]->cbp==0 ? 0 : 1);
-    if (currMB->skip_mb_available[1][0] == NULL)
+      b = (currMB->mb_available[0][1]->mb_type==0 && currMB->mb_available[0][1]->cbp==0 ? 0 : 1);
+    if (currMB->mb_available[1][0] == NULL)
       a = 0;
     else
-      a = (currMB->skip_mb_available[1][0]->mb_type==0 && currMB->skip_mb_available[1][0]->cbp==0 ? 0 : 1);
+      a = (currMB->mb_available[1][0]->mb_type==0 && currMB->mb_available[1][0]->cbp==0 ? 0 : 1);
     act_ctx = 7 + a + b;
 
     if (se->value1==0 && se->value2==0) // DIRECT mode, no coefficients
@@ -260,14 +215,14 @@ void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPt
   }
   else
   {
-    if (currMB->skip_mb_available[0][1] == NULL)
+    if (currMB->mb_available[0][1] == NULL)
       b = 0;
     else
-      b = (( (currMB->skip_mb_available[0][1])->mb_type != 0) ? 1 : 0 );
-    if (currMB->skip_mb_available[1][0] == NULL)
+      b = (( (currMB->mb_available[0][1])->mb_type != 0) ? 1 : 0 );
+    if (currMB->mb_available[1][0] == NULL)
       a = 0;
     else
-      a = (( (currMB->skip_mb_available[1][0])->mb_type != 0) ? 1 : 0 );
+      a = (( (currMB->mb_available[1][0])->mb_type != 0) ? 1 : 0 );
 
     act_ctx = a + b;
 
@@ -291,7 +246,7 @@ void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPt
 void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   int a, b;
-  int act_ctx;
+  int act_ctx = 0;
   int act_sym;
   int csym;
   int bframe   = (img->type==B_IMG || img->type==BS_IMG);
@@ -360,20 +315,20 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
   }
   else // INTER
   {
-
-                if (bframe)
-                {
-                        if (currMB->mb_available[0][1] == NULL)
-                                b = 0;
-                        else
-                                b = (( (currMB->mb_available[0][1])->mb_type != 0) ? 1 : 0 );
-                        if (currMB->mb_available[1][0] == NULL)
-                                a = 0;
-                        else
-                                a = (( (currMB->mb_available[1][0])->mb_type != 0) ? 1 : 0 );
-                        act_ctx = a + b;
-                        se->context = act_ctx; // store context
-                }
+    
+    if (bframe)
+    {
+      if (currMB->mb_available[0][1] == NULL)
+        b = 0;
+      else
+        b = (( (currMB->mb_available[0][1])->mb_type != 0) ? 1 : 0 );
+      if (currMB->mb_available[1][0] == NULL)
+        a = 0;
+      else
+        a = (( (currMB->mb_available[1][0])->mb_type != 0) ? 1 : 0 );
+      act_ctx = a + b;
+      se->context = act_ctx; // store context
+    }
     act_sym = curr_mb_type;
 
     if (act_sym>=(mode16x16=(bframe?24:7)))
@@ -638,9 +593,9 @@ void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr e
                 biari_encode_symbol(eep_dp, 1, ctx->ipr_contexts);
 
                 // remaining_mode_selector
-                biari_encode_symbol(eep_dp,(signed short)((se->value1 & 0x4)>>2), ctx->ipr_contexts+1);
+                biari_encode_symbol(eep_dp,(signed short)( se->value1 & 0x1    ), ctx->ipr_contexts+1);
                 biari_encode_symbol(eep_dp,(signed short)((se->value1 & 0x2)>>1), ctx->ipr_contexts+1);
-                biari_encode_symbol(eep_dp,(signed short)(se->value1 & 0x1), ctx->ipr_contexts+1);
+                biari_encode_symbol(eep_dp,(signed short)((se->value1 & 0x4)>>2), ctx->ipr_contexts+1);
         }
 }
 /*!
@@ -654,7 +609,7 @@ void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp
 {
   MotionInfoContexts  *ctx    = img->currentSlice->mot_ctx;
   Macroblock          *currMB = &img->mb_data[img->current_mb_nr];
-  int                 addctx  = se->context;
+  int                 addctx  = 0;
 
   int   a, b;
   int   act_ctx;
@@ -680,18 +635,31 @@ void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp
     }
   }
 
-  if (currMB->mb_available[0][1] == NULL)
-    b = 0;
-        else if (IS_DIRECT(currMB->mb_available[0][1]))
-                b = 0;
+	if ((img->subblock_y == 0) && ((currMB->mb_available[0][1] == NULL) || (IS_DIRECT(currMB->mb_available[0][1]))))
+		b = 0;
   else
-    b = (refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x] > 0 ? 1 : 0);
-  if (currMB->mb_available[1][0] == NULL)
+	{
+    /*===== HS: the chosen refframe_array should already contain the scale versions of RefIdx =====
+		if(( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (img->subblock_y == 0)
+			 && (img->field_mode == 0) && (currMB->mb_available[0][1]->mb_field == 1))) //|| (img->field_mode == 1))
+			b = (refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x] > 1 ? 1 : 0);
+		else
+    */
+			b = (refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x] > 0 ? 1 : 0);
+	}
+
+	if ((img->subblock_x == 0) && ((currMB->mb_available[1][0] == NULL) || (IS_DIRECT(currMB->mb_available[1][0]))))
     a = 0;
-        else if (IS_DIRECT(currMB->mb_available[1][0]))
-                a = 0;
   else 
-    a = (refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1] > 0 ? 1 : 0);
+	{
+    /*===== HS: the chosen refframe_array should already contain the scale versions of RefIdx =====
+		if(( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (img->subblock_x == 0)
+			 && (img->field_mode == 0) && (currMB->mb_available[1][0]->mb_field == 1))) // || (img->field_mode == 1))
+			a = (refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1] > 1 ? 1 : 0);
+		else
+    */
+			a = (refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1] > 0 ? 1 : 0);
+	}
 
   act_ctx     = a + 2*b; 
   se->context = act_ctx; // store context
@@ -722,7 +690,7 @@ void writeBwdRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
 {
   MotionInfoContexts  *ctx    = img->currentSlice->mot_ctx;
   Macroblock          *currMB = &img->mb_data[img->current_mb_nr];
-  int                 addctx  = se->context;
+  int                 addctx  = 0;
 
   int   a, b;
   int   act_ctx;
@@ -748,19 +716,31 @@ void writeBwdRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
       block_y        = img->block_y / 2;
     }
   }
+	if ((img->subblock_y == 0) && ((currMB->mb_available[0][1] == NULL) || (IS_DIRECT(currMB->mb_available[0][1]))))
+		b = 0;
+	else
+	{
+    /*===== HS: the chosen refframe_array should already contain the scale versions of RefIdx =====
+		if( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (img->subblock_y == 0)
+			 && (img->field_mode == 0) && (currMB->mb_available[0][1]->mb_field == 1))
+			b = (BWD_IDX(refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x]) > 1 ? 1 : 0);
+		else
+    */
+			b = (BWD_IDX(refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x]) > 0 ? 1 : 0);
+	}
 
-  if (currMB->mb_available[0][1] == NULL)
-    b = 0;
-  else if (IS_DIRECT(currMB->mb_available[0][1]))
-                b = 0;
-        else
-    b = (BWD_IDX(refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x]) > 0 ? 1 : 0);
-  if (currMB->mb_available[1][0] == NULL)
-    a = 0;
-        else if (IS_DIRECT(currMB->mb_available[1][0]))
-                a = 0;
+	if ((img->subblock_x == 0) && ((currMB->mb_available[1][0] == NULL) || (IS_DIRECT(currMB->mb_available[1][0]))))
+		a = 0;
   else 
-    a = (BWD_IDX(refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1]) > 0 ? 1 : 0);
+	{
+    /*===== HS: the chosen refframe_array should already contain the scale versions of RefIdx =====
+		if( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (img->subblock_x == 0)
+			 && (img->field_mode == 0) && (currMB->mb_available[1][0]->mb_field == 1))
+			a = (BWD_IDX(refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1]) > 1 ? 1 : 0);
+		else
+    */
+			a = (BWD_IDX(refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1]) > 0 ? 1 : 0);
+	}
 
 
   act_ctx     = a + 2*b;
@@ -808,7 +788,16 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
     if (currMB->mb_available[0][1] == NULL)
       b = 0;
     else 
+		{
       b = absm((currMB->mb_available[0][1])->mvd[0][BLOCK_SIZE-1][i][k]);
+			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
+			{
+				if ((currMB->mb_field==0) && (currMB->mb_available[0][1]->mb_field==1))
+					b *= 2;
+				else if ((currMB->mb_field==1) && (currMB->mb_available[0][1]->mb_field==0))
+					b /= 2;
+			}
+		}
   }
   else
     b = absm(currMB->mvd[0][j-1][i][k]);
@@ -818,12 +807,21 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
     if (currMB->mb_available[1][0] == NULL)
       a = 0;
     else 
-      a = absm((currMB->mb_available[1][0])->mvd[0][j][BLOCK_SIZE-1][k]);
+		{
+			a = absm((currMB->mb_available[1][0])->mvd[0][j][BLOCK_SIZE-1][k]);
+			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
+			{
+				if ((currMB->mb_field==0) && (currMB->mb_available[1][0]->mb_field==1))
+					a *= 2;
+				else if ((currMB->mb_field==1) && (currMB->mb_available[1][0]->mb_field==0))
+					a /= 2;
+			}
+		}
   }
   else
     a = absm(currMB->mvd[0][j][i-1][k]);
 
-        se->value2 = a+b;
+   se->value2 = a+b;
   if ((mv_local_err=a+b)<3)
     act_ctx = 5*k;
   else
@@ -922,7 +920,16 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
     if (currMB->mb_available[0][1] == NULL)
       b = 0;
     else
+		{
       b = absm((currMB->mb_available[0][1])->mvd[backward][BLOCK_SIZE-1][i][k]);
+			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
+			{
+				if ((currMB->mb_field==0) && (currMB->mb_available[0][1]->mb_field==1))
+					b *= 2;
+				else if ((currMB->mb_field==1) && (currMB->mb_available[0][1]->mb_field==0))
+					b /= 2;
+			}
+		}
   }
   else
     b = absm(currMB->mvd[backward][j-1][i][k]);
@@ -932,7 +939,16 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
     if (currMB->mb_available[1][0] == NULL)
       a = 0;
     else
-      a = absm((currMB->mb_available[1][0])->mvd[backward][j][BLOCK_SIZE-1][k]);
+		{
+			a = absm((currMB->mb_available[1][0])->mvd[backward][j][BLOCK_SIZE-1][k]);
+			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
+			{
+				if ((currMB->mb_field==0) && (currMB->mb_available[1][0]->mb_field==1))
+					a *= 2;
+				else if ((currMB->mb_field==1) && (currMB->mb_available[1][0]->mb_field==0))
+					a /= 2;
+			}
+		}
   }
   else
     a = absm(currMB->mvd[backward][j][i-1][k]);
@@ -1245,6 +1261,11 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
   int   k0      = 0;
   int   k1      = maxpos[type]-1;
 
+  int               fld       = ( img->field_picture || ( mb_adaptive && img->field_mode ) );
+  BiContextTypePtr  map_ctx   = ( fld ? img->currentSlice->tex_ctx-> fld_map_contexts[type2ctx_map [type]]
+                                      : img->currentSlice->tex_ctx->     map_contexts[type2ctx_map [type]] );
+  BiContextTypePtr  last_ctx  = ( fld ? img->currentSlice->tex_ctx->fld_last_contexts[type2ctx_last[type]]
+                                      : img->currentSlice->tex_ctx->    last_contexts[type2ctx_last[type]] );
 
   if (!c1isdc[type])
   {
@@ -1256,14 +1277,14 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
     sig   = (coeff[k]!=0 ? 1 : 0);
 
     if (img->pstruct)
-      biari_encode_symbol  (eep_dp, sig,  img->currentSlice->tex_ctx->map_contexts [type2ctx_map [type]]+pos2ctx_map_int [type][k]);
+      biari_encode_symbol  (eep_dp, sig,  map_ctx+pos2ctx_map_int [type][k]);
     else
-      biari_encode_symbol  (eep_dp, sig,  img->currentSlice->tex_ctx->map_contexts [type2ctx_map [type]]+pos2ctx_map     [type][k]);
+      biari_encode_symbol  (eep_dp, sig,  map_ctx+pos2ctx_map     [type][k]);
     if (sig)
     {
       last = (--coeff_ctr==0 ? 1 : 0);
 
-      biari_encode_symbol(eep_dp, last, img->currentSlice->tex_ctx->last_contexts[type2ctx_last[type]]+pos2ctx_last[type][k]);
+      biari_encode_symbol(eep_dp, last, last_ctx+pos2ctx_last[type][k]);
       if (last)
       {
         return;

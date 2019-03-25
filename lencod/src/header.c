@@ -76,11 +76,9 @@ static int pred_weight_table();
 int SliceHeader()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
   int len = 0;
-  int Quant = img->qp;
-  int val=0;
+  unsigned int field_pic_flag = 0, bottom_field_flag = 0;    // POC200301
 
   len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr,   partition);
 
@@ -97,14 +95,15 @@ int SliceHeader()
   if (input->InterlaceCodingOption != FRAME_CODING) // same condition as for sps->frame_mbs_only_flag!
   {
     // field_pic_flag    u(1)
-    val = (img->pstruct ==TOP_FIELD || img->pstruct ==BOTTOM_FIELD)?1:0;
-    len += u_1("SH: field_pic_flag" , val ,partition);
+    field_pic_flag = (img->pstruct ==TOP_FIELD || img->pstruct ==BOTTOM_FIELD)?1:0;
+    assert( field_pic_flag == img->fld_flag );
+    len += u_1("SH: field_pic_flag", field_pic_flag, partition);
 
-    if (val)
+    if (field_pic_flag)
     {
       //bottom_field_flag     u(1)
-      val = (img->pstruct == BOTTOM_FIELD)?1:0;
-      len += u_1("SH: bottom_field_flag" , val ,partition);
+      bottom_field_flag = (img->pstruct == BOTTOM_FIELD)?1:0;
+      len += u_1("SH: bottom_field_flag" , bottom_field_flag ,partition);
     }
   }
 
@@ -115,21 +114,35 @@ int SliceHeader()
     len += ue_v ("SH: idr_pic_id", 0, partition);
   }
 
-  // POC not changed yet
-  if (img->pic_order_cnt_type < 2 && !img->delta_pic_order_always_zero_flag)
+  // POC200301
+  if (img->pic_order_cnt_type == 0)
+  {
+    if (input->InterlaceCodingOption == FRAME_CODING) // same condition as for sps->frame_mbs_only_flag!
+    {
+      img->pic_order_cnt_lsb = (img->toppoc & ~((((unsigned int)(-1)) << (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4))) );
+    }
+    else
+    {
+      if (!field_pic_flag || img->pstruct == TOP_FIELD)
+        img->pic_order_cnt_lsb = (img->toppoc & ~((((unsigned int)(-1)) << (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4))) );
+      else if ( img->pstruct == BOTTOM_FIELD )
+        img->pic_order_cnt_lsb = (img->bottompoc & ~((((unsigned int)(-1)) << (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4))) );
+    }
+
+    len += u_v (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4, "SH: pic_order_cnt_lsb", img->pic_order_cnt_lsb, partition);
+    if (img->pic_order_present_flag && !field_pic_flag)  // img->fld_flag
+    {
+      len += se_v ("SH: delta_pic_order_cnt_bottom", img->delta_pic_order_cnt_bottom, partition);
+    }
+  }
+  if (img->pic_order_cnt_type == 1 && !img->delta_pic_order_always_zero_flag)
   {
     len += se_v ("SH: delta_pic_order_cnt[0]", img->delta_pic_order_cnt[0], partition);
 
-    if (img->pic_order_present_flag && !img->fld_flag)
+    if (img->pic_order_present_flag && !field_pic_flag)  // img->fld_flag
     {
-      assert ("This case is not yet implemented\n");
-      assert (0==1);
+      len += se_v ("SH: delta_pic_order_cnt[1]", img->delta_pic_order_cnt[1], partition);
     }
-  }
-  else
-  {
-    assert ("This case is not implemented\n");
-    assert (0==1);
   }
 
   // ist there any sense in the following assignments ???
@@ -175,7 +188,7 @@ int SliceHeader()
 
   if(input->symbol_mode==CABAC && img->type!=INTRA_IMG /*&& img->type!=SI_IMG*/)
   {
-    len += ue_v("SH: cabac_init_idc", img->cabac_init_idc, partition);
+    len += ue_v("SH: cabac_init_idc", img->model_number, partition);
   }
 
   // we transmit zero in the pps, so here the real QP
@@ -221,7 +234,6 @@ int SliceHeader()
 static int ref_pic_list_reordering()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
   Slice *currSlice = img->currentSlice;
 
@@ -295,7 +307,6 @@ static int dec_ref_pic_marking()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
-  Slice *currSlice = img->currentSlice;
 
   MMCObuffer_t *tmp_mmco;
 
@@ -355,7 +366,6 @@ static int pred_weight_table()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
-  Slice *currSlice = img->currentSlice;
 
   int len = 0;
   int i,j;
@@ -366,7 +376,7 @@ static int pred_weight_table()
 
   for (i=0; i<= img->num_ref_pic_active_fwd_minus1; i++)
   {
-    if (wp_weight[0][i][0] != 1<<luma_log_weight_denom)
+	  if ( (wp_weight[0][i][0] != 1<<luma_log_weight_denom) || (wp_offset[0][i][0] != 0) )
     {
       len += u_1 ("SH: luma_weight_flag_l0", 1, partition);
       
@@ -379,7 +389,8 @@ static int pred_weight_table()
         len += u_1 ("SH: luma_weight_flag_l0", 0, partition);
     }
 
-    if (wp_weight[0][i][j] != 1<<chroma_log_weight_denom)
+    if ( (wp_weight[0][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][1] != 0) || 
+		 (wp_weight[0][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][2] != 0)	)
     {
       len += u_1 ("chroma_weight_flag_l0", 1, partition);
       for (j=1; j<3; j++)
@@ -399,7 +410,7 @@ static int pred_weight_table()
   {
     for (i=0; i<= img->num_ref_pic_active_bwd_minus1; i++)
     {
-      if (wp_weight[1][i][0] != 1<<luma_log_weight_denom)
+      if ( (wp_weight[1][i][0] != 1<<luma_log_weight_denom) || (wp_offset[1][i][0] != 0) )
       {
         len += u_1 ("SH: luma_weight_flag_l1", 1, partition);
         
@@ -412,7 +423,8 @@ static int pred_weight_table()
         len += u_1 ("SH: luma_weight_flag_l1", 0, partition);
       }
       
-      if (wp_weight[1][i][j] != 1<<chroma_log_weight_denom)
+      if ( (wp_weight[1][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][1] != 0) || 
+		  (wp_weight[1][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][2] != 0) )
       {
         len += u_1 ("chroma_weight_flag_l1", 1, partition);
         for (j=1; j<3; j++)

@@ -288,6 +288,8 @@ typedef struct
   BiContextType  last_contexts[NUM_BLOCK_TYPES][NUM_LAST_CTX];
   BiContextType  one_contexts [NUM_BLOCK_TYPES][NUM_ONE_CTX];
   BiContextType  abs_contexts [NUM_BLOCK_TYPES][NUM_ABS_CTX];
+  BiContextType  fld_map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
+  BiContextType  fld_last_contexts[NUM_BLOCK_TYPES][NUM_LAST_CTX];
 } TextureInfoContexts;
 
 
@@ -353,9 +355,6 @@ typedef struct macroblock
   struct macroblock   *mb_available[3][3]; /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1]
                                                 NULL pointer identifies neighboring MBs which are unavailable */
   
-  struct macroblock   *skip_mb_available[3][3]; /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1]
-                                                NULL pointer identifies neighboring MBs which are unavailable */
-
   struct macroblock   *field_available[2];
 
   // some storage of macroblock syntax elements for global access
@@ -441,7 +440,6 @@ typedef struct
   int                 LFBetaOffset;     //!< Beta offset for filtering slice
 
   int                 pic_parameter_set_id;   //!<the ID of the picture parameter set the slice is reffering to
-  int                 cabac_init_idc;
 
 } Slice;
 
@@ -574,8 +572,10 @@ typedef struct img_par
 
 
   // End JVT-D101
-  unsigned int toppoc;      //poc for this frame or field
-  unsigned int bottompoc;   //poc of bottom field of frame (here always = poc+1)
+  // POC200301: from unsigned int to int
+           int toppoc;      //poc for this top field // POC200301
+           int bottompoc;   //poc of bottom field of frame
+           int framepoc;    //poc of this frame // POC200301
   unsigned int frame_num;   //frame_num for this frame
   unsigned int field_pic_flag;
   unsigned int bottom_field_flag;
@@ -583,16 +583,40 @@ typedef struct img_par
   //the following should probably go in sequence parameters
   // unsigned int log2_max_frame_num_minus4;
   unsigned int pic_order_cnt_type;
-  unsigned int num_ref_frames_in_pic_order_cnt_cycle;
+  // for poc mode 0, POC200301
+  // unsigned int log2_max_pic_order_cnt_lsb_minus4;  
+  // for poc mode 1, POC200301
   unsigned int delta_pic_order_always_zero_flag;
-                int offset_for_non_ref_pic;
-  int offset_for_top_to_bottom_field;
-  int offset_for_ref_frame[MAX_LENGTH_POC_CYCLE];
+           int offset_for_non_ref_pic;
+           int offset_for_top_to_bottom_field;
+  unsigned int num_ref_frames_in_pic_order_cnt_cycle;
+           int offset_for_ref_frame[MAX_LENGTH_POC_CYCLE];
+
+  // POC200301
+  //the following is for slice header syntax elements of poc
+  // for poc mode 0.
+  unsigned int pic_order_cnt_lsb;
+           int delta_pic_order_cnt_bottom;
+  // for poc mode 1.
+           int delta_pic_order_cnt[2];
+
+  // ////////////////////////
+  // for POC mode 0:
+    signed int PicOrderCntMsb;
+  unsigned int PrevPicOrderCntLsb;
+    signed int CurrPicOrderCntMsb;
+  // for POC mode 1:
+  unsigned int AbsFrameNum;
+    signed int ExpectedPicOrderCnt, PicOrderCntCycleCnt, FrameNumInPicOrderCntCycle;
+  unsigned int PreviousFrameNum, FrameNumOffset, ExpectedDeltaPerPicOrderCntCycle;
+  unsigned int Previousfield_pic_flag,Previousbottom_field_flag,Previousnal_reference_idc;
+  unsigned int Previousdelta_pic_order_cnt[2], PreviousPOC, ThisPOC, FirstFieldType;
+  // /////////////////////////
+
 
   //weighted prediction
   unsigned int weighted_pred_flag;
-  unsigned int weighted_bipred_explicit_flag;
-  unsigned int weighted_bipred_implicit_flag;
+  unsigned int weighted_bipred_idc;
   unsigned int luma_log_weight_denom;
   unsigned int chroma_log_weight_denom;
   int ***wp_weight;  // weight in [list][index][component] order
@@ -606,7 +630,7 @@ typedef struct img_par
   unsigned int pic_order_present_flag;
   
   //the following are sent in the slice header
-  int delta_pic_order_cnt[2];
+//  int delta_pic_order_cnt[2];
   int idr_flag;
   int idr_pic_id;
   int MaxFrameNum;
@@ -614,7 +638,9 @@ typedef struct img_par
   int no_output_of_prior_pics_flag;
   int long_term_reference_flag;
   int adaptive_ref_pic_buffering_flag;
-  
+
+  int model_number;
+
 } ImageParameters;
 
 extern ImageParameters *img;
@@ -767,21 +793,19 @@ void readMVD2Buffer_CABAC(SyntaxElement *se,  struct inp_par *inp, struct img_pa
 void readBiMVD2Buffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 void readBiDirBlkSize2Buffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 
-int  readSliceCABAC(struct img_par *img, struct inp_par *inp);
 int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_par *inp, DataPartition *this_dataPart);
 void readDquant_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 void readCIPredMode_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 
 void readMB_skip_flagInfoFromBuffer_CABAC( SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 void readFieldModeInfoFromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp); 
-void setRealMB_nr (struct img_par *img); 
+void setMapMB_nr (struct img_par *img); 
 int  check_next_mb_and_get_field_mode_CABAC(SyntaxElement *se,struct img_par *img,struct inp_par *inp,DataPartition  *act_dp);
-void CheckAvailabilityOfNeighborsForSkip(struct img_par *img); 
-void CheckAvailabilityOfNeighborsForAff(struct img_par *img); 
+void CheckAvailabilityOfNeighbors(struct img_par *img);
+void CheckAvailabilityOfNeighborsForAff(struct img_par *img);
 
 
 void error(char *text, int code);
-void start_slice(struct img_par *img, struct inp_par *inp);
 
 // dynamic mem allocation
 int  init_global_buffers(struct inp_par *inp, struct img_par *img);

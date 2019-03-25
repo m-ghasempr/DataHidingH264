@@ -48,13 +48,6 @@
 #define _B_FRAME_H_
 
 
-extern int ONE_FOURTH_TAP[3][2];
-extern const byte NCBP[48][2];
-
-extern const int BLOCK_STEP[8][2];
-extern const byte SNGL_SCAN[16][2];
-extern const int JQ1[];
-
 int **fw_refFrArr, ** bw_refFrArr;
 
 // For MB level frame/field coding

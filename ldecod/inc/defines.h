@@ -90,6 +90,7 @@
 #define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
 #define MAX_VALUE       999999              //!< used for start value for some variables
 #define Clip1(a)            ((a)>255?255:((a)<0?0:(a)))
+#define Clip3(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
 
 #define P8x8    8
 #define I4MB    9
@@ -218,11 +219,6 @@
 
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
-
-
-
-//#define SIMPLE_CHROMA_WP 1
-
 
 #endif
 

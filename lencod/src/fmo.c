@@ -593,7 +593,7 @@ int FmoGenerateType3MBAmap (int NumSliceGroups, int XSize, int YSize, int *MBAma
 {
   int x, y, xx;
   int n = XSize;              // Number of columns
-  int p = NumSliceGroups+1;     // Number of Slice Groups
+//  int p = NumSliceGroups+1;     // Number of Slice Groups
 
   int rx0, rx1, ry0, ry1;   // coordinates of the rectangule
 

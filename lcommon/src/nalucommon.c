@@ -32,7 +32,7 @@
 
 /*!
  ************************************************************************
- * \file  nalu.c
+ * \file  nalucommon.c
  *
  * \brief
  *    Common NALU support functions
@@ -57,7 +57,8 @@
  * \brief
  *    Allocates memory for a NALU
  *
- * \param none
+ * \param buffersize
+ *     size of NALU buffer 
  *
  * \return
  *    pointer to a NALU
@@ -84,10 +85,9 @@ NALU_t *AllocNALU(int buffersize)
  * \brief
  *    Frees a NALU
  *
- * \param NALU to be freed
+ * \param n 
+ *    NALU to be freed
  *
- * \return
- *    none
  *************************************************************************************
  */
 
@@ -96,10 +96,11 @@ void FreeNALU(NALU_t *n)
   if (n)
   {
     if (n->buf)
+    {
       free(n->buf);
-    
+      n->buf=NULL;
+    }
     free (n);
   }
 }
-
 

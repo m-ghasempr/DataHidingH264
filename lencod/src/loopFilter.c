@@ -211,10 +211,10 @@ void GetStrength(byte Strength[4],Macroblock* MbP,Macroblock* MbQ,int dir,int ed
 void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
               int AlphaC0Offset, int BetaOffset, int dir,int width,int Chro)
 {
-  int      pel, ap, aq, PtrInc, Strng ;
+  int      pel, ap = 0, aq = 0, PtrInc, Strng ;
   int      inc, inc2, inc3, inc4 ;
   int      C0, c0, Delta, dif, AbsDelta ;
-  int      L2, L1, L0, R0, R1, R2, RL0 ;
+  int      L2 = 0, L1, L0, R0, R1, R2 = 0, RL0 ;
   int      Alpha = 0, Beta =0 ;
   byte*    ClipTab = NULL;   
   int      small_gap;

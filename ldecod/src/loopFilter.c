@@ -40,13 +40,13 @@
  *
  * \author
  *    Contributors:
- *    - Peter List      Peter.List@t-systems.de:  Original code                                 (13-Aug-2001)
- *    - Jani Lainema    Jani.Lainema@nokia.com:   Some bug fixing, removal of recusiveness      (16-Aug-2001)
- *    - Peter List      Peter.List@t-systems.de:  inplace filtering and various simplifications (10-Jan-2002)
- *    - Anthony Joch    anthony@ubvideo.com:      Simplified switching between filters and 
- *                                                non-recursive default filter.                 (08-Jul-2002)
- *   - Cristina Gomila  cristina.gomila@thomson.net: Simplification of the chroma deblocking
- *                                                   from JVT-E089                              (21-Nov-2002)
+ *    - Peter List       Peter.List@t-systems.de:  Original code                                 (13-Aug-2001)
+ *    - Jani Lainema     Jani.Lainema@nokia.com:   Some bug fixing, removal of recusiveness      (16-Aug-2001)
+ *    - Peter List       Peter.List@t-systems.de:  inplace filtering and various simplifications (10-Jan-2002)
+ *    - Anthony Joch     anthony@ubvideo.com:      Simplified switching between filters and 
+ *                                                 non-recursive default filter.                 (08-Jul-2002)
+ *    - Cristina Gomila  cristina.gomila@thomson.net: Simplification of the chroma deblocking
+ *                                                    from JVT-E089                              (21-Nov-2002)
  *************************************************************************************
  */
 
@@ -223,10 +223,10 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
 void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
               int AlphaC0Offset, int BetaOffset, int dir,int width,int yuv)
 {
-  int      pel, ap, aq, PtrInc, Strng ;
+  int      pel, ap = 0, aq = 0, PtrInc, Strng ;
   int      inc, inc2, inc3, inc4 ;
   int      C0, c0, Delta, dif, AbsDelta ;
-  int      L2, L1, L0, R0, R1, R2, RL0 ;
+  int      L2 = 0, L1, L0, R0, R1, R2 = 0, RL0 ;
   int      Alpha = 0, Beta = 0 ;
   byte*    ClipTab = NULL;   
   int      small_gap;

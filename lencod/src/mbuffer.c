@@ -82,7 +82,7 @@ void init_frame_buffers(InputParameters *inp, ImageParameters *img)
   for (i=0;i<bufsize;i++)
   {
     get_mem2D(&(frm->picbuf_short[i]->mref), (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
-    get_mem3D(&(frm->picbuf_short[i]->mcef), 2, img->height_cr*2, img->width_cr*2);
+    get_mem3D(&(frm->picbuf_short[i]->mcef), 2, img->height_cr, img->width_cr);
     if (NULL == (frm->picbuf_short[i]->Refbuf11 = malloc ((img->width * img->height) * sizeof (pel_t))))
       no_mem_exit ("init_frame_buffers: Refbuf11");
 
@@ -125,7 +125,7 @@ void init_frame_buffers(InputParameters *inp, ImageParameters *img)
     for (i=0;i<bufsize;i++)
     {
       get_mem2D(&(fld->picbuf_short[i]->mref), (img->height/2+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
-      get_mem3D(&(fld->picbuf_short[i]->mcef), 2, img->height_cr, img->width_cr*2);
+      get_mem3D(&(fld->picbuf_short[i]->mcef), 2, img->height_cr/2, img->width_cr);
       if (NULL == (fld->picbuf_short[i]->Refbuf11 = malloc ((img->width * img->height / 2) * sizeof (pel_t))))
         no_mem_exit ("init_field_buffers: Refbuf11");
       if (input->WeightedPrediction || input->WeightedBiprediction)
@@ -312,7 +312,7 @@ void init_long_term_buffer(int size, ImageParameters *img)
       get_mem2D(&(fb->picbuf_long[i]->mref), (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
       if (input->WeightedPrediction || input->WeightedBiprediction)
         get_mem2D(&(fb->picbuf_long[i]->mref_w), (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
-      get_mem3D(&(fb->picbuf_long[i]->mcef), 2, img->height_cr*2, img->width_cr*2);
+      get_mem3D(&(fb->picbuf_long[i]->mcef), 2, img->height_cr, img->width_cr);
       if (NULL == (fb->picbuf_long[i]->Refbuf11 = malloc ((img->width * img->height) * sizeof (pel_t))))
         no_mem_exit ("init_long_term_buffer: Refbuf11");
       if (input->WeightedPrediction || input->WeightedBiprediction)

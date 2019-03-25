@@ -285,20 +285,17 @@ void biari_init_context (struct img_par* img, BiContextTypePtr ctx, const int* i
 {
   int pstate;
 
-	pstate = ((ini[0]*(img->qp-SHIFT_QP))>>4) + ini[1]; 
+  pstate = ((ini[0]*img->qp)>>4) + ini[1];
+  pstate = min (max ( 1, pstate), 126);
 
-
-  if (img->type==INTRA_IMG) pstate = min (max (27, pstate),  74);  // states from 0 to 23
-  else                      pstate = min (max ( 0, pstate), 101);  // states from 0 to 50
-
-  if (pstate>=51)
+  if ( pstate >= 64 )
   {
-    ctx->state  = pstate - 51;
+    ctx->state  = pstate - 64;
     ctx->MPS    = 1;
   }
   else
   {
-    ctx->state  = 50 - pstate;
+    ctx->state  = 63 - pstate;
     ctx->MPS    = 0;
   }
 }

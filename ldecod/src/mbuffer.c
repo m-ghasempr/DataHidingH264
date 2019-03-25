@@ -255,7 +255,7 @@ void init_long_term_buffer(int size, ImageParameters *img)
     {
       if ((fb->picbuf_long[i]=(Frame*)calloc(1,sizeof (Frame)))==NULL) no_mem_exit("init_frame_buffers: fb->picbuf_long");
       get_mem2D(&(fb->picbuf_long[i]->mref), img->height, img->width);
-      get_mem3D(&(fb->picbuf_long[i]->mcef), 2, img->height_cr*2, img->width_cr*2);
+      get_mem3D(&(fb->picbuf_long[i]->mcef), 2, img->height_cr, img->width_cr);
     }
 
     free (pb);

@@ -88,6 +88,7 @@ void init_ref_pic_list_reordering()
   currSlice->ref_pic_list_reordering_flag_l1 = 0;
 }
 
+
 /*!
  ************************************************************************
  *  \brief
@@ -132,13 +133,15 @@ int start_slice()
         header_len+=currStream->bits_to_go;
       writeVlcByteAlign(currStream);
       arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos)/*, &(currStream->last_startcode)*/,img->type);
-      init_contexts_MotionInfo (currSlice->mot_ctx);
-      init_contexts_TextureInfo(currSlice->tex_ctx);
     } else 
     {
       // Initialize CA-VLC
       CAVLC_init();
     }
+  }
+  if(input->symbol_mode == CABAC)
+  {
+    init_contexts();
   }
   return header_len;
 }
@@ -167,8 +170,6 @@ int terminate_slice()
 
   if (input->symbol_mode == CABAC)
     write_terminating_bit (1);      // only once, not for all partitions
-  //! is this correct considering that below in the partirtion loop the 
-  //! terminating bit is written again???  StW 020103
   
   for (i=0; i<currSlice->max_part_nr; i++)
   {
@@ -182,19 +183,22 @@ int terminate_slice()
     }
     else     // CABAC
     {
-//      write_terminating_bit (1);
       eep = &((currSlice->partArr[i]).ee_cabac);
       // terminate the arithmetic code
       arienco_done_encoding(eep);
       currStream->bits_to_go = eep->Ebits_to_go;
       currStream->byte_buf = 0;
-      bytes_written = currStream->byte_pos /*-currStream->tmp_byte_pos*/;
+      bytes_written = currStream->byte_pos;
       byte_pos_before_startcode_emu_prevention= currStream->byte_pos;
       currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, 0, currStream->byte_pos, eep->E);
       *(stat->em_prev_bits) += (currStream->byte_pos - byte_pos_before_startcode_emu_prevention) * 8;
-//        currStream->tmp_byte_pos = currStream->byte_pos;
     }           // CABAC
   }           // partition loop
+  if( input->symbol_mode == CABAC )
+  {
+    store_contexts();
+  }
+
   return 0;   
 }
 
@@ -209,6 +213,7 @@ void SetStateVariablesForFrameMode()
   img->height = input->img_height;      // set image height as frame height
 }
 
+
 void SetStateVariablesForFieldMode()
 {
   mcef = mcef_fld;      // set mcef to mcef_frm
@@ -217,6 +222,8 @@ void SetStateVariablesForFieldMode()
   Refbuf11 = Refbuf11_fld;      // set Refbuff to frm
   Refbuf11_w = Refbuf11_fld_w;  // set Refbuff to frm
 }
+
+
 /*!
  ************************************************************************
  * \brief
@@ -225,7 +232,6 @@ void SetStateVariablesForFieldMode()
  *   returns the number of coded MBs in the SLice 
  ************************************************************************
  */
-
 int encode_one_slice (int SliceGroupId, Picture *pic)
 {
   Boolean end_of_slice = FALSE;
@@ -233,18 +239,22 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
   int len;
   int NumberOfCodedMBs = 0;
   int CurrentMbInScanOrder;
-  int short_used = 0, img_ref = 0;
   int MBRowSize = img->width / MB_BLOCK_SIZE;
   double FrameRDCost, FieldRDCost;
-  int LastCodedMB = -1;
 
   img->cod_counter = 0;
+
   CurrentMbInScanOrder = FmoGetFirstMacroblockInSlice (SliceGroupId);
 // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", img->tr, SliceGroupId, img->current_slice_nr, CurrentMbInScanOrder);
 
   set_MB_parameters (CurrentMbInScanOrder);
   init_slice (CurrentMbInScanOrder);
   Bytes_After_Header = img->currentSlice->partArr[0].bitstream->byte_pos;
+
+  if (input->symbol_mode==CABAC)
+  {
+    SetCtxModelNumber ();
+  }
 
 /*
   // Tian Dong: June 7, 2002 JVT-B042
@@ -260,6 +270,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
 */
 
   len = start_slice ();
+
 //  printf("short size, used, num-used: (%d,%d,%d)\n", fb->short_size, fb->short_used, fb->num_short_used);
 
 /*
@@ -518,7 +529,6 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
  */
 static void init_slice ()
 {
-
   int i;
   Picture *currPic = img->currentPicture;
   Slice *curr_slice;
@@ -540,55 +550,18 @@ static void init_slice ()
   curr_slice->slice_too_big = dummy_slice_too_big;
 
   for (i = 0; i < curr_slice->max_part_nr; i++)
-    {
-      dataPart = &(curr_slice->partArr[i]);
-      if (input->symbol_mode == UVLC)
-        dataPart->writeSyntaxElement = writeSyntaxElement_UVLC;
-      else
-        dataPart->writeSyntaxElement = writeSyntaxElement_CABAC;
-
-      currStream = dataPart->bitstream;
-      currStream->bits_to_go = 8;
-      currStream->byte_pos = 0;
-      currStream->byte_buf = 0;
-
-
-/*
-      if (input->symbol_mode == UVLC)   
-        {
-          currStream = dataPart->bitstream;
-          currStream->bits_to_go = currStream->stored_bits_to_go;
-          currStream->byte_pos = currStream->stored_byte_pos;
-          currStream->byte_buf = currStream->stored_byte_buf;
-//          currStream->tmp_byte_pos = currStream->stored_byte_pos;       // temp store curr byte position
-          if (currStream->byte_pos != 0)
-            printf ("init_slice: byte_pos %d\n", currStream->byte_pos);
-          if (currStream->bits_to_go != 8)
-            printf ("init_slice: bits_to_go %d\n", currStream->byte_pos);
-        }
-      else                      // anything but UVLC and PAR_OF_26L
-        {
-          if (input->of_mode == PAR_OF_ANNEXB)
-            {
-              if ((img->current_slice_nr == 0) && (img->pstruct != 2) )
-                {
-                  currStream = dataPart->bitstream;
-                  currStream->bits_to_go = 8;
-                  currStream->byte_pos = 0;
-                  currStream->byte_buf = 0;
-//                  currStream->tmp_byte_pos = 0;
-                }
-            }
-          else
-            {
-              currStream = dataPart->bitstream;
-              currStream->bits_to_go = 8;
-              currStream->byte_pos = 0;
-              currStream->byte_buf = 0;
-            }
-        }
-*/
-    }
+  {
+    dataPart = &(curr_slice->partArr[i]);
+    if (input->symbol_mode == UVLC)
+      dataPart->writeSyntaxElement = writeSyntaxElement_UVLC;
+    else
+      dataPart->writeSyntaxElement = writeSyntaxElement_CABAC;
+    
+    currStream = dataPart->bitstream;
+    currStream->bits_to_go = 8;
+    currStream->byte_pos = 0;
+    currStream->byte_buf = 0;
+  }
 }
 
 
@@ -636,6 +609,25 @@ static Slice *malloc_slice()
 }
 
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Memory frees of all Slice structures and of its dependent
+ *    data structures
+ * \par Input:
+ *    Image Parameters struct struct img_par *img
+ ************************************************************************
+ */
+void free_slice_list(Picture *currPic)
+{
+  int i;
+
+  for (i=0; i<currPic->no_slices; i++)
+  {
+    free_slice (currPic->slices[i]);
+    currPic->slices[i]=NULL;
+  }
+}
 
 
 /*!
@@ -643,8 +635,8 @@ static Slice *malloc_slice()
  * \brief
  *    Memory frees of the Slice structure and of its dependent
  *    data structures
- * \par Input:
- *    Input Parameters struct inp_par *inp,  struct img_par *img
+ * \para slice:
+ *    Slice to be freed
  ************************************************************************
  */
 static void free_slice(Slice *slice)
@@ -672,7 +664,8 @@ static void free_slice(Slice *slice)
       delete_contexts_MotionInfo(slice->mot_ctx);
       delete_contexts_TextureInfo(slice->tex_ctx);
     }
-    free(img->currentSlice);
+    //free(img->currentSlice);
+    free(slice);
   }
 }
 
@@ -692,10 +685,6 @@ void modify_redundant_pic_cnt(unsigned char *buffer)
   buffer[rpc_bytes_to_go] |= tmp;
 }
 // End JVT-D101
-
-
-
-
 
 
 
@@ -827,250 +816,4 @@ void modify_redundant_pic_cnt(unsigned char *buffer)
         currStream->byte_pos   = 0;
       }
     return 0;
-*/
-
-
-
-/*!
- *****************************************************************************
- *
- * \brief 
- *    int RTPSliceHeader () write the Slice header for the RTP NAL      
- *
- * \return
- *    Number of bits used by the slice header
- *
- * \para Parameters
- *    none
- *
- * \para Side effects
- *    Slice header as per VCEG-N72r2 is written into the appropriate partition
- *    bit buffer
- *
- * \para Limitations/Shortcomings/Tweaks
- *    The current code does not support the change of picture parameters within
- *    one coded sequence, hence there is only one parameter set necessary.  This
- *    is hard coded to zero.
- *    As per Email discussions on 10/24/01 we decided to include the SliceID
- *    into both the Full Slice pakcet and Partition A packet
- *   
- * \date
- *    October 24, 2001
- *
- * \author
- *    Stephan Wenger   stewe@cs.tu-berlin.de
- *****************************************************************************/
-
-/*
-int RTPSliceHeader()
-{
-  int dP_nr;
-  Bitstream *currStream; 
-  DataPartition *partition;
-  SyntaxElement sym;
-
-  int len = 0;
-  int RTPSliceType;
-
-  if(img->type==BS_IMG && img->type!=B_IMG)
-    dP_nr= assignSE2partition[input->partition_mode][SE_BFRAME];
-  else
-    dP_nr= assignSE2partition[input->partition_mode][SE_HEADER];
-
-  currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
-  partition = &((img->currentSlice)->partArr[dP_nr]);
-
-  assert (input->of_mode == PAR_OF_RTP);
-  sym.type = SE_HEADER;         // This will be true for all symbols generated here
-  sym.mapping = n_linfo2;       // Mapping rule: Simple code number to len/info
-
-
-  SYMTRACESTRING("RTP-SH: Parameter Set");
-  sym.value1 = 0;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-  
-  // picture structure, (0: progressive, 1: top field, 2: bottom field, 
-  // 3: top field first, 4: bottom field first)
-  sym.value1 = img->pstruct;
-  SYMTRACESTRING("Picture Stucture");
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-  SYMTRACESTRING("RTP-SH: Picture ID");
-  sym.value1 = img->currentSlice->picture_id;
-
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-  switch (img->type)
-  {
-    case INTER_IMG:
-      if (img->types==SP_IMG)
-        RTPSliceType = 2;
-      else
-        RTPSliceType = 0;
-      break;
-    case INTRA_IMG:
-      RTPSliceType = 3;
-      break;
-    case B_IMG:
-    case BS_IMG:
-      RTPSliceType = 1;
-      break;
-    case SP_IMG:
-      // That's what I would expect to be the case. But img->type contains INTER_IMG 
-      // here (see handling above)
-      //! \todo make one variable from img->type and img->types
-      RTPSliceType = 2;
-      break;
-    default:
-      printf ("Panic: unknown picture type %d, exit\n", img->type);
-      exit (-1);
-  }
-
-
-  SYMTRACESTRING("RTP-SH: Slice Type");
-  sym.value1 = RTPSliceType;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-  // NOTE: following syntax elements have to be moved into nal_unit() and changed from e(v) to u(1)
-  if(1)
-  {
-    sym.value1 = img->disposable_flag;
-    SYMTRACESTRING("RTP-SH: NAL disposable_flag");
-    len += writeSyntaxElement_UVLC (&sym, partition);
-  }
-  
-  // NOTE: following syntax elements have to be moved into picture_layer_rbsp()
-  // weighted_bipred_implicit_flag
-  if(img->type==INTER_IMG)
-  {
-    sym.value1 = input->WeightedPrediction;
-    SYMTRACESTRING("PH weighted_pred_flag");
-    len += writeSyntaxElement_UVLC (&sym, partition);
-  }
-
-  if(img->type==B_IMG || img->type==BS_IMG)
-  {
-    sym.value1 = (input->WeightedBiprediction == 1)? 1 : 0;
-    SYMTRACESTRING("PH weighted_bipred_explicit_flag");
-    len += writeSyntaxElement_UVLC (&sym, partition);
-  }
-  if(img->type==B_IMG || img->type==BS_IMG)
-  {
-    sym.value1 = (input->WeightedBiprediction == 2)? 1 : 0;
-    SYMTRACESTRING("PH weighted_bipred_implicit_flag");
-    len += writeSyntaxElement_UVLC (&sym, partition);
-  }
-
-  if (img->type==INTER_IMG || img->type==B_IMG || img->type==BS_IMG)
-  {
-    sym.value1 = img->num_ref_pic_active_fwd_minus1;
-    SYMTRACESTRING("RTP-SH: num_ref_pic_active_fwd_minus1");
-    len += writeSyntaxElement_UVLC (&sym, partition);
-    if (img->type==B_IMG || img->type==BS_IMG)
-    {
-      sym.value1 = img->num_ref_pic_active_bwd_minus1;
-      SYMTRACESTRING("RTP-SH: num_ref_pic_active_bwd_minus1");
-      len += writeSyntaxElement_UVLC (&sym, partition);
-    }
-  }
-
-  SYMTRACESTRING("RTP-SH: FirstMBInSliceX");
-  sym.value1 = img->mb_x;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-  SYMTRACESTRING("RTP-SH: FirstMBinSlinceY");
-  sym.value1 = img->mb_y;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-  // JVT-D101: redundant_pic_cnt should be a ue(v) instead of u(1). However since currently we allow 
-  // only 1 redundant slice for each slice, therefore herein encoding it as u(1) is OK.
-  if(input->redundant_slice_flag) 
-  {
-    SYMTRACESTRING("RTP-SH: redundant_pic_cnt");
-    rpc_bytes_to_go = currStream->byte_pos;
-    rpc_bits_to_go = currStream->bits_to_go;
-    sym.bitpattern = img->redundant_pic_cnt = 0; //may be modifed before being written into bitstream file
-    sym.len = 1;
-    len += writeSyntaxElement_fixed(&sym, partition);
-  }
-  // End JVT-D101
-
-  if (img->type==B_IMG || img->type==BS_IMG)
-  {
-    SYMTRACESTRING("RTP-SH DirectSpatialFlag");
-    sym.bitpattern = input->direct_type;  // 1 for Spatial Direct, 0 for temporal Direct
-    sym.len = 1;
-    len += writeSyntaxElement_fixed(&sym, partition);
-  }
-
-
-  SYMTRACESTRING("RTP-SH: InitialQP");
-  sym.mapping = dquant_linfo;
-  sym.value1 = img->qp - (MAX_QP - MIN_QP +1)/2;
-  len += writeSyntaxElement_UVLC (&sym, partition);
-
-  if (img->types==SP_IMG)
-  {
-
-    if (img->type!=INTRA_IMG) // Switch Flag only for SP pictures
-    {
-      SYMTRACESTRING("RTP-SH SWITCH FLAG");
-      sym.bitpattern = 0;  // 1 for switching SP, 0 for normal SP
-      sym.len = 1;
-      len += writeSyntaxElement_fixed(&sym, partition);
-    }
-
-    SYMTRACESTRING("RTP-SH: SP InitialQP");
-    sym.value1 = img->qpsp - (MAX_QP - MIN_QP +1)/2;
-    len += writeSyntaxElement_UVLC (&sym, partition);
-  }
-
-  if (input->LFSendParameters)
-  {
-    SYMTRACESTRING("RTP-SH LF_DISABLE FLAG");
-    sym.bitpattern = input->LFDisable;  
-    sym.len = 1;
-    len += writeSyntaxElement_fixed(&sym, partition);
-
-    if (!input->LFDisable)
-    {
-      sym.mapping = dquant_linfo;           // Mapping rule: Signed integer
-      SYMTRACESTRING("RTP-SH LFAlphaC0OffsetDiv2");
-      sym.value1 = input->LFAlphaC0Offset>>1; 
-      len += writeSyntaxElement_UVLC (&sym, partition);
-
-      SYMTRACESTRING("RTP-SH LFBetaOffsetDiv2");
-      sym.value1 = input->LFBetaOffset>>1; 
-      len += writeSyntaxElement_UVLC (&sym, partition);
-    }
-  }
-
-  sym.mapping = n_linfo2;
-
-
-  if (input->partition_mode == PAR_DP_3 && img->type != B_IMG && img->type != BS_IMG)
-  {
-    SYMTRACESTRING("RTP-SH: Slice ID");
-    sym.value1 = img->current_slice_nr;
-    len += writeSyntaxElement_UVLC (&sym, partition);
-  }
-
-  len += writeERPS(&sym, partition);
-
-  // JVT-D097
-  if( input->num_slice_groups_minus1 > 0  &&  
-      input->mb_allocation_map_type >= 4  &&  
-                  input->mb_allocation_map_type <= 6)
-  {
-    SYMTRACESTRING("RTP-SH: slice_group_change_cycle");
-    sym.value1 = slice_group_change_cycle;
-    len += writeSyntaxElement_UVLC (&sym, partition);
-  }
-  // End JVT-D097
-
-  // After this, and when in CABAC mode, terminateSlice() may insert one more
-  // UVLC codeword for the number of coded MBs
-
-  return len;
-}
 */

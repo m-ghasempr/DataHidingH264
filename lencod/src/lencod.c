@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.0a
+ *     JM 6.1
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -89,7 +89,7 @@
 #include "sei.h"
 
 #define JM      "6"
-#define VERSION "6.0a"
+#define VERSION "6.1"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -106,6 +106,7 @@ Boolean In2ndIGOP = FALSE;
 int    start_frame_no_in_this_IGOP = 0;
 int    start_tr_in_this_IGOP = 0;
 int    FirstFrameIn2ndIGOP=0;
+int    cabac_encoding = 0;
 
 
 /*!
@@ -148,6 +149,7 @@ int main(int argc,char **argv)
   // allocate memory for frame buffers
   init_frame_buffers(input,img);
   init_global_buffers();
+  create_context_memory ();
 
   Init_Motion_Search_Module ();
 
@@ -184,7 +186,7 @@ int main(int argc,char **argv)
     if (input->InterlaceCodingOption==FRAME_CODING)
       img->bottompoc = img->toppoc;     //progressive
     else 
-      img->bottompoc = img->toppoc+1;
+      img->bottompoc = img->toppoc+1;   //hard coded
     push_poc(img->toppoc, img->bottompoc, REFFRAME);               //push poc values into array
     
     //frame_num for this frame
@@ -281,6 +283,7 @@ int main(int argc,char **argv)
         
         //the following is sent in the slice header
         img->delta_pic_order_cnt[0]= 2*(img->b_frame_to_code-1);
+        img->delta_pic_order_cnt[1]= 0;   // POC200301
         
         encode_one_frame();  // encode one B-frame
       }
@@ -326,6 +329,7 @@ int main(int argc,char **argv)
 
   // free image mem
   free_img ();
+  free_context_memory ();
   FreeNalPayloadBuffer();
   return 0;
 }
@@ -350,8 +354,8 @@ void init_poc()
   // frame poc's increase by 2, field poc's by 1
 
   // variable below gone for good, see defines.h LOG2_MAX_FRAME_NUM_MINUS4
-  //  img->log2_max_frame_num_minus4 = 4;           // used to be 12, bug?;      
-  img->pic_order_cnt_type=1;
+  //  img->log2_max_frame_num_minus4 = 4;           // used to be 12, bug?;
+  img->pic_order_cnt_type=input->pic_order_cnt_type;        // POC200301
   img->num_ref_frames_in_pic_order_cnt_cycle=1;
   img->delta_pic_order_always_zero_flag=0;
   img->offset_for_non_ref_pic =  -2*(input->successive_Bframe);
@@ -363,7 +367,18 @@ void init_poc()
   img->offset_for_ref_frame[0] = 2*(input->successive_Bframe+1);
 
                                     //the following should probably go in picture parameters
-  img->pic_order_present_flag=0;    //img->delta_pic_order_cnt[1] not sent
+//  img->pic_order_present_flag=0;    //img->delta_pic_order_cnt[1] not sent
+  // POC200301
+  if (input->InterlaceCodingOption==FRAME_CODING)
+  {
+    img->pic_order_present_flag=0;
+    img->delta_pic_order_cnt_bottom = 0;
+  }
+  else    
+  {
+    img->pic_order_present_flag=1;
+    img->delta_pic_order_cnt_bottom = 1;
+  }
 }
 
 /*!
@@ -688,13 +703,9 @@ Picture *malloc_picture()
 
 void free_picture(Picture *pic)
 {
-  int i;
-
   if (pic != NULL)
   {
-    for (i=0; i<pic->no_slices; i++)
-      if (pic->slices[i] != NULL)
-        free (pic->slices[i]);
+    free_slice_list(pic);
     free (pic);
   }
 }

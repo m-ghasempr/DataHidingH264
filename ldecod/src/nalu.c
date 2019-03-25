@@ -35,7 +35,7 @@
  * \file  nalu.c
  *
  * \brief
- *    Common NALU support functions
+ *    Decoder NALU support functions
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
@@ -43,10 +43,7 @@
  ************************************************************************
  */
 
-#include <stdio.h>
 #include <assert.h>
-#include <malloc.h>
-#include "memory.h"
 
 #include "global.h"
 #include "nalu.h"

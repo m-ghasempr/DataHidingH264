@@ -65,13 +65,15 @@
 #include "errorconcealment.h"
 #include "image.h"
 #include "mbuffer.h"
-#include "decodeiff.h"
 #include "fmo.h"
 #include "nalu.h"
 #include "parsetcommon.h"
 #include "parset.h"
 #include "header.h"
 #include "rtp.h"
+#include "sei.h"
+
+#include "context_ini.h"
 
 
 #include "erc_api.h"
@@ -100,11 +102,10 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 {
   int current_header;
   Slice *currSlice = img->currentSlice;
-  extern FILE* bits;
   int ercStartMB;
   int ercSegment;
   frame recfr;
-  int i;
+
   time_t ltime1;                  // for time measurement
   time_t ltime2;
 
@@ -135,7 +136,6 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   while ((currSlice->next_header != EOS && currSlice->next_header != SOP))
   {
 // printf ("decode_one_frame: currSlice->next_header %d\n", currSlice->next_header);
-    start_slice(img, inp);      //
     current_header = read_new_slice();
 
 //    img->current_mb_nr = img->map_mb_nr = currSlice->start_mb_nr;//GB
@@ -164,9 +164,6 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     currSlice->next_eiflag = 0;
     while ((currSlice->next_header != EOS && currSlice->next_header != SOP))
     {   
-      // set the  corresponding read functions
-      start_slice(img, inp);
-      
       // read new slice
       current_header = read_new_slice();
 //      img->current_mb_nr = currSlice->start_mb_nr;
@@ -236,6 +233,8 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     frame_postprocessing(img, inp);
   else
     field_postprocessing(img, inp);   // reset all interlaced variables
+
+  post_poc( img );                    // POC200301
 
   if((img->type==B_IMG_1 || img->type==B_IMG_MULT) && !img->disposable_flag)
     copy_stored_B_motion_info(img);
@@ -332,8 +331,6 @@ void find_snr(
   int diff_y,diff_u,diff_v;
   int uv;
   int  status;
-  static int modulo_ctr_frm=0,modulo_ctr_fld=0,pic_id_old_frm=0,pic_id_old_fld=0;
-  static int modulo_ctr_frm_b=0,modulo_ctr_fld_b=0,pic_id_old_frm_b=0,pic_id_old_fld_b=0;
   Slice *currSlice = img->currentSlice;
 
 #ifndef _ADAPT_LAST_GROUP_
@@ -353,45 +350,15 @@ void find_snr(
   // if errors appear. In this case the method of using this p_frame_no, nextP_tr, prevP_tr
   // variables does not work. So I use the picture_id instead.
 
+  // POC200301 The following modifications are done to make the decoder can get right frame_no
+  // in case of more than one IDR pictures. I have not found any reasons to use something like
+  // 256*modulo_ctr_xxx.
+
   //calculate frame number
-  if (img->type <= INTRA_IMG || img->type >= SI_IMG || !img->disposable_flag) 
-  {
     if (img->structure == FRAME)
-    { 
-      if (currSlice->picture_id < pic_id_old_frm) 
-        modulo_ctr_frm++;
-      
-      pic_id_old_frm = currSlice->picture_id;
-      frame_no = currSlice->picture_id + (256*modulo_ctr_frm);
-    }
+      frame_no = currSlice->picture_id;
     else
-    {
-      if (currSlice->picture_id < pic_id_old_fld) 
-        modulo_ctr_fld++;
-      
-      pic_id_old_fld = currSlice->picture_id;
-      frame_no = (currSlice->picture_id  + (256*modulo_ctr_fld))/2;
-    }
-  }
-  else
-  {
-    if (img->structure == FRAME)
-    { 
-      if (currSlice->picture_id < pic_id_old_frm_b) 
-        modulo_ctr_frm_b++;
-      
-      pic_id_old_frm_b = currSlice->picture_id;
-      frame_no = currSlice->picture_id + (256*modulo_ctr_frm_b);
-    }
-    else
-    {
-      if (currSlice->picture_id < pic_id_old_fld_b) 
-        modulo_ctr_fld_b++;
-      
-      pic_id_old_fld_b = currSlice->picture_id;
-      frame_no = (currSlice->picture_id  + (256*modulo_ctr_fld_b))/2;
-    }
-  }
+      frame_no = currSlice->picture_id/2;
 #endif
 
   rewind(p_ref);
@@ -641,6 +608,7 @@ int read_new_slice()
     if (ret == 0)
     {
 //      printf ("read_new_slice: returning %s\n", "EOS");
+      FreeNALU(nalu);
       return EOS;
     }
 
@@ -769,8 +737,7 @@ int read_new_slice()
         break;
       case NALU_TYPE_SEI:
         printf ("read_new_slice: Found NALU_TYPE_SEI, len %d\n", nalu->len);
-        // do something w/ the nalu
-        assert (0==1);
+        InterpretSEIMessage(nalu->buf,nalu->len,img);
         break;
       case NALU_TYPE_PPS:
         ProcessPPS(nalu);
@@ -1076,7 +1043,7 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
 
   while (end_of_slice == FALSE) // loop over macroblocks
   {
-    setRealMB_nr (img); //GB
+    setMapMB_nr (img); //GB
 
 
 #if TRACE
@@ -1127,8 +1094,7 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
 
   if (active_pps->entropy_coding_mode == CABAC)
   {
-    init_contexts_MotionInfo (img, currSlice->mot_ctx);
-    init_contexts_TextureInfo(img, currSlice->tex_ctx);
+    init_contexts (img);
   }
 
   // init new frame
@@ -1137,7 +1103,8 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
 
   // do reference frame buffer reordering
   reorder_mref(img);
-  fill_wp_params(img);
+  if ( (img->weighted_bipred_idc > 0  && (img->type == B_IMG_1 || img->type == B_IMG_MULT)) || (img->weighted_pred_flag && img->type !=INTRA_IMG))
+    fill_wp_params(img);
 
 
   if (current_header == SOP)
@@ -1174,8 +1141,7 @@ void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_hea
 
   if (active_pps->entropy_coding_mode == CABAC)
   {
-    init_contexts_MotionInfo (img, currSlice->mot_ctx);
-    init_contexts_TextureInfo(img, currSlice->tex_ctx);
+    init_contexts (img);
   }
   
   // init new frame
@@ -1191,7 +1157,8 @@ void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_hea
   
   // do reference frame buffer reordering
   reorder_mref(img);
-  fill_wp_params(img);
+  if ( (img->weighted_bipred_idc > 0  && (img->type == B_IMG_1 || img->type == B_IMG_MULT)) || (img->weighted_pred_flag && img->type !=INTRA_IMG))
+    fill_wp_params(img);
   
 
   if (current_header == SOP)
@@ -1850,56 +1817,25 @@ void reset_wp_params(struct img_par *img)
 
 void fill_wp_params(struct img_par *img)
 {
-  Slice *currSlice = img->currentSlice;
   int i, j, n;
   int comp;
   int log_weight_denom;
-  int p0, p1, pt;
+  int p0, pt;
+//  int p1;
   int bframe = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
-//  int current_tr;
-//  int fwd_refframe_offset;
-//  int bwd_refframe_offset;
   int fwd_ref[MAX_REFERENCE_PICTURES], bwd_ref[MAX_REFERENCE_PICTURES];
   int index;
   int max_bwd_ref, max_fwd_ref;
+  int x,z;
 
-#if 0
-  if(bframe)
-  {
-    int current_tr  = (img->structure==TOP_FIELD || img->structure==BOTTOM_FIELD)?img->tr_fld:2*img->tr_frm;
-    if(img->imgtr_next_P <= current_tr)
-      fwd_refframe_offset = 0;
-    else if (img->structure==FRAME)
-      fwd_refframe_offset = 1;
-    else
-      fwd_refframe_offset = 2;
-  }
-  else
-  {
-    fwd_refframe_offset = 0;
-  }
+  max_bwd_ref = img->num_ref_pic_active_bwd;
+  max_fwd_ref = img->num_ref_pic_active_fwd;
 
-  if (bframe && img->disposable_flag)
-  {
-    if(img->structure == TOP_FIELD)
-      bwd_refframe_offset = 1;
-    else
-      bwd_refframe_offset = 0;
-  }
-  else
-  {
-    bwd_refframe_offset = 0;
-  }
 
-#define fwd_ref_idx_to_refframe(idx) ((idx)+fwd_refframe_offset)
-#define bwd_ref_idx_to_refframe(idx) ((idx)+bwd_refframe_offset)
-#endif
-  if ((img->weighted_bipred_explicit_flag || img->weighted_bipred_implicit_flag) && (img->type == B_IMG_1 || img->type == B_IMG_MULT))
+if ((img->weighted_bipred_idc > 0) && (img->type == B_IMG_1 || img->type == B_IMG_MULT))
   {
     if (!img->disposable_flag )
     {
-      max_bwd_ref = MAX_REFERENCE_PICTURES;
-      max_fwd_ref = MAX_REFERENCE_PICTURES;
       for (index = 0; index < MAX_REFERENCE_PICTURES; index++)
       {
         fwd_ref[index] = index;
@@ -1914,8 +1850,6 @@ void fill_wp_params(struct img_par *img)
     }
     else 
     {
-       max_bwd_ref = 1;
-       max_fwd_ref = MAX_REFERENCE_PICTURES - 1;
        for (index = 0; index < MAX_REFERENCE_PICTURES - 1; index++)
        {
          fwd_ref[index] = index+1;
@@ -1924,12 +1858,12 @@ void fill_wp_params(struct img_par *img)
     }
   }      
 
-  if (img->weighted_bipred_implicit_flag && bframe)
+  if (img->weighted_bipred_idc == 2 && bframe)
   {
-    img->luma_log_weight_denom = 7;
-    img->chroma_log_weight_denom = 7;
-    img->wp_round_luma = 64;
-    img->wp_round_chroma = 64;
+    img->luma_log_weight_denom = 5;
+    img->chroma_log_weight_denom = 5;
+    img->wp_round_luma = 16;
+    img->wp_round_chroma = 16;
 
     for (i=0; i<MAX_REFERENCE_PICTURES; i++)
     {
@@ -1944,10 +1878,7 @@ void fill_wp_params(struct img_par *img)
 
   if (bframe)
   {
-    // !KS: initialization was missing here ????
-    max_bwd_ref = MAX_REFERENCE_PICTURES;
-    max_fwd_ref = MAX_REFERENCE_PICTURES;
-    // end KS
+
     for (i=0; i<max_fwd_ref; i++)
     {
       for (j=0; j<max_bwd_ref; j++)
@@ -1955,37 +1886,42 @@ void fill_wp_params(struct img_par *img)
         for (comp = 0; comp<3; comp++)
         {
           log_weight_denom = (comp == 0) ? img->luma_log_weight_denom : img->chroma_log_weight_denom;
-          if (img->weighted_bipred_explicit_flag)
+          if (img->weighted_bipred_idc == 1)
           {
             img->wbp_weight[0][i][j][comp] =  img->wp_weight[0][i][comp];
             img->wbp_weight[1][i][j][comp] =  img->wp_weight[1][j][comp];
           }
-          else if (img->weighted_bipred_implicit_flag)
+          else if (img->weighted_bipred_idc == 2)
           {
             pt = poc_distance (fwd_ref[i], bwd_ref[j]);
             if (pt == 0)
             {
-              img->wbp_weight[0][i][j][comp] =   1<<log_weight_denom;
-              img->wbp_weight[1][i][j][comp] =   1<<log_weight_denom;
+              img->wbp_weight[0][i][j][comp] =   32;
+              img->wbp_weight[1][i][j][comp] =   32;
             }
             else
             {
               p0 = poc_distance (fwd_ref[i], -1);
-              p1 = poc_distance (-1, bwd_ref[j]);
-              img->wbp_weight[0][i][j][comp] = (p1 << (log_weight_denom+1)) / pt;
-              img->wbp_weight[1][i][j][comp] = (p0 << (log_weight_denom+1)) / pt;
-//               if (comp == 0)
-//                      printf ("bpw weight[%d] = %d, %d\n", n,
-//                              img->wbp_weight[0][i][j][0], img->wbp_weight[1][i][j][0]);
+ //             p1 = poc_distance (-1, bwd_ref[j]);
+
+			  x = (16384 + (pt>>1))/pt;
+			  z = Clip3(-1024, 1023, (x*p0 + 32 )>>6);
+              img->wbp_weight[1][i][j][comp] = z >> 2;
+              img->wbp_weight[0][i][j][comp] = 64 - img->wbp_weight[1][i][j][comp];
+			  if (img->wbp_weight[1][i][j][comp] < -64 || img->wbp_weight[1][i][j][comp] > 128)
+			  {
+				  img->wbp_weight[1][i][j][comp] = 32;
+				  img->wbp_weight[0][i][j][comp] = 32;
+			  }
+
+
+               if (comp == 0)
+                      printf ("bpw weight[%d][%d] = %d, %d\n", i,j,
+                              img->wbp_weight[0][i][j][0], img->wbp_weight[1][i][j][0]);
             }
           }
         }
      }
    }
  }
-}
-
-int poc_distance( int refa, int refb)
-{
-  return toprefpoc[refb + 1] - toprefpoc[refa + 1];
 }

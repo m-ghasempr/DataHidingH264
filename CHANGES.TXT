@@ -1,3 +1,21 @@
+Changes for Version JM 6.1 to JM 6.0a
+-------------------------------------
+New features
+* SEI decoding reenabled and new messages added (KS)
+* Weighted Prediction Updates (JB)
+* POC updated (DT)
+* CABAC slice initializations (HS)
+
+Bug fixes
+* fix mb aff again (KS)
+
+Cleanups
+* remove many gcc warnings (KS)
+* remove unused code (KS)
+* clean up VLC reading (KS)
+* allocate less memory (WYK)
+
+
 Changes for Version JM 6.0a to JM 6.0
 -------------------------------------
 New features

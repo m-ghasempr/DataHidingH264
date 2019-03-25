@@ -33,7 +33,7 @@
 /*!
  *****************************************************************************
  *
- * \file scatter.c
+ * \file fmo.c
  *
  * \brief
  *    Support for Flexible Macroblock Ordering (FMO)
@@ -316,7 +316,6 @@ int FmoGenerateType3MBAmap (struct img_par *img, struct inp_par *inp, int NumSli
 {
   int x, y, xx;
   int n = XSize;              // Number of columns
-  int p = NumSliceGroups+1;     // Number of Slice Groups
 
   int rx0, rx1, ry0, ry1;   // coordinates of the rectangule
 

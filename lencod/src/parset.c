@@ -217,6 +217,7 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   //! Here, the same subset is implemented.  Changes in the POC stuff have
   //! also to be reflected here
   sps->log2_max_frame_num_minus4 = LOG2_MAX_FRAME_NUM_MINUS4;
+  sps->log2_max_pic_order_cnt_lsb_minus4 = LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4;   // POC200301
   sps->pic_order_cnt_type = img->pic_order_cnt_type;
   sps->num_ref_frames_in_pic_order_cnt_cycle = img->num_ref_frames_in_pic_order_cnt_cycle;
   sps->delta_pic_order_always_zero_flag = img->delta_pic_order_always_zero_flag;
@@ -373,19 +374,18 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
   len+=ue_v ("SPS: seq_parameter_set_id",                    sps->seq_parameter_set_id,                      partition);
   len+=ue_v ("SPS: log2_max_frame_num_minus4",               sps->log2_max_frame_num_minus4,                 partition);
   len+=ue_v ("SPS: pic_order_cnt_type",                      sps->pic_order_cnt_type,                        partition);
-  if (sps->pic_order_cnt_type == 1)
-    len+=ue_v ("SPS: num_ref_frames_in_pic_order_cnt_cycle",   sps->num_ref_frames_in_pic_order_cnt_cycle,     partition);
-  if (sps->pic_order_cnt_type < 2)
+  // POC200301
+  if (sps->pic_order_cnt_type == 0)
+    len+=ue_v ("SPS: log2_max_pic_order_cnt_lsb_minus4",     sps->log2_max_pic_order_cnt_lsb_minus4,         partition);
+  else if (sps->pic_order_cnt_type == 1)
   {
     len+=u_1  ("SPS: delta_pic_order_always_zero_flag",        sps->delta_pic_order_always_zero_flag,          partition);
     len+=se_v ("SPS: offset_for_non_ref_pic",                  sps->offset_for_non_ref_pic,                    partition);
     len+=se_v ("SPS: offset_for_top_to_bottom_field",          sps->offset_for_top_to_bottom_field,            partition);
+    len+=ue_v ("SPS: num_ref_frames_in_pic_order_cnt_cycle",   sps->num_ref_frames_in_pic_order_cnt_cycle,     partition);
+    for (i=0; i<sps->num_ref_frames_in_pic_order_cnt_cycle; i++)
+      len+=se_v ("SPS: offset_for_ref_frame",                  sps->offset_for_ref_frame[i],                      partition);
   }
-  if (sps->pic_order_cnt_type == 0)
-    len+=se_v ("SPS: offset_for_ref_frame[0]",                 sps->offset_for_ref_frame[0],                   partition);
-  else if (sps->pic_order_cnt_type == 1)
-    for(i=0; i<sps->num_ref_frames_in_pic_order_cnt_cycle; i++)
-      len+=se_v ("SPS: offset_for_ref_frame[i]",                 sps->offset_for_ref_frame[i],                   partition);
   len+=ue_v ("SPS: num_ref_frames",                          sps->num_ref_frames,                            partition);
   len+=u_1  ("SPS: required_frame_num_update_behaviour_flag",sps->required_frame_num_update_behaviour_flag,  partition);
   len+=ue_v ("SPS: frame_width_in_mbs_minus1",               sps->frame_width_in_mbs_minus1,                 partition);

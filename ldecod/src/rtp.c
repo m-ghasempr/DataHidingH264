@@ -128,7 +128,6 @@
 
 #include "global.h"
 #include "errorconcealment.h"
-#include "elements.h"
 #include "rtp.h"
 #include "fmo.h"
 #include "sei.h"
@@ -392,7 +391,7 @@ int RTPReadPacket (RTPpacket_t *p, FILE *bits)
 
 
 
-
+//!KS: everything below is old (now unused) code !!!
 
 
 

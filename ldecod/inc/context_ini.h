@@ -31,35 +31,25 @@
 */
 
 /*!
- ***************************************************************************
- *
- * \file fmo.h
+ *************************************************************************************
+ * \file context_ini.h
  *
  * \brief
- *    Support for Flexilble Macroblock Ordering (FMO)
- *
- * \date
- *    19 June, 2002
+ *    CABAC context initializations
  *
  * \author
- *    Stephan Wenger   stewe@cs.tu-berlin.de
- **************************************************************************/
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
+ *    - Detlev Marpe                    <marpe@hhi.de>
+ *    - Heiko Schwarz                   <hschwarz@hhi.de>
+ **************************************************************************************
+ */
 
-#ifndef _FMO_H_
-#define _FMO_H_
+
+#ifndef _CONTEXT_INI_
+#define _CONTEXT_INI_
 
 
-int FmoInit (struct img_par *img, struct inp_par *inp, int xs, int ys, int NewMBAmap[], int SizeOfNewMBAmap);
-int FmoFinit ();
-void FmoStartPicture();
-void FmoEndPicture();
-int FmoGetNumberOfSliceGroup();
-int FmoGetLastMBOfPicture(int structure);
-int FmoGetLastMBInSliceGroup(int SliceGroup, int structure);
-int FmoMB2Slice (int mb);
-int FmoGetNextMBNr (int CurrentMbNr, int structure);
-
-int FmoUpdateEvolvingMBAmap (struct img_par *img, struct inp_par *inp, int *MBAmap); // JVT-D097
-extern int *MBAmap; 
+void  init_contexts  (struct img_par* img);
 
 #endif
+

@@ -33,7 +33,7 @@
 /*!
  *************************************************************************************
  * \file header.h
- *
+ * 
  * \brief
  *    Prototypes for header.c
  *************************************************************************************
@@ -44,6 +44,11 @@
 
 int FirstPartOfSliceHeader();
 int RestOfSliceHeader();
+void dec_ref_pic_marking(Bitstream *currStream);
+
+void decoding_poc(struct img_par *img);
+void post_poc(struct img_par *img);
+int dumppoc(struct img_par *img);
 
 #endif
 

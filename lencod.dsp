@@ -107,6 +107,10 @@ SOURCE=.\lencod\src\configfile.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\context_ini.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\decoder.c
 # End Source File
 # Begin Source File
@@ -231,7 +235,15 @@ SOURCE=.\lencod\inc\configfile.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\context_ini.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\contributors.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\inc\ctx_tables.h
 # End Source File
 # Begin Source File
 

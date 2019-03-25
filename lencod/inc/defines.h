@@ -50,6 +50,7 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+
 #define TRACE           0   //!< 0:Trace off 1:Trace on
 
 // NAL Stuff
@@ -60,9 +61,7 @@
 // value as a log2_max_frame_num_PLUS4, meaning that 12 was sent in order to
 // sigbal an 8 bit frame_num.  This is corrected.
 
-#define LOG2_MAX_FRAME_NUM_MINUS4   4
-
-
+//#define LOG2_MAX_FRAME_NUM_MINUS4   4           // POC200301 moved to parsetcommoh.h
 
 // CAVLC
 #define LUMA              0
@@ -124,6 +123,7 @@
 #define MAX_VALUE       999999   //!< used for start value for some variables
 
 #define Clip1(a)            ((a)>255?255:((a)<0?0:(a)))
+#define Clip3(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
 
 #define P8x8    8
 #define I4MB    9
@@ -241,7 +241,6 @@
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
 #define BIPRED_SIMPLE 1
-//#define SIMPLE_CHROMA_WP 1
 
 #endif
 

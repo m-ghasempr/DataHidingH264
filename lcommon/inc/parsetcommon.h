@@ -61,6 +61,9 @@
 #define MAXIMUMPARSETNALUSIZE   1500
 #define SIZEslice_group_id      (sizeof (int) * 60000)    // should be sufficient for HUGE pictures, need one int per MB in a picture
 
+#define LOG2_MAX_FRAME_NUM_MINUS4   4           // POC200301 moved from defines.h
+#define LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4 4     // POC200301 newly added
+
 #define MAXSPS  32
 #define MAXPPS  128
 
@@ -178,17 +181,16 @@ typedef struct
   Boolean   redundant_slices_allowed_flag;                    // u(1)
   unsigned  seq_parameter_set_id;                             // ue(v)
   unsigned  log2_max_frame_num_minus4;                        // ue(v)
-  unsigned  pic_order_cnt_type;                               // ue(v)
-  // if( pic_order_cnt_type == 1 )
+  unsigned pic_order_cnt_type;
+  // if( pic_order_cnt_type == 0 ) 
+  unsigned log2_max_pic_order_cnt_lsb_minus4;                 // ue(v)
+  // else if( pic_order_cnt_type == 1 )
+    Boolean delta_pic_order_always_zero_flag;               // u(1)
+    int     offset_for_non_ref_pic;                         // se(v)
+    int     offset_for_top_to_bottom_field;                 // se(v)
     unsigned  num_ref_frames_in_pic_order_cnt_cycle;          // ue(v)
-    // if( pic_order_cnt_type < 2 ) {
-      Boolean    delta_pic_order_always_zero_flag;               // u(1)
-      int     offset_for_non_ref_pic;                         // se(v)
-      int     offset_for_top_to_bottom_field;                 // se(v)
-    // if( pic_order_cnt_type = = 0 )
-    // else if( pic_order_cnt_type = = 1 )
     // for( i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++ )
-      int     offset_for_ref_frame[MAXnum_ref_frames_in_pic_order_cnt_cycle];   // se(v)
+      int   offset_for_ref_frame[MAXnum_ref_frames_in_pic_order_cnt_cycle];   // se(v)
   unsigned  num_ref_frames;                                   // ue(v)
   Boolean   required_frame_num_update_behaviour_flag;         // u(1)
   unsigned  frame_width_in_mbs_minus1;                        // ue(v)

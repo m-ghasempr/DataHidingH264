@@ -43,54 +43,21 @@
  ************************************************************************
  */
 
-#include "contributors.h"
-
-#include <assert.h>
-#include <stdlib.h>
-#include <malloc.h>
-#include <math.h>
 #include <string.h>
 
+#include "contributors.h"
 #include "global.h"
 #include "elements.h"
 
-extern void tracebits(const char *trace_str,  int len,  int info,int value1, int value2) ;
-
-
-/*!
- ************************************************************************
- * \brief
- *    Input file containing Partition structures
- * \return
- *    TRUE if a startcode follows (meaning that all symbols are used).  \n
- *    FALSE otherwise.
- * \para
- *     Looks like this is dead code.  StW, 7.7.02
- ************************************************************************/
-/*
-int slice_startcode_follows(struct img_par *img, struct inp_par *inp)
+int assignSE2partition[][SE_MAX_ELEMENTS] =
 {
-  Slice *currSlice = img->currentSlice;
-  int dp_Nr = assignSE2partition[currSlice->dp_mode][SE_MBTYPE];
-  DataPartition *dP = &(currSlice->partArr[dp_Nr]);
-  Bitstream   *currStream = dP->bitstream;
-  byte *buf = currStream->streamBuffer;
-  int frame_bitoffset = currStream->frame_bitoffset;
-  int info;
-assert (!currStream->ei_flag);
-printf ("slice_startcode_follows returns %d\n", (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length)));
+  // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19  // elementnumber (no not uncomment)
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },   //!< all elements in one partition no data partitioning
+  {  0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 1, 0, 0 }    //!< three partitions per slice
+};
 
-  if (currStream->ei_flag)
-    return (img->current_mb_nr == currSlice->last_mb_nr);
-  else
-  {
-    if (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length))
-      return TRUE;
-    else
-      return FALSE;
-  }
-}
-*/
+int PartitionMode;
+
 /*!
  ************************************************************************
  * \brief

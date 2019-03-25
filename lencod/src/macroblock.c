@@ -607,20 +607,10 @@ void CheckAvailabilityOfNeighbors()
     for (j=0; j<3; j++)
     {
       img->mb_data[mb_nr].mb_available[i][j]=NULL;
-      img->mb_data[mb_nr].skip_mb_available[i][j]=NULL;
     }
 
   img->mb_data[mb_nr].mb_available[1][1]=currMB; // current MB
-  img->mb_data[mb_nr].skip_mb_available[1][1]=currMB; // current MB
   
-  // Check MB only for mb_skip_flag //GB
-  // Check MB to the left
-  if ((img->pix_x >= MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr))
-    currMB->skip_mb_available[1][0]=&(img->mb_data[mb_nr-1]);
-  // Check MB above
-  if ((img->pix_y >= MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-mb_width].slice_nr))
-    currMB->skip_mb_available[0][1]=&(img->mb_data[mb_nr-mb_width]);
-
 
   // Check MB to the left
   if(img->pix_x >= MB_BLOCK_SIZE)
@@ -902,16 +892,16 @@ LumaPrediction4x4 (int  block_x,    // <--  relative horizontal block coordinate
         for   (j=block_y; j<block_y4; j++)
           for (i=block_x; i<block_x4; i++)  
             if (fw_ref ==-1)
-              img->mpr[i][j] = clip1a((wp_weight[1][bw_ref_idx][0] * *bpred++ + wp_offset[1][bw_ref_idx][0] + wp_luma_round) >> luma_log_weight_denom);
+              img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][0] * *bpred++ + wp_luma_round) >> luma_log_weight_denom) + wp_offset[1][bw_ref_idx][0]);
             else if (bw_ref ==-1 )
-              img->mpr[i][j] = clip1a((wp_weight[0][fw_ref_idx][0] * *fpred++ + wp_offset[0][fw_ref_idx][0] + wp_luma_round) >> luma_log_weight_denom);
+              img->mpr[i][j] = clip1a(((wp_weight[0][fw_ref_idx][0] * *fpred++ + wp_luma_round) >> luma_log_weight_denom) + wp_offset[0][fw_ref_idx][0] );
             else 
-              img->mpr[i][j] = clip1a((wbp_weight[0][fw_ref_idx][bw_ref_idx][0] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * *bpred++ + wp_offset[0][fw_ref_idx][0] + wp_offset[1][bw_ref_idx][0]+ 2*wp_luma_round) >> (luma_log_weight_denom + 1)); 
+              img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][0] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * *bpred++ + 2*wp_luma_round) >> (luma_log_weight_denom + 1)) + ((wp_offset[0][fw_ref_idx][0] + wp_offset[1][bw_ref_idx][0] + 1)>>1)); 
       }
       else
         for   (j=block_y; j<block_y4; j++)
           for (i=block_x; i<block_x4; i++)  
-            img->mpr[i][j] = clip1a((wbp_weight[0][fw_ref_idx][bw_ref_idx][0] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * *bpred++ + wp_offset[0][fw_ref_idx][0] + wp_offset[1][bw_ref_idx][0] + 2*wp_luma_round) >> (luma_log_weight_denom + 1));
+              img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][0] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * *bpred++ + 2*wp_luma_round) >> (luma_log_weight_denom + 1)) + ((wp_offset[0][fw_ref_idx][0] + wp_offset[1][bw_ref_idx][0] + 1)>>1)); 
     }
     else if (img->type == BS_IMG)
     {
@@ -1422,69 +1412,39 @@ ChromaPrediction4x4 (int  uv,           // <-- colour component
         for (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)  
           if (fw_ref_frame==-1)
-#ifdef SIMPLE_CHROMA_WP
-            img->mpr[i][j] = clip1a((wp_weight[1][bw_ref_idx][uv+1] * *bpred++ + wp_offset[1][bw_ref_idx][uv+1] + wp_chroma_round) >> chroma_log_weight_denom);
-#else
-            img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][uv+1] * (*bpred++ - 128) + wp_offset[1][bw_ref_idx][uv+1] + wp_chroma_round) >> chroma_log_weight_denom) + 128);
-#endif
+            img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][uv+1] * *bpred++  + wp_chroma_round) >> chroma_log_weight_denom) + wp_offset[1][bw_ref_idx][uv+1]);
           else if (bw_ref_frame==-1)
-#ifdef SIMPLE_CHROMA_WP
-            img->mpr[i][j] =  clip1a((wp_weight[0][fw_ref_idx][uv+1] * *fpred++ + wp_offset[0][fw_ref_idx][uv+1] + wp_chroma_round) >> chroma_log_weight_denom);
-#else
-                    img->mpr[i][j] =  clip1a(((wp_weight[0][fw_ref_idx][uv+1] * (*fpred++ - 128) + wp_offset[0][fw_ref_idx][uv+1] + wp_chroma_round) >> chroma_log_weight_denom) + 128);
-#endif
+            img->mpr[i][j] =  clip1a(((wp_weight[0][fw_ref_idx][uv+1] * *fpred++  + wp_chroma_round) >> chroma_log_weight_denom) + wp_offset[0][fw_ref_idx][uv+1]);
           else
-#ifdef SIMPLE_CHROMA_WP
-            img->mpr[i][j] =  clip1a((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * *bpred++ 
-                  + wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1));
-#else
-            img->mpr[i][j] =  clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * (*fpred++ - 128)+ wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * (*bpred++  - 128)
-                  + wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1)) + 128);
-#endif
+            img->mpr[i][j] =  clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * *bpred++ 
+                  + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1)) + ((wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 1)>>1) );
       }
       else
         for (j=block_y; j<block_y4; j++)
           for (i=block_x; i<block_x4; i++)  
-#ifdef SIMPLE_CHROMA_WP
-            img->mpr[i][j] = clip1a((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * *bpred++ 
-                    + wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1));
-#else
-            img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * (*fpred++ - 128) + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * (*bpred++ - 128)
-                    + wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1)) + 128);
-#endif
+            img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * *bpred++ 
+                    + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1)) + ((wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 1)>>1));
  
     }
     else if (img->type == BS_IMG)
     {
       for (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)  
-#ifdef SIMPLE_CHROMA_WP
-          img->mpr[i][j] = clip1a((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * *bpred++ 
-                    + wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1));
-#else
-          img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * (*fpred++ - 128) + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * (*bpred++ - 128) 
-                    + wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1)) + 128);
-#endif
+          img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * *bpred++ 
+                     + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1)) + ((wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 1)>>1));
     }
     else if (fw_mode || skipped)
     {
       for (j=block_y; j<block_y4; j++)
       for (i=block_x; i<block_x4; i++)  
-#ifdef SIMPLE_CHROMA_WP
-           img->mpr[i][j] = clip1a((wp_weight[0][fw_ref_idx][uv+1] * *fpred++ + wp_offset[0][fw_ref_idx][uv+1] + wp_chroma_round) >> chroma_log_weight_denom);
-#else
-           img->mpr[i][j] = clip1a(((wp_weight[0][fw_ref_idx][uv+1] * (*fpred++ - 128) + wp_offset[0][fw_ref_idx][uv+1] + wp_chroma_round) >> chroma_log_weight_denom) + 128);
-#endif
+           img->mpr[i][j] = clip1a(((wp_weight[0][fw_ref_idx][uv+1] * *fpred++ + wp_chroma_round) >> chroma_log_weight_denom) +  wp_offset[0][fw_ref_idx][uv+1]);
     }
     else
     {
       for (j=block_y; j<block_y4; j++)
       for (i=block_x; i<block_x4; i++)  
-#ifdef SIMPLE_CHROMA_WP
-            img->mpr[i][j] = clip1a((wp_weight[1][bw_ref_idx][uv+1] * *bpred++ + wp_offset[1][bw_ref_idx][uv+1] + wp_chroma_round) >> chroma_log_weight_denom);
-#else
-                img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][uv+1] * (*bpred++ - 128) + wp_offset[1][bw_ref_idx][uv+1] + wp_chroma_round) >> chroma_log_weight_denom) + 128);
-#endif
+            img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][uv+1] * *bpred++ + wp_chroma_round) >> chroma_log_weight_denom) + wp_offset[1][bw_ref_idx][uv+1]);
+
     }       
   }
   else
@@ -1642,7 +1602,7 @@ void IntraChromaPrediction8x8 (int *mb_up, int *mb_left)
   int     uv;
   int     hline[8], vline[8];
   int     mode;
-  int     best_mode;
+  int     best_mode = DC_PRED_8;         //just an initilaization here, should always be overwritten
   int     cost;
   int     min_cost;
   int     diff[16];
@@ -2350,6 +2310,9 @@ void write_one_macroblock (int eos_bit)
   int*        bitCount = currMB->bitcounter;
   int i,j;
   int mb_y = img->mb_y;
+
+  extern int cabac_encoding;
+
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
     mb_y = img->top_field ? 2*img->field_mb_y:2*img->field_mb_y+1;
   
@@ -2359,6 +2322,8 @@ void write_one_macroblock (int eos_bit)
   {
     write_terminating_bit (0);
   }
+
+  cabac_encoding = 1;
 
   //--- write header ---
   writeMBHeader (0); 
@@ -2397,6 +2362,7 @@ void write_one_macroblock (int eos_bit)
   stat->bit_slice += bitCount[BITS_TOTAL_MB];
         img->currentSlice->write_is_real = 0;//GB
 
+  cabac_encoding = 0;
 }
 
 
@@ -3209,7 +3175,7 @@ int predict_nnz(int i,int j)
 {
   int Left_block,Top_block, pred_nnz;
   int cnt=0;
-  int mb_ypos = img->mb_y;
+//  int mb_ypos = img->mb_y;
   int decr    = 1;
 
   int mb_nr    = img->current_mb_nr;
@@ -3261,7 +3227,7 @@ int predict_nnz_chroma(int i,int j)
   int Left_block,Top_block, pred_nnz;
   int cnt=0;
   int mb_y = img->mb_y;
-  int mb_ypos = img->mb_y;
+//  int mb_ypos = img->mb_y;
   int decr    = 1;
 
 /*  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)

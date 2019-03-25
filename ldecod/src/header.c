@@ -43,6 +43,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "global.h"
 #include "elements.h"
@@ -50,7 +51,9 @@
 #include "fmo.h"
 #include "vlc.h"
 #include "mbuffer.h"
+#include "header.h"
 
+#include "ctx_tables.h"
 
 #if TRACE
 #define SYMTRACESTRING(s) strncpy(sym.tracestring,s,TRACESTRING_SIZE)
@@ -62,7 +65,6 @@ extern int UsedBits;
 
 static void ref_pic_list_reordering();
 static void pred_weight_table();
-static void dec_ref_pic_marking();
 
 
 /*!
@@ -78,15 +80,16 @@ int FirstPartOfSliceHeader()
   Slice *currSlice = img->currentSlice;
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
+  Bitstream *currStream = partition->bitstream;
 
   UsedBits= partition->bitstream->frame_bitoffset; // was hardcoded to 31 for previous start-code. This is better.
 
   // Get first_mb_in_slice
-  currSlice->start_mb_nr = ue_v ("SH: first_mb_in_slice", partition);
+  currSlice->start_mb_nr = ue_v ("SH: first_mb_in_slice", currStream);
 
-  currSlice->picture_type = ue_v ("SH: slice_type", partition);
+  currSlice->picture_type = ue_v ("SH: slice_type", currStream);
 
-  currSlice->pic_parameter_set_id = ue_v ("SH: pic_parameter_set_id", partition);
+  currSlice->pic_parameter_set_id = ue_v ("SH: pic_parameter_set_id", currStream);
   
   return UsedBits;
 }
@@ -104,15 +107,9 @@ int RestOfSliceHeader()
   Slice *currSlice = img->currentSlice;
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
-//  int UsedBits= partition->bitstream->frame_bitoffset; // was hardcoded to 31 for previous start-code. This is better.
-  static int last_imgtr_frm=0,modulo_ctr_frm=0,last_imgtr_fld=0,modulo_ctr_fld=0;
-  static int last_imgtr_frm_b=0,modulo_ctr_frm_b=0,last_imgtr_fld_b=0,modulo_ctr_fld_b=0;
-  static int FirstCall = 1;   // used for FMO initialization
-  static unsigned int AbsFrameNum, ExpectedPicOrderCnt, PicOrderCntCycleCnt, FrameNumInPicOrderCntCycle;
-  static unsigned int PreviousFrameNum, FrameNumOffset, ExpectedDeltaPerPicOrderCntCycle;
-  static unsigned int Previousfield_pic_flag,Previousbottom_field_flag,Previousnal_reference_idc;
-  static unsigned int Previousdelta_pic_order_cnt[2], PreviousPOC=11111, ThisPOC, FirstFieldType;
-  int i,val;
+  Bitstream *currStream = partition->bitstream;
+
+  int val;
 
   int multpred=active_sps->num_ref_frames>1;
   
@@ -145,7 +142,7 @@ int RestOfSliceHeader()
 
   img->type = currSlice->picture_type;
 
-  img->frame_num = u_v (active_sps->log2_max_frame_num_minus4 + 4, "SH: frame_num", partition);
+  img->frame_num = u_v (active_sps->log2_max_frame_num_minus4 + 4, "SH: frame_num", currStream);
 
   if (active_sps->frame_mbs_only_flag)
   {
@@ -155,11 +152,11 @@ int RestOfSliceHeader()
   else
   {
     // field_pic_flag   u(1)
-    img->field_pic_flag = u_1("SH: field_pic_flag", partition);
+    img->field_pic_flag = u_1("SH: field_pic_flag", currStream);
     if (img->field_pic_flag)
     {
       // bottom_field_flag  u(1)
-      img->bottom_field_flag = u_1("SH: bottom_field_flag", partition);
+      img->bottom_field_flag = u_1("SH: bottom_field_flag", currStream);
 
       img->structure = img->bottom_field_flag ? BOTTOM_FIELD : TOP_FIELD;
     }
@@ -180,47 +177,47 @@ int RestOfSliceHeader()
 
   if (img->idr_flag)
   {
-    img->idr_pic_id = ue_v("SH: idr_pic_id", partition);
+    img->idr_pic_id = ue_v("SH: idr_pic_id", currStream);
   }
 
-  if(!img->delta_pic_order_always_zero_flag)
+  // POC200301
+  if (img->pic_order_cnt_type == 0)
   {
-    img->delta_pic_order_cnt[0] = se_v("SH: delta_pic_order_cnt[0]", partition);
+    img->pic_order_cnt_lsb = u_v(active_sps->log2_max_pic_order_cnt_lsb_minus4 + 4, "SH: pic_order_cnt_lsb", currStream);
+    if( img->pic_order_present_flag  ==  1 &&  !img->field_pic_flag )
+      img->delta_pic_order_cnt_bottom = se_v("SH: delta_pic_order_cnt_bottom", currStream);
   }
-  else 
-    img->delta_pic_order_cnt[0] = 0;
-                        
-  if (img->pic_order_present_flag  && !img->delta_pic_order_always_zero_flag)
+  if( img->pic_order_cnt_type == 1 && !img->delta_pic_order_always_zero_flag ) 
   {
-    img->delta_pic_order_cnt[1] = se_v("SH: delta_pic_order_cnt[1]", partition);
+    img->delta_pic_order_cnt[ 0 ] = se_v("SH: delta_pic_order_cnt[0]", currStream);
+    if( img->pic_order_present_flag  ==  1  &&  !img->field_pic_flag )
+      img->delta_pic_order_cnt[ 1 ] = se_v("SH: delta_pic_order_cnt[1]", currStream);
   }
-  else 
-    img->delta_pic_order_cnt[1] = 0;
   
   //! redundant_pic_cnt is missing here
   if (active_pps->redundant_pic_cnt_present_flag)
   {
-    img->redundant_pic_cnt = u_1 ("SH: redundant_pic_cnt", partition);
+    img->redundant_pic_cnt = u_1 ("SH: redundant_pic_cnt", currStream);
   }
 
   if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
   {
-    img->direct_type = u_1 ("SH: direct_spatial_mv_pred_flag", partition);
+    img->direct_type = u_1 ("SH: direct_spatial_mv_pred_flag", currStream);
   }
 
   img->num_ref_pic_active_fwd = 0;
   img->num_ref_pic_active_bwd = 0;
 
-  val = u_1 ("SH: num_ref_idx_override_flag", partition);
+  val = u_1 ("SH: num_ref_idx_override_flag", currStream);
   if (val)
   {
     if(img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type==B_IMG_1 || img->type==B_IMG_MULT)
     {
-      img->num_ref_pic_active_fwd = 1 + ue_v ("SH: num_ref_pic_active_fwd_minus1", partition);
+      img->num_ref_pic_active_fwd = 1 + ue_v ("SH: num_ref_pic_active_fwd_minus1", currStream);
       
       if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
       {
-        img->num_ref_pic_active_bwd = 1 + ue_v ("SH: num_ref_pic_active_bwd_minus1", partition);
+        img->num_ref_pic_active_bwd = 1 + ue_v ("SH: num_ref_pic_active_bwd_minus1", currStream);
       }
     }
   }
@@ -228,7 +225,7 @@ int RestOfSliceHeader()
   ref_pic_list_reordering();
 
   img->apply_weights = ((img->weighted_pred_flag && (currSlice->picture_type == INTER_IMG_1 || currSlice->picture_type == INTER_IMG_MULT || currSlice->picture_type == SP_IMG_1 || currSlice->picture_type == SP_IMG_MULT) )
-          || ((img->weighted_bipred_explicit_flag  || img->weighted_bipred_implicit_flag ) && (currSlice->picture_type == B_IMG_1 || currSlice->picture_type == B_IMG_MULT )));
+          || ((img->weighted_bipred_idc > 0 ) && (currSlice->picture_type == B_IMG_1 || currSlice->picture_type == B_IMG_MULT )));
 
   if ((active_pps->weighted_pred_flag&&(img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT))||
       (active_pps->weighted_bipred_idc==1 && (img->type==B_IMG_1 || img->type==B_IMG_MULT)))
@@ -236,39 +233,39 @@ int RestOfSliceHeader()
     pred_weight_table();
   }
 
-  dec_ref_pic_marking();
+  dec_ref_pic_marking(currStream);
 
-  if (active_pps->entropy_coding_mode && img->type!=INTRA_IMG && img->type!=SP_IMG_1 && img->type!=SP_IMG_MULT)
+  if (active_pps->entropy_coding_mode && img->type!=INTRA_IMG && img->type!=SI_IMG)
   {
-    currSlice->cabac_init_idc = ue_v("SH: cabac_init_idc", partition);
+    img->model_number = ue_v("SH: cabac_init_idc", currStream);
   }
   else 
   {
-    currSlice->cabac_init_idc=0;
+    img->model_number = 0;
   }
 
-  val = se_v("SH: slice_qp_delta", partition);
+  val = se_v("SH: slice_qp_delta", currStream);
   currSlice->qp = img->qp = 26 + active_pps->pic_init_qp_minus26 + val;
 
   if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT || img->type == SI_IMG) 
   {
     if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT)
     {
-      img->sp_switch = u_1 ("SH: sp_for_switch_flag", partition);
+      img->sp_switch = u_1 ("SH: sp_for_switch_flag", currStream);
     }
-    val = se_v("SH: slice_qs_delta", partition);
+    val = se_v("SH: slice_qs_delta", currStream);
     img->qpsp = 26 + active_pps->pic_init_qs_minus26 + val;
   }
 
   if (active_pps->deblocking_filter_parameters_present_flag)
   {
-    currSlice->LFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", partition);
+    currSlice->LFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", currStream);
 
     if (currSlice->LFDisableIdc!=1)
     {
-      currSlice->LFAlphaC0Offset = 2 * se_v("SH: slice_alpha_c0_offset_div2", partition);
+      currSlice->LFAlphaC0Offset = 2 * se_v("SH: slice_alpha_c0_offset_div2", currStream);
 
-      currSlice->LFBetaOffset = 2 * se_v("SH: slice_beta_offset_div2", partition);
+      currSlice->LFBetaOffset = 2 * se_v("SH: slice_beta_offset_div2", currStream);
     }
   }
 
@@ -314,141 +311,8 @@ int RestOfSliceHeader()
 
   img->max_mb_nr = 2*(img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 
-  //calculate pocs
-  if(img->idr_flag)
-  {
-    FrameNumOffset=0;     //  first pix of IDRGOP, 
-    FirstFieldType = img->bottom_field_flag;              //save type of first field of frame
-                                                          //NB may not work with mixed field & frame coding
-    img->delta_pic_order_cnt[0]=0;                        //ignore first delta
-    assert (img->frame_num == 0);
-    if(img->frame_num)error("frame_num != 0 in idr pix", -1020);
-
-  }
-  else if (img->frame_num<PreviousFrameNum)
-  {             //not first pix of IDRGOP
-    FrameNumOffset += img->MaxFrameNum;
-  }
-
-  if(img->num_ref_frames_in_pic_order_cnt_cycle) 
-    AbsFrameNum = FrameNumOffset+img->frame_num;
-  else 
-    AbsFrameNum=0;
-
-  if(img->disposable_flag && AbsFrameNum)
-    AbsFrameNum--;
-
-  //! calculate ExpectedDeltaPerPicOrderCntCycle (used to be done during the reading
-  //! of the SPS symbols (which usd to live in the slice header)
-
-  ExpectedDeltaPerPicOrderCntCycle=0;
-  if(active_sps->num_ref_frames_in_pic_order_cnt_cycle)
-    for(i=0;i<(int) active_sps->num_ref_frames_in_pic_order_cnt_cycle;i++)
-    {
-      ExpectedDeltaPerPicOrderCntCycle += active_sps->offset_for_ref_frame[i];
-    }
-
-
-  if(AbsFrameNum)
-  {
-    PicOrderCntCycleCnt = (AbsFrameNum-1)/img->num_ref_frames_in_pic_order_cnt_cycle;
-    FrameNumInPicOrderCntCycle = (AbsFrameNum-1)%img->num_ref_frames_in_pic_order_cnt_cycle;
-    ExpectedPicOrderCnt = PicOrderCntCycleCnt*ExpectedDeltaPerPicOrderCntCycle;
-    for(i=0;i<=(int)FrameNumInPicOrderCntCycle;i++)
-      ExpectedPicOrderCnt += img->offset_for_ref_frame[i];
-  }
-  else 
-    ExpectedPicOrderCnt=0;
-
-  if(img->disposable_flag)
-    ExpectedPicOrderCnt += img->offset_for_non_ref_pic;
-
-
-  if(img->field_pic_flag==0)
-  {           //frame pix
-    ThisPOC = img->toppoc = ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
-    img->bottompoc = img->toppoc + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[1];
-    if(PreviousPOC!=ThisPOC)
-    {               //new frame detected
-      if(img->disposable_flag)
-        push_poc(img->toppoc,img->bottompoc,NONREFFRAME);
-      else                                    
-        push_poc(img->toppoc,img->bottompoc,REFFRAME);
-    }
-  }
-  else if (img->bottom_field_flag==0)
-  {  //top field 
-    ThisPOC = img->toppoc = ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
-    if(PreviousPOC!=ThisPOC  &&  FirstFieldType==img->bottom_field_flag)
-    {           //new frame detected
-      if(img->disposable_flag)
-        push_poc(img->toppoc,0,NONREFFRAME);
-      else                                    
-        push_poc(img->toppoc,0,REFFRAME);
-    }
-    else 
-      toprefpoc[0] = img->toppoc;                //2nd field of same frame
-  } 
-  else
-  {                                                   //bottom field
-    ThisPOC = img->bottompoc = ExpectedPicOrderCnt + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[0];
-    if(PreviousPOC!=ThisPOC  &&  FirstFieldType==img->bottom_field_flag)
-    {           //new frame detected
-      if(img->disposable_flag)
-        push_poc(0,img->bottompoc,NONREFFRAME);
-      else 
-        push_poc(0,img->bottompoc,REFFRAME);
-    }
-    else 
-      bottomrefpoc[0] = img->bottompoc;          //2nd field of same frame
-  }
-
-                                                                //temp stuff to track tr
-  if(img->field_pic_flag)
-  {
-    img->tr_fld = ThisPOC;
-    if(img->bottom_field_flag)
-    {
-      currSlice->picture_id = img->tr = img->bottompoc%256;
-    }
-    else
-    {   //top field
-      currSlice->picture_id = img->tr = img->toppoc%256;
-    }
-  }
-  else
-  {           //frame pix  -  use toppoc/2
-    img->tr_frm = ThisPOC/2;
-    currSlice->picture_id = img->tr = (img->toppoc/2)%256;
-  }
-            //update "Previous" stuff for next slice
-  PreviousFrameNum=img->frame_num;
-  Previousfield_pic_flag=img->field_pic_flag;
-  Previousbottom_field_flag=img->bottom_field_flag;
-  Previousnal_reference_idc=img->idr_flag;               
-  Previousdelta_pic_order_cnt[0]=img->delta_pic_order_cnt[0];
-  Previousdelta_pic_order_cnt[1]=img->delta_pic_order_cnt[1];
-  PreviousPOC=ThisPOC;
-            //moved from above for stuff that still uses img->tr
-            //soon to be obsolete
-  if(!img->current_slice_nr)
-  { 
-    if((img->type != B_IMG_MULT && img->type != B_IMG_1) || !img->disposable_flag) 
-    {
-      img->pstruct_next_P = img->structure;
-      if(img->structure == TOP_FIELD)
-      {
-        img->imgtr_last_P = img->imgtr_next_P;
-        img->imgtr_next_P = img->tr_fld;
-      }
-      else if(img->structure == FRAME)
-      {
-        img->imgtr_last_P = img->imgtr_next_P;
-        img->imgtr_next_P = 2*img->tr_frm;
-      }
-    }
-    
-  }
+  //calculate pocs  POC200301
+  decoding_poc(img);
   //note  UsedBits is probably inaccurate
 //  dumppoc (img);
   return UsedBits;
@@ -466,29 +330,30 @@ static void ref_pic_list_reordering()
   Slice *currSlice = img->currentSlice;
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
+  Bitstream *currStream = partition->bitstream;
   int i, val;
 
   alloc_ref_pic_list_reordering_buffer(currSlice);
   
   if (img->type!=INTRA_IMG && img->type!=SI_IMG)
   {
-    val = currSlice->ref_pic_list_reordering_flag_l0 = u_1 ("SH: ref_pic_list_reordering_flag_l0", partition);
+    val = currSlice->ref_pic_list_reordering_flag_l0 = u_1 ("SH: ref_pic_list_reordering_flag_l0", currStream);
     
     if (val)
     {
       i=0;
       do
       {
-        val = currSlice->remapping_of_pic_nums_idc_l0[i] = ue_v("SH: remapping_of_pic_nums_idc_l0", partition);
+        val = currSlice->remapping_of_pic_nums_idc_l0[i] = ue_v("SH: remapping_of_pic_nums_idc_l0", currStream);
         if (val==0 || val==1)
         {
-          currSlice->abs_diff_pic_num_minus1_l0[i] = ue_v("SH: abs_diff_pic_num_minus1_l0", partition);
+          currSlice->abs_diff_pic_num_minus1_l0[i] = ue_v("SH: abs_diff_pic_num_minus1_l0", currStream);
         }
         else
         {
           if (val==2)
           {
-            currSlice->long_term_pic_idx_l0[i] = ue_v("SH: long_term_pic_idx_l0", partition);
+            currSlice->long_term_pic_idx_l0[i] = ue_v("SH: long_term_pic_idx_l0", currStream);
           }
         }
         i++;
@@ -499,23 +364,23 @@ static void ref_pic_list_reordering()
 
   if (img->type==B_IMG_1 || img->type==B_IMG_MULT)
   {
-    val = currSlice->ref_pic_list_reordering_flag_l1 = u_1 ("SH: ref_pic_list_reordering_flag_l1", partition);
+    val = currSlice->ref_pic_list_reordering_flag_l1 = u_1 ("SH: ref_pic_list_reordering_flag_l1", currStream);
     
     if (val)
     {
       i=0;
       do
       {
-        val = currSlice->remapping_of_pic_nums_idc_l1[i] = ue_v("SH: remapping_of_pic_nums_idc_l1", partition);
+        val = currSlice->remapping_of_pic_nums_idc_l1[i] = ue_v("SH: remapping_of_pic_nums_idc_l1", currStream);
         if (val==0 || val==1)
         {
-          currSlice->abs_diff_pic_num_minus1_l1[i] = ue_v("SH: abs_diff_pic_num_minus1_l1", partition);
+          currSlice->abs_diff_pic_num_minus1_l1[i] = ue_v("SH: abs_diff_pic_num_minus1_l1", currStream);
         }
         else
         {
           if (val==2)
           {
-            currSlice->long_term_pic_idx_l1[i] = ue_v("SH: long_term_pic_idx_l1", partition);
+            currSlice->long_term_pic_idx_l1[i] = ue_v("SH: long_term_pic_idx_l1", currStream);
           }
         }
         i++;
@@ -536,25 +401,26 @@ static void pred_weight_table()
   Slice *currSlice = img->currentSlice;
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
+  Bitstream *currStream = partition->bitstream;
   int luma_weight_flag_l0, luma_weight_flag_l1, chroma_weight_flag_l0, chroma_weight_flag_l1;
   int i,j;
 
-  img->luma_log_weight_denom = ue_v ("SH: luma_log_weight_denom", partition);
+  img->luma_log_weight_denom = ue_v ("SH: luma_log_weight_denom", currStream);
   img->wp_round_luma = 1<<(img->luma_log_weight_denom - 1);
   
-  img->chroma_log_weight_denom = ue_v ("SH: chroma_log_weight_denom", partition);
+  img->chroma_log_weight_denom = ue_v ("SH: chroma_log_weight_denom", currStream);
   img->wp_round_chroma = 1<<(img->chroma_log_weight_denom - 1);
 
   reset_wp_params(img);
 
   for (i=0; i<img->num_ref_pic_active_fwd; i++)
   {
-    luma_weight_flag_l0 = u_1("SH: luma_weight_flag_l0", partition);
+    luma_weight_flag_l0 = u_1("SH: luma_weight_flag_l0", currStream);
     
     if (luma_weight_flag_l0)
     {
-      img->wp_weight[0][i][0] = se_v ("SH: luma_weight_l0", partition);
-      img->wp_offset[0][i][0] = se_v ("SH: luma_offset_l0", partition);
+      img->wp_weight[0][i][0] = se_v ("SH: luma_weight_l0", currStream);
+      img->wp_offset[0][i][0] = se_v ("SH: luma_offset_l0", currStream);
     }
     else
     {
@@ -562,14 +428,14 @@ static void pred_weight_table()
       img->wp_offset[0][i][0] = 0;
     }
     
-    chroma_weight_flag_l0 = u_1 ("SH: chroma_weight_flag_l0", partition);
+    chroma_weight_flag_l0 = u_1 ("SH: chroma_weight_flag_l0", currStream);
     
     for (j=1; j<3; j++)
     {
       if (chroma_weight_flag_l0)
       {
-        img->wp_weight[0][i][j] = se_v("SH: chroma_weight_l0", partition);
-        img->wp_offset[0][i][j] = se_v("SH: chroma_offset_l0", partition);
+        img->wp_weight[0][i][j] = se_v("SH: chroma_weight_l0", currStream);
+        img->wp_offset[0][i][j] = se_v("SH: chroma_offset_l0", currStream);
       }
       else
       {
@@ -578,16 +444,16 @@ static void pred_weight_table()
       }
     }
   }
-  if ((img->type == B_IMG_1 || img->type == B_IMG_MULT) && img->weighted_bipred_explicit_flag == 1)
+  if ((img->type == B_IMG_1 || img->type == B_IMG_MULT) && img->weighted_bipred_idc == 1)
   {
     for (i=0; i<img->num_ref_pic_active_bwd; i++)
     {
-      luma_weight_flag_l1 = u_1("SH: luma_weight_flag_l1", partition);
+      luma_weight_flag_l1 = u_1("SH: luma_weight_flag_l1", currStream);
       
       if (luma_weight_flag_l1)
       {
-        img->wp_weight[1][i][0] = se_v ("SH: luma_weight_l1", partition);
-        img->wp_offset[1][i][0] = se_v ("SH: luma_offset_l1", partition);
+        img->wp_weight[1][i][0] = se_v ("SH: luma_weight_l1", currStream);
+        img->wp_offset[1][i][0] = se_v ("SH: luma_offset_l1", currStream);
       }
       else
       {
@@ -595,14 +461,14 @@ static void pred_weight_table()
         img->wp_offset[1][i][0] = 0;
       }
       
-      chroma_weight_flag_l1 = u_1 ("SH: chroma_weight_flag_l1", partition);
+      chroma_weight_flag_l1 = u_1 ("SH: chroma_weight_flag_l1", currStream);
       
       for (j=1; j<3; j++)
       {
         if (chroma_weight_flag_l1)
         {
-          img->wp_weight[1][i][j] = se_v("SH: chroma_weight_l1", partition);
-          img->wp_offset[1][i][j] = se_v("SH: chroma_offset_l1", partition);
+          img->wp_weight[1][i][j] = se_v("SH: chroma_weight_l1", currStream);
+          img->wp_offset[1][i][j] = se_v("SH: chroma_offset_l1", currStream);
         }
         else
         {
@@ -621,11 +487,8 @@ static void pred_weight_table()
  *    read the memory control operations
  ************************************************************************
  */
-static void dec_ref_pic_marking()
+void dec_ref_pic_marking(Bitstream *currStream)
 {
-  Slice *currSlice = img->currentSlice;
-  int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
-  DataPartition *partition = &(currSlice->partArr[dP_nr]);
   int val;
 
   MMCObuffer_t *tmp_mmco,*tmp_mmco2;
@@ -641,12 +504,12 @@ static void dec_ref_pic_marking()
 
   if (img->idr_flag)
   {
-    img->no_output_of_prior_pics_flag = u_1("SH: no_output_of_prior_pics_flag", partition);
-    img->long_term_reference_flag = u_1("SH: long_term_reference_flag", partition);
+    img->no_output_of_prior_pics_flag = u_1("SH: no_output_of_prior_pics_flag", currStream);
+    img->long_term_reference_flag = u_1("SH: long_term_reference_flag", currStream);
   }
   else
   {
-    img->adaptive_ref_pic_buffering_flag = u_1("SH: adaptive_ref_pic_buffering_flag", partition);
+    img->adaptive_ref_pic_buffering_flag = u_1("SH: adaptive_ref_pic_buffering_flag", currStream);
     if (img->adaptive_ref_pic_buffering_flag)
     {
       // read Memory Management Control Operation 
@@ -655,19 +518,19 @@ static void dec_ref_pic_marking()
         tmp_mmco=(MMCObuffer_t*)calloc (1,sizeof (MMCObuffer_t));
         tmp_mmco->Next=NULL;
         
-        val = tmp_mmco->MMCO = ue_v("SH: memory_management_control_operation", partition);
+        val = tmp_mmco->MMCO = ue_v("SH: memory_management_control_operation", currStream);
 
         if ((val==1)||(val==3)) 
         {
-          tmp_mmco->DPN = 1 + ue_v("SH: difference_of_pic_nums_minus1", partition);
+          tmp_mmco->DPN = 1 + ue_v("SH: difference_of_pic_nums_minus1", currStream);
         }
         if ((val==2)||(val==3)||(val==6))
         {
-          tmp_mmco->LPIN = ue_v("SH: long_term_pic_idx", partition);
+          tmp_mmco->LPIN = ue_v("SH: long_term_pic_idx", currStream);
         }
         if (val==4)
         {
-          tmp_mmco->MLIP1 = ue_v("SH: max_long_term_pic_idx_plus1", partition);
+          tmp_mmco->MLIP1 = ue_v("SH: max_long_term_pic_idx_plus1", currStream);
         }
         
         // add MMCO to list
@@ -688,6 +551,264 @@ static void dec_ref_pic_marking()
   }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    To calculate the poc values
+ *        based upon JVT-F100d2
+ *  POC200301: Until Jan 2003, this function will calculate the correct POC
+ *    values, but the management of POCs in buffered pictures may need more work.
+ * \return
+ *    none
+ ************************************************************************
+ */
+void decoding_poc(struct img_par *img)
+{
+  int i;
+  static int flag = 0;
+  Slice *currSlice = img->currentSlice;
+  // for POC mode 0:
+  unsigned int        MaxPicOrderCntLsb = (1<<(active_sps->log2_max_pic_order_cnt_lsb_minus4+4));
+  flag ++;
+  // for POC mode 1:
+
+  switch ( img->pic_order_cnt_type )
+  {
+  case 0: // POC MODE 0
+    // 1st
+    if(img->idr_flag)
+      img->PicOrderCntMsb = 0;
+
+    // Calculate the MSBs of current picture
+    if( img->pic_order_cnt_lsb  <  img->PrevPicOrderCntLsb  &&  
+      ( img->PrevPicOrderCntLsb - img->pic_order_cnt_lsb )  >=  ( MaxPicOrderCntLsb / 2 ) )
+	    img->CurrPicOrderCntMsb = img->PicOrderCntMsb + MaxPicOrderCntLsb;
+    else if ( img->pic_order_cnt_lsb  >  img->PrevPicOrderCntLsb  &&
+      ( img->pic_order_cnt_lsb - img->PrevPicOrderCntLsb )  >  ( MaxPicOrderCntLsb / 2 ) )
+	    img->CurrPicOrderCntMsb = img->PicOrderCntMsb - MaxPicOrderCntLsb;
+    else
+	    img->CurrPicOrderCntMsb = img->PicOrderCntMsb;
+    
+    // 2nd
+
+    img->toppoc = img->CurrPicOrderCntMsb + img->pic_order_cnt_lsb;
+    if( img->bottom_field_flag ) 
+	    img->bottompoc = img->CurrPicOrderCntMsb + img->pic_order_cnt_lsb;
+    else
+	    img->bottompoc = img->toppoc + img->delta_pic_order_cnt_bottom;
+
+    // last: some post-processing. 
+    if ( img->toppoc <= img->bottompoc )
+      img->ThisPOC = img->framepoc = img->toppoc;
+    else
+      img->ThisPOC = img->framepoc = img->bottompoc;
+    break;
+
+
+  case 1: // POC MODE 1
+    // 1st
+    if(img->idr_flag)
+    {
+      img->FrameNumOffset=0;     //  first pix of IDRGOP, 
+      // why the following two lines?????
+      img->FirstFieldType = img->bottom_field_flag;              //save type of first field of frame
+                                                            //NB may not work with mixed field & frame coding
+      img->delta_pic_order_cnt[0]=0;                        //ignore first delta
+      if(img->frame_num)  error("frame_num != 0 in idr pix", -1020);
+    }
+    else if (img->frame_num<img->PreviousFrameNum)
+    {             //not first pix of IDRGOP
+      img->FrameNumOffset += img->MaxFrameNum;
+    }
+
+    // 2nd
+    if(img->num_ref_frames_in_pic_order_cnt_cycle) 
+      img->AbsFrameNum = img->FrameNumOffset+img->frame_num;
+    else 
+      img->AbsFrameNum=0;
+    if(img->disposable_flag && img->AbsFrameNum>0)
+      img->AbsFrameNum--;
+
+    // 3rd
+    img->ExpectedDeltaPerPicOrderCntCycle=0;
+    if(active_sps->num_ref_frames_in_pic_order_cnt_cycle)
+    for(i=0;i<(int) active_sps->num_ref_frames_in_pic_order_cnt_cycle;i++)
+      img->ExpectedDeltaPerPicOrderCntCycle += active_sps->offset_for_ref_frame[i];
+
+    if(img->AbsFrameNum)
+    {
+      img->PicOrderCntCycleCnt = (img->AbsFrameNum-1)/img->num_ref_frames_in_pic_order_cnt_cycle;
+      img->FrameNumInPicOrderCntCycle = (img->AbsFrameNum-1)%img->num_ref_frames_in_pic_order_cnt_cycle;
+      img->ExpectedPicOrderCnt = img->PicOrderCntCycleCnt*img->ExpectedDeltaPerPicOrderCntCycle;
+      for(i=0;i<=(int)img->FrameNumInPicOrderCntCycle;i++)
+        img->ExpectedPicOrderCnt += img->offset_for_ref_frame[i];
+    }
+    else 
+      img->ExpectedPicOrderCnt=0;
+
+    if(img->disposable_flag)
+      img->ExpectedPicOrderCnt += img->offset_for_non_ref_pic;
+
+    // TIAN DONG: The following processing may need to be updated. POC200301
+    // and some codes can move to post_poc().
+    // post processing: for management of POC values of pictures in buffer
+    if(img->field_pic_flag==0)
+    {           //frame pix
+      img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
+      img->bottompoc = img->toppoc + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[1];
+      img->ThisPOC = img->framepoc = (img->toppoc < img->bottompoc)? img->toppoc : img->bottompoc; // POC200301
+      if(img->PreviousPOC!=img->ThisPOC)
+      {         //new frame detected
+        if(img->disposable_flag)
+          push_poc(img->toppoc,img->bottompoc,NONREFFRAME);
+        else
+          push_poc(img->toppoc,img->bottompoc,REFFRAME);
+      }
+    }
+    else if (img->bottom_field_flag==0)
+    {  //top field 
+      img->ThisPOC = img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
+      img->bottompoc = 0;
+      if(img->PreviousPOC!=img->ThisPOC  &&  img->FirstFieldType==img->bottom_field_flag)
+      {           //new frame detected
+        if(img->disposable_flag)
+          push_poc(img->toppoc,0,NONREFFRAME);
+        else
+          push_poc(img->toppoc,0,REFFRAME);
+      }
+      else
+        toprefpoc[0] = img->toppoc;                //2nd field of same frame
+    } 
+    else
+    {  //bottom field
+      img->toppoc = 0;
+      img->ThisPOC = img->bottompoc = img->ExpectedPicOrderCnt + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[0];
+      if(img->PreviousPOC!=img->ThisPOC  &&  img->FirstFieldType==img->bottom_field_flag)
+      {           //new frame detected
+        if(img->disposable_flag)
+          push_poc(0,img->bottompoc,NONREFFRAME);
+        else 
+          push_poc(0,img->bottompoc,REFFRAME);
+      }
+      else 
+        bottomrefpoc[0] = img->bottompoc;          //2nd field of same frame
+    }
+  
+    // 4th (last) update "Previous" stuff for next slice
+//    post_poc( img );
+    break;
+
+
+  case 2: // POC MODE 2
+    if(img->idr_flag) // IDR picture
+    {
+      img->FrameNumOffset=0;     //  first pix of IDRGOP, 
+      img->ThisPOC = img->framepoc = img->toppoc = img->bottompoc = 0;
+      if(img->frame_num)  error("frame_num != 0 in idr pix", -1020);
+    }
+    else
+    {
+      if (img->frame_num<img->PreviousFrameNum)
+        img->FrameNumOffset += img->MaxFrameNum;
+      img->AbsFrameNum = img->FrameNumOffset+img->frame_num;
+      if(img->disposable_flag)
+        img->ThisPOC = (2*img->AbsFrameNum - 1);
+      else
+        img->ThisPOC = (2*img->AbsFrameNum);
+
+      if (img->field_pic_flag==0)
+        img->toppoc = img->bottompoc = img->framepoc = img->ThisPOC;
+      else if (img->bottom_field_flag==0)
+         img->toppoc = img->framepoc = img->ThisPOC;
+      else img->bottompoc = img->framepoc = img->ThisPOC;
+    }
+
+    break;
+
+
+  default:
+    //error must occurs
+    assert( 1==0 );
+    break;
+  }
+
+  //temp stuff to track tr
+  if(img->field_pic_flag)
+  {
+    img->tr_fld = img->ThisPOC;
+    if(img->bottom_field_flag)
+    {
+      currSlice->picture_id = img->tr = img->bottompoc;
+    }
+    else
+    {   //top field
+      currSlice->picture_id = img->tr = img->toppoc;
+    }
+  }
+  else
+  {           //frame pix  -  use toppoc/2
+    img->tr_frm = img->ThisPOC/2;
+    currSlice->picture_id = img->tr = img->toppoc/2;
+  }
+            //moved from above for stuff that still uses img->tr
+            //soon to be obsolete
+  if(!img->current_slice_nr)
+  { 
+    if((img->type != B_IMG_MULT && img->type != B_IMG_1) || !img->disposable_flag) 
+    {
+      img->pstruct_next_P = img->structure;
+      if(img->structure == TOP_FIELD)
+      {
+        img->imgtr_last_P = img->imgtr_next_P;
+        img->imgtr_next_P = img->tr_fld;
+      }
+      else if(img->structure == FRAME)
+      {
+        img->imgtr_last_P = img->imgtr_next_P;
+        img->imgtr_next_P = 2*img->tr_frm;
+      }
+    }
+  }
+}
+
+void post_poc(struct img_par *img)
+{
+  switch ( img->pic_order_cnt_type )
+  {
+  case 0: // POC MODE 0
+    if( !img->disposable_flag )
+    {
+      img->PrevPicOrderCntLsb = img->pic_order_cnt_lsb;
+      img->PicOrderCntMsb = img->CurrPicOrderCntMsb;
+    }
+    break;
+
+
+  case 1: // POC MODE 1
+    img->PreviousFrameNum=img->frame_num;
+    img->Previousfield_pic_flag=img->field_pic_flag;
+    img->Previousbottom_field_flag=img->bottom_field_flag;
+    img->Previousnal_reference_idc=img->idr_flag;               
+    img->Previousdelta_pic_order_cnt[0]=img->delta_pic_order_cnt[0];
+    img->Previousdelta_pic_order_cnt[1]=img->delta_pic_order_cnt[1];
+    img->PreviousPOC=img->ThisPOC;
+    break;
+
+
+  case 2: // POC MODE 2
+    if (!img->disposable_flag)
+      img->PreviousFrameNum=img->frame_num;
+    break;
+
+
+  default:
+    //error must occurs
+    assert( 1==0 );
+    break;
+  }
+
+}
+
 
 
 /*!
@@ -706,7 +827,8 @@ int dumppoc(struct img_par *img) {
     printf ("field_pic_flag                        %d\n", img->field_pic_flag);
     printf ("bottom_field_flag                     %d\n", img->bottom_field_flag);
     printf ("POC SPS\n");
-    printf ("log2_max_frame_num_minus4             %d\n", 4);
+    printf ("log2_max_frame_num_minus4             %d\n", LOG2_MAX_FRAME_NUM_MINUS4);         // POC200301
+    printf ("log2_max_pic_order_cnt_lsb_minus4     %d\n", LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4);
     printf ("pic_order_cnt_type                    %d\n", img->pic_order_cnt_type);
     printf ("num_ref_frames_in_pic_order_cnt_cycle %d\n", img->num_ref_frames_in_pic_order_cnt_cycle);
     printf ("delta_pic_order_always_zero_flag      %d\n", img->delta_pic_order_always_zero_flag);
@@ -721,5 +843,29 @@ int dumppoc(struct img_par *img) {
     printf ("delta_pic_order_cnt[2]                %d\n", img->delta_pic_order_cnt[2]);
     printf ("idr_flag                              %d\n", img->idr_flag);
     printf ("MaxFrameNum                           %d\n", img->MaxFrameNum);
+
     return 0;
+}
+
+// this function is likely to be updated according to how POC values are managed in JM.
+int poc_distance( int refa, int refb)
+{
+  return toprefpoc[refb + 1] - toprefpoc[refa + 1];
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    return the poc of img as per (8-1) JVT-F100d2
+ *  POC200301
+ ************************************************************************
+ */
+int picture_order(struct img_par *img)
+{
+  if (img->field_pic_flag==0) // is a frame
+    return img->framepoc;
+  else if (img->bottom_field_flag==0) // top field
+    return img->toppoc;
+  else // bottom field
+    return img->bottompoc;
 }

@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.0a
+ *     JM 6.1
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -124,7 +124,7 @@
 #include "erc_api.h"
 
 #define JM          "6"
-#define VERSION     "6.0a"
+#define VERSION     "6.1"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -134,17 +134,17 @@ extern objectBuffer_t *erc_object_list;
 extern ercVariables_t *erc_errorVar;
 
 
-//! I have started to move the inp and img structures into global variables.
-//! They are declared in the following lines.  Since inp is defined in conio.h
-//! and cannot be overridden globally, it is defined here as input
-//!
-//! Everywhere, input-> and img-> can now be used either globally or with
-//! the local override through the formal parameter mechanism
+// I have started to move the inp and img structures into global variables.
+// They are declared in the following lines.  Since inp is defined in conio.h
+// and cannot be overridden globally, it is defined here as input
+//
+// Everywhere, input-> and img-> can now be used either globally or with
+// the local override through the formal parameter mechanism
 
 extern FILE* bits;
-struct inp_par    *input;         // input parameters from input configuration file
-struct snr_par    *snr;         // statistics
-struct img_par    *img;         // image parameters
+struct inp_par    *input;       //!< input parameters from input configuration file
+struct snr_par    *snr;         //!< statistics
+struct img_par    *img;         //!< image parameters
 
 /*!
  ***********************************************************************
@@ -647,7 +647,6 @@ void FreePartition (DataPartition *dp, int n)
 void malloc_slice(struct inp_par *inp, struct img_par *img)
 {
   Slice *currSlice;
-  const int buffer_size = MAX_CODED_FRAME_SIZE; // picture size unknown at this time, this value is to check
 
   img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
   if ( (currSlice = img->currentSlice) == NULL)

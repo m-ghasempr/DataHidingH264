@@ -146,6 +146,10 @@ Mapping Map[] = {
     // End JVT-D095, JVT-D097
 
     {"UseRedundantSlice", &configinput.redundant_slice_flag, 0}, // JVT-D101
+    {"PicOrderCntType", &configinput.pic_order_cnt_type, 0},     // POC200301
+
+    {"ContextInitMethod",        &configinput.context_init_method,     0},
+    {"FixedModelNumber",         &configinput.model_number,            0},
 
     {NULL,                       NULL,                                -1}
 };

@@ -812,7 +812,6 @@ void SetModesAndRefframeForBlocks (int mode)
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   int  bframe  = (img->type==B_IMG || img->type==BS_IMG);
   int  **abp_type_arr = abp_type_FrArr;
-  int spframe        = (img->types==SP_IMG);
   int    **fwrefarr = fw_refFrArr;
   int    **bwrefarr = bw_refFrArr;
   int        **frefarr = refFrArr;
@@ -2183,7 +2182,8 @@ void encode_one_macroblock ()
 #if BIPRED_SIMPLE
                     tmp_fw_ref = best_fw_ref;
 #endif
-                    bid_mcost =  BBIDPartitionCost (mode, block, &tmp_fw_ref, &tmp_bw_ref, lambda_motion_factor, &best_abp_type, lambda_motion);
+                    bid_mcost =  ABIDPartitionCost (mode, block, &tmp_fw_ref, &tmp_bw_ref, lambda_motion_factor, &best_abp_type);
+ //                   bid_mcost =  BBIDPartitionCost (mode, block, &tmp_fw_ref, &tmp_bw_ref, lambda_motion_factor, &best_abp_type,  useABT, lambda_motion);
 
                     best_bw_ref = 0;
                     bw_mcost = 1<<20;
@@ -2436,7 +2436,7 @@ void encode_one_macroblock ()
 #if BIPRED_SIMPLE
                 tmp_fw_ref = best_fw_ref;
 #endif
-                bid_mcost =  BBIDPartitionCost (mode, block, &tmp_fw_ref, &tmp_bw_ref, lambda_motion_factor, &best_abp_type, lambda_motion);
+                bid_mcost =  BBIDPartitionCost (mode, block, &tmp_fw_ref, &tmp_bw_ref, lambda_motion_factor, &best_abp_type, (int)lambda_motion);
 
                 best_bw_ref = 0;
                 bw_mcost = 1<<20;

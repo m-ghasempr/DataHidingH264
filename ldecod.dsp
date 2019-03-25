@@ -107,6 +107,10 @@ SOURCE=.\ldecod\src\cabac.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\context_ini.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\erc_api.c
 # End Source File
 # Begin Source File
@@ -227,7 +231,15 @@ SOURCE=.\ldecod\inc\cabac.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\inc\context_ini.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\inc\contributors.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\inc\ctx_tables.h
 # End Source File
 # Begin Source File
 

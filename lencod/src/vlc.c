@@ -66,10 +66,12 @@
  * \brief
  *    ue_v, writes an ue(v) syntax element, returns the length in bits
  *
- * \param 
- *    tracestring: the string for the trace file
- *    value: the value to be coded
- *    part: the DataPartition the value should be coded into
+ * \param tracestring
+ *    the string for the trace file
+ * \param value
+ *    the value to be coded
+ *  \param bitstream
+ *    the Bitstream the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element
@@ -102,10 +104,12 @@ int ue_v (char *tracestring, int value, DataPartition *part)
  * \brief
  *    ue_v, writes an ue(v) syntax element, returns the length in bits
  *
- * \param 
- *    tracestring: the string for the trace file
- *    value: the value to be coded
- *    part: the DataPartition the value should be coded into
+ * \param tracestring
+ *    the string for the trace file
+ * \param value
+ *    the value to be coded
+ *  \param bitstream
+ *    the Bitstream the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element
@@ -139,10 +143,12 @@ int se_v (char *tracestring, int value, DataPartition *part)
  *    u_1, writes a flag (u(1) syntax element, returns the length in bits, 
  *    always 1
  *
- * \param 
- *    tracestring: the string for the trace file
- *    value: the value to be coded
- *    part: the DataPartition the value should be coded into
+ * \param tracestring
+ *    the string for the trace file
+ * \param value
+ *    the value to be coded
+ *  \param bitstream
+ *    the Bitstream the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element (always 1)
@@ -176,11 +182,12 @@ int u_1 (char *tracestring, int value, DataPartition *part)
  * \brief
  *    u_v, writes a a n bit fixed length syntax element, returns the length in bits, 
  *
- * \param 
- *    n number of bits to be used for binary unsigned coding
- *    tracestring: the string for the trace file
- *    value: the value to be coded
- *    part: the DataPartition the value should be coded into
+ * \param tracestring
+ *    the string for the trace file
+ * \param value
+ *    the value to be coded
+ *  \param bitstream
+ *    the Bitstream the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element 

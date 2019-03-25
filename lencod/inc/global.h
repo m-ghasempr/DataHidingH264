@@ -208,9 +208,8 @@ typedef struct
 {
   unsigned short state;         // index into state-table CP  
   unsigned char  MPS;           // Least Probable Symbol 0/1 CP
-//      int                                              ew;
-//      unsigned int     state_prob[128];
-//      unsigned int     state_sum;
+
+  unsigned long  count;
 
 } BiContextType;
 
@@ -237,7 +236,7 @@ typedef struct
   BiContextType mv_res_contexts  [2][NUM_MV_RES_CTX];
   BiContextType ref_no_contexts  [2][NUM_REF_NO_CTX];
   BiContextType delta_qp_contexts   [NUM_DELTA_QP_CTX];
-  BiContextType mb_aff_contexts                 [NUM_MB_AFF_CTX];
+  BiContextType mb_aff_contexts     [NUM_MB_AFF_CTX];
 
 } MotionInfoContexts;
 
@@ -262,6 +261,8 @@ typedef struct
   BiContextType  last_contexts[NUM_BLOCK_TYPES][NUM_LAST_CTX];
   BiContextType  one_contexts [NUM_BLOCK_TYPES][NUM_ONE_CTX];
   BiContextType  abs_contexts [NUM_BLOCK_TYPES][NUM_ABS_CTX];
+  BiContextType  fld_map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
+  BiContextType  fld_last_contexts[NUM_BLOCK_TYPES][NUM_LAST_CTX];
 } TextureInfoContexts;
 
 //*********************** end of data type definition for CABAC *******************
@@ -323,10 +324,7 @@ typedef struct macroblock
   int                 bitcounter[MAX_BITCOUNTER_MB];
   struct macroblock   *mb_available[3][3];        /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1] \n
                                                        NULL pointer identifies neighboring MBs which are unavailable */
-  struct macroblock   *skip_mb_available[3][3];        /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1] \n
-                                                       NULL pointer identifies neighboring MBs which are unavailable */
-
-        struct macroblock   *field_available[2];
+  struct macroblock   *field_available[2];
   // some storage of macroblock syntax elements for global access
   int                 mb_type;
   int                 mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];          //!< indices correspond to [forw,backw][block_y][block_x][x,y]
@@ -736,6 +734,10 @@ typedef struct
   // End JVT-D095, JVT-D097
 
   int redundant_slice_flag; //! whether redundant slices exist,  JVT-D101
+  int pic_order_cnt_type;   // POC200301
+
+  int context_init_method;
+  int model_number;
 
 } InputParameters;
 
@@ -867,34 +869,52 @@ typedef struct
 
   int redundant_pic_cnt; // JVT-D101
 
+
+  //the following should probably go in sequence parameters
+  // unsigned int log2_max_frame_num_minus4;
+  unsigned int pic_order_cnt_type;
+  // for poc mode 0, POC200301
+  // unsigned int log2_max_pic_order_cnt_lsb_minus4;  
+  // for poc mode 1, POC200301
+  unsigned int delta_pic_order_always_zero_flag;
+           int offset_for_non_ref_pic;
+           int offset_for_top_to_bottom_field;
+  unsigned int num_ref_frames_in_pic_order_cnt_cycle;
+           int offset_for_ref_frame[1];  // MAX_LENGTH_POC_CYCLE in decoder
+
+  // POC200301
+  //the following is for slice header syntax elements of poc
+  // for poc mode 0.
+  unsigned int pic_order_cnt_lsb;
+           int delta_pic_order_cnt_bottom;
+  // for poc mode 1.
+           int delta_pic_order_cnt[2];
+
+
+
+
+  // POC200301
   unsigned int field_picture;
-  unsigned int toppoc;      //poc for this frame or field
-  unsigned int bottompoc;   //for completeness - poc of bottom field of a frame (always = poc+1)
+    signed int toppoc;      //poc for this frame or field
+    signed int bottompoc;   //for completeness - poc of bottom field of a frame (always = poc+1)
   unsigned int frame_num;   //frame_num for this frame
   
-  //the following should probably go in sequence parameters
-//  unsigned int log2_max_frame_num_minus4;
-  unsigned int pic_order_cnt_type;
-  unsigned int num_ref_frames_in_pic_order_cnt_cycle;
-  unsigned int delta_pic_order_always_zero_flag;
-  int offset_for_non_ref_pic;
-  int offset_for_top_to_bottom_field;
-  int offset_for_ref_frame[1];
-  
+
   //the following should probably go in picture parameters
-  unsigned int pic_order_present_flag;
+  unsigned int pic_order_present_flag; // ????????
 
   //the following are sent in the slice header
-  int delta_pic_order_cnt[2];
+//  int delta_pic_order_cnt[2];
   int idr_flag;
   int disposable_flag;
   
   int adaptive_ref_pic_buffering_flag;
   int no_output_of_prior_pics_flag;
   int long_term_reference_flag;
-  int cabac_init_idc;
 
   MMCObuffer_t *mmco_buffer;
+
+  int model_number;
 
 } ImageParameters;
 
@@ -1048,7 +1068,7 @@ int   LumaResidualCoding8x8     (int*, int*, int, int, int, int, int);
 int   writeLumaCoeff8x8         (int, int);
 int   writeMotionVector8x8      (int, int, int, int, int, int, int, int);
 int   writeReferenceFrame       (int, int, int, int, int);
-int   ABIDPartitionCost         (int, int, int*, int*, int, int*, int);
+int   ABIDPartitionCost         (int, int, int*, int*, int, int*);
 int   BBIDPartitionCost         (int, int, int* , int* , int, int* , int);
 int   writeAbpCoeffIndex        (int, int, int, int);
 int   writeIntra4x4Modes        (int);
@@ -1120,6 +1140,8 @@ void  SetRefFrameInfo_P();
 int   MakeIntraPrediction(int *intra_pred_mode_2);
 void  CheckAvailabilityOfNeighbors();
 
+void free_slice_list(Picture *currPic);
+
 #if TRACE
 void  trace2out(SyntaxElement *se);
 #endif
@@ -1190,7 +1212,6 @@ void InitRefbuf_fld ();
 void copy2mref_fld();
 void store_field_MV(int frame_number);
 void store_direct_moving_flag(int frame_number);
-void store_field_colB8mode();
 
 
 void  SetRefFrameInfo (int, int);
@@ -1279,3 +1300,4 @@ int poc_distance( int refa, int refb);
 
 #endif
 
+#include "context_ini.h"

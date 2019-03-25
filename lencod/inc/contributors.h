@@ -61,9 +61,9 @@
       Lowell Winger                   <lwinger@videolocus.com><lwinger@uwaterloo.ca>
       Guy Côté                        <gcote@videolocus.com>
       Michael Gallant                 <mgallant@videolocus.com>
-      VideoLocus Inc.                 
-      97 Randall Dr.         
-      Waterloo, ON, Canada  N2V1C5  
+      VideoLocus Inc.
+      97 Randall Dr.
+      Waterloo, ON, Canada  N2V1C5
 
       Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
       Telenor Broadband Services
@@ -140,8 +140,14 @@
       Nokia Corporation / Nokia Mobile Phones
       P.O. Box 88
       33721 Tampere, Finland
-            
+
       Karsten Suehring                <suehring@hhi.de>
+      Heinrich-Hertz-Institute
+      Einsteinufer 37
+      10587 Berlin
+      Germany
+
+      Heiko Schwarz                   <hschwarz@hhi.de>
       Heinrich-Hertz-Institute
       Einsteinufer 37
       10587 Berlin
@@ -159,9 +165,9 @@
       Alexis Michael Tourapis         <alexismt@ieee.org>
       Xiaoyan Sun                     <sunxiaoyan@msrchina.research.microsoft.com>
       Microsoft Research Asia
-      3/F, Beijing Sigma Center 
-      No.49, Zhichun Road, Hai Dian District, 
-      Beijing China 100080 
+      3/F, Beijing Sigma Center
+      No.49, Zhichun Road, Hai Dian District,
+      Beijing China 100080
 
 
       Mathias Wien                     <wien@ient.rwth-aachen.de>
@@ -195,12 +201,12 @@
       Cupertino, CA 95014
 
       Barry Haskell
-      Apple Computer, Inc.      <bhaskell@apple.com>  
+      Apple Computer, Inc.      <bhaskell@apple.com>
       2 Infinite Loop
       Cupertino, California 95014
 
       Greg Conklin
-      RealNetworks, Inc.              <gregc@real.com>  
+      RealNetworks, Inc.              <gregc@real.com>
       2601 Elliott Ave
       Seattle, WA 98101
 
@@ -208,7 +214,7 @@
       Cristina Gomila        <cristina.gomila@thomson.net>
       Thomson
       2 Independence Way
-      Princeton, NJ 08540 
+      Princeton, NJ 08540
     \endverbatim
  */
 

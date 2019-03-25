@@ -34,22 +34,16 @@
  ************************************************************************
  * \file image.h
  *
- * \author
- *  Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
- *  Copyright (C) 1999  Telenor Satellite Services, Norway
  ************************************************************************
  */
 
 #ifndef _IMAGE_H_
 #define _IMAGE_H_
 
-//! TAPs used in the oneforthpix()routine
-const int ONE_FOURTH_TAP[3][2] =
-{
-  {20,20},
-  {-5,-4},
-  { 1, 0},
-};
+// this one is empty. keep it, maybe we will move some image.c function 
+// declarations here
+
+int picture_order(struct img_par *img);
 
 #endif
 

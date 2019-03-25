@@ -35,8 +35,7 @@
  * \file annexb.c
  *
  * \brief
- *    Bit Stream format
- * \
+ *    Annex B Byte Stream format
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
@@ -44,14 +43,12 @@
  *************************************************************************************
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
-#include "annexb.h"
 #include "global.h"
-#include "nalucommon.h"
+#include "annexb.h"
 #include "memalloc.h"
 
 
@@ -93,19 +90,24 @@ int GetAnnexbNALU (NALU_t *nalu)
   
   if (3 != fread (Buf, 1, 3, bits))
   {
+    free(Buf);
     return 0;
   }
 
   info2 = FindStartCode (Buf, 2);
   if(info2 != 1) {
     if(1 != fread(Buf+3, 1, 1, bits))
+    {
+      free(Buf);
       return 0;
+    }
     info3 = FindStartCode (Buf, 3);
   }
 
   if (info2 != 1 && info3 != 1)
   {
     printf ("GetAnnexbNALU: no Start Code at the begin of the NALU, return -1\n");
+    free(Buf);
     return -1;
   }
 
@@ -142,6 +144,7 @@ int GetAnnexbNALU (NALU_t *nalu)
     nalu->startcodeprefix_len == 4?"long":"short", nalu->len, nalu->forbidden_bit, nalu->nal_reference_idc, nalu->nal_unit_type);
   fflush (p_trace);
 #endif
+      free(Buf);
       return pos-1;
     }
     Buf[pos++] = fgetc (bits);
@@ -165,6 +168,7 @@ int GetAnnexbNALU (NALU_t *nalu)
   if (0 != fseek (bits, rewind, SEEK_CUR))
   {
     snprintf (errortext, ET_SIZE, "GetAnnexbNALU: Cannot fseek %d in the bit stream file", rewind);
+    free(Buf);
     error(errortext, 600);
   }
 
@@ -186,6 +190,7 @@ int GetAnnexbNALU (NALU_t *nalu)
   fflush (p_trace);
 #endif
   
+  free(Buf);
  
   return (pos+rewind);
 }
@@ -234,9 +239,9 @@ void CloseBitstreamFile()
  *     0, indicating that there is no start code
  *
  *  \param Buf
- *         pointer to byte-stream
+ *     pointer to byte-stream
  *  \param zeros_in_startcode
- *         indicates number of 0x00 bytes in start-code.
+ *     indicates number of 0x00 bytes in start-code.
  ************************************************************************
  */
 static int FindStartCode (unsigned char *Buf, int zeros_in_startcode)

@@ -65,6 +65,7 @@
 #include "elements.h"
 
 static int ec_flag[SE_MAX_ELEMENTS];        //!< array to set errorconcealment
+/*
 static char SEtypes[][25] =
 {
     "SE_HEADER",
@@ -88,6 +89,7 @@ static char SEtypes[][25] =
     "SE_BFRAME",
     "SE_EOS"
 };
+*/
 
 /*!
  ***********************************************************************
