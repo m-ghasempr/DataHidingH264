@@ -374,8 +374,11 @@ static void pred_weight_table()
   img->luma_log2_weight_denom = ue_v ("SH: luma_log2_weight_denom", currStream);
   img->wp_round_luma = img->luma_log2_weight_denom ? 1<<(img->luma_log2_weight_denom - 1): 0;
   
-  img->chroma_log2_weight_denom = ue_v ("SH: chroma_log2_weight_denom", currStream);
-  img->wp_round_chroma = img->chroma_log2_weight_denom ? 1<<(img->chroma_log2_weight_denom - 1): 0;
+  if ( 0 != active_sps->chroma_format_idc)
+  {
+    img->chroma_log2_weight_denom = ue_v ("SH: chroma_log2_weight_denom", currStream);
+    img->wp_round_chroma = img->chroma_log2_weight_denom ? 1<<(img->chroma_log2_weight_denom - 1): 0;
+  }
 
   reset_wp_params(img);
 

@@ -1,3 +1,10 @@
+Changes for Version JM 9.8 to JM 9.7
+------------------------------------
+- encoder/decoder: fix monochrome pred_weight_table syntax (MT)
+- encoder/decoder: fix cropping_flag usage (KS)
+- encoder: fix frame_num for reference B pictures (AT)
+
+
 Changes for Version JM 9.7 to JM 9.6
 ------------------------------------
 - encoder: revert zero motion vector change in low complexity mode (YH)

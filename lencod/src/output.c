@@ -233,7 +233,7 @@ void write_out_picture(StorablePicture *p, int p_out)
     img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
     write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
 
-    if (active_sps->frame_cropping_flag)
+    if (p->frame_cropping_flag)
     {
       crop_left   = SubWidthC[p->chroma_format_idc] * p->frame_cropping_rect_left_offset;
       crop_right  = SubWidthC[p->chroma_format_idc] * p->frame_cropping_rect_right_offset;

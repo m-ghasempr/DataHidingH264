@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 9.7 (FRExt)
+ *     JM 9.8 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -68,7 +68,7 @@
 #include "erc_api.h"
 
 #define JM          "9 (FRExt)"
-#define VERSION     "9.7"
+#define VERSION     "9.8"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"

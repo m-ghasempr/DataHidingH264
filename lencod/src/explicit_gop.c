@@ -419,6 +419,13 @@ void encode_enhancement_layer()
         img->delta_pic_order_cnt[1]= 0;   // POC200301
         
         encode_one_frame();  // encode one B-frame
+
+        if (input->BRefPictures == 1 && img->b_frame_to_code==input->successive_Bframe)           
+        {
+          img->frame_num++;                 //increment frame_num for each stored B slice
+          img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
+        } 
+
         if (input->ReportFrameStats)
           report_frame_statistic();
       }

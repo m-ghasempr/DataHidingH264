@@ -385,8 +385,11 @@ static int pred_weight_table()
   int i,j;
 
   len += ue_v("SH: luma_log_weight_denom", luma_log_weight_denom, bitstream);
-  
-  len += ue_v("SH: chroma_log_weight_denom", chroma_log_weight_denom, bitstream);
+
+  if ( 0 != active_sps->chroma_format_idc)
+  {
+    len += ue_v("SH: chroma_log_weight_denom", chroma_log_weight_denom, bitstream);
+  }
 
   for (i=0; i< img->num_ref_idx_l0_active; i++)
   {
