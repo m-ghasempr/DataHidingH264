@@ -219,6 +219,10 @@ SOURCE=.\lencod\src\rdopt_coding_state.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\rdpicdecision.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\refbuf.c
 # End Source File
 # Begin Source File

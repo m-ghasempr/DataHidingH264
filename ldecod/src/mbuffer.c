@@ -3156,7 +3156,7 @@ ColocatedParams* alloc_colocated(int size_x, int size_y, int mb_adaptive_frame_f
  *
  ************************************************************************
  */
-void free_collocated(ColocatedParams* p)
+void free_colocated(ColocatedParams* p)
 {
   if (p)
   {
@@ -3208,7 +3208,7 @@ void free_collocated(ColocatedParams* p)
   }
 }
 
-void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
+void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
 {
   StorablePicture *fs, *fs_top, *fs_bottom;
   int i,j;

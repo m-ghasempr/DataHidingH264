@@ -373,6 +373,10 @@ typedef struct macroblock
   int                 all_blk_8x8;
   int                 luma_transform_size_8x8_flag;
   int                 NoMbPartLessThan8x8Flag;
+
+#if BI_PREDICTION
+  int    bi_pred_me;
+#endif
   
   // rate control
   double              actj;               // macroblock activity measure for macroblock j
@@ -470,7 +474,8 @@ typedef struct
 Picture *top_pic;
 Picture *bottom_pic;
 Picture *frame_pic;
-
+Picture *frame_pic2;
+Picture *frame_pic3;
 
 // global picture format dependend buffers, mem allocation in image.c
 imgpel **imgY_org;           //!< Reference luma image
@@ -520,7 +525,8 @@ byte **pixel_map;   //!< Shows the latest reference frame that is reliable for e
 byte **refresh_map; //!< Stores the new values for pixel_map  
 int intras;         //!< Counts the intra updates in each frame.
 
-int  Bframe_ctr, frame_no, nextP_tr_fld, nextP_tr_frm;
+int  Iframe_ctr, Pframe_ctr,Bframe_ctr;
+int  frame_no, nextP_tr_fld, nextP_tr_frm;
 int  tot_time;
 
 #define ET_SIZE 300      //!< size of error text buffer
@@ -556,7 +562,10 @@ typedef struct
   float snr_y1;              //!< SNR Y(dB) first frame
   float snr_u1;              //!< SNR U(dB) first frame
   float snr_v1;              //!< SNR V(dB) first frame
-  float snr_ya;              //!< Average SNR Y(dB) remaining frames
+  float snr_yt[3];             //!< SNR Y(dB) based on frame type
+  float snr_ut[3];             //!< SNR U(dB) based on frame type
+  float snr_vt[3];             //!< SNR V(dB) based on frame type
+  float snr_ya;               //!< Average SNR Y(dB) remaining frames
   float snr_ua;              //!< Average SNR U(dB) remaining frames
   float snr_va;              //!< Average SNR V(dB) remaining frames
 } SNRParameters;
@@ -572,16 +581,19 @@ typedef struct
   int qp0;                      //!< QP of first frame
   int qpN;                      //!< QP of remaining frames
   int jumpd;                    //!< number of frames to skip in input sequence (e.g 2 takes frame 0,3,6,9...)
-  int hadamard;                 /*!< 0: 'normal' SAD in 1/3 pixel search.  1: use 4x4 Haphazard transform and '
-                                     Sum of absolute transform difference' in 1/3 pixel search                   */
+  int hadamard;                 /*!< 0: 'normal' SAD in sub pixel search.  1: use 4x4 Hadamard transform and '
+                                     Sum of absolute transform difference' in sub pixel search                   */
+  int hadamardqpel;             //!< Use Hadamard transform only for quarter pel positions.
   int search_range;             /*!< search range - integer pel search and 16x16 blocks.  The search window is
                                      generally around the predicted vector. Max vector is 2xmcrange.  For 8x8
                                      and 4x4 block sizes the search range is 1/2 of that for 16x16 blocks.       */
-  int num_ref_frames;     //!< number of reference frames to be used
+  int num_ref_frames;           //!< number of reference frames to be used
   int P_List0_refs;
   int B_List0_refs;
   int B_List1_refs;
   int Log2MaxFrameNum;
+  int ResendPPS;
+  int GenerateMultiplePPS;
 
   int img_width;                //!< image width  (must be a multiple of 16 pels)
   int img_height;               //!< image height (must be a multiple of 16 pels)
@@ -591,6 +603,7 @@ typedef struct
                                      In connection with this intra update, restrictions is put on motion vectors
                                      to prevent errors to propagate from the past                                */
   int blc_size[8][2];           //!< array for different block sizes
+  int part_size[8][2];          //!< array for different partition sizes
   int slice_mode;               //!< Indicate what algorithm to use for setting slices
   int slice_argument;           //!< Argument to the specified slice algorithm
   int UseConstrainedIntraPred;  //!< 0: Inter MB pixels are allowed for intra prediction 1: Not allowed
@@ -611,6 +624,12 @@ typedef struct
   int qpBRSOffset;                     //!< QP for reference B slice coded pictures
   int direct_spatial_mv_pred_flag;              //!< Direct Mode type to be used (0: Temporal, 1: Spatial)
   int directInferenceFlag;      //!< Direct Inference Flag
+#if BI_PREDICTION
+  int BiPredMotionEstimation;
+  int BiPredMERefinements;
+  int BiPredMESearchRange;
+  int BiPredMESubPel;
+#endif
 
   // SP Pictures
   int sp_periodicity;           //!< The periodicity of SP-pictures
@@ -620,6 +639,11 @@ typedef struct
   int WeightedPrediction;        //!< Weighted prediciton for P frames (0: not used, 1: explicit)
   int WeightedBiprediction;      //!< Weighted prediciton for B frames (0: not used, 1: explicit, 2: implicit)
   int UseWeightedReferenceME;    //!< Use Weighted Reference for ME.
+  int RDPictureDecision;         //!< Perform RD optimal decision between various coded versions of same picture
+  int RDPictureIntra;            //!< Enabled RD pic decision for intra as well.
+  int RDPSliceWeightOnly;        //!< If enabled, does not check QP variations for P slices.
+  int RDBSliceWeightOnly;        //!< If enabled, does not check QP variations for B slices.
+  int SkipIntraInInterSlices;    //!< Skip intra type checking in inter slices if best_mode is skip/direct
   int BRefPictures;              //!< B coded reference pictures replace P pictures (0: not used, 1: used)
   int PyramidCoding;
   char ExplicitPyramidFormat[1024];  //!< Explicit GOP format (PyramidCoding==3). 
@@ -715,6 +739,7 @@ typedef struct
   int AllowTransform8x8;
   int LowPassForIntra8x8;
   int ReportFrameStats;
+  int DisplayEncParams;
 
   //! Rate Control on JVT standard 
   int RCEnable;    
@@ -825,6 +850,7 @@ typedef struct
   int tr;
   int fld_type;                        //!< top or bottom field
   unsigned int fld_flag;                                
+  unsigned int rd_pass;
   int direct_intraP_ref[4][4];
   int pstruct_next_P;
   int imgtr_next_P_frm;
@@ -841,6 +867,12 @@ typedef struct
 
   short****** pred_mv;                 //!< motion vector predictors for all block types and all reference frames
   short****** all_mv;                  //!< replaces local all_mv
+#if BI_PREDICTION
+  short****** bipred_mv1;              //!< Biprediction MVs
+  short****** bipred_mv2;              //!< Biprediction MVs
+  short bi_pred_me[MAXMODE];
+#endif
+
 
   int LFDisableIdc;
   int LFAlphaC0Offset;
@@ -930,7 +962,7 @@ typedef struct
   int NumberofGOP;
   int TotalQpforPPicture;
   int NumberofPPicture;
-  double MADofMB[6336];
+  double *MADofMB;
   int BasicUnitQP;
   int TopFieldFlag;
   int FieldControl;
@@ -985,10 +1017,8 @@ typedef struct
   int   quant0;                 //!< quant for the first frame
   int   quant1;                 //!< average quant for the remaining frames
   float bitr;                   //!< bit rate for current frame, used only for output til terminal
-  float bitr0;                  //!< stored bit rate for the first frame
   float bitrate;                //!< average bit rate for the sequence except first frame
   int   bit_ctr;                //!< counter for bit usage
-  int   bit_ctr_0;              //!< stored bit use for the first frame
   int   bit_ctr_n;              //!< bit usage for the current frame
   int   bit_slice;              //!< number of bits in current slice
   int   bit_ctr_emulationprevention; //!< stored bits needed to prevent start code emulation
@@ -1000,20 +1030,22 @@ typedef struct
   // B pictures
   int   *mode_use_Bframe;
   int   *bit_use_mode_Bframe;
+  int   bit_ctr_I;
   int   bit_ctr_P;
   int   bit_ctr_B;
+  float bitrate_I;
   float bitrate_P;
   float bitrate_B;
 
-  int   mode_use       [NUM_PIC_TYPE][MAXMODE]; //!< Macroblock mode usage for Intra frames
-  int   bit_use_mode   [NUM_PIC_TYPE][MAXMODE]; //!< statistics of bit usage
+  int   mode_use            [NUM_PIC_TYPE][MAXMODE]; //!< Macroblock mode usage for Intra frames
+  int   bit_use_mode        [NUM_PIC_TYPE][MAXMODE]; //!< statistics of bit usage
   int   bit_use_stuffingBits[NUM_PIC_TYPE];
-  int   bit_use_mb_type[NUM_PIC_TYPE];
-  int   bit_use_header[NUM_PIC_TYPE];
-  int   tmp_bit_use_cbp[NUM_PIC_TYPE];
-  int   bit_use_coeffY[NUM_PIC_TYPE];
-  int   bit_use_coeffC[NUM_PIC_TYPE];
-  int   bit_use_delta_quant[NUM_PIC_TYPE];
+  int   bit_use_mb_type     [NUM_PIC_TYPE];
+  int   bit_use_header      [NUM_PIC_TYPE];
+  int   tmp_bit_use_cbp     [NUM_PIC_TYPE];
+  int   bit_use_coeffY      [NUM_PIC_TYPE];
+  int   bit_use_coeffC      [NUM_PIC_TYPE];
+  int   bit_use_delta_quant [NUM_PIC_TYPE];
 
   int   em_prev_bits_frm;
   int   em_prev_bits_fld;
@@ -1033,6 +1065,9 @@ typedef struct
   int    ****cofAC;
   int    ***cofDC;
   int    mb_type;
+#if BI_PREDICTION
+  int    bi_pred_me;
+#endif  
   int    b8mode[4], b8pdir[4];
   int    **ipredmode;
   int    intra_pred_modes[16];
@@ -1041,6 +1076,8 @@ typedef struct
   int    mode;
   short  ******pred_mv;        //!< predicted motion vectors
   short  ******all_mv;         //!< all modes motion vectors
+  short  ******bipred_mv1;     //!< all modes motion vectors
+  short  ******bipred_mv2;     //!< all modes motion vectors
   short  refar[2][4][4];       //!< reference frame array [list][x][y]
   int    i16offset;
   int    c_ipred_mode;
@@ -1058,10 +1095,10 @@ typedef struct
 //!< Currently only supports Enhancement GOP but could be easily extended
 typedef struct
 {
-	int slice_type;       //! Slice type
-	int display_no;       //! GOP Display order
-	int reference_idc;    //! Is reference?
-	int slice_qp;         //! Assigned QP
+  int slice_type;       //! Slice type
+  int display_no;       //! GOP Display order
+  int reference_idc;    //! Is reference?
+  int slice_qp;         //! Assigned QP
   int pyramid_layer;    //! Pyramid layer (used with GOP Pyramid option 2
   int pyramidPocDelta;  //! Currently unused
 } GOP_DATA;
@@ -1074,7 +1111,7 @@ RD_DATA rddata_top_field_mb, rddata_bot_field_mb; //!< For MB level field/frame 
 
 extern InputParameters *input;
 extern ImageParameters *img;
-extern StatParameters *stats;
+extern StatParameters  *stats;
 
 extern SNRParameters *snr;
 
@@ -1128,13 +1165,13 @@ void information_init();
 int  get_picture_type();
 int clip1a(int a);
 void DeblockFrame(ImageParameters *img, imgpel **, imgpel ***) ;
-void  MarkAllMacroblockModes(ImageParameters *img, imgpel **, imgpel ***);
+void MarkAllMacroblockModes(ImageParameters *img, imgpel **, imgpel ***);
 
 int  TransformDecision(int, int*);
 int  SATD8X8(int*, int);
 
-void  LumaPrediction4x4 (int, int, int, int, int, short, short);
-int   SATD (int*, int);
+void LumaPrediction4x4 (int, int, int, int, int, short, short);
+int  SATD (int*, int);
 
 pel_t* FastLineX (int, pel_t*, int, int, int, int);
 pel_t* UMVLineX  (int, pel_t*, int, int, int, int);
@@ -1160,14 +1197,26 @@ int   writeIntra4x4Modes        (int);
 int   writeChromaIntraPredMode  ();
 
 void estimate_weighting_factor_B_slice();
-void estimate_weighting_factor_P_slice();
+void estimate_weighting_factor_P_slice(int offset);
+int  test_wp_P_slice(int offset);
+int  test_wp_B_slice(int method);
 void poc_based_ref_management(int current_pic_num);
+int  picture_coding_decision (Picture *picture1, Picture *picture2, int qp);
+
+unsigned CeilLog2( unsigned uiVal);
 
 int  Get_Direct_Cost8x8 (int, int*);
+
+#if BI_PREDICTION
+int   BPredPartitionCost  (int, int, short, short, int, int);
+void  LumaPrediction4x4Bi (int, int,   int,   int, int, short, short, int);
+int   SATDBI (int* , int );
+#endif
+
 int  Get_Direct_CostMB  (double);
 int  B8Mode2Value (int b8mode, int b8pdir);
 
-int GetSkipCostMB (double lambda);
+int  GetSkipCostMB (double lambda);
 void FindSkipModeMotionVector ();
 
 
@@ -1217,6 +1266,7 @@ int  start_sequence();
 int  terminate_sequence();
 int  start_slice();
 int  terminate_slice();
+int  write_PPS(int, int);
 
 // B pictures
 int  get_fwMV(int *min_fw_sad, int tot_intra_sad);
@@ -1235,9 +1285,9 @@ void writeVlcByteAlign(Bitstream* currStream);
 
 
 int   writeLumaCoeff4x4_CABAC     (int, int, int);
-int   writeLumaCoeff8x8_CABAC (int, int);
-int   writeCBPandLumaCoeff  ();
-int   writeChromaCoeff      ();
+int   writeLumaCoeff8x8_CABAC     (int, int);
+int   writeCBPandLumaCoeff        ();
+int   writeChromaCoeff            ();
 int   writeMB_bits_for_4x4_luma   (int, int, int);
 int   writeMB_bits_for_16x16_luma ();
 int   writeMB_bits_for_luma       (int);
@@ -1257,7 +1307,7 @@ void decode_one_mb (int, Macroblock*);
 void decode_one_b8block (int, int, int, int, int);
 void Get_Reference_Block(imgpel **imY, int block_y, int block_x, int mvhor, int mvver, imgpel **out);
 byte Get_Reference_Pixel(imgpel **imY, int y, int x);
-int Half_Upsample(imgpel **imY, int j, int i);
+int  Half_Upsample(imgpel **imY, int j, int i);
 void DecOneForthPix(imgpel **dY, imgpel ***dref);
 void compute_residue(int mode);
 void compute_residue_b8block (int, int);

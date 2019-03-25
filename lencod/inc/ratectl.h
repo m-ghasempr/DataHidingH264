@@ -105,10 +105,10 @@ int FieldQPBuffer;
 int FrameQPBuffer;
 int FrameAveHeaderBits;
 int FieldAveHeaderBits;
-double BUPFMAD[6336];//LIZG
-double BUCFMAD[6336];//LIZG
-double FCBUCFMAD[6336];
-double FCBUPFMAD[6336];
+double *BUPFMAD;
+double *BUCFMAD;
+double *FCBUCFMAD;
+double *FCBUPFMAD;
 
 Boolean GOPOverdue;
 
@@ -121,6 +121,9 @@ int diffy8[16][16];//for P8X8 mode
 extern int Iprev_bits;
 extern int Pprev_bits;
 
+void rc_alloc();
+void rc_free();
+
 void rc_init_seq();
 void rc_init_GOP(int np, int nb);
 void rc_update_pict_frame(int nbits);
@@ -128,13 +131,13 @@ void rc_init_pict(int fieldpic,int topfield, int targetcomputation);
 void rc_update_pict(int nbits);
 void setbitscount(int nbits);
 
-int updateQuantizationParameter(int topfield);/*LIZG*/
-void updateRCModel ();/*LIZG*/
-void updateMADModel ();/*LIZG*/
-Boolean skipThisFrame (); /*LIZG*/
-void RCModelEstimator (int n_windowSize);/*LIZG*/
-void MADModelEstimator (int n_windowSize);/*LIZG*/
-double calc_MAD();/*LIZG*/
+int updateQuantizationParameter(int topfield);
+void updateRCModel ();
+void updateMADModel ();
+Boolean skipThisFrame ();
+void RCModelEstimator (int n_windowSize);
+void MADModelEstimator (int n_windowSize);
+double calc_MAD();
 double ComputeFrameMAD();
 int Qstep2QP( double Qstep );
 double QP2Qstep( int QP );

@@ -198,10 +198,7 @@
       Haidian District 
       Beijing China, 100084
         
-      Alexis Michael Tourapis         <alexis@mobilygen.com>
-      Mobilygen Corporation 
-      2100 Lakeside Drive
-      Santa Clara, CA, 95054
+      Alexis Michael Tourapis         <alexismt@ieee.org>
   
    \endverbatim
  */

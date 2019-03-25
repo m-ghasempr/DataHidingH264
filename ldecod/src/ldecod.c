@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 9.2 (FRExt)
+ *     JM 9.3 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -68,7 +68,7 @@
 #include "erc_api.h"
 
 #define JM          "9 (FRExt)"
-#define VERSION     "9.2"
+#define VERSION     "9.3"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -260,7 +260,9 @@ void Configure(int ac, char *av[])
   fprintf(stdout,"--------------------------------------------------------------------------\n");
 #endif
   fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
-    fprintf(stdout,"Frame    POC Pic#  QP  SnrY    SnrU    SnrV    Y:U:V  Time(ms)\n");
+  fprintf(stdout,"--------------------------------------------------------------------------\n");
+  fprintf(stdout,"  Frame       POC   Pic#   QP   SnrY    SnrU    SnrV   Y:U:V  Time(ms)\n");
+  fprintf(stdout,"--------------------------------------------------------------------------\n");
   
 }
 
@@ -347,7 +349,7 @@ int main(int argc, char **argv)
   free_dpb();
   uninit_out_buffer();
 
-  free_collocated(Co_located);
+  free_colocated(Co_located);
   free (input);
   free (snr);
   free (img);
@@ -494,16 +496,6 @@ void init_conf(struct inp_par *inp, char *config_filename)
 #endif
 
   fclose (fd);
-
-
-#if TRACE
-  if ((p_trace=fopen(TRACEFILE,"w"))==0)             // append new statistic at the end
-  {
-    snprintf(errortext, ET_SIZE, "Error open file %s!",TRACEFILE);
-    error(errortext,500);
-  }
-#endif
-
 
 }
 

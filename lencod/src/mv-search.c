@@ -16,6 +16,7 @@
  *      - Detlev Marpe                    <marpe@hhi.de>
  *      - Thomas Wedi                     <wedi@tnt.uni-hannover.de>
  *      - Heiko Schwarz                   <hschwarz@hhi.de>
+ *      - Alexis Michael Tourapis         <alexismt@ieee.org>
  *
  *************************************************************************************
 */
@@ -40,6 +41,7 @@
 
 // These procedure pointers are used by motion_search() and one_eigthpel()
 static pel_t  (*PelY_14)     (pel_t**, int, int, int, int);
+static pel_t  (*PelY_14b)    (pel_t**, int, int, int, int);
 static pel_t *(*PelYline_11) (pel_t *, int, int, int, int);
 
 // Statistics, temporary
@@ -561,7 +563,6 @@ void SetMotionVectorPredictor (short  pmv[2],
     }
   }
 
-
   /* Prediction if only one of the neighbors uses the reference frame
    * we are checking
    */
@@ -813,15 +814,15 @@ Clear_Motion_Search_Module ()
  */
 int                                               //  ==> minimum motion cost after search
 FullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  original pixel values for the AxB block
-                          int       ref,          // <--  reference frame (0... or -1 (backward))
+                          short       ref,          // <--  reference frame (0... or -1 (backward))
                           int       list,
                           int       pic_pix_x,    // <--  absolute x-coordinate of regarded AxB block
                           int       pic_pix_y,    // <--  absolute y-coordinate of regarded AxB block
                           int       blocktype,    // <--  block type (1-16x16 ... 7-4x4)
-                          int       pred_mv_x,    // <--  motion vector predictor (x) in sub-pel units
-                          int       pred_mv_y,    // <--  motion vector predictor (y) in sub-pel units
-                          int*      mv_x,         // <--> in: search center (x) / out: motion vector (x) - in pel units
-                          int*      mv_y,         // <--> in: search center (y) / out: motion vector (y) - in pel units
+                          short       pred_mv_x,    // <--  motion vector predictor (x) in sub-pel units
+                          short       pred_mv_y,    // <--  motion vector predictor (y) in sub-pel units
+                          short*      mv_x,         // <--> in: search center (x) / out: motion vector (x) - in pel units
+                          short*      mv_y,         // <--> in: search center (y) / out: motion vector (y) - in pel units
                           int       search_range, // <--  1-d search range in pel units
                           int       min_mcost,    // <--  minimum motion cost (cost for center or huge value)
                           double    lambda)       // <--  lagrangian parameter for determining motion cost
@@ -1297,7 +1298,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
   int   blocksize_y     = input->blc_size[blocktype][1];
   int   pic4_pix_x      = (pic_pix_x << 2);
   int   pic4_pix_y      = (pic_pix_y << 2);
-  int   min_pos2        = (input->hadamard ? 0 : 1);
+  int   min_pos2        = (input->hadamard ? (input->hadamardqpel ? 1 : 0) : 1);
   int   max_pos2        = (input->hadamard ? max(1,search_pos2) : search_pos2);
   int   list_offset     = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
 
@@ -1306,6 +1307,9 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
 
   int   img_width, img_height;
   
+  int   halfpelhadamard       = input->hadamardqpel ? 0 : input->hadamard;
+  int   qpelstart             = input->hadamardqpel ? 0 : 1;
+
   ref_picture     = listX[list+list_offset][ref];
 
   //===== Use weighted Reference for ME ====
@@ -1391,7 +1395,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
 
         if (!input->AllowTransform8x8)
         {
-          if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+          if ((mcost += SATD (diff, halfpelhadamard)) > min_mcost)
           {
             abort_search = 1;
             break;
@@ -1407,7 +1411,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
     }
 
     if(input->AllowTransform8x8)
-      mcost += find_SATD (curr_diff, input->hadamard, blocktype);
+      mcost += find_SATD (curr_diff, halfpelhadamard, blocktype);
 
     if (mcost < min_mcost)
     {
@@ -1421,6 +1425,9 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
     *mv_y += (spiral_search_y [best_pos] << 1);
   }
 
+
+  if (input->hadamardqpel)
+    min_mcost = INT_MAX;
 
   /************************************
    *****                          *****
@@ -1438,7 +1445,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
     PelY_14 = UMVPelY_14;
   }
   //===== loop over search positions =====
-  for (best_pos = 0, pos = 1; pos < search_pos4; pos++)
+  for (best_pos = 0, pos = qpelstart; pos < search_pos4; pos++)
   {
     cand_mv_x = *mv_x + spiral_search_x[pos];    // quarter-pel units
     cand_mv_y = *mv_y + spiral_search_y[pos];    // quarter-pel units
@@ -1518,6 +1525,817 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
   return min_mcost;
 }
 
+#if BI_PREDICTION
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Full pixel block motion search
+ ***********************************************************************
+ */
+int                                               //  ==> minimum motion cost after search
+FullPelBlockMotionBiPred (pel_t**   orig_pic,     // <--  original pixel values for the AxB block
+                          short       ref,          // <--  reference frame (0... or -1 (backward))
+                          int       list,
+                          int       pic_pix_x,    // <--  absolute x-coordinate of regarded AxB block
+                          int       pic_pix_y,    // <--  absolute y-coordinate of regarded AxB block
+                          int       blocktype,    // <--  block type (1-16x16 ... 7-4x4)
+                          int       iteration,    
+                          short     pred_mv_x1,    // <--  motion vector predictor (x) in sub-pel units
+                          short     pred_mv_y1,    // <--  motion vector predictor (y) in sub-pel units
+                          short     pred_mv_x2,    // <--  motion vector predictor (x) in sub-pel units
+                          short     pred_mv_y2,    // <--  motion vector predictor (y) in sub-pel units
+                          short*    mv_x,         // <--> in: search center (x) / out: motion vector (x) - in pel units
+                          short*    mv_y,         // <--> in: search center (y) / out: motion vector (y) - in pel units
+                          short*    s_mv_x,         // <--> in: search center (x) / out: motion vector (x) - in pel units
+                          short*    s_mv_y,         // <--> in: search center (y) / out: motion vector (y) - in pel units
+                          int       search_range, // <--  1-d search range in pel units
+                          int       min_mcost,    // <--  minimum motion cost (cost for center or huge value)
+                          double    lambda)       // <--  lagrangian parameter for determining motion cost
+{
+  int   pos, cand_x, cand_y, y, x4, mcost;
+  
+  pel_t *orig_line, *ref2_line, *ref1_line;
+  pel_t *(*get_ref_line1)(int, pel_t*, int, int, int, int);
+  pel_t *(*get_ref_line2)(int, pel_t*, int, int, int, int);
+
+  int   list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+  pel_t *ref1_pic     = listX[list + list_offset          ][ref]->imgY_11;
+  pel_t *ref2_pic     = listX[list ==0? 1 + list_offset: list_offset][ 0 ]->imgY_11;  
+  int   img_width     = listX[list+list_offset            ][ref]->size_x;
+  int   img_height    = listX[list+list_offset            ][ref]->size_y;
+
+  int   best_pos      = 0;                                        // position with minimum motion cost
+  int   max_pos       = (2*search_range+1)*(2*search_range+1);    // number of search positions
+  int   lambda_factor = LAMBDA_FACTOR (lambda);                   // factor for determining lagragian motion cost
+  int   blocksize_y   = input->blc_size[blocktype][1];            // vertical block size
+  int   blocksize_x   = input->blc_size[blocktype][0];            // horizontal block size
+  int   blocksize_x4  = blocksize_x >> 2;                         // horizontal block size in 4-pel units
+  int   pred_x1        = (pic_pix_x << 2) + pred_mv_x1;       // predicted position x (in sub-pel units)
+  int   pred_y1        = (pic_pix_y << 2) + pred_mv_y1;       // predicted position y (in sub-pel units)
+  int   pred_x2        = (pic_pix_x << 2) + pred_mv_x2;       // predicted position x (in sub-pel units)
+  int   pred_y2        = (pic_pix_y << 2) + pred_mv_y2;       // predicted position y (in sub-pel units)
+  short center_x      = pic_pix_x + *mv_x;                      // center position x (in pel units)
+  short center_y      = pic_pix_y + *mv_y;                      // center position y (in pel units)
+  short ref1_center_x = pic_pix_x + *s_mv_x;                      // mvx of second pred (in pel units)
+  short ref1_center_y = pic_pix_y + *s_mv_y;                      // mvy of second pred (in pel units)
+  
+  
+  int   bi_diff; 
+  short apply_weights   = (active_pps->weighted_bipred_idc>0);  
+  short weightSpic = (apply_weights ? (list == 0? wbp_weight[list_offset    ][ref][0  ][0]: wbp_weight[list_offset + 1][0  ][ref][0]) : 1<<luma_log_weight_denom);
+  short weightRpic = (apply_weights ? (list == 0? wbp_weight[list_offset + 1][ref][0  ][0]: wbp_weight[list_offset    ][0  ][ref][0]) : 1<<luma_log_weight_denom);
+  short offsetSpic = (apply_weights ? (list == 0?  wp_offset[list_offset    ][ref]     [0]:  wp_offset[list_offset + 1][0  ]     [0]) : 0);
+  short offsetRpic = (apply_weights ? (list == 0?  wp_offset[list_offset + 1][ref]     [0]:  wp_offset[list_offset    ][0  ]     [0]) : 0);
+  short weightedpel,pixel1,pixel2;
+  short offsetBi=(offsetRpic + offsetSpic + 1)>>1;
+  //===== set function for getting reference picture lines =====
+  if ((center_x > search_range) && (center_x < img->width -1-search_range-blocksize_x) &&
+    (center_y > search_range) && (center_y < img->height-1-search_range-blocksize_y)   )
+  {
+    get_ref_line2 = FastLineX;
+  }
+  else
+  {
+    get_ref_line2 = UMVLineX;
+  }
+  
+  //===== set function for getting reference picture lines =====
+  if ((ref1_center_x > search_range) && (ref1_center_x < img->width -1-search_range-blocksize_x) &&
+      (ref1_center_y > search_range) && (ref1_center_y < img->height-1-search_range-blocksize_y)   )
+  {
+    get_ref_line1 = FastLineX;
+  }
+  else
+  {
+    get_ref_line1 = UMVLineX;
+  }
+
+  //===== loop over all search positions =====
+  for (pos=0; pos<max_pos; pos++)
+  {
+    //--- set candidate position (absolute position in pel units) ---
+    cand_x = center_x + spiral_search_x[pos];
+    cand_y = center_y + spiral_search_y[pos];
+
+    //--- initialize motion cost (cost for motion vector) and check ---
+    mcost =  MV_COST (lambda_factor, 2, ref1_center_x, ref1_center_y, pred_x1, pred_y1);
+    mcost += MV_COST (lambda_factor, 2,        cand_x,        cand_y, pred_x2, pred_y2);
+
+    if (mcost >= min_mcost)   continue;
+
+    //--- add residual cost to motion cost ---
+    if (apply_weights)
+    {
+      for (y=0; y<blocksize_y; y++)
+      {
+        ref2_line  = get_ref_line2 (blocksize_x, ref2_pic,        cand_y+y,        cand_x, img_height, img_width);
+        ref1_line  = get_ref_line1 (blocksize_x, ref1_pic, ref1_center_y+y, ref1_center_x, img_height, img_width);
+        orig_line = orig_pic [y];
+        
+        for (x4=0; x4<blocksize_x4; x4++)
+        { 
+          pixel1=weightSpic * (*ref1_line++);
+          pixel2=weightRpic * (*ref2_line++);
+          weightedpel =  Clip3 (0, img->max_imgpel_value ,((pixel1 + pixel2 +
+                                2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          bi_diff = (*orig_line++)  - weightedpel;
+          mcost += byte_abs[bi_diff];
+          
+          pixel1=weightSpic * (*ref1_line++);
+          pixel2=weightRpic * (*ref2_line++);
+          weightedpel =  Clip3 (0, img->max_imgpel_value ,((pixel1 + pixel2 +
+                                2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          bi_diff = (*orig_line++)  - weightedpel;
+          mcost += byte_abs[bi_diff];
+          
+          pixel1=weightSpic * (*ref1_line++);
+          pixel2=weightRpic * (*ref2_line++);
+          weightedpel =  Clip3 (0, img->max_imgpel_value ,((pixel1 + pixel2 +
+                                2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          bi_diff = (*orig_line++)  - weightedpel;
+          mcost += byte_abs[bi_diff];
+          
+          pixel1=weightSpic * (*ref1_line++);
+          pixel2=weightRpic * (*ref2_line++);
+          weightedpel =  Clip3 (0, img->max_imgpel_value ,((pixel1 + pixel2 +
+                                2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          bi_diff = (*orig_line++)  - weightedpel;
+          mcost += byte_abs[bi_diff];
+        }    
+      
+        if (mcost >= min_mcost)
+        {
+          break;
+        }        
+      }
+    }
+    else
+    {
+      for (y=0; y<blocksize_y; y++)
+      {
+        ref2_line = get_ref_line2 (blocksize_x, ref2_pic,        cand_y+y,        cand_x, img_height, img_width);
+        ref1_line = get_ref_line1 (blocksize_x, ref1_pic, ref1_center_y+y, ref1_center_x, img_height, img_width);
+        orig_line = orig_pic [y];
+        
+        for (x4=0; x4<blocksize_x4; x4++)
+        {         
+          bi_diff = (*orig_line++) - (((*ref1_line++) + *ref2_line++)>>1) ;
+          mcost += byte_abs[bi_diff];
+          bi_diff = (*orig_line++) - (((*ref1_line++) + *ref2_line++)>>1) ;
+          mcost += byte_abs[bi_diff];
+          bi_diff = (*orig_line++) - (((*ref1_line++) + *ref2_line++)>>1) ;
+          mcost += byte_abs[bi_diff];
+          bi_diff = (*orig_line++) - (((*ref1_line++) + *ref2_line++)>>1) ;
+          mcost += byte_abs[bi_diff];
+        }    
+        
+        if (mcost >= min_mcost)
+        {
+          break;
+        }
+      }
+    }
+    
+    //--- check if motion cost is less than minimum cost ---
+    if (mcost < min_mcost)
+    {
+      best_pos  = pos;
+      min_mcost = mcost;
+    }
+  }
+
+
+  //===== set best motion vector and return minimum motion cost =====
+  if (best_pos)
+  {
+    *mv_x += spiral_search_x[best_pos];
+    *mv_y += spiral_search_y[best_pos];
+  }
+  return min_mcost;
+}
+
+/*!
+***********************************************************************
+* \brief
+*    Sub pixel block motion search
+***********************************************************************
+*/
+int                                               //  ==> minimum motion cost after search
+SubPelBlockSearchBiPred (pel_t**   orig_pic,      // <--  original pixel values for the AxB block
+                         short       ref,           // <--  reference frame (0... or -1 (backward))
+                         int       list,          // <--  reference picture list 
+                         int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
+                         int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
+                         int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
+                         short     pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
+                         short     pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
+                         short*    mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
+                         short*    mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
+                         short*    s_mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
+                         short*    s_mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
+                         int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
+                         int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
+                         int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                         double    lambda         // <--  lagrangian parameter for determining motion cost
+                         )
+{
+  int   curr_diff[MB_BLOCK_SIZE][MB_BLOCK_SIZE], i, j, k;
+  int   diff[16], *d;  
+  short pos, best_pos, mcost, abort_search;
+  short y0, x0, ry0, rx0, ry;
+  short sy0, sy, sx0;
+  short cand_mv_x, cand_mv_y;
+  short max_pos_x4, max_pos_y4;
+  pel_t *orig_line;
+  
+  StorablePicture *ref_picture;
+
+  int   lambda_factor   = LAMBDA_FACTOR (lambda);
+  short mv_shift        = 0;
+  short blocksize_x     = input->blc_size[blocktype][0];
+  short blocksize_y     = input->blc_size[blocktype][1];
+  short pic4_pix_x      = (pic_pix_x << 2);
+  short pic4_pix_y      = (pic_pix_y << 2);
+  short min_pos2        = (input->hadamard ? 0 : 1);
+  short max_pos2        = (input->hadamard ? max(1,search_pos2) : search_pos2);
+  short list_offset     = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+
+  short apply_weights =  (active_pps->weighted_bipred_idc );  
+  short weightSpic = (apply_weights ? (list == 0? wbp_weight[list_offset    ][ref][0  ][0]: wbp_weight[list_offset + 1][0  ][ref][0]) : 1);
+  short weightRpic = (apply_weights ? (list == 0? wbp_weight[list_offset + 1][ref][0  ][0]: wbp_weight[list_offset    ][0  ][ref][0]) : 1);
+  short offsetSpic = (apply_weights ? (list == 0?  wp_offset[list_offset    ][ref]     [0]:  wp_offset[list_offset + 1][0  ]     [0]) : 0);
+  short offsetRpic = (apply_weights ? (list == 0?  wp_offset[list_offset + 1][ref]     [0]:  wp_offset[list_offset    ][0  ]     [0]) : 0);
+
+  short offsetBi=(offsetRpic + offsetSpic + 1)>>1;
+  int   weightedpel;
+
+  int   img_width, img_height;
+
+  int   halfpelhadamard = input->hadamardqpel ? 0 : input->hadamard;
+  int   qpelstart = input->hadamardqpel ? 0 : 1;
+
+  pel_t **ref1_pic      = listX[list+list_offset                    ][ref]->imgY_ups;      
+  pel_t **ref2_pic      = listX[list==0? 1 +list_offset: list_offset][0  ]->imgY_ups;  
+  
+  ref_picture     = listX[list+list_offset][ref];
+  
+    
+  img_width  = ref_picture->size_x;
+  img_height = ref_picture->size_y;
+
+  max_pos_x4      = ((ref_picture->size_x - blocksize_x+1)<<2);
+  max_pos_y4      = ((ref_picture->size_y - blocksize_y+1)<<2);
+  
+  /*********************************
+   *****                       *****
+   *****  HALF-PEL REFINEMENT  *****
+   *****                       *****
+   *********************************/
+  //===== convert search center to quarter-pel units =====
+
+
+  *mv_x <<= 2;
+  *mv_y <<= 2;
+  //===== set function for getting pixel values =====
+  if ((pic4_pix_x + *mv_x > 1) && (pic4_pix_x + *mv_x < max_pos_x4 - 2) &&
+      (pic4_pix_y + *mv_y > 1) && (pic4_pix_y + *mv_y < max_pos_y4 - 2)   )
+  {
+    PelY_14 = FastPelY_14;
+  }
+  else
+  {
+    PelY_14 = UMVPelY_14;
+  }
+
+  if ((pic4_pix_x + *s_mv_x > 1) && (pic4_pix_x + *s_mv_x < max_pos_x4 - 2) &&
+      (pic4_pix_y + *s_mv_y > 1) && (pic4_pix_y + *s_mv_y < max_pos_y4 - 2)   )
+  {
+    PelY_14b = FastPelY_14;
+  }
+  else
+  {
+    PelY_14b = UMVPelY_14;
+  }
+
+  //===== loop over search positions =====
+  for (best_pos = 0, pos = min_pos2; pos < max_pos2; pos++)
+  {
+    cand_mv_x = *mv_x + (spiral_search_x[pos] << 1);    // quarter-pel units
+    cand_mv_y = *mv_y + (spiral_search_y[pos] << 1);    // quarter-pel units
+    
+    //----- set motion vector cost -----
+    mcost = MV_COST (lambda_factor, mv_shift, cand_mv_x, cand_mv_y, pred_mv_x, pred_mv_y);
+  
+    //----- add up SATD -----
+    for (y0=0, abort_search=0; y0<blocksize_y && !abort_search; y0+=4)
+    {
+      sy0 = ((pic_pix_y + y0)<<2) + *s_mv_y;
+      ry0 = ((pic_pix_y + y0)<<2) + cand_mv_y;
+      
+      if (apply_weights)
+      {
+        for (x0=0; x0<blocksize_x; x0+=4)
+        {
+          sx0 = ((pic_pix_x + x0)<<2) + *s_mv_x ;
+          rx0 = ((pic_pix_x + x0)<<2) + cand_mv_x;
+          d   = diff;
+          
+          sy=sy0;
+          ry=ry0;          
+          orig_line = orig_pic [y0  ];    
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0 , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0   , img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0  ] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+1] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+2] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 12  ,img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 12,img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+3] - weightedpel);
+          
+          sy=sy0+4;
+          ry=ry0+4;
+          orig_line = orig_pic [y0+1];    
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0 , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0   , img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0  ] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+1] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+2] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 12  ,img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 12,img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+3] - weightedpel);
+          
+          sy=sy0+8;
+          ry=ry0+8;
+          orig_line = orig_pic [y0+2];    
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0   , img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0  ] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+1] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+2] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 12  ,img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 12,img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+3] - weightedpel);
+          
+          sy=sy0+12; 
+          ry=ry0+12;
+          orig_line = orig_pic [y0+3];    
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) +
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0   , img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0  ] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+1] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+2] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 12  ,img_height, img_width) + 
+                                                             weightRpic * PelY_14 (ref2_pic, ry, rx0+ 12,img_height, img_width) + 
+                                                             2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d        = (orig_line[x0+3] - weightedpel);
+          
+          
+          if (!input->AllowTransform8x8)
+          {
+            if ((mcost += SATD (diff, halfpelhadamard)) > min_mcost)
+            {
+              abort_search = 1;
+              break;
+            }
+          }
+          else
+          {
+            for(j=0, k=0; j<4; j++)
+              for(i=0; i<4; i++, k++)
+                curr_diff[y0+j][x0+i] = diff[k];
+          }
+        
+        }
+      }
+      else
+      {
+        for (x0=0; x0<blocksize_x; x0+=4)
+        {
+          sx0 = ((pic_pix_x + x0)<<2) + *s_mv_x;
+          rx0 = ((pic_pix_x + x0)<<2) + cand_mv_x;
+          d   = diff;
+          
+          sy=sy0; 
+          ry=ry0;
+          orig_line = orig_pic [y0  ];    
+          *d++      = (orig_line[x0  ] - ((PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0   , img_height, img_width))>>1));
+          *d++      = (orig_line[x0+1] - ((PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+2] - ((PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+3] - ((PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+12, img_height, img_width))>>1));
+          
+          sy=sy0+4; 
+          ry=ry0+4;
+          orig_line = orig_pic [y0+1];    
+          *d++      = (orig_line[x0  ] - ((PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0   , img_height, img_width))>>2));
+          *d++      = (orig_line[x0+1] - ((PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width))>>2));
+          *d++      = (orig_line[x0+2] - ((PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width))>>2));
+          *d++      = (orig_line[x0+3] - ((PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+12, img_height, img_width))>>2));
+          
+          sy=sy0+8; 
+          ry=ry0+8;
+          orig_line = orig_pic [y0+2];    
+          *d++      = (orig_line[x0  ] - ((PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0   , img_height, img_width))>>1));
+          *d++      = (orig_line[x0+1] - ((PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+2] - ((PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+3] - ((PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+12, img_height, img_width))>>1));
+          
+          sy=sy0+12; 
+          ry=ry0+12;
+          orig_line = orig_pic [y0+3];    
+          *d++      = (orig_line[x0  ] - ((PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0   , img_height, img_width))>>1));
+          *d++      = (orig_line[x0+1] - ((PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+2] - ((PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width))>>1));
+          *d        = (orig_line[x0+3] - ((PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+12, img_height, img_width))>>1));
+          
+          
+          if (!input->AllowTransform8x8)
+          {
+            if ((mcost += SATD (diff, halfpelhadamard)) > min_mcost)
+            {
+              abort_search = 1;
+              break;
+            }
+          }
+          else
+          {
+            for(j=0, k=0; j<4; j++)
+              for(i=0; i<4; i++, k++)
+                curr_diff[y0+j][x0+i] = diff[k];
+          }
+
+        }
+      }
+    }
+    
+    if(input->AllowTransform8x8)
+      mcost += find_SATD (curr_diff, halfpelhadamard, blocktype);
+
+
+    if (mcost < min_mcost)
+    {
+      min_mcost = mcost;
+      best_pos  = pos;
+    }
+  }
+  if (best_pos)
+  {
+    *mv_x += (spiral_search_x [best_pos] << 1);
+    *mv_y += (spiral_search_y [best_pos] << 1);
+  }
+
+  if (input->hadamardqpel)
+    min_mcost = INT_MAX;
+    
+  /************************************
+  *****                          *****
+  *****  QUARTER-PEL REFINEMENT  *****
+  *****                          *****
+  ************************************/
+  //===== set function for getting pixel values =====
+  if ((pic4_pix_x + *mv_x > 1) && (pic4_pix_x + *mv_x < max_pos_x4 - 1) &&
+    (pic4_pix_y + *mv_y > 1) && (pic4_pix_y + *mv_y < max_pos_y4 - 1)   )
+  {
+    PelY_14 = FastPelY_14;
+  }
+  else
+  {
+    PelY_14 = UMVPelY_14;
+  }
+  //===== loop over search positions =====
+  for (best_pos = 0, pos = qpelstart; pos < search_pos4; pos++)
+  {
+    cand_mv_x = *mv_x + spiral_search_x[pos];    // quarter-pel units
+    cand_mv_y = *mv_y + spiral_search_y[pos];    // quarter-pel units
+    
+    //----- set motion vector cost -----
+    mcost = MV_COST (lambda_factor, mv_shift, cand_mv_x, cand_mv_y, pred_mv_x, pred_mv_y);
+    
+    //----- add up SATD -----
+    for (y0=0, abort_search=0; y0<blocksize_y && !abort_search; y0+=4)
+    {
+      sy0 = ((pic_pix_y + y0)<<2) + *s_mv_y;      
+      ry0 = ((pic_pix_y + y0)<<2) + cand_mv_y;
+
+      if (apply_weights)
+      {
+          
+        for (x0=0; x0<blocksize_x; x0+=4)
+        {
+          sy  = sy0;
+          sx0 = ((pic_pix_x + x0)<<2) + *s_mv_x;
+          rx0 = ((pic_pix_x + x0)<<2) + cand_mv_x;
+          d   = diff;
+          
+          sy=sy0;
+          orig_line = orig_pic [y0  ];    ry=ry0;          
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0     , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0  ] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 4  , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+1] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 8  , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+2] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 12 , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+3] - weightedpel);
+          
+          sy=sy0+4;
+          orig_line = orig_pic [y0+1];    ry=ry0+4;
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0     , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0  ] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 4  , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+1] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 8  , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+2] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 12 , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+3] - weightedpel);
+          
+          sy=sy0+8;
+          orig_line = orig_pic [y0+2];    ry=ry0+8;
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0     , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0  ] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 4  , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+1] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 8  , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+2] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 12 , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+3] - weightedpel);
+          
+          sy=sy0+12;
+          orig_line = orig_pic [y0+3];    ry=ry0+12;
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0     , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1))  + (offsetBi));
+          *d++      = (orig_line[x0  ] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 4  , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+1] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 8  , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d++      = (orig_line[x0+2] - weightedpel);
+          weightedpel =  Clip3 (0, img->max_imgpel_value , 
+                                ((weightSpic * PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) + 
+                                  weightRpic * PelY_14 (ref2_pic, ry, rx0+ 12 , img_height, img_width) + 
+                                  2 * wp_luma_round) >> (luma_log_weight_denom + 1)) + (offsetBi));
+          *d        = (orig_line[x0+3] - weightedpel);
+          
+          
+          if (!input->AllowTransform8x8)
+          {
+            if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+            {
+              abort_search = 1;
+              break;
+            }
+          }
+          else
+          {
+            for(j=0, k=0; j<4; j++)
+              for(i=0; i<4; i++, k++)
+                curr_diff[y0+j][x0+i] = diff[k];
+          }
+       }
+      }
+      else
+      {      
+        for (x0=0; x0<blocksize_x; x0+=4)
+        {
+         
+          sx0 = ((pic_pix_x + x0)<<2) + *s_mv_x;
+          rx0 = ((pic_pix_x + x0)<<2) + cand_mv_x;
+          d   = diff;
+
+          sy  = sy0; 
+          ry  = ry0;
+          orig_line = orig_pic [y0  ];    
+          *d++      = (orig_line[x0  ] - ((PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0   , img_height, img_width))>>1));
+          *d++      = (orig_line[x0+1] - ((PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+2] - ((PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+3] - ((PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+12, img_height, img_width))>>1));
+          
+          sy  = sy0+4;        
+          ry  = ry0+4;
+          orig_line = orig_pic [y0+1];    
+          *d++      = (orig_line[x0  ] - ((PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0   , img_height, img_width))>>1));
+          *d++      = (orig_line[x0+1] - ((PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+2] - ((PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+3] - ((PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+12, img_height, img_width))>>1));
+          
+          sy  = sy0+8;                
+          ry  = ry0+8;
+          orig_line = orig_pic [y0+2];    
+          *d++      = (orig_line[x0  ] - ((PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0   , img_height, img_width))>>1));
+          *d++      = (orig_line[x0+1] - ((PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+2] - ((PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+3] - ((PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+12, img_height, img_width))>>1));
+          
+          sy  = sy0+12;                
+          ry  = ry0+12;
+          orig_line = orig_pic [y0+3];   
+          *d++      = (orig_line[x0  ] - ((PelY_14b (ref1_pic, sy, sx0     , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0   , img_height, img_width))>>1));
+          *d++      = (orig_line[x0+1] - ((PelY_14b (ref1_pic, sy, sx0+ 4  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 4, img_height, img_width))>>1));
+          *d++      = (orig_line[x0+2] - ((PelY_14b (ref1_pic, sy, sx0+ 8  , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+ 8, img_height, img_width))>>1));
+          *d        = (orig_line[x0+3] - ((PelY_14b (ref1_pic, sy, sx0+ 12 , img_height, img_width) +  PelY_14 (ref2_pic, ry, rx0+12, img_height, img_width))>>1));
+          
+          
+          if (!input->AllowTransform8x8)
+          {
+            if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+            {
+              abort_search = 1;
+              break;
+            }
+          }
+          else
+          {
+            for(j=0, k=0; j<4; j++)
+              for(i=0; i<4; i++, k++)
+                curr_diff[y0+j][x0+i] = diff[k];
+          }
+        }
+      }
+    }
+
+    if(input->AllowTransform8x8)
+      mcost += find_SATD (curr_diff, input->hadamard, blocktype);
+    
+    if (mcost < min_mcost)
+    {
+      min_mcost = mcost;
+      best_pos  = pos;
+    }
+  }
+  if (best_pos)
+  {
+    *mv_x += spiral_search_x [best_pos];
+    *mv_y += spiral_search_y [best_pos];
+  }
+  
+  //===== return minimum motion cost =====
+  return min_mcost;
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Motion Cost for Bidirectional modes
+ ***********************************************************************
+ */
+int BPredPartitionCost (int   blocktype,
+                        int   block8x8,
+                        short fw_ref,
+                        short bw_ref,
+                        int   lambda_factor,
+                        int   list)
+{
+  static int  bx0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,2,0,2}};
+  static int  by0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,0,0,0}, {0,0,2,2}};
+
+  int   diff[64];
+  int   curr_blk[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // ABT pred.error buffer
+  int   bsx       = min(input->blc_size[blocktype][0],8);
+  int   bsy       = min(input->blc_size[blocktype][1],8);
+
+  int   pic_pix_x, pic_pix_y, block_x, block_y;
+  int   v, h, mcost, i, j, k;
+  int   mvd_bits  = 0;
+  int   parttype  = (blocktype<4?blocktype:4);
+  int   step_h0   = (input->part_size[ parttype][0]);
+  int   step_v0   = (input->part_size[ parttype][1]);
+  int   step_h    = (input->part_size[blocktype][0]);
+  int   step_v    = (input->part_size[blocktype][1]);
+  int   bxx, byy;                               // indexing curr_blk
+
+  short   ******all_mv = list ? img->bipred_mv1 : img->bipred_mv2;
+  short   ******  p_mv = img->pred_mv;
+
+    //----- cost for motion vector bits -----
+  for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
+  for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
+  {
+    mvd_bits += mvbits[ all_mv [h][v][LIST_0][fw_ref][blocktype][0] - p_mv[h][v][LIST_0][fw_ref][blocktype][0] ];
+    mvd_bits += mvbits[ all_mv [h][v][LIST_0][fw_ref][blocktype][1] - p_mv[h][v][LIST_0][fw_ref][blocktype][1] ];
+
+    mvd_bits += mvbits[ all_mv [h][v][LIST_1][bw_ref][blocktype][0] - p_mv[h][v][LIST_1][bw_ref][blocktype][0] ];
+    mvd_bits += mvbits[ all_mv [h][v][LIST_1][bw_ref][blocktype][1] - p_mv[h][v][LIST_1][bw_ref][blocktype][1] ];
+  }
+
+  mcost = WEIGHTED_COST (lambda_factor, mvd_bits);
+
+  //----- cost of residual signal -----
+  for (byy=0, v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; byy+=4, v++)
+  {
+    pic_pix_y = img->opix_y + (block_y = (v<<2));
+
+    for (bxx=0, h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; bxx+=4, h++)
+    {
+      pic_pix_x = img->opix_x + (block_x = (h<<2));
+
+      LumaPrediction4x4Bi (block_x, block_y, 2, blocktype, blocktype, fw_ref, bw_ref, list);
+
+      for (k=j=0; j<4; j++)
+      for (  i=0; i<4; i++, k++)
+      {
+        diff[k] = curr_blk[byy+j][bxx+i] = 
+        imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+
+      }
+      if ((!input->AllowTransform8x8) || (blocktype>4)) // tchen 4-29-04
+        mcost += SATD (diff, input->hadamard);
+
+    }
+  }
+  if (input->AllowTransform8x8 && (blocktype<=4))  // tchen 4-29-04
+  {
+    for (byy=0; byy<input->blc_size[parttype][1]; byy+=bsy)
+      for (bxx=0; bxx<input->blc_size[parttype][0]; bxx+=bsx)
+      {
+        k=0;
+        for (i=0;i<8;i++)
+          for (j=0;j<8;j++)
+            diff[k++] = curr_blk[i+byy][j+bxx];
+
+        mcost += SATD8X8(diff, input->hadamard);
+      }
+  }
+
+  return mcost;
+}
+
+
+
+#endif
 
 
 /*!
@@ -1573,6 +2391,13 @@ BlockMotionSearch (short     ref,           //!< reference idx
   int me_tmp_time;
 
   int  N_Bframe=0, n_Bframe=0;
+
+#ifdef WIN32
+  _ftime( &tstruct1 );    // start time ms
+#else
+  ftime(&tstruct1);
+#endif
+
   if(input->FMEnable)
   {
     N_Bframe = input->successive_Bframe;
@@ -1726,11 +2551,6 @@ BlockMotionSearch (short     ref,           //!< reference idx
 
   pred_mv_x = pred_mv[0];
   pred_mv_y = pred_mv[1];
-#ifdef WIN32
-  _ftime( &tstruct1 );    // start time ms
-#else
-  ftime(&tstruct1);
-#endif
 
   //==================================
   //=====   INTEGER-PEL SEARCH   =====
@@ -1789,23 +2609,14 @@ BlockMotionSearch (short     ref,           //!< reference idx
                                               pred_mv_x, pred_mv_y, &mv_x, &mv_y, search_range,
                                               min_mcost, lambda);
 
-#endif
+#endif // #ifndef _FAST_FULL_ME_
   }
 
-#ifdef WIN32
-      _ftime(&tstruct2);   // end time ms
-#else
-      ftime(&tstruct2);    // end time ms
-#endif
-      
-      me_tmp_time=(tstruct2.time*1000+tstruct2.millitm) - (tstruct1.time*1000+tstruct1.millitm); 
-      me_tot_time += me_tmp_time;
-      me_time += me_tmp_time;
 
   //==============================
   //=====   SUB-PEL SEARCH   =====
   //==============================
-  if (input->hadamard)
+  if (input->hadamard && !input->hadamardqpel)
   {
     min_mcost = max_value;
   }
@@ -1845,12 +2656,16 @@ BlockMotionSearch (short     ref,           //!< reference idx
     }
   }
   else
-  {
+  {        
+    if (input->hadamard && !input->hadamardqpel)
+    {
+      min_mcost = max_value;
+    }
+    
     min_mcost =  SubPelBlockMotionSearch (orig_pic, ref, list, pic_pix_x, pic_pix_y, blocktype,
-                                          pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9,
-                                          min_mcost, lambda);
-  }
-
+      pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9,
+      min_mcost, lambda);            
+ }
 
   if (!input->rdopt)
   {
@@ -1893,16 +2708,143 @@ BlockMotionSearch (short     ref,           //!< reference idx
     }
   }
   else
-  {
-  for (i=0; i < (bsx>>2); i++)
-  {
-    for (j=0; j < (bsy>>2); j++)
+  {    
+    for (i=0; i < (bsx>>2); i++)
     {
-      all_mv[block_x+i][block_y+j][list][ref][blocktype][0] = mv_x;
-      all_mv[block_x+i][block_y+j][list][ref][blocktype][1] = mv_y;
+      for (j=0; j < (bsy>>2); j++)
+      {
+        all_mv[block_x+i][block_y+j][list][ref][blocktype][0] = mv_x;
+        all_mv[block_x+i][block_y+j][list][ref][blocktype][1] = mv_y;
+      }
     }
   }
+#if BI_PREDICTION        
+  if (img->type==B_SLICE && input->BiPredMotionEstimation!=0 && (blocktype == 1) && (ref==0))
+  {
+        
+    short   ******bipred_mv = list ? img->bipred_mv1 : img->bipred_mv2;
+    int     min_mcostbi = max_value;
+    short   bimv_x, bimv_y, tempmv_x ,tempmv_y;
+    short   pred_mv_x1, pred_mv_y1;
+    short   pred_mv_x2 = 0, pred_mv_y2 = 0;
+    short   iterlist=list;
+    short   pred_mv_bi[2];
+
+    SetMotionVectorPredictor (pred_mv_bi, enc_picture->ref_idx, enc_picture->mv, 0, (list == LIST_0? LIST_1: LIST_0), block_x, block_y, bsx, bsy);
+
+    mv_x=(mv_x + 2)>>2;
+    mv_y=(mv_y + 2)>>2;
+     
+    for (i=0;i<=input->BiPredMERefinements;i++)
+    {
+      if (i%2)
+      {
+        pred_mv_x2=pred_mv[0];
+        pred_mv_y2=pred_mv[1]; 
+        pred_mv_x1=pred_mv_bi[0];
+        pred_mv_y1=pred_mv_bi[1]; 
+        tempmv_x=bimv_x;
+        tempmv_y=bimv_y;        
+        bimv_x=mv_x;
+        bimv_y=mv_y;
+        iterlist= (list == LIST_0? LIST_1: LIST_0);
+        
+      }
+      else
+      {
+        pred_mv_x1=pred_mv[0];
+        pred_mv_y1=pred_mv[1]; 
+        pred_mv_x2=pred_mv_bi[0];
+        pred_mv_y2=pred_mv_bi[1]; 
+
+        if (i!=0)
+        {
+          tempmv_x=bimv_x;
+          tempmv_y=bimv_y;        
+          bimv_x=mv_x;
+          bimv_y=mv_y;
+        }
+        else
+        {
+          tempmv_x=mv_x;
+          tempmv_y=mv_y;        
+          bimv_x = (pred_mv_x2 + 2)>>2;
+          bimv_y = (pred_mv_y2 + 2)>>2;
+        }
+
+        iterlist=list;
+      }
+
+      min_mcostbi = FullPelBlockMotionBiPred (orig_pic, ref, iterlist, pic_pix_x, pic_pix_y, blocktype, i,
+                                              pred_mv_x1, pred_mv_y1, pred_mv_x2, pred_mv_y2, 
+                                              &bimv_x, &bimv_y, &tempmv_x, &tempmv_y, input->BiPredMESearchRange>>i,
+                                              min_mcostbi, lambda );
+      mv_x=tempmv_x;
+      mv_y=tempmv_y;        
+
+    }
+    
+    tempmv_x=tempmv_x << 2;
+    tempmv_y=tempmv_y << 2;
+
+    if (input->BiPredMESubPel)
+    {
+      if (input->hadamard)
+      {
+        min_mcostbi = max_value;
+      }
+      
+      min_mcostbi =  SubPelBlockSearchBiPred (orig_pic, 0, iterlist, pic_pix_x, pic_pix_y, blocktype,
+                                              pred_mv_x2, pred_mv_y2, &bimv_x, &bimv_y, &tempmv_x, &tempmv_y, 9, 9,
+                                              min_mcostbi, lambda * 0.5);
+    }
+    else
+    {
+      bimv_x=bimv_x << 2;
+      bimv_y=bimv_y << 2;
+    }
+
+    if (input->BiPredMESubPel==2)
+    {
+      if (input->hadamard)
+      {
+        min_mcostbi = max_value;
+      }
+      
+      min_mcostbi =  SubPelBlockSearchBiPred (orig_pic, 0, (iterlist == LIST_0? LIST_1: LIST_0), pic_pix_x, pic_pix_y, blocktype,
+        pred_mv_x, pred_mv_y, &mv_x, &mv_y, &bimv_x, &bimv_y, 9, 9,
+        min_mcostbi, lambda * 0.5);      
+    }
+    else
+    {
+      mv_x=tempmv_x;
+      mv_y=tempmv_y;            
+    }
+
+    for (i=0; i < (bsx>>2); i++)
+    {
+      for (j=0; j < (bsy>>2); j++)
+      {
+        bipred_mv[block_x+i][block_y+j][iterlist                          ][0][blocktype][0] = mv_x;
+        bipred_mv[block_x+i][block_y+j][iterlist                          ][0][blocktype][1] = mv_y;
+        bipred_mv[block_x+i][block_y+j][iterlist == LIST_0? LIST_1: LIST_0][0][blocktype][0] = bimv_x;
+        bipred_mv[block_x+i][block_y+j][iterlist == LIST_0? LIST_1: LIST_0][0][blocktype][1] = bimv_y;        
+      }
+    }
   }
+  
+#endif
+
+  
+#ifdef WIN32
+      _ftime(&tstruct2);   // end time ms
+#else
+      ftime(&tstruct2);    // end time ms
+#endif
+      
+      me_tmp_time=(tstruct2.time*1000+tstruct2.millitm) - (tstruct1.time*1000+tstruct1.millitm); 
+      me_tot_time += me_tmp_time;
+      me_time += me_tmp_time;
 
   return min_mcost;
 }
@@ -1933,10 +2875,10 @@ int BIDPartitionCost (int   blocktype,
   int   v, h, mcost, i, j, k;
   int   mvd_bits  = 0;
   int   parttype  = (blocktype<4?blocktype:4);
-  int   step_h0   = (input->blc_size[ parttype][0]>>2);
-  int   step_v0   = (input->blc_size[ parttype][1]>>2);
-  int   step_h    = (input->blc_size[blocktype][0]>>2);
-  int   step_v    = (input->blc_size[blocktype][1]>>2);
+  int   step_h0   = (input->part_size[ parttype][0]);
+  int   step_v0   = (input->part_size[ parttype][1]);
+  int   step_h    = (input->part_size[blocktype][0]);
+  int   step_v    = (input->part_size[blocktype][1]);
   int   bxx, byy;                               // indexing curr_blk
 
   short   ******all_mv = img->all_mv;
@@ -2165,6 +3107,7 @@ int Get_Direct_Cost8x8 (int block, int *cost8x8)
       }
 
       //===== prediction of 4x4 block =====
+
       LumaPrediction4x4 (block_x, block_y, direct_pdir[pic_pix_x>>2][pic_pix_y>>2], 0, 0, 
                          direct_ref_idx[LIST_0][pic_pix_x>>2][pic_pix_y>>2], 
                          direct_ref_idx[LIST_1][pic_pix_x>>2][pic_pix_y>>2]);
@@ -2259,10 +3202,10 @@ PartitionMotionSearch (int    blocktype,
   int   pic_block_x, pic_block_y;
   int   bslice    = (img->type==B_SLICE);
   int   parttype  = (blocktype<4?blocktype:4);
-  int   step_h0   = (input->blc_size[ parttype][0]>>2);
-  int   step_v0   = (input->blc_size[ parttype][1]>>2);
-  int   step_h    = (input->blc_size[blocktype][0]>>2);
-  int   step_v    = (input->blc_size[blocktype][1]>>2);
+  int   step_h0   = (input->part_size[ parttype][0]);
+  int   step_v0   = (input->part_size[ parttype][1]);
+  int   step_h    = (input->part_size[blocktype][0]);
+  int   step_v    = (input->part_size[blocktype][1]);
   int   list;
   int   numlists;
   int   list_offset;

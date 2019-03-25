@@ -302,7 +302,10 @@ void Init_QOffsetMatrix ()
     if(content!='\0')
       ParseQOffsetMatrix(content, strlen (content));
     else
+    {
       printf("\nError: %s\nProceeding with default values for all matrices.", errortext);
+      input->OffsetMatrixPresentFlag = 0;
+    }
 
     printf("\n");
 

@@ -18,6 +18,8 @@
 
 extern StorablePicture *enc_picture;
 extern StorablePicture *enc_frame_picture;
+extern StorablePicture *enc_frame_picture2;
+extern StorablePicture *enc_frame_picture3;
 extern StorablePicture *enc_top_picture;
 extern StorablePicture *enc_bottom_picture;
 

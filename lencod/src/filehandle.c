@@ -45,14 +45,33 @@ void error(char *text, int code)
 /*!
  ************************************************************************
  * \brief
+ *     This function generates and writes the PPS 
+ *
+ ************************************************************************
+ */
+int write_PPS(int len, int PPS_id)
+{  
+  NALU_t *nalu;
+  nalu = NULL;
+  nalu = GeneratePic_parameter_set_NALU (PPS_id);
+  len += WriteNALU (nalu);
+  FreeNALU (nalu);
+  
+  return len;
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    This function opens the output files and generates the
  *    appropriate sequence header
  ************************************************************************
  */
 int start_sequence()
 {
-  int len=0;
+  int i,len=0, total_pps = (input->GenerateMultiplePPS) ? 3 : 1;
   NALU_t *nalu;
+  
 
   switch(input->of_mode)
   {
@@ -73,19 +92,19 @@ int start_sequence()
   //! As a sequence header, here we write the both sequence and picture
   //! parameter sets.  As soon as IDR is implemented, this should go to the
   //! IDR part, as both parsets have to be transmitted as part of an IDR.
-  //! An alterbative may be to consider this function the IDR start function.
+  //! An alternative may be to consider this function the IDR start function.
   
   nalu = NULL;
   nalu = GenerateSeq_parameter_set_NALU ();
   len += WriteNALU (nalu);
   FreeNALU (nalu);
-  nalu = NULL;
-  nalu = GeneratePic_parameter_set_NALU ();
-  len += WriteNALU (nalu);
-  FreeNALU (nalu);
-
-//  stat->bit_ctr_parametersets = len;
-    stats->bit_ctr_parametersets_n = len;
+  
+  //! Lets write now the Picture Parameter sets. Output will be equal to the total number of bits spend here.
+  for (i=0;i<total_pps;i++)
+  {
+     len = write_PPS(len, i);
+  }
+  stats->bit_ctr_parametersets_n = len;
   return 0;
 }
 

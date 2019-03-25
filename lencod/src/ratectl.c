@@ -47,6 +47,85 @@ int PDuantQp;
 FILE *BitRate;
 double DeltaP;
 
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    Dynamically allocate memory needed for rate control
+ *
+ *************************************************************************************
+*/
+void rc_alloc()
+{
+  img->MADofMB = (double*) calloc (img->FrameSizeInMbs, sizeof (double));
+  if (NULL==img->MADofMB)
+  {
+    no_mem_exit("rc_alloc: img->MADofMB");
+  }
+  
+  BUPFMAD = (double*) calloc ((img->FrameSizeInMbs/input->basicunit), sizeof (double));
+  if (NULL==BUPFMAD)
+  {
+    no_mem_exit("rc_alloc: img->BUPFMAD");
+  }
+
+  BUCFMAD = (double*) calloc ((img->FrameSizeInMbs/input->basicunit), sizeof (double));
+  if (NULL==BUCFMAD)
+  {
+    no_mem_exit("rc_alloc: img->BUCFMAD");
+  }
+
+  FCBUCFMAD = (double*) calloc ((img->FrameSizeInMbs/input->basicunit), sizeof (double));
+  if (NULL==FCBUCFMAD)
+  {
+    no_mem_exit("rc_alloc: img->FCBUCFMAD");
+  }
+
+  FCBUPFMAD = (double*) calloc ((img->FrameSizeInMbs/input->basicunit), sizeof (double));
+  if (NULL==FCBUPFMAD)
+  {
+    no_mem_exit("rc_alloc: img->FCBUPFMAD");
+  }
+
+}
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    Free memory needed for rate control
+ *
+ *************************************************************************************
+*/
+void rc_free()
+{
+  if (NULL!=img->MADofMB)
+  {
+    free (img->MADofMB);
+    img->MADofMB = NULL;
+  }
+  if (NULL!=BUPFMAD)
+  {
+    free (BUPFMAD);
+    BUPFMAD = NULL;
+  }
+  if (NULL!=BUCFMAD)
+  {
+    free (BUCFMAD);
+    BUCFMAD = NULL;
+  }
+  if (NULL!=FCBUCFMAD)
+  {
+    free (FCBUCFMAD);
+    FCBUCFMAD = NULL;
+  }
+  if (NULL!=FCBUPFMAD)
+  {
+    free (FCBUPFMAD);
+    FCBUPFMAD = NULL;
+  }
+}
+
+
 /*! 
  *************************************************************************************
  * \brief
@@ -171,7 +250,7 @@ void rc_init_seq()
           qp  = 20;
         else
           qp =10;
-        input->SeinitialQP = qp;
+    input->SeinitialQP = qp;
   }
 }
 
@@ -646,8 +725,8 @@ int updateQuantizationParameter(int topfield)
   if(img->BasicUnit==img->Frame_Total_Number_MB)
   {
     /* fixed quantization parameter is used to coded I frame, the first P frame and the first B frame
-       the quantization parameter is adjusted according the available channel bandwidth and 
-       the type of vide */  
+    the quantization parameter is adjusted according the available channel bandwidth and 
+    the type of vide */  
     /*top field*/
     if((topfield)||(img->FieldControl==0))
     {
@@ -660,12 +739,6 @@ int updateQuantizationParameter(int topfield)
       {
         if(input->successive_Bframe==1)
         {
-          BFrameNumber=(NumberofBFrames+1)%input->successive_Bframe;
-          if(BFrameNumber==0)
-            BFrameNumber=input->successive_Bframe;
-          /*adaptive field/frame coding*/
-          else if(BFrameNumber==1)
-          {
             if((input->PicInterlace==ADAPTIVE_CODING)\
               ||(input->MbInterlace))
             {
@@ -685,7 +758,7 @@ int updateQuantizationParameter(int topfield)
                 }
               }
             }
-          }
+
           if(PreviousQp1==PreviousQp2)
             m_Qc=PreviousQp1+2;
           else
@@ -698,8 +771,9 @@ int updateQuantizationParameter(int topfield)
           BFrameNumber=(NumberofBFrames+1)%input->successive_Bframe;
           if(BFrameNumber==0)
             BFrameNumber=input->successive_Bframe;
+          
           /*adaptive field/frame coding*/
-          else if(BFrameNumber==1)
+          if(BFrameNumber==1)
           {
             if((input->PicInterlace==ADAPTIVE_CODING)\
               ||(input->MbInterlace))
@@ -721,7 +795,7 @@ int updateQuantizationParameter(int topfield)
               }
             }
           }
-
+          
           if((PreviousQp2-PreviousQp1)<=(-2*input->successive_Bframe-3))
             StepSize=-3;
           else  if((PreviousQp2-PreviousQp1)==(-2*input->successive_Bframe-2))
@@ -783,7 +857,7 @@ int updateQuantizationParameter(int topfield)
             Pm_Qp=FieldQPBuffer;
           }
         }
-
+        
         m_X1=Pm_X1;
         m_X2=Pm_X2;
         m_Hp=PPreHeader;
@@ -882,46 +956,42 @@ int updateQuantizationParameter(int topfield)
       {
         if(input->successive_Bframe==1)
         {
-          BFrameNumber=(NumberofBFrames+1)%input->successive_Bframe;
-        if(BFrameNumber==0)
-          BFrameNumber=input->successive_Bframe;
-        /*adaptive field/frame coding*/
-        else if(BFrameNumber==1)
-        {
+         /*adaptive field/frame coding*/
           if((input->PicInterlace==ADAPTIVE_CODING)\
-            ||(input->MbInterlace))
-          {
-            if(img->FieldControl==0)
-            {             
-              /*previous choice is frame coding*/
-              if(img->FieldFrame==1)
-              {
-                PreviousQp1=PreviousQp2;
-                PreviousQp2=FrameQPBuffer;
-              }
-              /*previous choice is field coding*/
-              else
-              {
-                PreviousQp1=PreviousQp2;
-                PreviousQp2=FieldQPBuffer;
+              ||(input->MbInterlace))
+            {
+              if(img->FieldControl==0)
+              {             
+                /*previous choice is frame coding*/
+                if(img->FieldFrame==1)
+                {
+                  PreviousQp1=PreviousQp2;
+                  PreviousQp2=FrameQPBuffer;
+                }
+                /*previous choice is field coding*/
+                else
+                {
+                  PreviousQp1=PreviousQp2;
+                  PreviousQp2=FieldQPBuffer;
+                }
               }
             }
-          }
-        }
-        if(PreviousQp1==PreviousQp2)
-          m_Qc=PreviousQp1+2;
-        else
-          m_Qc=(PreviousQp1+PreviousQp2)/2+1;
-        m_Qc = MIN(m_Qc, RC_MAX_QUANT); // clipping
-        m_Qc = MAX(RC_MIN_QUANT, m_Qc);//clipping
+
+          if(PreviousQp1==PreviousQp2)
+            m_Qc=PreviousQp1+2;
+          else
+            m_Qc=(PreviousQp1+PreviousQp2)/2+1;
+          m_Qc = MIN(m_Qc, RC_MAX_QUANT); // clipping
+          m_Qc = MAX(RC_MIN_QUANT, m_Qc);//clipping
         }
         else
         {
           BFrameNumber=(NumberofBFrames+1)%input->successive_Bframe;
           if(BFrameNumber==0)
             BFrameNumber=input->successive_Bframe;
+          
           /*adaptive field/frame coding*/
-          else if(BFrameNumber==1)
+          if(BFrameNumber==1)
           {
             if((input->PicInterlace==ADAPTIVE_CODING)\
               ||(input->MbInterlace))

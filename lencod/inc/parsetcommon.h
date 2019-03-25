@@ -125,7 +125,7 @@ typedef struct
   int       num_ref_idx_l0_active_minus1;                     // ue(v)
   int       num_ref_idx_l1_active_minus1;                     // ue(v)
   Boolean   weighted_pred_flag;                               // u(1)
-  Boolean   weighted_bipred_idc;                              // u(2)
+  unsigned  weighted_bipred_idc;                              // u(2)
   int       pic_init_qp_minus26;                              // se(v)
   int       pic_init_qs_minus26;                              // se(v)
   int       chroma_qp_index_offset;                           // se(v)

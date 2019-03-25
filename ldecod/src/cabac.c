@@ -639,7 +639,7 @@ void readMB_typeInfo_CABAC( SyntaxElement *se,
       a = (( (currMB->mb_available_left)->mb_type != SI4MB) ? 1 : 0 );
 
     act_ctx = a + b;
-    act_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[4] + act_ctx);
+    act_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[1] + act_ctx);
     se->context = act_ctx; // store context
 
     if (act_sym==0) //  SI 4x4 Intra

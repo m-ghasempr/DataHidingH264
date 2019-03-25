@@ -1123,9 +1123,7 @@ int dct_chroma(int uv,int cr_cbp)
   int m4[4][4];
   int qp_per_dc = 0;
   int qp_rem_dc = 0;
-  //int qp_const;
   int q_bits_422 = 0;	
-  //int qp_const_422 = 0;
   Boolean lossless_qpprime = ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
 
   qp_c      = currMB->qp + img->chroma_qp_offset[uv];
@@ -1135,24 +1133,15 @@ int dct_chroma(int uv,int cr_cbp)
   qp_per    = (qp_c + img->bitdepth_chroma_qp_scale)/6;              
   qp_rem    = (qp_c + img->bitdepth_chroma_qp_scale)%6;              
   q_bits    = Q_BITS+qp_per;
-  /*
-  if (img->type == I_SLICE)
-    qp_const=(1<<q_bits)/3;    // intra
-  else
-    qp_const=(1<<q_bits)/6;    // inter
-*/
+
   if (img->yuv_format == YUV422)
   {
     //for YUV422 only
     qp_per_dc = (qp_c + 3 + img->bitdepth_chroma_qp_scale)/6;
     qp_rem_dc = (qp_c + 3 + img->bitdepth_chroma_qp_scale)%6;
-    //q_bits_422 = Q_BITS+qp_per_dc;
-    /*
-    if (img->type == I_SLICE)		
-      qp_const_422=(1<<q_bits_422)/3;    // intra
-    else
-      qp_const_422=(1<<q_bits_422)/6;    // inter
-      */
+    
+    q_bits_422 = Q_BITS+qp_per_dc;
+  
   }
 
   
@@ -1217,10 +1206,8 @@ int dct_chroma(int uv,int cr_cbp)
       
       if(intra == 1)
         level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (LevelOffset4x4Chroma_Intra[uv][qp_per][0][0]<<1)) >> (q_bits+1);
-        //level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (qp_const<<1)) >> (q_bits+1);
       else
         level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (LevelOffset4x4Chroma_Inter[uv][qp_per][0][0]<<1)) >> (q_bits+1);
-        //level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (qp_const<<1)) >> (q_bits+1);
       
       if (input->symbol_mode == UVLC && img->qp < 4) 
       {
@@ -1323,10 +1310,8 @@ int dct_chroma(int uv,int cr_cbp)
 
       if(intra == 1)
         level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0] + (LevelOffset4x4Chroma_Intra[uv][qp_per_dc][0][0]*2)) >> (q_bits_422+1);
-        //level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0] + (qp_const_422*2)) >> (q_bits_422+1);
       else
         level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0] + (LevelOffset4x4Chroma_Inter[uv][qp_per_dc][0][0]*2)) >> (q_bits_422+1);
-      //level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0] + (qp_const_422*2)) >> (q_bits_422+1);
 
       if (level != 0)
       {
@@ -1454,10 +1439,8 @@ int dct_chroma(int uv,int cr_cbp)
         level = abs(m4[i][j]);
       else if(intra == 1)        
         level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (LevelOffset4x4Chroma_Intra[uv][qp_per][0][0]*2)) >> (q_bits+1);
-      //level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (qp_const*2)) >> (q_bits+1);
       else
         level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (LevelOffset4x4Chroma_Inter[uv][qp_per][0][0]*2)) >> (q_bits+1);
-      //level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (qp_const*2)) >> (q_bits+1);
       
       if (level != 0)
       {
@@ -1575,10 +1558,8 @@ int dct_chroma(int uv,int cr_cbp)
           level = abs(img->m7[n1+i][n2+j]);
         else if(intra == 1)          
           level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+LevelOffset4x4Chroma_Intra[uv][qp_per][i][j])>>q_bits;
-        //level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+qp_const)>>q_bits;
         else
           level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+LevelOffset4x4Chroma_Inter[uv][qp_per][i][j])>>q_bits;
-        //level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+qp_const)>>q_bits;
 
         if (level  != 0)
         {
@@ -1749,7 +1730,6 @@ int dct_chroma4x4(int uv, int b8, int b4)
   int sign(int a,int b);
 
   int i,j,i1,j1,ilev,m5[4],m6[4],coeff_ctr;
-  //int qp_const;
   int level,scan_pos,run;
   int nonzeroAC;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
@@ -1769,12 +1749,7 @@ int dct_chroma4x4(int uv, int b8, int b4)
   qp_per    = (qp_c + img->bitdepth_chroma_qp_scale)/6;              
   qp_rem    = (qp_c + img->bitdepth_chroma_qp_scale)%6;              
   q_bits    = Q_BITS+qp_per;
-/*
-  if (img->type == I_SLICE)
-    qp_const=(1<<q_bits)/3;    // intra
-  else
-    qp_const=(1<<q_bits)/6;    // inter
-*/
+
   //  Horizontal transform
   if(!lossless_qpprime)
   for (j=0; j < BLOCK_SIZE; j++)
@@ -1818,10 +1793,8 @@ int dct_chroma4x4(int uv, int b8, int b4)
     level = abs(img->m7[0][0]);
   else if(intra == 1)    
     level =(abs(img->m7[0][0]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + LevelOffset4x4Chroma_Intra[uv][qp_per][0][0]) >> q_bits;
-  //level =(abs(img->m7[0][0]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + qp_const) >> q_bits;
   else
     level =(abs(img->m7[0][0]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + LevelOffset4x4Chroma_Inter[uv][qp_per][0][0]) >> q_bits;
-  //level =(abs(img->m7[0][0]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + qp_const) >> q_bits;
 
   b8 -= 4*(uv+1);
   dc_level_temp[uv][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)] = sign(level, img->m7[0][0]);
@@ -1861,10 +1834,8 @@ int dct_chroma4x4(int uv, int b8, int b4)
       level = abs (img->m7[i][j]);
     else if(intra == 1)      
       level = (abs(img->m7[i][j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+LevelOffset4x4Chroma_Intra[uv][qp_per][i][j])>>q_bits;
-    //level = (abs(img->m7[i][j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+qp_const)>>q_bits;
     else
       level = (abs(img->m7[i][j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+LevelOffset4x4Chroma_Inter[uv][qp_per][i][j])>>q_bits;
-      //level = (abs(img->m7[i][j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+qp_const)>>q_bits;
     
     if (level != 0)
     {

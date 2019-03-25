@@ -8,7 +8,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *     - Alexis Michael Tourapis                     <alexis@mobilygen.com, alexismt@ieee.org> 
+ *     - Alexis Michael Tourapis                     <alexismt@ieee.org> 
  *************************************************************************************
  */
 
@@ -73,8 +73,8 @@ void create_pyramid()
     }
      
     curlevel = GOPlevels ;
-    if (NULL == (curGOPLevelfrm = (int*)malloc(GOPlevels*sizeof(int)))) no_mem_exit("create_pyramid:curGOPLevelfrm");
-    if (NULL == (curGOPLeveldist= (int*)malloc(GOPlevels*sizeof(int)))) no_mem_exit("create_pyramid:curGOPLeveldist");
+    if (NULL == (curGOPLevelfrm = (int*)malloc((GOPlevels + 1)*sizeof(int)))) no_mem_exit("create_pyramid:curGOPLevelfrm");
+    if (NULL == (curGOPLeveldist= (int*)malloc((GOPlevels + 1)*sizeof(int)))) no_mem_exit("create_pyramid:curGOPLeveldist");
     
     for (i=0; i <input->successive_Bframe; i++)
     {

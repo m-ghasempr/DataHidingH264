@@ -265,11 +265,16 @@ void find_snr(
               StorablePicture *p,     //!< picture to be compared
               int p_ref)              //!< open reference YUV file
 {
+  int SubWidthC  [4]= { 1, 2, 2, 1};
+  int SubHeightC [4]= { 1, 2, 1, 1};
+  int crop_left, crop_right, crop_top, crop_bottom;
+
   int i,j;
   int64 diff_y,diff_u,diff_v;
   int uv;
   int64  status;
   int symbol_size_in_bytes = img->pic_unit_bitsize_on_disk/8;
+  int size_x, size_y;
   int size_x_cr, size_y_cr;
   int64 framesize_in_bytes;
   unsigned int max_pix_value_sqd = img->max_imgpel_value * img->max_imgpel_value;
@@ -279,7 +284,36 @@ void find_snr(
 
   // calculate frame number
   int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? p->poc /(input->poc_scale) : p->poc/(3-input->poc_scale);
-  
+
+  // cropping for luma
+  if (p->frame_cropping_flag)
+  {
+    crop_left   = SubWidthC[p->chroma_format_idc] * p->frame_cropping_rect_left_offset;
+    crop_right  = SubWidthC[p->chroma_format_idc] * p->frame_cropping_rect_right_offset;
+    crop_top    = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) *  p->frame_cropping_rect_top_offset;
+    crop_bottom = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) *   p->frame_cropping_rect_bottom_offset;
+  }
+  else
+  {
+    crop_left = crop_right = crop_top = crop_bottom = 0;
+  }
+
+  size_x = p->size_x - crop_left - crop_right;
+  size_y = p->size_y - crop_top - crop_bottom;
+
+  // cropping for chroma
+  if (p->frame_cropping_flag)
+  {
+    crop_left   = p->frame_cropping_rect_left_offset;
+    crop_right  = p->frame_cropping_rect_right_offset;
+    crop_top    = ( 2 - p->frame_mbs_only_flag ) *  p->frame_cropping_rect_top_offset;
+    crop_bottom = ( 2 - p->frame_mbs_only_flag ) *   p->frame_cropping_rect_bottom_offset;
+  }
+  else
+  {
+    crop_left = crop_right = crop_top = crop_bottom = 0;
+  }
+
   if ((p->chroma_format_idc==YUV400) && input->write_uv)
   {
     size_x_cr = p->size_x/2;
@@ -287,26 +321,28 @@ void find_snr(
   }
   else
   {
-    size_x_cr = p->size_x_cr;
-    size_y_cr = p->size_y_cr;
+    size_x_cr = p->size_x_cr - crop_left - crop_right;
+    size_y_cr = p->size_y_cr - crop_top  - crop_bottom;
   }
-  framesize_in_bytes = (((int64)p->size_y*p->size_x) + ((int64)size_y_cr*size_x_cr)*2) * symbol_size_in_bytes;
+
+  framesize_in_bytes = (((int64)size_y*size_x) + ((int64)size_y_cr*size_x_cr)*2) * symbol_size_in_bytes;
 
   if (psnrPOC==0 && img->psnr_number)
     img->idr_psnr_number=img->psnr_number + 1;
+
   img->psnr_number=max(img->psnr_number,img->idr_psnr_number+psnrPOC);
 
   frame_no = img->idr_psnr_number+psnrPOC;
 
   // KS: this buffer should actually be allocated only once, but this is still much faster than the previous version
-  buf = malloc (p->size_y*p->size_x*symbol_size_in_bytes);
+  buf = malloc ( size_y * size_x * symbol_size_in_bytes );
 
   if (NULL == buf)
   {
     no_mem_exit("find_snr: buf");
   }
 
-  status = lseek (p_ref, framesize_in_bytes*frame_no, SEEK_SET);
+  status = lseek (p_ref, framesize_in_bytes * frame_no, SEEK_SET);
   if (status == -1)
   {
     fprintf(stderr, "Error in seeking frame number: %d\n", frame_no);
@@ -317,8 +353,8 @@ void find_snr(
   if(rgb_output)
     lseek (p_ref, framesize_in_bytes/3, SEEK_CUR);
 
-  read(p_ref, buf, p->size_y*p->size_x*symbol_size_in_bytes);
-  buf2img(imgY_ref, buf, p->size_x, p->size_y, symbol_size_in_bytes);
+  read(p_ref, buf, size_y * size_x * symbol_size_in_bytes);
+  buf2img(imgY_ref, buf, size_x, size_y, symbol_size_in_bytes);
 
   if (dec_picture->chroma_format_idc != YUV400)
   {
@@ -327,8 +363,8 @@ void find_snr(
       if(rgb_output && uv==1)
         lseek (p_ref, -framesize_in_bytes, SEEK_CUR);
     
-      read(p_ref, buf, p->size_y_cr*p->size_x_cr*symbol_size_in_bytes);
-      buf2img(imgUV_ref[uv], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes);
+      read(p_ref, buf, size_y_cr * size_x_cr*symbol_size_in_bytes);
+      buf2img(imgUV_ref[uv], buf, size_x_cr, size_y_cr, symbol_size_in_bytes);
     }
   }
 
@@ -339,9 +375,9 @@ void find_snr(
 
   img->quad[0]=0;
   diff_y=0;
-  for (j=0; j < p->size_y; ++j)
+  for (j=0; j < size_y; ++j)
   {
-    for (i=0; i < p->size_x; ++i)
+    for (i=0; i < size_x; ++i)
     {
       diff_y += img->quad[abs(p->imgY[j][i]-imgY_ref[j][i])];
     }
@@ -353,9 +389,9 @@ void find_snr(
   
   if (dec_picture->chroma_format_idc != YUV400)
   {
-    for (j=0; j < p->size_y_cr; ++j)
+    for (j=0; j < size_y_cr; ++j)
     {
-      for (i=0; i < p->size_x_cr; ++i)
+      for (i=0; i < size_x_cr; ++i)
       {
         diff_u += img->quad[abs(imgUV_ref[0][j][i]-p->imgUV[0][j][i])];
         diff_v += img->quad[abs(imgUV_ref[1][j][i]-p->imgUV[1][j][i])];
@@ -372,15 +408,15 @@ void find_snr(
 
   // Collecting SNR statistics
   if (diff_y != 0)
-    snr->snr_y=(float)(10*log10(max_pix_value_sqd*(double)((double)(p->size_x)*(p->size_y) / diff_y)));        // luma snr for current frame
+    snr->snr_y=(float)(10*log10(max_pix_value_sqd*(double)((double)(size_x)*(size_y) / diff_y)));        // luma snr for current frame
   else
     snr->snr_y=0;
   if (diff_u != 0)
-    snr->snr_u=(float)(10*log10(max_pix_value_sqd_uv*(double)((double)(p->size_x_cr)*(p->size_y_cr) / (diff_u))));    //  chroma snr for current frame
+    snr->snr_u=(float)(10*log10(max_pix_value_sqd_uv*(double)((double)(size_x_cr)*(size_y_cr) / (diff_u))));    //  chroma snr for current frame
   else
     snr->snr_u=0;
   if (diff_v != 0)
-    snr->snr_v=(float)(10*log10(max_pix_value_sqd_uv*(double)((double)(p->size_x_cr)*(p->size_y_cr) / (diff_v))));    //  chroma snr for current frame
+    snr->snr_v=(float)(10*log10(max_pix_value_sqd_uv*(double)((double)(size_x_cr)*(size_y_cr) / (diff_v))));    //  chroma snr for current frame
   else
     snr->snr_v=0;
 
@@ -1215,22 +1251,22 @@ void exit_picture()
     sprintf(yuvFormat,"%s", yuv_types[chroma_format_idc]);
     
     if(slice_type == I_SLICE) // I picture
-      fprintf(stdout,"%3d(I)  %3d %3d %5d %7.4f %7.4f %7.4f  %s %5d\n",
+      fprintf(stdout,"%04d(I)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
       frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
     else if(slice_type == P_SLICE) // P pictures
-      fprintf(stdout,"%3d(P)  %3d %3d %5d %7.4f %7.4f %7.4f  %s %5d\n",
+      fprintf(stdout,"%04d(P)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
       frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
     else if(slice_type == SP_SLICE) // SP pictures
-      fprintf(stdout,"%3d(SP) %3d %3d %5d %7.4f %7.4f %7.4f  %s %5d\n",
+      fprintf(stdout,"%04d(SP) %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
       frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
     else if (slice_type == SI_SLICE)
-      fprintf(stdout,"%3d(SI) %3d %3d %5d %7.4f %7.4f %7.4f  %s %5d\n",
+      fprintf(stdout,"%04d(SI) %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
       frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
     else if(refpic) // stored B pictures
-      fprintf(stdout,"%3d(BS) %3d %3d %5d %7.4f %7.4f %7.4f  %s %5d\n",
+      fprintf(stdout,"%04d(RB) %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
       frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
     else // B pictures
-      fprintf(stdout,"%3d(B)  %3d %3d %5d %7.4f %7.4f %7.4f  %s %5d\n",
+      fprintf(stdout,"%04d(B)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
       frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
 
     fflush(stdout);
@@ -1477,7 +1513,7 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
   set_ref_pic_num();
 
   if (img->type == B_SLICE)
-      compute_collocated(Co_located, listX);
+      compute_colocated(Co_located, listX);
 
   //reset_ec_flags();
 

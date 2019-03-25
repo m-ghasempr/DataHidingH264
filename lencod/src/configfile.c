@@ -80,6 +80,7 @@ static void ParseContent (char *buf, int bufsize);
 static int ParameterNameToMapIndex (char *s);
 static int InitEncoderParams();
 static int TestEncoderParams(int bitdepth_qp_scale);
+static int DisplayEncoderParams();
 static void PatchInp ();
 static void ProfileCheck();
 static void LevelCheck();
@@ -247,6 +248,8 @@ void Configure (int ac, char *av[])
   }
   printf ("\n");
   PatchInp();
+  if (input->DisplayEncParams)
+    DisplayEncoderParams();
 }
 
 /*!
@@ -480,6 +483,14 @@ static int InitEncoderParams()
   return -1;
 };
 
+/*!
+ ***********************************************************************
+ * \brief
+ *    Validates encoding parameters.
+ * \return
+ *    -1 for error
+ ***********************************************************************
+ */
 static int TestEncoderParams(int bitdepth_qp_scale)
 {
   int i = 0;
@@ -544,6 +555,36 @@ static int TestEncoderParams(int bitdepth_qp_scale)
   return -1;
 };
 
+
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Outputs encoding parameters.
+ * \return
+ *    -1 for error
+ ***********************************************************************
+ */
+static int DisplayEncoderParams()
+{
+  int i = 0;
+
+  printf("******************************************************\n");
+  printf("*               Encoder Parameters                   *\n");
+  printf("******************************************************\n");
+  while (Map[i].TokenName != NULL)
+  {
+    if (Map[i].Type == 0)
+      printf("Parameter %s = %d\n",Map[i].TokenName,* (int *) (Map[i].Place));
+    else if (Map[i].Type == 1)
+      printf("Parameter %s = ""%s""\n",Map[i].TokenName,(char *)  (Map[i].Place));
+    else if (Map[i].Type == 2)
+      printf("Parameter %s = %.2f\n",Map[i].TokenName,* (double *) (Map[i].Place));
+      i++;
+  }
+  printf("******************************************************\n");
+  return -1;
+};
 
 /*!
  ************************************************************************
@@ -614,6 +655,25 @@ static void PatchInp ()
 
     input->blc_size[7][0]= 4;
     input->blc_size[7][1]= 4;
+
+
+    input->part_size[0][0] = 4;
+    input->part_size[0][1] = 4;
+    input->part_size[1][0] = 4;
+    input->part_size[1][1] = 4;
+    input->part_size[2][0] = 4;
+    input->part_size[2][1] = 2;
+    input->part_size[3][0] = 2;
+    input->part_size[3][1] = 4;
+    input->part_size[4][0] = 2;
+    input->part_size[4][1] = 2;
+    input->part_size[5][0] = 2;
+    input->part_size[5][1] = 1;
+    input->part_size[6][0] = 1;
+    input->part_size[6][1] = 2;
+    input->part_size[7][0] = 1;
+    input->part_size[7][1] = 1;
+
 
   // set proper log2_max_frame_num_minus4.
   {

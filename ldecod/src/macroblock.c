@@ -2142,12 +2142,12 @@ int predict_nnz(struct img_par *img, int i,int j)
 
   // left block
   getLuma4x4Neighbour(mb_nr, i, j, -1, 0, &pix);
-/* to be inserted only for dp
-  if (pix.available && active_pps->constrained_intra_pred_flag)
+
+  if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
   {
     pix.available &= img->intra_block[pix.mb_addr];
   }
-*/  
+
   if (pix.available)
   {
     pred_nnz = img->nz_coeff [pix.mb_addr ][pix.x][pix.y];
@@ -2156,12 +2156,12 @@ int predict_nnz(struct img_par *img, int i,int j)
 
   // top block
   getLuma4x4Neighbour(mb_nr, i, j, 0, -1, &pix);
-/* to be inserted only for dp
-  if (pix.available && active_pps->constrained_intra_pred_flag)
+
+  if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
   {
     pix.available &= img->intra_block[pix.mb_addr];
   }
-*/  
+
   if (pix.available)
   {
     pred_nnz += img->nz_coeff [pix.mb_addr ][pix.x][pix.y];
@@ -2201,6 +2201,12 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     //YUV420 and YUV422
     // left block
     getChroma4x4Neighbour(mb_nr, i%2, j-4, -1, 0, &pix);
+
+    if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
+    {
+      pix.available &= img->intra_block[pix.mb_addr];
+    }
+
     if (pix.available)
     {
       pred_nnz = img->nz_coeff [pix.mb_addr ][2 * (i/2) + pix.x][4 + pix.y];
@@ -2209,6 +2215,12 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     
     // top block
     getChroma4x4Neighbour(mb_nr, i%2, j-4, 0, -1, &pix);
+
+    if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
+    {
+      pix.available &= img->intra_block[pix.mb_addr];
+    }
+
     if (pix.available)
     {
       pred_nnz += img->nz_coeff [pix.mb_addr ][2 * (i/2) + pix.x][4 + pix.y];
@@ -2220,6 +2232,12 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     //YUV444
     // left block
     getChroma4x4Neighbour(mb_nr, i, j-j_off, -1, 0, &pix);
+
+    if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
+    {
+      pix.available &= img->intra_block[pix.mb_addr];
+    }
+
     if (pix.available)
     {
       pred_nnz = img->nz_coeff [pix.mb_addr ][pix.x][j_off + pix.y];
@@ -2228,6 +2246,12 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     
     // top block
     getChroma4x4Neighbour(mb_nr, i, j-j_off, 0, -1, &pix);
+
+    if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
+    {
+      pix.available &= img->intra_block[pix.mb_addr];
+    }
+
     if (pix.available)
     {
       pred_nnz += img->nz_coeff [pix.mb_addr ][pix.x][j_off + pix.y];

@@ -583,7 +583,7 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
 
     if (NULL!=Co_located)
     {
-      free_collocated(Co_located);
+      free_colocated(Co_located);
     }
     Co_located = alloc_colocated (img->width, img->height,sps->mb_adaptive_frame_field_flag);
     ercInit(img->width, img->height, 1);
@@ -631,7 +631,7 @@ void UseParameterSet (int PicParsetId)
 
 //  printf ("Using Picture Parameter set %d and associated Sequence Parameter Set %d\n", PicParsetId, PicParSet[PicParsetId].seq_parameter_set_id);
 
-  if (sps->pic_order_cnt_type < 0 || sps->pic_order_cnt_type > 2)  // != 1
+  if ((int) sps->pic_order_cnt_type < 0 || sps->pic_order_cnt_type > 2)  // != 1
   {
     printf ("invalid sps->pic_order_cnt_type = %d\n", sps->pic_order_cnt_type);
     error ("pic_order_cnt_type != 1", -1000);

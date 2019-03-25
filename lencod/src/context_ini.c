@@ -67,16 +67,16 @@ void create_context_memory ()
   num_mb_per_slice  = (input->slice_mode==1 ? input->slice_argument : num_mb);
   number_of_slices  = (num_mb + num_mb_per_slice - 1) / num_mb_per_slice;
 
-  if ((initialized  = (int***) malloc (2 * sizeof(int**))) == NULL)
+  if ((initialized  = (int***) malloc (3 * sizeof(int**))) == NULL)
   {
     no_mem_exit ("create_context_memory: initialized");
   }
-  if ((model_number = (int***) malloc (2 * sizeof(int**))) == NULL)
+  if ((model_number = (int***) malloc (3 * sizeof(int**))) == NULL)
   {
     no_mem_exit ("create_context_memory: model_number");
   }
 
-  for (k=0; k<2; k++)
+  for (k=0; k<3; k++)
   {
     if ((initialized[k] = (int**) malloc (FRAME_TYPES * sizeof(int*))) == NULL)
     {
@@ -101,7 +101,7 @@ void create_context_memory ()
   }
 
   //===== set all context sets as "uninitialized" =====
-  for (k=0; k<2; k++)
+  for (k=0; k<3; k++)
   {
     for (i=0; i<FRAME_TYPES; i++)
     {
@@ -128,7 +128,7 @@ void free_context_memory ()
 {
   int i, k;
 
-  for (k=0; k<2; k++)
+  for (k=0; k<3; k++)
   {
     for (i=0; i<FRAME_TYPES; i++)
     {

@@ -49,12 +49,15 @@ Mapping Map[] = {
     {"QPBSlice",                 &configinput.qpB,                          0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP  },
     {"FrameSkip",                &configinput.jumpd,                        0,   0.0,                       2,  0.0,              0.0              },
     {"UseHadamard",              &configinput.hadamard,                     0,   0.0,                       1,  0.0,              1.0              },
+    {"UseHadamardQpelOnly",      &configinput.hadamardqpel,                 0,   0.0,                       1,  0.0,              1.0              },
     {"SearchRange",              &configinput.search_range,                 0,   16.0,                      2,  0.0,              0.0              },
     {"NumberReferenceFrames",    &configinput.num_ref_frames,               0,   1.0,                       1,  1.0,             16.0              },
     {"PList0References",         &configinput.P_List0_refs,                 0,   0.0,                       1,  0.0,             16.0              },
     {"BList0References",         &configinput.B_List0_refs,                 0,   0.0,                       1,  0.0,             16.0              },
     {"BList1References",         &configinput.B_List1_refs,                 0,   1.0,                       1,  0.0,             16.0              },
     {"Log2MaxFrameNum",          &configinput.Log2MaxFrameNum,              0,   0.0,                       2,  0.0,              0.0              },
+    {"GenerateMultiplePPS",      &configinput.GenerateMultiplePPS,          0,   0.0,                       1,  0.0,              1.0              },
+    {"ResendPPS",                &configinput.ResendPPS,                    0,   0.0,                       1,  0.0,              1.0              },
     {"SourceWidth",              &configinput.img_width,                    0,   176.0,                     2, 16.0,              0.0              },
     {"SourceHeight",             &configinput.img_height,                   0,   144.0,                     2, 16.0,              0.0              },
     {"MbLineIntraUpdate",        &configinput.intra_upd,                    0,   0.0,                       1,  0.0,              1.0              },
@@ -130,11 +133,23 @@ Mapping Map[] = {
     {"WeightedPrediction",       &configinput.WeightedPrediction,           0,   0.0,                       1,  0.0,              1.0              },
     {"WeightedBiprediction",     &configinput.WeightedBiprediction,         0,   0.0,                       1,  0.0,              2.0              },
     {"UseWeightedReferenceME",   &configinput.UseWeightedReferenceME,       0,   0.0,                       1,  0.0,              1.0              },
-    {"BRefeferencePictures",     &configinput.BRefPictures,                 0,   0.0,                       1,  0.0,              1.0              },
+    {"RDPictureDecision",        &configinput.RDPictureDecision,            0,   0.0,                       1,  0.0,              1.0              },
+    {"RDPictureIntra",           &configinput.RDPictureIntra,               0,   0.0,                       1,  0.0,              1.0              },    
+    {"RDPSliceWeightOnly",       &configinput.RDPSliceWeightOnly,           0,   1.0,                       1,  0.0,              1.0              },    
+    {"RDBSliceWeightOnly",       &configinput.RDBSliceWeightOnly,           0,   0.0,                       1,  0.0,              1.0              },    
+
+    {"SkipIntraInInterSlices",   &configinput.SkipIntraInInterSlices,       0,   0.0,                       1,  0.0,              1.0              },    
+    {"BReferencePictures",       &configinput.BRefPictures,                 0,   0.0,                       1,  0.0,              1.0              },
     {"PyramidCoding",            &configinput.PyramidCoding,                0,   0.0,                       1,  0.0,              3.0              },
     {"ExplicitPyramidFormat",    &configinput.ExplicitPyramidFormat,        1,   0.0,                       0,  0.0,              0.0              },
     {"PyramidRefReorder",        &configinput.PyramidRefReorder,            0,   0.0,                       1,  0.0,              1.0              },
     {"PocMemoryManagement",      &configinput.PocMemoryManagement,          0,   0.0,                       1,  0.0,              1.0              },
+#if BI_PREDICTION
+    {"BiPredMotionEstimation",   &configinput.BiPredMotionEstimation,       0,   0.0,                       1,  0.0,              1.0              },
+    {"BiPredMERefinements",      &configinput.BiPredMERefinements,          0,   0.0,                       1,  0.0,              5.0              },
+    {"BiPredMESearchRange",      &configinput.BiPredMESearchRange,          0,   8.0,                       2,  0.0,              0.0              },
+    {"BiPredMESubPel",           &configinput.BiPredMESubPel,               0,   1.0,                       1,  0.0,              2.0              },
+#endif
 
     {"LoopFilterParametersFlag", &configinput.LFSendParameters,             0,   0.0,                       1,  0.0,              1.0              },
     {"LoopFilterDisable",        &configinput.LFDisableIdc,                 0,   0.0,                       1,  0.0,              2.0              },
@@ -159,6 +174,7 @@ Mapping Map[] = {
 
     {"Transform8x8Mode",         &configinput.AllowTransform8x8,            0,   0.0,                       1,  0.0,              2.0              },
     {"ReportFrameStats",         &configinput.ReportFrameStats,             0,   0.0,                       1,  0.0,              1.0              },
+    {"DisplayEncParams",         &configinput.DisplayEncParams,             0,   0.0,                       1,  0.0,              1.0              },
     // Rate Control
     {"RateControlEnable",        &configinput.RCEnable,                     0,   0.0,                       1,  0.0,              1.0              },
     {"Bitrate",                  &configinput.bit_rate,                     0,   0.0,                       2,  0.0,              0.0              },

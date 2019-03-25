@@ -1,3 +1,23 @@
+Changes for Version JM 9.3 to JM 9.2
+------------------------------------
+- encoder: Bi predictive ME (AT)
+- encoder: encoder parameter tuning (AT)
+- encoder: fix allocation in error concealment (SM)
+- encoder: fix allocation in pyramid code (AT)
+- encoder: fix qp_const_422 assignment (SKa)
+- encoder: fix padding for automatically added borders (SKa)
+- encoder: support multiple PPS (AT)
+- encoder: picture RD-decision (AT)
+- encoder: rate-control fix (SM)
+- encoder: restrict num_ref_frames to MaxDpbSize (ZH/KS)
+- encoder: allocate rate control memory depending on frame size (KS)
+- decoder: open trace file only once (AT)
+- decoder: remove duplicate initialization of error states (MA)
+- decoder: fix timing SEI parsing (PW/KS)
+- decoder: fix CABAC SI context selection (DM/KS)
+- encoder/decoder: fix neighboring of TotalCoeff in CAVLC (KS/WC)
+- encoder/decoder: fix PSNR calculation if cropping is enabled (KS)
+
 Changes for Version JM 9.2 to JM 9.1
 ------------------------------------
 - encoder: fix possible integer overflow in quantization offsets (SN/AT)
@@ -952,6 +972,7 @@ LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LW      Limin Wang              liwang@gi.com
 LWi     Lowell Winger           lwinger@videolocus.com
 LP	Luca Pezzoni		luca.pezzoni@st.com
+MA	Mauricio Alvarez	alvarez@ac.upc.edu
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
 ML      Maxim Lobasso           lobasso@hotmail.com
@@ -988,6 +1009,7 @@ TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 TWa     Toby Walker             tobyw@usrl.sony.com
 VG      Valeri George           valeri.george@hhi.fraunhofer.de
 VV      Viktor Varsa            viktor.varsa@nokia.com
+WC	Woong Il Choi		creata@ece.skku.ac.kr
 WF	Wenfang Fu		fwf@video.mdc.tsinghua.edu.cn
 WK	Woo-Shik Kim		wskim@sait.samsung.co.kr
 WYK     Ye-Kui Wang             wyk@ieee.org

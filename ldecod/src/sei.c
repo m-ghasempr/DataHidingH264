@@ -1418,10 +1418,15 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
 #endif
   }
 
-  picture_structure_present_flag  = u_1("SEI: picture_structure_present_flag"  , buf);
-#ifdef PRINT_PCITURE_TIMING_INFO
-  printf("picture_structure_present_flag = %d\n",picture_structure_present_flag);
-#endif
+  if (!active_sps->vui_parameters_present_flag)
+  {
+    picture_structure_present_flag = 0;
+  }
+  else
+  {
+    picture_structure_present_flag  =  active_sps->vui_seq_parameters.pic_struct_present_flag;
+  }
+
   if (picture_structure_present_flag)
   {
     picture_structure = u_v(3, "SEI: picture_structure" , buf);

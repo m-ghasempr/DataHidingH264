@@ -138,8 +138,8 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 pi
     
     /* Reset tables and parameters */
     memset( errorVar->yCondition, 0, 4*nOfMBs*sizeof(*errorVar->yCondition));
-    memset( errorVar->uCondition, 0, nOfMBs*sizeof(*errorVar->uCondition));
-    memset( errorVar->vCondition, 0, nOfMBs*sizeof(*errorVar->vCondition));
+    memset( errorVar->uCondition, 0,   nOfMBs*sizeof(*errorVar->uCondition));
+    memset( errorVar->vCondition, 0,   nOfMBs*sizeof(*errorVar->vCondition));
     
     if (errorVar->nOfSegments != numOfSegments) 
     {
@@ -155,6 +155,7 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 pi
     for ( i = 0; i < errorVar->nOfSegments; i++ ) 
     {
       // mark all the Blocks as empty 
+      /* // this is a duplication of the memset above
       for ( j = 0; j < nOfMBs; j++ ) 
       {
         errorVar->yCondition[MBNum2YBlock (j, 0, picSizeX)] = ERC_BLOCK_EMPTY;
@@ -164,6 +165,7 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 pi
         errorVar->uCondition[j] = ERC_BLOCK_EMPTY;
         errorVar->vCondition[j] = ERC_BLOCK_EMPTY;
       }
+      */
       errorVar->segments[i].fCorrupted = 1; //! mark segments as corrupted
       errorVar->segments[i].startMBPos = 0;
       errorVar->segments[i].endMBPos = nOfMBs - 1;

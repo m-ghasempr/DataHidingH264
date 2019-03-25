@@ -636,10 +636,21 @@ static void init_slice (int start_mb_addr)
   if (img->structure==FRAME)
     init_mbaff_lists();
 
-  if (img->type != I_SLICE && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_SLICE))))
+  if (img->type != I_SLICE && (active_pps->weighted_pred_flag == 1 || (active_pps->weighted_bipred_idc > 0 && (img->type == B_SLICE))))
   {
   	if (img->type==P_SLICE || img->type==SP_SLICE)
-       estimate_weighting_factor_P_slice ();
+    {
+      if (input->GenerateMultiplePPS && input->RDPictureDecision)
+      {
+        if (enc_picture==enc_frame_picture2)
+          estimate_weighting_factor_P_slice (0);
+        else
+          estimate_weighting_factor_P_slice (1);
+      }
+      else
+        estimate_weighting_factor_P_slice (0);
+      
+    }
     else
        estimate_weighting_factor_B_slice ();
   }
@@ -647,7 +658,7 @@ static void init_slice (int start_mb_addr)
   set_ref_pic_num();
 
   if (img->type == B_SLICE)
-    compute_collocated(Co_located, listX);
+    compute_colocated(Co_located, listX);
 
 }
 
@@ -839,13 +850,16 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
   int tmp_value, diff;  
 
   int abs_poc_dist;
+  int maxPicNum, MaxFrameNum = 1 << (log2_max_frame_num_minus4 + 4);
   
   if (img->structure==FRAME)
   {
+    maxPicNum  = MaxFrameNum;
     currPicNum = img->frame_num;
   }
   else
   {
+    maxPicNum  = 2 * MaxFrameNum;
     currPicNum = 2 * img->frame_num + 1;
   }
   
@@ -938,6 +952,8 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
       {
         remapping_of_pic_nums_idc[i] = 0;
         abs_diff_pic_num_minus1[i] = abs(diff)-1;
+        if (abs_diff_pic_num_minus1[i] < 0)
+          abs_diff_pic_num_minus1[i] = maxPicNum -1; 
       }
       else
       {
@@ -978,8 +994,7 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
       {
         default_order[j] = tmp_reorder[j];
       }
-      
-      
+            
     }
     remapping_of_pic_nums_idc[i] = 3;
     

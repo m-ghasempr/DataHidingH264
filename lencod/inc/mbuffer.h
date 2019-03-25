@@ -185,8 +185,8 @@ void             free_ref_pic_list_reordering_buffer(Slice *currSlice);
 void             fill_frame_num_gap(ImageParameters *img);
 
 ColocatedParams* alloc_colocated(int size_x, int size_y,int mb_adaptive_frame_field_flag);
-void free_collocated(ColocatedParams* p);
-void compute_collocated(ColocatedParams* p, StorablePicture **listX[6]);
+void free_colocated(ColocatedParams* p);
+void compute_colocated(ColocatedParams* p, StorablePicture **listX[6]);
 
 #endif
 

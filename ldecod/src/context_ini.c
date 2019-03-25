@@ -26,16 +26,16 @@
   for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==I_SLICE)  biari_init_context (img, &(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
-    else                            biari_init_context (img, &(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
+    if      ((img->type==I_SLICE)||(img->type==SI_SLICE))  biari_init_context (img, &(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
+    else                                                   biari_init_context (img, &(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
   } \
 }
 #define BIARI_CTX_INIT1(jj,ctx,tab,num) \
 { \
   for (j=0; j<jj; j++) \
   { \
-  if      (img->type==I_SLICE)  biari_init_context (img, &(ctx[j]), &(tab ## _I[num][0][j][0])); \
-    else                            biari_init_context (img, &(ctx[j]), &(tab ## _P[num][0][j][0])); \
+    if   ((img->type==I_SLICE)||(img->type==SI_SLICE))  biari_init_context (img, &(ctx[j]), &(tab ## _I[num][0][j][0])); \
+    else                                                biari_init_context (img, &(ctx[j]), &(tab ## _P[num][0][j][0])); \
   } \
 }
 

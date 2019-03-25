@@ -15,6 +15,7 @@
  *    - Detlev Marpe                    <marpe@hhi.de>
  *    - Thomas Wedi                     <wedi@tnt.uni-hannover.de>
  *    - Ragip Kurceren                  <ragip.kurceren@nokia.com>
+ *    - Alexis Michael Tourapis         <alexismt@ieee.org>
  *************************************************************************************
  */
 
@@ -262,15 +263,16 @@ void start_macroblock(int mb_addr, int mb_field)
   currMB->qpsp       = img->qpsp;
   if(input->RCEnable)
   {
-    if (img->current_mb_nr==0)
+    int prev_mb = FmoGetPreviousMBNr(img->current_mb_nr);
+    if (prev_mb>-1)
     {
-      currMB->prev_qp = img->qp;
-      currMB->prev_delta_qp = 0;
+      currMB->prev_qp = img->mb_data[prev_mb].qp;
+      currMB->prev_delta_qp = img->mb_data[prev_mb].delta_qp;
     }
     else
-    {    
-      currMB->prev_qp = img->mb_data[img->current_mb_nr-1].qp;
-      currMB->prev_delta_qp = img->mb_data[img->current_mb_nr-1].delta_qp;
+    {
+      currMB->prev_qp = curr_slice->qp;
+      currMB->prev_delta_qp = 0;
     }
     /*frame layer rate control*/
     if(input->basicunit==img->Frame_Total_Number_MB)
@@ -422,7 +424,7 @@ void start_macroblock(int mb_addr, int mb_field)
            else if(currMB->predict_qp<currMB->qp - min_qp_delta)
              currMB->predict_qp=currMB->qp - min_qp_delta; 
            
-           currMB->prev_qp = currMB->predict_qp;
+//           currMB->prev_qp = currMB->predict_qp;
            
            dq = currMB->delta_qp + currMB->predict_qp-currMB->qp;
            if(dq < -min_qp_delta) 
@@ -973,25 +975,29 @@ LumaPrediction4x4 (int   block_x,    // <--  relative horizontal block coordinat
   int  by        = block_y >> 2;
   int* fpred     = fw_pred;
   int* bpred     = bw_pred;
-//  int  direct    = (fw_mode == 0 && bw_mode == 0 && (img->type == B_SLICE));
-//  int  skipped   = (fw_mode == 0 && bw_mode == 0 && (img->type != B_SLICE));
+  Macroblock*    currMB     = &img->mb_data[img->current_mb_nr];
 
-//  int  apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE || img->type == SP_SLICE)) ||
-//                         (input->WeightedBiprediction && (img->type ==B_SLICE)));  
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type== P_SLICE || img->type == SP_SLICE)) ||
                          (active_pps->weighted_bipred_idc && (img->type== B_SLICE)));  
+  short****** mv_array = img->all_mv;
 
-  
-  int  list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+  int  list_offset   = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+
+#if BI_PREDICTION
+  if (currMB->bi_pred_me && fw_ref_idx == 0 && bw_ref_idx == 0 && p_dir == 2 && fw_mode==1 && bw_mode==1)
+  {
+    mv_array = currMB->bi_pred_me == 1? img->bipred_mv1 : img->bipred_mv2 ;
+  }
+#endif
 
   if ((p_dir==0)||(p_dir==2))
   {
-    OneComponentLumaPrediction4x4 (fw_pred, pic_opix_x, pic_opix_y, img->all_mv[bx][by][LIST_0][fw_ref_idx][fw_mode], fw_ref_idx, listX[0+list_offset]);   
+    OneComponentLumaPrediction4x4 (fw_pred, pic_opix_x, pic_opix_y, mv_array[bx][by][LIST_0][fw_ref_idx][fw_mode], fw_ref_idx, listX[0+list_offset]);   
   }
 
   if ((p_dir==1)||(p_dir==2))
   { 
-    OneComponentLumaPrediction4x4 (bw_pred, pic_opix_x, pic_opix_y, img->all_mv[bx][by][LIST_1][bw_ref_idx][bw_mode], bw_ref_idx, listX[1+list_offset]);   
+    OneComponentLumaPrediction4x4 (bw_pred, pic_opix_x, pic_opix_y, mv_array[bx][by][LIST_1][bw_ref_idx][bw_mode], bw_ref_idx, listX[1+list_offset]);   
   }
 
   if (apply_weights)
@@ -1043,6 +1049,104 @@ LumaPrediction4x4 (int   block_x,    // <--  relative horizontal block coordinat
     }
   }
 }
+#if BI_PREDICTION
+/*!
+************************************************************************
+* \brief
+*    Predict one 4x4 Luma block
+************************************************************************
+*/
+void
+LumaPrediction4x4Bi (int  block_x,    // <--  relative horizontal block coordinate of 4x4 block
+                   int  block_y,    // <--  relative vertical   block coordinate of 4x4 block
+                   int  p_dir,      // <--  prediction direction (0=forward, 1=backward, 2=bidir)
+                   int  fw_mode,    // <--  forward  prediction mode (1-7, 0=DIRECT if bw_mode=0)
+                   int  bw_mode,    // <--  backward prediction mode (1-7, 0=DIRECT if fw_mode=0)
+                   short  fw_ref_idx, // <--  reference frame for forward prediction (-1: Intra4x4 pred. with fw_mode)
+                   short  bw_ref_idx,
+                   int  list)    
+{
+  static int fw_pred[16];
+  static int bw_pred[16];
+
+  int  i, j;
+  int  block_x4  = block_x+4;
+  int  block_y4  = block_y+4;
+  int  pic_opix_x = img->opix_x + block_x;
+  int  pic_opix_y = img->opix_y + block_y;
+  int  bx        = block_x >> 2;
+  int  by        = block_y >> 2;
+  int* fpred     = fw_pred;
+  int* bpred     = bw_pred;
+  Macroblock*    currMB     = &img->mb_data[img->current_mb_nr];
+
+   
+  int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
+                         (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));  
+
+  int  list_offset   = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+
+  short   ******bipred_mv = list ? img->bipred_mv1 : img->bipred_mv2;
+
+  if ((p_dir==0)||(p_dir==2))
+  {
+      //OneComponentLumaPrediction4x4 (fw_pred, pic_opix_x, pic_opix_y, bipred_mv[bx][by][LIST_0][fw_ref_idx][fw_mode], fw_ref_idx, listX[0+list_offset]);   
+      OneComponentLumaPrediction4x4 (fw_pred, pic_opix_x, pic_opix_y, bipred_mv[bx][by][LIST_0][fw_ref_idx][fw_mode], fw_ref_idx, listX[0+list_offset]);   
+  }
+
+  if ((p_dir==1)||(p_dir==2))
+  { 
+      OneComponentLumaPrediction4x4 (bw_pred, pic_opix_x, pic_opix_y, bipred_mv[bx][by][LIST_1][bw_ref_idx][bw_mode], bw_ref_idx, listX[1+list_offset]);   
+  }
+
+  if (apply_weights)
+  {
+    if (p_dir==2)
+    {
+      for   (j=block_y; j<block_y4; j++)
+        for (i=block_x; i<block_x4; i++)  
+          img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][0] * *fpred++ + 
+                                    wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * *bpred++ + 
+                                    2*wp_luma_round) >> (luma_log_weight_denom + 1)) + 
+                                    ((wp_offset[0][fw_ref_idx][0] + wp_offset[1][bw_ref_idx][0] + 1)>>1)); 
+    }
+    else if (p_dir==0)
+    {
+      for   (j=block_y; j<block_y4; j++)
+        for (i=block_x; i<block_x4; i++)                   
+          img->mpr[i][j] = clip1a(((wp_weight[0][fw_ref_idx][0] * *fpred++  + wp_luma_round) >> luma_log_weight_denom) +
+          + wp_offset[0][fw_ref_idx][0] );        
+    }
+    else // p_dir==1
+    {
+      for   (j=block_y; j<block_y4; j++)
+        for (i=block_x; i<block_x4; i++)  
+          img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][0] * *bpred++  + wp_luma_round) >> luma_log_weight_denom) +
+          wp_offset[1][bw_ref_idx][0] );
+    }
+  }
+  else
+  {
+    if (p_dir==2)
+    {
+      for   (j=block_y; j<block_y4; j++)
+        for (i=block_x; i<block_x4; i++)  
+          img->mpr[i][j] = (*fpred++ + *bpred++ + 1) / 2; 
+    }
+    else if (p_dir==0)
+    {
+      for   (j=block_y; j<block_y4; j++)
+        for (i=block_x; i<block_x4; i++)  img->mpr[i][j] = *fpred++;
+    }
+    else // p_dir==1
+    {
+      for   (j=block_y; j<block_y4; j++)
+        for (i=block_x; i<block_x4; i++)  img->mpr[i][j] = *bpred++;
+    }
+  }
+}
+#endif
+
 
 /*!
  ************************************************************************
@@ -1342,7 +1446,7 @@ LumaResidualCoding ()
   {
     short bw_ref;
     SetModesAndRefframe (block8x8, &p_dir, &fw_mode, &bw_mode, &refframe, &bw_ref);
-
+    
     sum_cnt_nonz += LumaResidualCoding8x8 (&(currMB->cbp), &(currMB->cbp_blk), block8x8,
                                            p_dir, fw_mode, bw_mode, refframe, bw_ref);
   }
@@ -1583,11 +1687,15 @@ ChromaPrediction4x4 (int   uv,           // <-- colour component
   int* bpred     = bw_pred;
   short****** mv_array = img->all_mv;
 
-  //int apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE||img->type == SP_SLICE)) ||
-//                     (input->WeightedBiprediction && (img->type == B_SLICE)));
+  Macroblock*    currMB     = &img->mb_data[img->current_mb_nr];
+
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
                          (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));  
 
+#if BI_PREDICTION
+  if (currMB->bi_pred_me && fw_ref_idx == 0 && bw_ref_idx == 0 && p_dir == 2 && fw_mode==1 && bw_mode==1)
+    mv_array = currMB->bi_pred_me == 1? img->bipred_mv1 : img->bipred_mv2 ;
+#endif
 
   //===== INTRA PREDICTION =====
   if (p_dir==-1)
@@ -2837,8 +2945,8 @@ int writeMotionVector8x8 (int  i0,
   DataPartition* dataPart;
 
   int            rate       = 0;
-  int            step_h     = input->blc_size[mv_mode][0] >> 2;
-  int            step_v     = input->blc_size[mv_mode][1] >> 2;
+  int            step_h     = input->part_size[mv_mode][0];
+  int            step_v     = input->part_size[mv_mode][1];
   Macroblock*    currMB     = &img->mb_data[img->current_mb_nr];
   SyntaxElement* currSE     = &img->MB_SyntaxElements[currMB->currSEnr];
   Slice*         currSlice  = img->currentSlice;
@@ -2849,11 +2957,19 @@ int writeMotionVector8x8 (int  i0,
   short******    all_mv     = img->all_mv;
   short******    pred_mv    = img->pred_mv;
 
+#if BI_PREDICTION
+  if (currMB->bi_pred_me && currMB->b8pdir[0]==2 && mv_mode == 1 && refindex == 0)
+  {
+      all_mv = currMB->bi_pred_me == 1? img->bipred_mv1 : img->bipred_mv2 ;
+  }
+#endif
+
   for (j=j0; j<j1; j+=step_v)
   for (i=i0; i<i1; i+=step_h)
   {
     for (k=0; k<2; k++) 
     {
+
       curr_mvd = all_mv[i][j][list_idx][refindex][mv_mode][k] - pred_mv[i][j][list_idx][refindex][mv_mode][k];
 
       //--- store (oversampled) mvd ---
@@ -2885,7 +3001,6 @@ int writeMotionVector8x8 (int  i0,
         }
         else
         {
-        
           snprintf(currSE->tracestring, TRACESTRING_SIZE, "mvd_l1 (%d) = %3d  (org_mv %3d pred_mv %3d)",k, curr_mvd, all_mv[i][j][list_idx][refindex][mv_mode][k], pred_mv[i][j][list_idx][refindex][mv_mode][k]);
         }
 
@@ -3561,12 +3676,12 @@ int predict_nnz(int i,int j)
 
   // left block
   getLuma4x4Neighbour(mb_nr, i, j, -1, 0, &pix);
-/* to be inserted only for dp
-  if (pix.available && img->constrained_intra_pred_flag)
+
+  if (pix.available && active_pps->constrained_intra_pred_flag && (input->partition_mode != 0))
   {
     pix.available &= img->intra_block[pix.mb_addr];
   }
-*/  
+
   if (pix.available)
   {
     pred_nnz = img->nz_coeff [pix.mb_addr ][pix.x][pix.y];
@@ -3575,12 +3690,12 @@ int predict_nnz(int i,int j)
 
   // top block
   getLuma4x4Neighbour(mb_nr, i, j, 0, -1, &pix);
-/* to be inserted only for dp
-  if (pix.available && img->constrained_intra_pred_flag)
+
+  if (pix.available && active_pps->constrained_intra_pred_flag && (input->partition_mode != 0))
   {
     pix.available &= img->intra_block[pix.mb_addr];
   }
-*/  
+
   if (pix.available)
   {
     pred_nnz += img->nz_coeff [pix.mb_addr ][pix.x][pix.y];
@@ -3621,6 +3736,12 @@ int predict_nnz_chroma(int i,int j)
     //YUV420 and YUV422
     // left block
     getChroma4x4Neighbour(mb_nr, i%2, j-4, -1, 0, &pix);
+
+    if (pix.available && active_pps->constrained_intra_pred_flag && (input->partition_mode != 0))
+    {
+      pix.available &= img->intra_block[pix.mb_addr];
+    }
+
     if (pix.available)
     {
       pred_nnz = img->nz_coeff [pix.mb_addr ][2 * (i/2) + pix.x][4 + pix.y];
@@ -3629,6 +3750,12 @@ int predict_nnz_chroma(int i,int j)
     
     // top block
     getChroma4x4Neighbour(mb_nr, i%2, j-4, 0, -1, &pix);
+
+    if (pix.available && active_pps->constrained_intra_pred_flag && (input->partition_mode != 0))
+    {
+      pix.available &= img->intra_block[pix.mb_addr];
+    }
+
     if (pix.available)
     {
       pred_nnz += img->nz_coeff [pix.mb_addr ][2 * (i/2) + pix.x][4 + pix.y];
@@ -3640,6 +3767,12 @@ int predict_nnz_chroma(int i,int j)
     //YUV444
     // left block
     getChroma4x4Neighbour(mb_nr, i, j-j_off, -1, 0, &pix);
+
+    if (pix.available && active_pps->constrained_intra_pred_flag && (input->partition_mode != 0))
+    {
+      pix.available &= img->intra_block[pix.mb_addr];
+    }
+
     if (pix.available)
     {
       pred_nnz = img->nz_coeff [pix.mb_addr ][pix.x][j_off + pix.y];
@@ -3648,6 +3781,12 @@ int predict_nnz_chroma(int i,int j)
     
     // top block
     getChroma4x4Neighbour(mb_nr, i, j-j_off, 0, -1, &pix);
+
+    if (pix.available && active_pps->constrained_intra_pred_flag && (input->partition_mode != 0))
+    {
+      pix.available &= img->intra_block[pix.mb_addr];
+    }
+
     if (pix.available)
     {
       pred_nnz += img->nz_coeff [pix.mb_addr ][pix.x][j_off + pix.y];

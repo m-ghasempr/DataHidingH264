@@ -77,9 +77,9 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
     if ( errorVar->nOfCorruptedSegments ) 
     {
       if (chroma_format_idc != YUV400)
-        predMB = (imgpel *) malloc(256 + (img->mb_cr_size_x*img->mb_cr_size_y)*2);
+        predMB = (imgpel *) malloc ( (256 + (img->mb_cr_size_x*img->mb_cr_size_y)*2) * sizeof (imgpel));
       else
-        predMB = (imgpel *) malloc(256);
+        predMB = (imgpel *) malloc(256 * sizeof (imgpel));
       
       if ( predMB == NULL ) no_mem_exit("ercConcealInterFrame: predMB");
       

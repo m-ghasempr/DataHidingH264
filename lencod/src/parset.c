@@ -15,6 +15,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
  
 #include "global.h"
 
@@ -26,10 +27,12 @@
 // Local helpers
 static int IdentifyProfile();
 static int IdentifyLevel();
-static int IdentifyNumRefFrames();
 static int GenerateVUISequenceParameters();
 
 extern ColocatedParams *Co_located;
+
+seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
+pic_parameter_set_rbsp_t PicParSet[MAXPPS];
 
 static const byte ZZ_SCAN[16]  =
 {  0,  1,  4,  8,  5,  2,  3,  6,  9, 12, 13, 10,  7, 11, 14, 15
@@ -62,10 +65,45 @@ void GenerateParameterSets ()
   sps = AllocSPS();
   pps = AllocPPS();
 
-  FillParameterSetStructures (sps, pps);
-  
+  GenerateSequenceParameterSet(sps, 0);
+
+  if (input->GenerateMultiplePPS)
+  {
+    if (sps->profile_idc >= FREXT_HP)
+    {
+      GeneratePictureParameterSet( pps, sps, 0, 0, 0, input->cb_qp_index_offset, input->cr_qp_index_offset);
+      memcpy (&PicParSet[0], pps, sizeof (pic_parameter_set_rbsp_t));
+      GeneratePictureParameterSet( pps, sps, 1, 1, 1, input->cb_qp_index_offset, input->cr_qp_index_offset);
+      memcpy (&PicParSet[1], pps, sizeof (pic_parameter_set_rbsp_t));
+      GeneratePictureParameterSet( pps, sps, 2, 1, 2, input->cb_qp_index_offset, input->cr_qp_index_offset);
+      memcpy (&PicParSet[2], pps, sizeof (pic_parameter_set_rbsp_t));
+
+    }
+    else
+    {
+      GeneratePictureParameterSet( pps, sps, 0, 0, 0, input->chroma_qp_index_offset, 0);
+      memcpy (&PicParSet[0], pps, sizeof (pic_parameter_set_rbsp_t));
+      GeneratePictureParameterSet( pps, sps, 1, 1, 1, input->chroma_qp_index_offset, 0);
+      memcpy (&PicParSet[1], pps, sizeof (pic_parameter_set_rbsp_t));
+      GeneratePictureParameterSet( pps, sps, 2, 1, 2, input->chroma_qp_index_offset, 0);
+      memcpy (&PicParSet[2], pps, sizeof (pic_parameter_set_rbsp_t));
+    }
+  }
+  else
+  {
+    if (sps->profile_idc >= FREXT_HP)
+      GeneratePictureParameterSet( pps, sps, 0, input->WeightedPrediction, input->WeightedBiprediction, 
+                                   input->cb_qp_index_offset, input->cr_qp_index_offset);
+    else
+      GeneratePictureParameterSet( pps, sps, 0, input->WeightedPrediction, input->WeightedBiprediction,
+                                   input->chroma_qp_index_offset, 0);
+    
+    memcpy (&PicParSet[0], pps, sizeof (pic_parameter_set_rbsp_t));
+
+  }
+
   active_sps = sps;
-  active_pps = pps;
+  active_pps = &PicParSet[0];
 }
 
 /*! 
@@ -80,8 +118,9 @@ void GenerateParameterSets ()
 */
 void FreeParameterSets ()
 {
+
   FreeSPS (active_sps);
-  FreePPS (active_pps);
+  //FreePPS (active_pps);
 }
 
 /*! 
@@ -90,7 +129,8 @@ void FreeParameterSets ()
 *    int GenerateSeq_parameter_set_NALU ();
 *
 * \note
-*    Uses the global variables through FillParameterSetStructures()
+*    Uses the global variables through GenerateSequenceParameterSet()
+*    and GeneratePictureParameterSet
 *
 * \return
 *    A NALU containing the Sequence ParameterSet
@@ -116,10 +156,11 @@ NALU_t *GenerateSeq_parameter_set_NALU ()
 /*! 
 *************************************************************************************
 * \brief
-*    NALU_t *GeneratePic_parameter_set_NALU ();
+*    NALU_t *GeneratePic_parameter_set_NALU (int PPS_id);
 *
 * \note
-*    Uses the global variables through FillParameterSetStructures()
+*    Uses the global variables through GenerateSequenceParameterSet()
+*    and GeneratePictureParameterSet
 *
 * \return
 *    A NALU containing the Picture Parameter Set
@@ -127,71 +168,39 @@ NALU_t *GenerateSeq_parameter_set_NALU ()
 *************************************************************************************
 */
 
-NALU_t *GeneratePic_parameter_set_NALU()
+NALU_t *GeneratePic_parameter_set_NALU(int PPS_id)
 {
   NALU_t *n = AllocNALU(64000);
   int RBSPlen = 0;
   int NALUlen;
   byte rbsp[MAXRBSPSIZE];
 
-  RBSPlen = GeneratePic_parameter_set_rbsp (active_pps, rbsp);
+  RBSPlen = GeneratePic_parameter_set_rbsp (&PicParSet[PPS_id], rbsp);
   NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_PPS, NALU_PRIORITY_HIGHEST, 0, 1);
   n->startcodeprefix_len = 4;
 
   return n;
 }
 
+
 /*!
  ************************************************************************
  * \brief
- *    FillParameterSetStructures: extracts info from global variables and
- *    generates a picture and sequence parameter set structure
+ *    GenerateSequenceParameterSet: extracts info from global variables and
+ *    generates sequence parameter set structure
  *
  * \param sps
  *    Sequence parameter set to be filled
- * \param pps
- *    Picture parameter set to be filled
+ *
  * \par
  *    Function reads all kinds of values from several global variables,
- *    including input-> and image-> and fills in the sps and pps.  Many
- *    values are current hard-coded to defaults, especially most of the
- *    VUI stuff.  Currently, the sps and pps structures are fixed length
- *    with the exception of the fully flexible FMO map (mode 6).  This
- *    mode is not supported.  Hence, the function does not need to
- *    allocate memory for the FMOmap, the pointer slice_group_id is
- *    always NULL.  If one wants to implement FMO mode 6, one would need
- *    to malloc the memory for the map here, and the caller would need
- *    to free it after use.
- *
- * \par 
- *    Limitations
- *    Currently, the encoder does not support multiple parameter sets,
- *    primarily because the config file does not support it.  Hence the
- *    pic_parameter_set_id and the seq_parameter_set_id are always zero.
- *    If one day multiple parameter sets are implemented, it would
- *    make sense to break this function into two, one for the picture and
- *    one for the sequence.
- *    Currently, FMO is not supported
- *    The following pps and sps elements seem not to be used in the encoder 
- *    or decoder and, hence, a guessed default value is conveyed:
- *
- *    pps->num_ref_idx_l0_active_minus1 = img->num_ref_pic_active_fwd_minus1;
- *    pps->num_ref_idx_l1_active_minus1 = img->num_ref_pic_active_bwd_minus1;
- *    pps->chroma_qp_index_offset = 0;
- *    sps->required_frame_num_update_behaviour_flag = FALSE;
- *    sps->direct_temporal_constrained_flag = FALSE;
- *
- * \par
- *    Regarding the QP
- *    The previous software versions coded the absolute QP only in the 
- *    slice header.  This is kept, and the offset in the PPS is coded 
- *    even if we could save bits by intelligently using this field.
+ *    including input-> and image-> and fills in the sps.  Many
+ *    values are current hard-coded to defaults.
  *
  ************************************************************************
  */
 
-void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps, 
-                                 pic_parameter_set_rbsp_t *pps)
+void GenerateSequenceParameterSet(seq_parameter_set_rbsp_t *sps, int SPS_id)
 {
   unsigned i;
   int SubWidthC  [4]= { 1, 2, 2, 1};
@@ -206,7 +215,6 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   // Sequence Parameter Set
   // *************************************************************************
   assert (sps != NULL);
-  assert (pps != NULL);
   // Profile and Level should be calculated using the info from the config
   // file.  Calculation is hidden in IndetifyProfile() and IdentifyLevel()
   sps->profile_idc = IdentifyProfile();
@@ -248,7 +256,7 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   // End of POC stuff
 
   // Number of Reference Frames
-  sps->num_ref_frames = IdentifyNumRefFrames();
+  sps->num_ref_frames = input->num_ref_frames;
 
   //required_frame_num_update_behaviour_flag hardcoded to zero
   sps->gaps_in_frame_num_value_allowed_flag = FALSE;    // double check
@@ -268,6 +276,7 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
 
   sps->chroma_format_idc = input->yuv_format;
 
+  // This should be moved somewhere else.
   {
     int PicWidthInMbs, PicHeightInMapUnits, FrameHeightInMbs;
     int width, height;
@@ -281,18 +290,10 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
     Co_located = alloc_colocated (width, height,sps->mb_adaptive_frame_field_flag);
     
   }
-  // *************************************************************************
-  // Picture Parameter Set 
-  // *************************************************************************
-
-  pps->seq_parameter_set_id = 0;
-  pps->pic_parameter_set_id = 0;
-  pps->entropy_coding_mode_flag = (input->symbol_mode==UVLC?0:1);
 
   // Fidelity Range Extensions stuff
   if(frext_profile)
   {
-    pps->transform_8x8_mode_flag = input->AllowTransform8x8 ? 1:0;
 
     sps->seq_scaling_matrix_present_flag = (input->ScalingMatrixPresentFlag&1);
     for(i=0; i<8; i++)
@@ -301,13 +302,85 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
         sps->seq_scaling_list_present_flag[i] = (input->ScalingListPresentFlag[i]&1);
       else
       {
-        if(pps->transform_8x8_mode_flag)
+        if(input->AllowTransform8x8)
           sps->seq_scaling_list_present_flag[i] = (input->ScalingListPresentFlag[i]&1);
         else
           sps->seq_scaling_list_present_flag[i] = 0;
       }
     }
+  }
+  else
+  {
+    sps->seq_scaling_matrix_present_flag = 0;
+    for(i=0; i<8; i++)
+      sps->seq_scaling_list_present_flag[i] = 0;
 
+  }
+
+
+  if (img->auto_crop_right || img->auto_crop_bottom)
+  {
+    sps->frame_cropping_flag = TRUE;
+    sps->frame_cropping_rect_left_offset=0;
+    sps->frame_cropping_rect_top_offset=0;
+    sps->frame_cropping_rect_right_offset=  (img->auto_crop_right / SubWidthC[sps->chroma_format_idc]);
+    sps->frame_cropping_rect_bottom_offset= (img->auto_crop_bottom / (SubHeightC[sps->chroma_format_idc] * (2 - sps->frame_mbs_only_flag)));
+    if (img->auto_crop_right % SubWidthC[sps->chroma_format_idc])
+    {
+      error("automatic frame cropping (width) not possible",500);
+    }
+    if (img->auto_crop_bottom % (SubHeightC[sps->chroma_format_idc] * (2 - sps->frame_mbs_only_flag)))
+    {
+      error("automatic frame cropping (height) not possible",500);
+    }
+  }
+  else
+  {
+    sps->frame_cropping_flag = FALSE;
+  }
+};
+
+/*!
+ ************************************************************************
+ * \brief
+ *    GeneratePictureParameterSet: 
+ *    Generates a Picture Parameter Set structure
+ *
+ * \param pps
+ *    Picture parameter set to be filled
+ *
+ * \par
+ *    Regarding the QP
+ *    The previous software versions coded the absolute QP only in the 
+ *    slice header.  This is kept, and the offset in the PPS is coded 
+ *    even if we could save bits by intelligently using this field.
+ *
+ ************************************************************************
+ */
+
+void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, seq_parameter_set_rbsp_t *sps, int PPS_id, 
+                                 int WeightedPrediction, int WeightedBiprediction, 
+                                 int cb_qp_index_offset, int cr_qp_index_offset)
+{
+  unsigned i;
+
+  int frext_profile = ((IdentifyProfile()==FREXT_HP) || 
+                      (IdentifyProfile()==FREXT_Hi10P) ||
+                      (IdentifyProfile()==FREXT_Hi422) ||
+                      (IdentifyProfile()==FREXT_Hi444));
+
+  // *************************************************************************
+  // Picture Parameter Set 
+  // *************************************************************************
+
+  pps->seq_parameter_set_id = sps->seq_parameter_set_id;
+  pps->pic_parameter_set_id = PPS_id;
+  pps->entropy_coding_mode_flag = (input->symbol_mode==UVLC?0:1);
+
+  // Fidelity Range Extensions stuff
+  if(frext_profile)
+  {
+    pps->transform_8x8_mode_flag = input->AllowTransform8x8 ? 1:0;
     pps->pic_scaling_matrix_present_flag = (input->ScalingMatrixPresentFlag&2)>>1;
     for(i=0; i<8; i++)
     {
@@ -324,10 +397,6 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   }
   else
   {
-    sps->seq_scaling_matrix_present_flag = 0;
-    for(i=0; i<8; i++)
-      sps->seq_scaling_list_present_flag[i] = 0;
-
     pps->pic_scaling_matrix_present_flag = 0;
     for(i=0; i<8; i++)
       pps->pic_scaling_list_present_flag[i] = 0;
@@ -394,20 +463,18 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
 
   pps->num_ref_idx_l0_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
   pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
-  //pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? 0 : 1 ;   // set defaults
-
   
-  pps->weighted_pred_flag = input->WeightedPrediction;
-  pps->weighted_bipred_idc = input->WeightedBiprediction;
+  pps->weighted_pred_flag = WeightedPrediction;
+  pps->weighted_bipred_idc = WeightedBiprediction;
 
   pps->pic_init_qp_minus26 = 0;         // hard coded to zero, QP lives in the slice header
   pps->pic_init_qs_minus26 = 0;
 
-  pps->chroma_qp_index_offset = input->chroma_qp_index_offset;      // double check: is this chroma fidelity thing already implemented???
+  pps->chroma_qp_index_offset = cb_qp_index_offset; 
   if (frext_profile)
   {
-    pps->cb_qp_index_offset     = input->cb_qp_index_offset;
-    pps->cr_qp_index_offset     = input->cr_qp_index_offset;
+    pps->cb_qp_index_offset     = cb_qp_index_offset;
+    pps->cr_qp_index_offset     = cr_qp_index_offset;
   }
   else
     pps->cb_qp_index_offset = pps->cr_qp_index_offset = pps->chroma_qp_index_offset;
@@ -416,27 +483,6 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   pps->constrained_intra_pred_flag = input->UseConstrainedIntraPred;
   
   pps->redundant_pic_cnt_present_flag = 0;
-
-  if (img->auto_crop_right || img->auto_crop_bottom)
-  {
-    sps->frame_cropping_flag = TRUE;
-    sps->frame_cropping_rect_left_offset=0;
-    sps->frame_cropping_rect_top_offset=0;
-    sps->frame_cropping_rect_right_offset=  (img->auto_crop_right / SubWidthC[sps->chroma_format_idc]);
-    sps->frame_cropping_rect_bottom_offset= (img->auto_crop_bottom / (SubHeightC[sps->chroma_format_idc] * (2 - sps->frame_mbs_only_flag)));
-    if (img->auto_crop_right % SubWidthC[sps->chroma_format_idc])
-    {
-      error("automatic frame cropping (width) not possible",500);
-    }
-    if (img->auto_crop_bottom % (SubHeightC[sps->chroma_format_idc] * (2 - sps->frame_mbs_only_flag)))
-    {
-      error("automatic frame cropping (height) not possible",500);
-    }
-  }
-  else
-  {
-    sps->frame_cropping_flag = FALSE;
-  }
 };
 
 /*! 
@@ -622,7 +668,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
 
 
 /*! 
- *************************************************************************************
+ ***********************************************************************************************
  * \brief
  *    int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *sps, char *rbsp);
  *
@@ -637,7 +683,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
  * \note
  *    Picture Parameter VUI function is called, but the function implements
  *    an exit (-1)
- *************************************************************************************
+ ************************************************************************************************
  */
  
 int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
@@ -807,31 +853,6 @@ int IdentifyLevel()
 {
   return input->LevelIDC;
 };
-
-
-/*! 
- *************************************************************************************
- * \brief
- *    Returns the number of reference frame buffers
- *
- * \return
- *    Number of reference frame buffers used
- *
- * \note
- *    This function currently maps to input->num_ref_frames.  With all this interlace
- *    stuff this may or may not be correct.  If you determine a problem with the
- *    memory management for Interlace, then this could be one possible problem.
- *    However, so far no problem have been determined by my limited testing of
- *    a stupid 1950's technology :-)  StW, 11/27/02
- *************************************************************************************
- */
-
-int IdentifyNumRefFrames()
-{
-  if(input->num_ref_frames > 16)error("no ref frames too large",-100);
-  
-  return input->num_ref_frames;
-}
 
 
 /*! 

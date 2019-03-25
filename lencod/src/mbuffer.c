@@ -178,18 +178,10 @@ void init_dpb()
 
   dpb.size      = getDpbSize();
   
-//  dpb.size      = min(getDpbSize(), input->num_ref_frames + input->successive_Bframe);   
-//  dpb.size      = input->num_ref_frames + inp->successive_Bframe;
-
-  if ((0==dpb.size) && ((input->intra_period!=1) || (input->successive_Bframe!=0)))
-  {
-    error("DPB size of zero frames at specified level / frame size not possible for for P/B coding. Increase level.", 1000);
-  }
   if (dpb.size < (unsigned int)input->num_ref_frames)
   {
-    printf("warning: DPB size at specified level is smaller than the number of reference frames. Encoding may fail.\n");
+    error ("DPB size at specified level is smaller than the specified number of reference frames. This is not allowed.\n", 1000);
   }
- 
 
   dpb.used_size = 0;
   dpb.last_picture = NULL;
@@ -346,7 +338,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   s->imgY_ups = NULL;
   s->imgUV    = NULL;
 
-  if (input->WeightedPrediction || input->WeightedBiprediction)
+  if (input->WeightedPrediction || input->WeightedBiprediction || input->GenerateMultiplePPS)
   {
       s->imgY_11_w = NULL;
       s->imgY_ups_w = NULL;
@@ -440,10 +432,27 @@ void free_storable_picture(StorablePicture* p)
 {
   if (p)
   {
-    free_mem3Dshort (p->ref_idx, 2);
-    free_mem3Dint64 (p->ref_pic_id, 6);
-    free_mem3Dint64 (p->ref_id, 6);
-    free_mem4Dshort (p->mv, 2, p->size_x / BLOCK_SIZE);
+    if (p->ref_idx)
+    {
+      free_mem3Dshort (p->ref_idx, 2);
+      p->ref_idx = NULL;
+    }
+    
+    if (p->ref_pic_id)
+    {
+      free_mem3Dint64 (p->ref_pic_id, 6);
+      p->ref_pic_id = NULL;
+    }
+    if (p->ref_id)
+    {
+      free_mem3Dint64 (p->ref_id, 6);
+      p->ref_id = NULL;
+    }
+    if (p->mv)
+    {
+      free_mem4Dshort (p->mv, 2, p->size_x / BLOCK_SIZE);
+      p->mv = NULL;
+    }
 
     if (p->moving_block)
     {
@@ -479,7 +488,7 @@ void free_storable_picture(StorablePicture* p)
       p->imgUV=NULL;
     }
 
-    if (input->WeightedPrediction || input->WeightedBiprediction)
+    if (input->WeightedPrediction || input->WeightedBiprediction || input->GenerateMultiplePPS)
     {
       if (p->imgY_11_w)
       {
@@ -492,10 +501,15 @@ void free_storable_picture(StorablePicture* p)
         p->imgY_ups_w=NULL;
       }
     }
-
-    free(p->mb_field);
+    
+    if (p->mb_field)
+    {
+      free(p->mb_field);
+      p->mb_field=NULL;
+    }
 
     free(p);
+    p = NULL;
   }
 }
 
@@ -532,6 +546,22 @@ static void unmark_for_reference(FrameStore* fs)
   }
 
   fs->is_reference = 0;
+
+  if (fs->frame->imgY_ups_w)
+  {
+    free_mem2Dpel (fs->frame->imgY_ups_w);
+    fs->frame->imgY_ups_w=NULL;
+  }
+  if (fs->frame->imgY_ups)
+  {
+    free_mem2Dpel (fs->frame->imgY_ups);
+    fs->frame->imgY_ups=NULL;
+  }
+  if (fs->frame->imgY_11_w)
+  {
+    free (fs->frame->imgY_11_w);
+    fs->frame->imgY_11_w=NULL;
+  }
 }
 
 
@@ -3284,7 +3314,7 @@ ColocatedParams* alloc_colocated(int size_x, int size_y, int mb_adaptive_frame_f
  *
  ************************************************************************
  */
-void free_collocated(ColocatedParams* p)
+void free_colocated(ColocatedParams* p)
 {
   if (p)
   {
@@ -3336,7 +3366,15 @@ void free_collocated(ColocatedParams* p)
   }
 }
 
-void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
+/*!
+ ************************************************************************
+ * \brief
+ *    Compute co-located motion info
+ *
+ ************************************************************************
+ */
+
+void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
 {
   StorablePicture *fs, *fs_top, *fs_bottom;
   int i,j;
@@ -3468,16 +3506,17 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
           
           p->is_long_term             = fs->is_long_term;
 
-          if (img->direct_spatial_mv_pred_flag ==1)
-          p->moving_block[i][j] = 
-            !((!p->is_long_term &&((p->ref_idx[LIST_0][i][j] == 0) && 
-            (abs(p->mv[LIST_0][i][j][0])>>1 == 0) && 
-            (abs(p->mv[LIST_0][i][j][1])>>1 == 0))) || 
-            ((p->ref_idx[LIST_0][i][j] == -1) && 
-            (p->ref_idx[LIST_1][i][j] == 0) && 
-            (abs(p->mv[LIST_1][i][j][0])>>1 == 0) && 
-            (abs(p->mv[LIST_1][i][j][1])>>1 == 0)));
-          
+          if (img->direct_spatial_mv_pred_flag == 1)
+          {
+            p->moving_block[i][j] = 
+              !((!p->is_long_term &&((p->ref_idx[LIST_0][i][j] == 0) && 
+              (abs(p->mv[LIST_0][i][j][0])>>1 == 0) && 
+              (abs(p->mv[LIST_0][i][j][1])>>1 == 0))) || 
+              ((p->ref_idx[LIST_0][i][j] == -1) && 
+              (p->ref_idx[LIST_1][i][j] == 0) && 
+              (abs(p->mv[LIST_1][i][j][0])>>1 == 0) && 
+              (abs(p->mv[LIST_1][i][j][1])>>1 == 0)));
+          }
         }
         else
         {
@@ -3490,16 +3529,17 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
           p->bottom_ref_pic_id[LIST_0][i][j] = fs_bottom->ref_id[LIST_0][RSD(i)][RSD(j)]; 
           p->bottom_ref_pic_id[LIST_1][i][j] = fs_bottom->ref_id[LIST_1][RSD(i)][RSD(j)]; 
 
-          if (img->direct_spatial_mv_pred_flag ==1)
-          p->bottom_moving_block[i][j] = 
-            !((!fs_bottom->is_long_term && ((p->bottom_ref_idx[LIST_0][i][j] == 0) && 
-            (abs(p->bottom_mv[LIST_0][i][j][0])>>1 == 0) && 
-            (abs(p->bottom_mv[LIST_0][i][j][1])>>1 == 0))) || 
-            ((p->bottom_ref_idx[LIST_0][i][j] == -1) && 
-            (p->bottom_ref_idx[LIST_1][i][j] == 0) && 
-            (abs(p->bottom_mv[LIST_1][i][j][0])>>1 == 0) && 
-            (abs(p->bottom_mv[LIST_1][i][j][1])>>1 == 0)));
-
+          if (img->direct_spatial_mv_pred_flag == 1)
+          {
+            p->bottom_moving_block[i][j] = 
+              !((!fs_bottom->is_long_term && ((p->bottom_ref_idx[LIST_0][i][j] == 0) && 
+              (abs(p->bottom_mv[LIST_0][i][j][0])>>1 == 0) && 
+              (abs(p->bottom_mv[LIST_0][i][j][1])>>1 == 0))) || 
+              ((p->bottom_ref_idx[LIST_0][i][j] == -1) && 
+              (p->bottom_ref_idx[LIST_1][i][j] == 0) && 
+              (abs(p->bottom_mv[LIST_1][i][j][0])>>1 == 0) && 
+              (abs(p->bottom_mv[LIST_1][i][j][1])>>1 == 0)));
+          }
 
           p->top_mv[LIST_0][i][j][0] = fs_top->mv[LIST_0][RSD(i)][RSD(j)][0];
           p->top_mv[LIST_0][i][j][1] = fs_top->mv[LIST_0][RSD(i)][RSD(j)][1];
@@ -3510,17 +3550,19 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
           p->top_ref_pic_id[LIST_0][i][j] = fs_top->ref_id[LIST_0][RSD(i)][RSD(j)]; 
           p->top_ref_pic_id[LIST_1][i][j] = fs_top->ref_id[LIST_1][RSD(i)][RSD(j)]; 
 
-          if (img->direct_spatial_mv_pred_flag ==1)
-          p->top_moving_block[i][j] = 
-            !((!fs_top->is_long_term && ((p->top_ref_idx[LIST_0][i][j] == 0) && 
-            (abs(p->top_mv[LIST_0][i][j][0])>>1 == 0) && 
-            (abs(p->top_mv[LIST_0][i][j][1])>>1 == 0))) || 
-            ((p->top_ref_idx[LIST_0][i][j] == -1) && 
-            (p->top_ref_idx[LIST_1][i][j] == 0) && 
-            (abs(p->top_mv[LIST_1][i][j][0])>>1 == 0) && 
-            (abs(p->top_mv[LIST_1][i][j][1])>>1 == 0)));
-          
-          if (img->direct_spatial_mv_pred_flag==0 && !fs->field_frame[i][2*j])
+          if (img->direct_spatial_mv_pred_flag == 1)
+          {
+            p->top_moving_block[i][j] = 
+              !((!fs_top->is_long_term && ((p->top_ref_idx[LIST_0][i][j] == 0) && 
+              (abs(p->top_mv[LIST_0][i][j][0])>>1 == 0) && 
+              (abs(p->top_mv[LIST_0][i][j][1])>>1 == 0))) || 
+              ((p->top_ref_idx[LIST_0][i][j] == -1) && 
+              (p->top_ref_idx[LIST_1][i][j] == 0) && 
+              (abs(p->top_mv[LIST_1][i][j][0])>>1 == 0) && 
+              (abs(p->top_mv[LIST_1][i][j][1])>>1 == 0)));
+          }
+
+          if ((img->direct_spatial_mv_pred_flag == 0 ) && !fs->field_frame[i][2*j])
           {
             p->top_mv[LIST_0][i][j][1] /= 2;        
             p->top_mv[LIST_1][i][j][1] /= 2;
@@ -3612,15 +3654,18 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
 
       }
       p->is_long_term             = fs->is_long_term;
-      if (img->direct_spatial_mv_pred_flag ==1)
-      p->moving_block[i][j]= 
-        !((!p->is_long_term && ((p->ref_idx[LIST_0][i][j] == 0) && 
-        (abs(p->mv[LIST_0][i][j][0])>>1 == 0) && 
-        (abs(p->mv[LIST_0][i][j][1])>>1 == 0))) || 
-        ((p->ref_idx[LIST_0][i][j] == -1) && 
-        (p->ref_idx[LIST_1][i][j] == 0) && 
-        (abs(p->mv[LIST_1][i][j][0])>>1 == 0) && 
-        (abs(p->mv[LIST_1][i][j][1])>>1 == 0)));
+
+      if (img->direct_spatial_mv_pred_flag == 1)
+      {
+        p->moving_block[i][j]= 
+          !((!p->is_long_term && ((p->ref_idx[LIST_0][i][j] == 0) && 
+          (abs(p->mv[LIST_0][i][j][0])>>1 == 0) && 
+          (abs(p->mv[LIST_0][i][j][1])>>1 == 0))) || 
+          ((p->ref_idx[LIST_0][i][j] == -1) && 
+          (p->ref_idx[LIST_1][i][j] == 0) && 
+          (abs(p->mv[LIST_1][i][j][0])>>1 == 0) && 
+          (abs(p->mv[LIST_1][i][j][1])>>1 == 0)));
+      }
     }      
   }
 

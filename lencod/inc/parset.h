@@ -24,15 +24,20 @@ void GenerateParameterSets ();
 void FreeParameterSets ();
 
 NALU_t *GenerateSeq_parameter_set_NALU ();
-NALU_t *GeneratePic_parameter_set_NALU ();
+NALU_t *GeneratePic_parameter_set_NALU (int);
 
 // The following are local helpers, but may come handy in the future, hence public
-void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps, pic_parameter_set_rbsp_t *pps);
+void GenerateSequenceParameterSet(seq_parameter_set_rbsp_t *sps, int SPS_id);
+void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, seq_parameter_set_rbsp_t *sps, int PPS_id, 
+                                 int WeightedPrediction, int WeightedBiprediction, 
+                                 int cb_qp_index_offset, int cr_qp_index_offset);
+
 int Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingList, short *UseDefaultScalingMatrix, DataPartition *partition);
 int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *buf);
 int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *buf);
 void FreeSPS (seq_parameter_set_rbsp_t *sps);
 void FreePPS (pic_parameter_set_rbsp_t *pps);
+
 pic_parameter_set_rbsp_t *AllocPPS ();
 seq_parameter_set_rbsp_t *AllocSPS ();
 

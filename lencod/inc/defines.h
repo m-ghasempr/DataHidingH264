@@ -25,6 +25,8 @@
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
 
+#define BI_PREDICTION   1
+
 typedef unsigned char byte;    //!< byte type definition
 
 //FREXT Profile IDC definitions
