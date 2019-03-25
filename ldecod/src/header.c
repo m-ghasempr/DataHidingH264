@@ -233,6 +233,8 @@ int RestOfSliceHeader()
 
   val = se_v("SH: slice_qp_delta", currStream);
   currSlice->qp = img->qp = 26 + active_pps->pic_init_qp_minus26 + val;
+  if ((img->qp < -img->bitdepth_luma_qp_scale) || (img->qp > 51))
+    error ("slice_qp_delta makes slice_qp_y out of range", 500);
 
   
   currSlice->slice_qp_delta = val;  
@@ -245,6 +247,8 @@ int RestOfSliceHeader()
     }
     val = se_v("SH: slice_qs_delta", currStream);
     img->qpsp = 26 + active_pps->pic_init_qs_minus26 + val;
+    if ((img->qpsp < 0) || (img->qpsp > 51))
+      error ("slice_qs_delta makes slice_qs_y out of range", 500);
   }
 
   if (active_pps->deblocking_filter_control_present_flag)

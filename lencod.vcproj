@@ -39,6 +39,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
 				OutputFile="./bin/lencod.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="TRUE"
@@ -103,6 +104,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
 				OutputFile="./bin/lencod.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
@@ -297,7 +299,26 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\lencod\src\epzs.c">
+				RelativePath="lencod\src\epzs.c">
+				<FileConfiguration
+					Name="Debug|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="0"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BasicRuntimeChecks="3"
+						BrowseInformation="1"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="2"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BrowseInformation="1"/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="lencod\src\explicit_gop.c">
@@ -608,7 +629,26 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\lencod\src\mode_decision.c">
+				RelativePath="lencod\src\mode_decision.c">
+				<FileConfiguration
+					Name="Debug|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="0"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BasicRuntimeChecks="3"
+						BrowseInformation="1"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="2"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BrowseInformation="1"/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="lencod\src\mv-search.c">
@@ -963,7 +1003,26 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\lencod\src\simplified_fast_me.c">
+				RelativePath="lencod\src\simplified_fast_me.c">
+				<FileConfiguration
+					Name="Debug|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="0"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BasicRuntimeChecks="3"
+						BrowseInformation="1"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="2"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BrowseInformation="1"/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="lencod\src\slice.c">
@@ -1088,7 +1147,7 @@
 				RelativePath="lencod\inc\elements.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\epzs.h">
+				RelativePath="lencod\inc\epzs.h">
 			</File>
 			<File
 				RelativePath="lencod\inc\explicit_gop.h">
@@ -1130,7 +1189,7 @@
 				RelativePath="lencod\inc\minmax.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\mode_decision.h">
+				RelativePath="lencod\inc\mode_decision.h">
 			</File>
 			<File
 				RelativePath="lencod\inc\mv-search.h">
@@ -1172,7 +1231,7 @@
 				RelativePath="lencod\inc\sei.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\simplified_fast_me.h">
+				RelativePath="lencod\inc\simplified_fast_me.h">
 			</File>
 			<File
 				RelativePath="lencod\inc\transform8x8.h">

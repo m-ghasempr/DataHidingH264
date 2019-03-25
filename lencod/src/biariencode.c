@@ -53,12 +53,12 @@ int binCount = 0;
 
 int pic_bin_count;
 
-void reset_pic_bin_count()
+void reset_pic_bin_count(void)
 {
   pic_bin_count = 0;
 }
 
-int get_pic_bin_count()
+int get_pic_bin_count(void)
 {
   return pic_bin_count;
 }
@@ -71,7 +71,7 @@ int get_pic_bin_count()
  *    Allocates memory for the EncodingEnvironment struct
  ************************************************************************
  */
-EncodingEnvironmentPtr arienco_create_encoding_environment()
+EncodingEnvironmentPtr arienco_create_encoding_environment(void)
 {
   EncodingEnvironmentPtr eep;
 
@@ -147,9 +147,9 @@ int arienco_bits_written(EncodingEnvironmentPtr eep)
  */
 void arienco_done_encoding(EncodingEnvironmentPtr eep)
 {
-  put_one_bit_plus_outstanding((Elow >> (B_BITS-1)) & 1);
-  put_one_bit((Elow >> (B_BITS-2))&1);
-  put_one_bit(1);
+  put_one_bit_plus_outstanding((unsigned char) ((Elow >> (B_BITS-1)) & 1));
+  put_one_bit((unsigned char) (Elow >> (B_BITS-2))&1);
+  put_one_bit((unsigned char) 1);
 
   stats->bit_use_stuffingBits[img->type]+=(8-Ebits_to_go);
 
@@ -185,7 +185,7 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   /* covers all cases where code does not bother to shift down symbol to be 
    * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code simply 
    * masks off the bit position and passes in the resulting value */
-  symbol = (symbol != 0);
+  symbol = (short) (symbol != 0);
 
   if (symbol != bi_ct->MPS) 
   {
@@ -193,7 +193,7 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
     range = rLPS;
     
     if (!bi_ct->state)
-      bi_ct->MPS = bi_ct->MPS ^ 1;               // switch LPS if necessary
+      bi_ct->MPS = (unsigned char) (bi_ct->MPS ^ 0x01);               // switch LPS if necessary
     bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
   } 
   else 
@@ -328,12 +328,12 @@ void biari_init_context (BiContextTypePtr ctx, const int* ini)
 
   if ( pstate >= 64 )
   {
-    ctx->state  = pstate - 64;
+    ctx->state  = (unsigned short) (pstate - 64);
     ctx->MPS    = 1;
   }
   else
   {
-    ctx->state  = 63 - pstate;
+    ctx->state  = (unsigned short) (63 - pstate);
     ctx->MPS    = 0;
   }
   

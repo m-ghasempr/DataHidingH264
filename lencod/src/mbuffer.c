@@ -26,10 +26,10 @@
 #include "image.h"
 
 static void insert_picture_in_dpb(FrameStore* fs, StorablePicture* p);
-static void output_one_frame_from_dpb();
+static void output_one_frame_from_dpb(void);
 static int  is_used_for_reference(FrameStore* fs);
 static void get_smallest_poc(int *poc,int * pos);
-static int  remove_unused_frame_from_dpb();
+static int  remove_unused_frame_from_dpb(void);
 static int  is_short_term_reference(FrameStore* fs);
 static int  is_long_term_reference(FrameStore* fs);
 void gen_field_ref_ids(StorablePicture *p);
@@ -51,7 +51,7 @@ int listXsize[6];
  *    Print out list of pictures in DPB. Used for debug purposes.
  ************************************************************************
  */
-void dump_dpb()
+void dump_dpb(void)
 {
   unsigned i;
 
@@ -97,7 +97,7 @@ void dump_dpb()
  *
  ************************************************************************
  */
-int getDpbSize()
+int getDpbSize(void)
 {
   int pic_size = (active_sps->pic_width_in_mbs_minus1 + 1) * (active_sps->pic_height_in_map_units_minus1 + 1) * (active_sps->frame_mbs_only_flag?1:2) * 384;
 
@@ -171,7 +171,7 @@ int getDpbSize()
  *
  ************************************************************************
  */
-void check_num_ref()
+void check_num_ref(void)
 {
   if ((int)(dpb.ltref_frames_in_buffer +  dpb.ref_frames_in_buffer ) > (max(1,img->num_ref_frames)))
   {
@@ -187,7 +187,7 @@ void check_num_ref()
  *
  ************************************************************************
  */
-void init_dpb()
+void init_dpb(void)
 {
   unsigned i,j;
 
@@ -258,7 +258,7 @@ void init_dpb()
  *    Free memory for decoded picture buffer.
  ************************************************************************
  */
-void free_dpb()
+void free_dpb(void)
 {
   unsigned i;
   if (dpb.fs)
@@ -300,7 +300,7 @@ void free_dpb()
  *    the allocated FrameStore structure
  ************************************************************************
  */
-FrameStore* alloc_frame_store()
+FrameStore* alloc_frame_store(void)
 {
   FrameStore *f;
 
@@ -1335,7 +1335,7 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
  *
  ************************************************************************
  */
-void init_mbaff_lists()
+void init_mbaff_lists(void)
 {
   unsigned j;
   int i;
@@ -1567,7 +1567,7 @@ void reorder_ref_pic_list(StorablePicture **list, int *list_size, int num_ref_id
  *
  ************************************************************************
  */
-void update_ref_list()
+void update_ref_list(void)
 {
   unsigned i, j;
   for (i=0, j=0; i<dpb.used_size; i++)
@@ -1595,7 +1595,7 @@ void update_ref_list()
  *
  ************************************************************************
  */
-void update_ltref_list()
+void update_ltref_list(void)
 {
   unsigned i, j;
   for (i=0, j=0; i<dpb.used_size; i++)
@@ -2137,7 +2137,7 @@ void mm_update_max_long_term_frame_idx(int max_long_term_frame_idx_plus1)
  *    Mark all long term reference pictures unused for reference
  ************************************************************************
  */
-static void mm_unmark_all_long_term_for_reference ()
+static void mm_unmark_all_long_term_for_reference (void)
 {
   mm_update_max_long_term_frame_idx(0);
 }
@@ -2148,7 +2148,7 @@ static void mm_unmark_all_long_term_for_reference ()
  *    Mark all short term reference pictures unused for reference
  ************************************************************************
  */
-static void mm_unmark_all_short_term_for_reference ()
+static void mm_unmark_all_short_term_for_reference (void)
 {
   unsigned int i;
   for (i=0; i<dpb.ref_frames_in_buffer; i++)
@@ -2775,7 +2775,7 @@ static void get_smallest_poc(int *poc,int * pos)
  *    Remove a picture from DPB which is no longer needed.
  ************************************************************************
  */
-static int remove_unused_frame_from_dpb()
+static int remove_unused_frame_from_dpb(void)
 {
   unsigned i;
 
@@ -2797,7 +2797,7 @@ static int remove_unused_frame_from_dpb()
  *    Output one picture stored in the DPB.
  ************************************************************************
  */
-static void output_one_frame_from_dpb()
+static void output_one_frame_from_dpb(void)
 {
   int poc, pos;
   //diagnostics
@@ -2839,7 +2839,7 @@ static void output_one_frame_from_dpb()
  *    All stored picture are output. Should be called to empty the buffer
  ************************************************************************
  */
-void flush_dpb()
+void flush_dpb(void)
 {
   unsigned i;
 
@@ -3526,7 +3526,7 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
           //! Check whether we should use top or bottom field mvs.
           //! Depending on the assigned poc values.          
           
-          if (abs(enc_picture->poc - fs_bottom->poc) > abs(enc_picture->poc - fs_top->poc) )
+          if (absm(enc_picture->poc - fs_bottom->poc) > absm(enc_picture->poc - fs_top->poc) )
           {
             p->mv[LIST_0][j][i][0]    = fs_top->mv[LIST_0][jdiv][i][0];
             p->mv[LIST_0][j][i][1]    = fs_top->mv[LIST_0][jdiv][i][1] ;          
@@ -3619,12 +3619,12 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
             p->moving_block[j][i] = 
               !((!p->is_long_term 
               && ((p->ref_idx[LIST_0][j][i] == 0) 
-              &&  (abs(p->mv[LIST_0][j][i][0])>>1 == 0) 
-              &&  (abs(p->mv[LIST_0][j][i][1])>>1 == 0))) 
+              &&  (absm(p->mv[LIST_0][j][i][0])>>1 == 0) 
+              &&  (absm(p->mv[LIST_0][j][i][1])>>1 == 0))) 
               || ((p->ref_idx[LIST_0][j][i] == -1) 
               &&  (p->ref_idx[LIST_1][j][i] == 0) 
-              &&  (abs(p->mv[LIST_1][j][i][0])>>1 == 0) 
-              &&  (abs(p->mv[LIST_1][j][i][1])>>1 == 0)));
+              &&  (absm(p->mv[LIST_1][j][i][0])>>1 == 0) 
+              &&  (absm(p->mv[LIST_1][j][i][1])>>1 == 0)));
           }
         }
         else
@@ -3643,12 +3643,12 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
             p->bottom_moving_block[j][i] = 
               !((!fs_bottom->is_long_term 
               && ((p->bottom_ref_idx[LIST_0][j][i] == 0) 
-              &&  (abs(p->bottom_mv[LIST_0][j][i][0])>>1 == 0) 
-              &&  (abs(p->bottom_mv[LIST_0][j][i][1])>>1 == 0))) 
+              &&  (absm(p->bottom_mv[LIST_0][j][i][0])>>1 == 0) 
+              &&  (absm(p->bottom_mv[LIST_0][j][i][1])>>1 == 0))) 
               || ((p->bottom_ref_idx[LIST_0][j][i] == -1) 
               &&  (p->bottom_ref_idx[LIST_1][j][i] == 0) 
-              &&  (abs(p->bottom_mv[LIST_1][j][i][0])>>1 == 0) 
-              &&  (abs(p->bottom_mv[LIST_1][j][i][1])>>1 == 0)));
+              &&  (absm(p->bottom_mv[LIST_1][j][i][0])>>1 == 0) 
+              &&  (absm(p->bottom_mv[LIST_1][j][i][1])>>1 == 0)));
           }
 
           p->top_mv[LIST_0][j][i][0] = fs_top->mv[LIST_0][jj][ii][0];
@@ -3665,12 +3665,12 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
             p->top_moving_block[j][i] = 
               !((!fs_top->is_long_term 
               && ((p->top_ref_idx[LIST_0][j][i] == 0) 
-              &&  (abs(p->top_mv[LIST_0][j][i][0])>>1 == 0) 
-              &&  (abs(p->top_mv[LIST_0][j][i][1])>>1 == 0))) 
+              &&  (absm(p->top_mv[LIST_0][j][i][0])>>1 == 0) 
+              &&  (absm(p->top_mv[LIST_0][j][i][1])>>1 == 0))) 
               || ((p->top_ref_idx[LIST_0][j][i] == -1) 
               &&  (p->top_ref_idx[LIST_1][j][i] == 0) 
-              &&  (abs(p->top_mv[LIST_1][j][i][0])>>1 == 0) 
-              &&  (abs(p->top_mv[LIST_1][j][i][1])>>1 == 0)));
+              &&  (absm(p->top_mv[LIST_1][j][i][0])>>1 == 0) 
+              &&  (absm(p->top_mv[LIST_1][j][i][1])>>1 == 0)));
           }
 
           if ((img->direct_spatial_mv_pred_flag == 0 ) && !fs->field_frame[2*j][i])
@@ -3703,7 +3703,7 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
           
           if (fs->field_frame[j][i])
           {
-            if (abs(enc_picture->poc - fs->bottom_field->poc) > abs(enc_picture->poc - fs->top_field->poc))
+            if (absm(enc_picture->poc - fs->bottom_field->poc) > absm(enc_picture->poc - fs->top_field->poc))
             {
               p->mv[LIST_0][j][i][0] = fs->top_field->mv[LIST_0][jdiv][i][0];
               p->mv[LIST_0][j][i][1] = fs->top_field->mv[LIST_0][jdiv][i][1] ;
@@ -3762,12 +3762,12 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
           p->moving_block[j][i]= 
             !((!p->is_long_term 
             && ((p->ref_idx[LIST_0][j][i] == 0) 
-            &&  (abs(p->mv[LIST_0][j][i][0])>>1 == 0) 
-            &&  (abs(p->mv[LIST_0][j][i][1])>>1 == 0))) 
+            &&  (absm(p->mv[LIST_0][j][i][0])>>1 == 0) 
+            &&  (absm(p->mv[LIST_0][j][i][1])>>1 == 0))) 
             || ((p->ref_idx[LIST_0][j][i] == -1) 
             &&  (p->ref_idx[LIST_1][j][i] == 0) 
-            &&  (abs(p->mv[LIST_1][j][i][0])>>1 == 0) 
-            &&  (abs(p->mv[LIST_1][j][i][1])>>1 == 0)));
+            &&  (absm(p->mv[LIST_1][j][i][0])>>1 == 0) 
+            &&  (absm(p->mv[LIST_1][j][i][1])>>1 == 0)));
         }
       }
     }
@@ -3796,12 +3796,12 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
           p->moving_block[j][i]= 
             !((!p->is_long_term 
             && ((p->ref_idx[LIST_0][j][i] == 0) 
-            &&  (abs(p->mv[LIST_0][j][i][0])>>1 == 0) 
-            &&  (abs(p->mv[LIST_0][j][i][1])>>1 == 0))) 
+            &&  (absm(p->mv[LIST_0][j][i][0])>>1 == 0) 
+            &&  (absm(p->mv[LIST_0][j][i][1])>>1 == 0))) 
             || ((p->ref_idx[LIST_0][j][i] == -1) 
             &&  (p->ref_idx[LIST_1][j][i] == 0) 
-            &&  (abs(p->mv[LIST_1][j][i][0])>>1 == 0) 
-            &&  (abs(p->mv[LIST_1][j][i][1])>>1 == 0)));
+            &&  (absm(p->mv[LIST_1][j][i][0])>>1 == 0) 
+            &&  (absm(p->mv[LIST_1][j][i][1])>>1 == 0)));
         }
       }
     }      
@@ -3851,7 +3851,7 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
         
         if (iTRp!=0)
         {
-          prescale = ( 16384 + abs( iTRp / 2 ) ) / iTRp;
+          prescale = ( 16384 + absm( iTRp / 2 ) ) / iTRp;
           img->mvscale[j][i] = Clip3( -1024, 1023, ( iTRb * prescale + 32 ) >> 6 ) ;
         }
         else

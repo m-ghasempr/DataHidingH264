@@ -15,7 +15,7 @@
 #ifndef _MB_ACCESS_H_
 #define _MB_ACCESS_H_
 
-void CheckAvailabilityOfNeighbors();
+void CheckAvailabilityOfNeighbors(void);
 
 void getNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix);
 void getLuma4x4Neighbour (int curr_mb_nr, int block_x, int block_y, int rel_x, int rel_y, PixelPos *pix);

@@ -125,15 +125,15 @@ InitializeFastFullIntegerSearch ()
     }
   }
   
-  if ((search_setup_done = (int**)malloc (2*sizeof(int)))==NULL)
+  if ((search_setup_done = (int**)malloc (2*sizeof(int*)))==NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: search_setup_done");
-  if ((search_center_x = (int**)malloc (2*sizeof(int)))==NULL)
+  if ((search_center_x = (int**)malloc (2*sizeof(int*)))==NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: search_center_x");
-  if ((search_center_y = (int**)malloc (2*sizeof(int)))==NULL)
+  if ((search_center_y = (int**)malloc (2*sizeof(int*)))==NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: search_center_y");
-  if ((pos_00 = (int**)malloc (2*sizeof(int)))==NULL)
+  if ((pos_00 = (int**)malloc (2*sizeof(int*)))==NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: pos_00");
-  if ((max_search_range = (int**)malloc (2*sizeof(int)))==NULL)
+  if ((max_search_range = (int**)malloc (2*sizeof(int*)))==NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: max_search_range");
   
   for (list=0; list<2; list++)
@@ -789,7 +789,6 @@ Init_Motion_Search_Module ()
   }
   
 #ifdef _FAST_FULL_ME_
-//  if(input->FMEnable != 0 && input->FMEnable != 3)
   if(!input->FMEnable)
     InitializeFastFullIntegerSearch ();
 #endif
@@ -820,7 +819,6 @@ Clear_Motion_Search_Module ()
   free_mem4Dint (motion_cost, 8, 2);
   
 #ifdef _FAST_FULL_ME_
-//  if(input->FMEnable != 0 && input->FMEnable != 3)
   if(!input->FMEnable)
     ClearFastFullIntegerSearch ();
 #endif
@@ -2053,7 +2051,7 @@ FullPelBlockMotionBiPred (pel_t**   orig_pic,      // <--  original pixel values
 /*!
 ***********************************************************************
 * \brief
-*    Sub pixel block motion search
+*    Bipred Sub pixel block motion search
 ***********************************************************************
 */
 int                                               //  ==> minimum motion cost after search
@@ -3279,8 +3277,9 @@ void FindSkipModeMotionVector ()
     for (by = 0;by < 4;by++)
       for (bx = 0;bx < 4;bx++)
       {
-        all_mv [by][bx][0][0][0][0] = 0;
-        all_mv [by][bx][0][0][0][1] = 0;
+        memset(all_mv [by][bx][0][0][0], 0, 2* sizeof(short));
+        //all_mv [by][bx][0][0][0][0] = 0;
+        //all_mv [by][bx][0][0][0][1] = 0;
       }
   }
   else
@@ -3289,8 +3288,9 @@ void FindSkipModeMotionVector ()
     for (by = 0;by < 4;by++)
       for (bx = 0;bx < 4;bx++)
       {
-        all_mv [by][bx][0][0][0][0] = pmv[0];
-        all_mv [by][bx][0][0][0][1] = pmv[1];
+        memcpy(all_mv [by][bx][0][0][0], pmv, 2* sizeof(short));
+        //all_mv [by][bx][0][0][0][0] = pmv[0];
+        //all_mv [by][bx][0][0][0][1] = pmv[1];
       }
   }
 }
@@ -3481,8 +3481,9 @@ PartitionMotionSearch (int    blocktype,
 
             for (i=0; i<step_h; i++)
             {
-              mv_array  [block_y][pic_block_x+i][0] = all_mv[0];
-              mv_array  [block_y][pic_block_x+i][1] = all_mv[1];
+              memcpy(mv_array  [block_y][pic_block_x+i], all_mv, 2* sizeof(short));
+              //mv_array  [block_y][pic_block_x+i][0] = all_mv[0];
+              //mv_array  [block_y][pic_block_x+i][1] = all_mv[1];
             }
           }
         }
@@ -3682,8 +3683,10 @@ void Get_Direct_Motion_Vectors ()
         {
           if (!l0_refX  && !moving_block[opic_block_y][opic_block_x])
           {
-            all_mvs[LIST_0][0][0][0] = 0;
-            all_mvs[LIST_0][0][0][1] = 0;            
+
+            memset(all_mvs[LIST_0][0][0], 0, 2* sizeof(short));
+            //all_mvs[LIST_0][0][0][0] = 0;
+            //all_mvs[LIST_0][0][0][1] = 0;            
             direct_ref_idx[LIST_0][pic_block_y][pic_block_x]=0;       
           }
           else

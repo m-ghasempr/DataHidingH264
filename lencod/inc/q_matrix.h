@@ -31,10 +31,13 @@ extern short ScalingList8x8[2][64];
 extern short UseDefaultScalingMatrix4x4Flag[6];
 extern short UseDefaultScalingMatrix8x8Flag[2];
 
+extern int *qp_per_matrix;
+extern int *qp_rem_matrix;
+
 
 void Init_QMatrix (void);
-void CalculateQuantParam();
-void CalculateQuant8Param();
-void free_QMatrix();
+void CalculateQuantParam(void);
+void CalculateQuant8Param(void);
+void free_QMatrix(void);
 
 #endif

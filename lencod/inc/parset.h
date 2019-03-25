@@ -20,10 +20,10 @@
 #include "parsetcommon.h"
 #include "nalu.h"
 
-void GenerateParameterSets ();
-void FreeParameterSets ();
+void GenerateParameterSets (void);
+void FreeParameterSets (void);
 
-NALU_t *GenerateSeq_parameter_set_NALU ();
+NALU_t *GenerateSeq_parameter_set_NALU (void);
 NALU_t *GeneratePic_parameter_set_NALU (int);
 
 // The following are local helpers, but may come handy in the future, hence public
@@ -38,8 +38,8 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, unsigned char
 void FreeSPS (seq_parameter_set_rbsp_t *sps);
 void FreePPS (pic_parameter_set_rbsp_t *pps);
 
-pic_parameter_set_rbsp_t *AllocPPS ();
-seq_parameter_set_rbsp_t *AllocSPS ();
+pic_parameter_set_rbsp_t *AllocPPS (void);
+seq_parameter_set_rbsp_t *AllocSPS (void);
 
 
 #endif

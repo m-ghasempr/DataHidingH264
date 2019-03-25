@@ -102,12 +102,12 @@ float AlphaThird[8];
 byte *flag_intra;
 int  flag_intra_SAD;
 
-void DefineThreshold();
-void DefineThresholdMB();
-int get_mem_FME();
-void free_mem_FME();
+void DefineThreshold(void);
+void DefineThresholdMB(void);
+int get_mem_FME(void);
+void free_mem_FME(void);
 
-void decide_intrabk_SAD();
+void decide_intrabk_SAD(void);
 void skip_intrabk_SAD(int best_mode, int ref_max);
 void setup_FME(short ref, int list, int block_y, int block_x, int blocktype, short   ******all_mv);
 

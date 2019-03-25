@@ -26,6 +26,7 @@
 #include "simplified_fast_me.h"
 #include "ratectl.h"            
 #include "mode_decision.h"
+#include "fmo.h"
 
 //==== MODULE PARAMETERS ====
 imgpel temp_imgY[16][16]; // to temp store the Y data for 8x8 transform
@@ -196,6 +197,65 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bs
   enc_mb->valid[P8x8]  = (enc_mb->valid[4] || enc_mb->valid[5] || enc_mb->valid[6] || enc_mb->valid[7]);
   enc_mb->valid[12]    = (img->type == SI_SLICE);
 
+  if(img->type==SP_SLICE)
+  {
+    if(si_frame_indicator)
+    {
+      enc_mb->valid[I8MB]  = 0;
+      enc_mb->valid[IPCM]  = 0;
+      enc_mb->valid[0]     = 0;
+      enc_mb->valid[1]     = 0;
+      enc_mb->valid[2]     = 0; 
+      enc_mb->valid[3]     = 0;
+      enc_mb->valid[4]     = 0;
+      enc_mb->valid[5]     = 0;
+      enc_mb->valid[6]     = 0;
+      enc_mb->valid[7]     = 0;
+      enc_mb->valid[P8x8]  = 0;
+      enc_mb->valid[12]    = 0;
+      if(check_for_SI16())
+      {
+        enc_mb->valid[I4MB]  = 0;
+        enc_mb->valid[I16MB] = 1;
+      }
+      else
+      {
+        enc_mb->valid[I4MB]  = 1;
+        enc_mb->valid[I16MB] = 0;
+      }
+    }
+  }
+
+  if(img->type==SP_SLICE)
+  {
+    if(sp2_frame_indicator)
+    {
+      if(check_for_SI16())
+      {
+        enc_mb->valid[I8MB]  = 0;
+        enc_mb->valid[IPCM]  = 0;
+        enc_mb->valid[0]     = 0;
+        enc_mb->valid[1]     = 0;
+        enc_mb->valid[2]     = 0; 
+        enc_mb->valid[3]     = 0;
+        enc_mb->valid[4]     = 0;
+        enc_mb->valid[5]     = 0;
+        enc_mb->valid[6]     = 0;
+        enc_mb->valid[7]     = 0;
+        enc_mb->valid[P8x8]  = 0;
+        enc_mb->valid[12]    = 0;
+        enc_mb->valid[I4MB]  = 0;
+        enc_mb->valid[I16MB] = 1;
+      }
+      else
+      {
+        enc_mb->valid[I8MB]  = 0;
+        enc_mb->valid[IPCM]  = 0;
+        enc_mb->valid[0]     = 0;
+        enc_mb->valid[I16MB] = 0;
+      }
+    }
+  }
   
   //===== SET LAGRANGE PARAMETERS =====
   // Note that these are now computed at the slice level to reduce
@@ -280,15 +340,21 @@ void list_prediction_cost(int list, int block, int mode, RD_PARAMS enc_mb, int b
     {
       if (!img->checkref || list || ref==0 || CheckReliabilityOfRef (block, list, ref, mode))
       {
-        mcost  = (input->rdopt 
-          ? REF_COST (enc_mb.lambda_mf, ref, cur_list) 
-          : (int) (2 * enc_mb.lambda_me * min(ref, 1)));     
-        
-        mcost += motion_cost[mode][list][ref][block];
-        if (mcost < bmcost[list])
+        // limit the number of reference frames to 1 when switching SP frames are used
+        if((!input->sp2_frame_indicator && !input->sp_output_indicator)||
+          ((input->sp2_frame_indicator || input->sp_output_indicator) && (img->type!=P_SLICE && img->type!=SP_SLICE))||
+          ((input->sp2_frame_indicator || input->sp_output_indicator) && ((img->type==P_SLICE || img->type==SP_SLICE) &&(ref==0))))
         {
-          bmcost[list]   = mcost;
-          best_ref[list] = (char)ref;
+          mcost  = (input->rdopt 
+            ? REF_COST (enc_mb.lambda_mf, ref, cur_list) 
+            : (int) (2 * enc_mb.lambda_me * min(ref, 1)));     
+
+          mcost += motion_cost[mode][list][ref][block];
+          if (mcost < bmcost[list])
+          {
+            bmcost[list]   = mcost;
+            best_ref[list] = (char)ref;
+          }
         }
       }
     }
@@ -430,7 +496,7 @@ void compute_mode_RD_cost(int mode,
     || (mode == 0 && bslice && active_sps->direct_8x8_inference_flag)
     || ((mode == P8x8) && (enc_mb.valid[4]))
     :  0;
-  
+//store_coding_state (cs_cm); // RD  
   SetModesAndRefframeForBlocks (mode);
   
   // Encode with coefficients
@@ -496,7 +562,6 @@ void compute_mode_RD_cost(int mode,
       else
         break;
     }
-  }
   
   // Encode with no coefficients. Currently only for direct. This could be extended to all other modes as in example.
   //if (mode < P8x8 && (*inter_skip == 0) && enc_mb.valid[mode] && currMB->cbp && (currMB->cbp&15) != 15 && !input->nobskip)
@@ -512,6 +577,7 @@ void compute_mode_RD_cost(int mode,
       
       store_macroblock_parameters (mode);
     }
+  }
   }
 };
 
@@ -558,11 +624,15 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
   int (*fadjustTransformCr)[2][16][16] = transform8x8? img->fadjust8x8Cr : img->fadjust4x4Cr;
   int lumaAdjustIndex = transform8x8? 2 : 3;
   int chromaAdjustIndex = transform8x8? 0 : 2;
-  
+#ifdef BEST_NZ_COEFF
+  int best_nz_coeff[2][2];
+#endif
+
+ 
   //--- set coordinates ---
   j0 = ((block/2)<<3);    j1 = (j0>>2);
   i0 = ((block%2)<<3);    i1 = (i0>>2);
-  
+
 #ifdef BEST_NZ_COEFF
   for(j = 0; j <= 1; j++)
   {
@@ -570,7 +640,7 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
       best_nz_coeff[i][j] = img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] = 0;
   }
 #endif
-  
+
   if (transform8x8)
     currMB->luma_transform_size_8x8_flag = 1; //switch to transform size 8x8
   
@@ -591,7 +661,8 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
         //--- Direct Mode ---                                      
         if (!input->rdopt )
         {
-          direct4x4_tmp=0; direct8x8_tmp=0;
+          direct4x4_tmp = 0; 
+          direct8x8_tmp = 0;
           direct4x4_tmp = Get_Direct_Cost8x8 ( block, &direct8x8_tmp);
           
           if ((direct4x4_tmp==INT_MAX)||(*cost_direct==INT_MAX))
@@ -667,6 +738,7 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
         {
           //--- get cost and reference frame for LIST 1 prediction ---
           bmcost[LIST_1] = INT_MAX;
+          bmcost[BI_PRED] = INT_MAX;
           list_prediction_cost(LIST_1, block, mode, enc_mb, bmcost, best_ref);
           
           // Compute bipredictive cost between best list 0 and best list 1 references
@@ -716,12 +788,13 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
         dataTr->part8x8fwref[block] = best_ref[LIST_0];
         dataTr->part8x8bwref[block] = best_ref[LIST_1];
         
+        img->mb_data[img->current_mb_nr].b8mode[block] = mode;
+        
 #ifdef BEST_NZ_COEFF
         for(j = 0; j <= 1; j++)
         {
           for(i = 0; i <= 1; i++)
-            best_nz_coeff[i][j]= cnt_nonz 
-            ? img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] : 0;
+            best_nz_coeff[i][j]= cnt_nonz ? img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] : 0;
         }
 #endif
         
@@ -752,6 +825,8 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
                 pix_x = img->pix_x + i;
                 dataTr->rec_mbY8x8[j][i] = enc_picture->imgY[pix_y][pix_x];
                 dataTr->mpr8x8[j][i] = img->mpr[j][i];
+                if(img->type==SP_SLICE && (!si_frame_indicator))
+                  dataTr->lrec[j][i]=lrec[pix_y][pix_x]; // store the coefficients for primary SP slice
               }     
             }
           }
@@ -835,6 +910,8 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
         {       
         memcpy(&dataTr->rec_mbY8x8[j][i0], &enc_picture->imgY[img->pix_y + j][img->pix_x + i0], 2* BLOCK_SIZE * sizeof (imgpel));
         memcpy(&dataTr->mpr8x8[j][i0], &img->mpr[j][i0], 2* BLOCK_SIZE * sizeof (imgpel));
+        if(img->type==SP_SLICE &&(!si_frame_indicator))
+          memcpy(&dataTr->lrec[j][i0],&lrec[img->pix_y+j][img->pix_x+i0],2*BLOCK_SIZE*sizeof(int)); // store coefficients for primary SP slice
       }
     }
     else 
@@ -869,6 +946,8 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
       for (j=j0; j<j0 + 2 * BLOCK_SIZE; j++)
         {
         memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x], dataTr->rec_mbY8x8[j], 2 * BLOCK_SIZE * sizeof(imgpel));
+        if(img->type==SP_SLICE &&(!si_frame_indicator))
+          memcpy(&lrec[img->pix_y + j][img->pix_x], dataTr->lrec[j],2*BLOCK_SIZE*sizeof(imgpel)); // reset the coefficients for SP slice
       }
     } // if (block<3)    
   }  
@@ -913,7 +992,7 @@ void encode_one_macroblock ()
   char        best_ref[2] = {0, -1};
   int         bmcost[5] = {INT_MAX};
   int         cost=0;
-  int         min_cost = INT_MAX, cost_direct=0, have_direct=0, i16mode;
+  int         min_cost = INT_MAX, cost_direct=0, have_direct=0, i16mode=0;
   int         intra1 = 0;
   int         temp_cpb = 0;
   int         best_transform_flag = 0;
@@ -927,16 +1006,13 @@ void encode_one_macroblock ()
   
   int         pix_x, pix_y;
   Macroblock* currMB      = &img->mb_data[img->current_mb_nr];
-  Macroblock* prevMB      = img->current_mb_nr ? &img->mb_data[img->current_mb_nr-1]:NULL ;
+  int         prev_mb_nr  = FmoGetPreviousMBNr(img->current_mb_nr);
+  Macroblock* prevMB      = (prev_mb_nr >= 0) ? &img->mb_data[prev_mb_nr]:NULL ;
   
   char   **ipredmodes = img->ipredmode;
   short   *allmvs = img->all_mv[0][0][0][0][0];
   short   max_chroma_pred_mode;
   int     ****i4p;  //for non-RD-opt. mode
-  
-#ifdef BEST_NZ_COEFF
-  int best_nz_coeff[2][2];
-#endif  
   
   int tmp_8x8_flag, tmp_no_mbpart;  
   // Residue Color Transform
@@ -1093,12 +1169,21 @@ void encode_one_macroblock ()
               if (bslice)
               {
                 best8x8pdir[1][0] = best8x8pdir[1][1] = best8x8pdir[1][2] = best8x8pdir[1][3] = ctr16x16;
-                if (ctr16x16 < 2) k--;
+                
+                if ( (bslice) && (input->BiPredMotionEstimation) 
+                  && (ctr16x16 == 2 && img->bi_pred_me[mode] < 2 && mode == 1))
+                  ctr16x16--;
+                if (ctr16x16 < 2) 
+                  index--;
                 ctr16x16++;
               }
               
               currMB->c_ipred_mode=DC_PRED_8;
               compute_mode_RD_cost(mode, currMB, enc_mb, &min_rdcost, &min_rate, i16mode, bslice, &inter_skip);
+
+              if ((input->BiPredMotionEstimation) && (bslice) && ctr16x16 == 2 
+                && img->bi_pred_me[mode] < 2 && mode == 1 && best8x8pdir[1][0] == 2) 
+                img->bi_pred_me[mode] = img->bi_pred_me[mode] + 1;
             } // for (ctr16x16=0, k=0; k<1; k++)
             
             if(pslice)
@@ -1135,6 +1220,8 @@ void encode_one_macroblock ()
       
       if ((!inter_skip) && enc_mb.valid[P8x8])
       {
+        giRDOpt_B8OnlyFlag = 1;
+		
         tr8x8.cost8x8 = INT_MAX;
         tr4x4.cost8x8 = INT_MAX;
         //===== store coding state of macroblock =====
@@ -1150,8 +1237,14 @@ void encode_one_macroblock ()
           //===========================================================
           //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
           for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
+          {
             submacroblock_mode_decision(enc_mb, &tr8x8, currMB, cofAC_8x8ts[block],
             &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1);
+            best8x8mode       [block] = tr8x8.part8x8mode [block];
+            best8x8pdir [P8x8][block] = tr8x8.part8x8pdir [block];
+            best8x8fwref[P8x8][block] = tr8x8.part8x8fwref[block];
+            best8x8bwref[P8x8][block] = tr8x8.part8x8bwref[block];
+          }
           
           // following params could be added in RD_8x8DATA structure
           cbp8_8x8ts      = cbp8x8;
@@ -1197,7 +1290,12 @@ void encode_one_macroblock ()
         if (!input->rdopt && (tr4x4.cost8x8 < min_cost || tr8x8.cost8x8 < min_cost))
         {
           best_mode = P8x8;
-          if (input->Transform8x8Mode)
+          if (input->Transform8x8Mode == 2)
+          {
+              min_cost = tr8x8.cost8x8;
+              currMB->luma_transform_size_8x8_flag=1;
+          }
+          else if (input->Transform8x8Mode)
           {
             if (tr8x8.cost8x8 < tr4x4.cost8x8)
             {
@@ -1211,12 +1309,15 @@ void encode_one_macroblock ()
             }
             else
             {
-              min_cost = tr8x8.cost8x8;
-              currMB->luma_transform_size_8x8_flag=1;
               if (GetBestTransformP8x8() == 0)
               {
                 min_cost = tr4x4.cost8x8;
                 currMB->luma_transform_size_8x8_flag=0;
+              }
+              else
+              {
+                min_cost = tr8x8.cost8x8;
+                currMB->luma_transform_size_8x8_flag=1;
               }
             }
           }
@@ -1226,6 +1327,7 @@ void encode_one_macroblock ()
             currMB->luma_transform_size_8x8_flag=0;
           }
         }// if (!input->rdopt && (tr4x4.cost8x8 < min_cost || tr8x8.cost8x8 < min_cost))
+        giRDOpt_B8OnlyFlag = 0;
       }
       else // if (enc_mb.valid[P8x8])
       {
@@ -1245,6 +1347,7 @@ void encode_one_macroblock ()
     //-------------------------------------------------------------------------
    if (input->rdopt)
    {
+     // store_coding_state (cs_cm);    
     if (!inter_skip)
     {
         int mb_available_up;
@@ -1426,6 +1529,11 @@ void encode_one_macroblock ()
           }
         }          
       }
+#ifdef BEST_NZ_COEFF
+      for (j=0;j<4;j++)
+        for (i=0; i<(4+img->num_blk8x8_uv); i++)
+          img->nz_coeff[img->current_mb_nr][j][i] = gaaiMBAFF_NZCoeff[j][i]; 
+#endif
    }
    else //rdopt off
    {
@@ -1794,9 +1902,12 @@ void encode_one_macroblock ()
     // Residue Color Transform
     if ((!(img->residue_transform_flag && (best_mode==I4MB || best_mode==I16MB || best_mode==I8MB))) && img->yuv_format!=YUV400)
       ChromaResidualCoding (&dummy);
-    if (best_mode==I16MB) {
+
+    if (best_mode==I16MB) 
+    {
       img->i16offset = I16Offset  (currMB->cbp, i16mode);
     }
+
     SetMotionVectorsMB (currMB, bslice);
     
     //===== check for SKIP mode =====
@@ -1840,5 +1951,35 @@ void encode_one_macroblock ()
   {
     simplified_skip_intrabk_SAD(best_mode, listXsize[enc_mb.list_offset[LIST_0]]);
   }
+
+  //--- constrain intra prediction ---
+  if(input->UseConstrainedIntraPred && (img->type==P_SLICE || img->type==B_SLICE))
+  {
+    if( !IS_INTRA(currMB) )
+    {
+      img->intra_block[img->current_mb_nr] = 0;
+    }
+    else
+    {
+      img->intra_block[img->current_mb_nr] = 1;
+    }
+
+  }
+
 }
 
+/*!
+*************************************************************************************
+* \brief
+*    Checks whether a primary SP slice macroblock was encoded as I16 
+*************************************************************************************
+*/
+int check_for_SI16()
+{
+  int i,j;
+  for(i=img->pix_y;i<img->pix_y+MB_BLOCK_SIZE;i++)
+    for(j=img->pix_x;j<img->pix_x+MB_BLOCK_SIZE;j++)
+      if(lrec[i][j]!=-16)
+	return 0;
+  return 1;
+}

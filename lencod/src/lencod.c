@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 10.1 (FRExt)
+ *     JM 10.2 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -69,7 +69,7 @@
 #include "epzs.h"
 
 #define JM      "10 (FRExt)"
-#define VERSION "10.1"
+#define VERSION "10.2"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;
@@ -91,12 +91,12 @@ int    cabac_encoding = 0;
 int    frame_statistic_start;
 extern ColocatedParams *Co_located;
 
-void Init_Motion_Search_Module ();
-void Clear_Motion_Search_Module ();
-void report_frame_statistic();
-void SetLevelIndices();
+void Init_Motion_Search_Module (void);
+void Clear_Motion_Search_Module (void);
+void report_frame_statistic(void);
+void SetLevelIndices(void);
 
-void init_stats()
+void init_stats(void)
 {
   stats->successive_Bframe = input->successive_Bframe;
   stats->bit_ctr_I = 0;
@@ -135,6 +135,8 @@ int main(int argc,char **argv)
 {
   int M,N,n,np,nb;           //Rate control
   int primary_disp = 0;
+  int i;
+  giRDOpt_B8OnlyFlag = 0;
 
   p_dec = p_in = -1;
 
@@ -163,6 +165,26 @@ int main(int argc,char **argv)
     frame_pic_3 = malloc_picture();
   }
 
+  si_frame_indicator=0; //indicates whether the frame is SP or SI
+  frame_pic_2 = malloc_picture();//holds the encoded SI frame
+   
+  //allocation of lrec and lrec_uv for SI frames
+  lrec = (int **) malloc(img->height * sizeof(int *));
+  for(i=0;i<img->height;i++)
+  {
+    lrec[i] = (int *) malloc(img->width * sizeof(int ));
+  }
+  lrec_uv = (int ***) malloc(2 * sizeof(int **));
+  for(i=0;i<2;i++)
+  {
+    lrec_uv[i] = (int **) malloc(img->height * sizeof(int *));
+  }
+  for(i=0;i<img->height;i++)
+  {
+    lrec_uv[0][i]=(int *) malloc(img->width * sizeof(int ));
+    lrec_uv[1][i]=(int *) malloc(img->width * sizeof(int ));
+  }
+  number_sp2_frames=0;
   if (input->PicInterlace != FRAME_CODING)
   {
     top_pic = malloc_picture();
@@ -184,7 +206,7 @@ int main(int argc,char **argv)
   }  
 
   dpb.init_done = 0;
-  init_dpb(input);
+  init_dpb();
   init_out_buffer();
   init_stats();
 
@@ -318,7 +340,8 @@ int main(int argc,char **argv)
           
           /* number of B frames */
           nb = (input->no_frames - 1) * input->successive_Bframe;
-        }else
+        }
+        else
         {
           N = input->intra_period*(input->successive_Bframe+1);
           M = input->successive_Bframe+1;
@@ -362,9 +385,9 @@ int main(int argc,char **argv)
     
     if (img->nal_reference_idc == 0)
     {
-            primary_disp ++;
-            img->frame_num -= 1;
-            img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
+      primary_disp ++;
+      img->frame_num -= 1;
+      img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
     }    
     encode_enhancement_layer();
     
@@ -432,9 +455,9 @@ int main(int argc,char **argv)
  * 
  ***********************************************************************
  */
-void report_stats_on_error()
+void report_stats_on_error(void)
 {
-  input->no_frames=img->number-1;
+  input->no_frames=img->number;
   terminate_sequence();
 
   flush_dpb();
@@ -544,7 +567,7 @@ void init_poc()
  *    sets omg->nz_coef[][][][] to -1
  ***********************************************************************
  */
-void CAVLC_init()
+void CAVLC_init(void)
 {
   unsigned int i, k, l;
 
@@ -733,6 +756,12 @@ void init_img()
   }
   // CAVLC mem
   get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 4+img->num_blk8x8_uv);
+
+
+  get_mem2Ddb_offset(&(img->lambda_md), 10, 52 + img->bitdepth_luma_qp_scale,img->bitdepth_luma_qp_scale);
+  get_mem2Ddb_offset(&(img->lambda_me), 10, 52 + img->bitdepth_luma_qp_scale,img->bitdepth_luma_qp_scale);
+  get_mem2Dint_offset(&(img->lambda_mf), 10, 52 + img->bitdepth_luma_qp_scale,img->bitdepth_luma_qp_scale);
+  //get_mem2Ddouble(&(img->lambda_md), 10, 52 + img->bitdepth_luma_qp_scale);
 
   CAVLC_init();
 
@@ -1287,7 +1316,8 @@ void report()
       total_bits=stats->bit_ctr_P + stats->bit_ctr_I + stats->bit_ctr_B + stats->bit_ctr_parametersets, stats->bit_ctr_I, stats->bit_ctr_P, stats->bit_ctr_B,stats->bit_ctr_parametersets);
     
     frame_rate = (img->framerate *(float)(stats->successive_Bframe + 1)) / (float) (input->jumpd+1);
-    stats->bitrate= ((float) total_bits * frame_rate)/((float) (input->no_frames + frame_ctr[B_SLICE]));
+//    stats->bitrate= ((float) total_bits * frame_rate)/((float) (input->no_frames + frame_ctr[B_SLICE]));
+    stats->bitrate= ((float) total_bits * frame_rate)/((float)(frame_ctr[I_SLICE] + frame_ctr[P_SLICE] + frame_ctr[B_SLICE]));
     
     fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stats->bitrate/1000);
     
@@ -1755,7 +1785,7 @@ void report()
  *    none
  ************************************************************************
  */
-void information_init()
+void information_init(void)
 {
   char yuv_types[4][10]= {"YUV 4:0:0","YUV 4:2:0","YUV 4:2:2","YUV 4:4:4"};
   if (input->Verbose == 0 || input->Verbose  == 1)
@@ -1797,7 +1827,7 @@ void information_init()
  *    memory allocation for original picture buffers
  ************************************************************************
  */
-int init_orig_buffers()
+int init_orig_buffers(void)
 {
   int memory_size = 0;
   
@@ -1841,7 +1871,7 @@ int init_orig_buffers()
  * \return Number of allocated bytes
  ************************************************************************
  */
-int init_global_buffers()
+int init_global_buffers(void)
 {
   int j,memory_size=0;
 #ifdef _ADAPT_LAST_GROUP_
@@ -1857,6 +1887,19 @@ int init_global_buffers()
 
   memory_size += init_orig_buffers(); 
     
+
+  if ((yPicPos = (unsigned int*)malloc(img->FrameSizeInMbs * sizeof(unsigned int))) == NULL)
+    no_mem_exit("init_global_buffers: yPicPos");  
+  memory_size += img->FrameSizeInMbs * sizeof(unsigned int);
+  if ((xPicPos = (unsigned int*)malloc(img->FrameSizeInMbs * sizeof(unsigned int))) == NULL)
+    no_mem_exit("init_global_buffers: xPicPos");
+  memory_size += img->FrameSizeInMbs * sizeof(unsigned int);
+
+  for (j=0;j< (int) img->FrameSizeInMbs;j++)
+  {
+    xPicPos[j] = (j % img->PicWidthInMbs);
+    yPicPos[j] = (j / img->PicWidthInMbs);
+  }
 
   if (input->WeightedPrediction || input->WeightedBiprediction || input->GenerateMultiplePPS)
   {
@@ -1938,7 +1981,7 @@ int init_global_buffers()
  *    Free allocated memory of original picture buffers
  ************************************************************************
  */
-void free_orig_planes()
+void free_orig_planes(void)
 {
   free_mem2Dpel(imgY_org_frm);      // free ref frame buffers
 
@@ -1974,7 +2017,7 @@ void free_orig_planes()
  *    none
  ************************************************************************
  */
-void free_global_buffers()
+void free_global_buffers(void)
 {
   int  i,j;
 
@@ -1987,6 +2030,8 @@ void free_global_buffers()
 
   free_orig_planes();
 
+  free(yPicPos);
+  free(xPicPos);
   // Free Qmatrices and offsets
   free_QMatrix();
   free_QOffsets();
@@ -2065,6 +2110,10 @@ void free_global_buffers()
   }
 
   free_mem3Dint(img->nz_coeff, img->FrameSizeInMbs);
+
+  free_mem2Ddb_offset(img->lambda_md,img->bitdepth_luma_qp_scale);
+  free_mem2Ddb_offset(img->lambda_me,img->bitdepth_luma_qp_scale);
+  free_mem2Dint_offset(img->lambda_mf,img->bitdepth_luma_qp_scale);
 
   if(input->FMEnable == 1)
   {
@@ -2267,7 +2316,7 @@ void free_mem_DCcoeff (int*** cofDC)
  *    form frame picture from two field pictures 
  ************************************************************************
  */
-void combine_field()
+void combine_field(void)
 {
   int i;
 
@@ -2314,7 +2363,7 @@ int decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bi
  *    Do some initializaiton work for encoding the 2nd IGOP
  ************************************************************************
  */
-void process_2nd_IGOP()
+void process_2nd_IGOP(void)
 {
   Boolean FirstIGOPFinished = FALSE;
   if ( img->number == input->no_frames-1 )
@@ -2343,7 +2392,7 @@ void process_2nd_IGOP()
  *    Set the image type for I,P and SP pictures (not B!)
  ************************************************************************
  */
-void SetImgType()
+void SetImgType(void)
 {
   int intra_refresh = input->intra_period == 0 ? (IMG_NUMBER == 0) : ((IMG_NUMBER%input->intra_period) == 0);
   
@@ -2358,7 +2407,7 @@ void SetImgType()
 }
 
  
-void SetLevelIndices()
+void SetLevelIndices(void)
 {
   switch(active_sps->level_idc)
   {

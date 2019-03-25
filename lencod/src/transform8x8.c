@@ -1660,7 +1660,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       
       if (currMB->luma_transform_size_8x8_flag && input->symbol_mode == UVLC)
       {
-        *coeff_cost += (level > 1) ? MAX_VALUE : COEFF_COST8x8[input->disthres][runs[MCcoeff]];
+        *coeff_cost += (level > 1 || lossless_qpprime) ? MAX_VALUE : COEFF_COST8x8[input->disthres][runs[MCcoeff]];
 
         img->cofAC[b8][MCcoeff][0][scan_poss[MCcoeff]] = sign(level,img->m7[j][i]);
         img->cofAC[b8][MCcoeff][1][scan_poss[MCcoeff]] = runs[MCcoeff];
@@ -1669,12 +1669,13 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       }
       else
       {
-        *coeff_cost += (level > 1) ? MAX_VALUE : COEFF_COST8x8[input->disthres][run];
+        *coeff_cost += (level > 1 || lossless_qpprime) ? MAX_VALUE :COEFF_COST8x8[input->disthres][run];
         ACLevel[scan_pos] = sign(level,img->m7[j][i]);
         ACRun  [scan_pos] = run;
         ++scan_pos;
         run=-1;                     // reset zero level counter
       }      
+      
       level = sign(level, img->m7[j][i]);
       if(lossless_qpprime)
       {

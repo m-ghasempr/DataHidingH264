@@ -52,7 +52,7 @@ extern short  best8x8fwref[MAXMODE][4]; // [mode][block]
 extern short  best8x8bwref[MAXMODE][4]; // [mode][block]
 extern imgpel pred[16][16];
 
-extern void   set_stored_macroblock_parameters ();
+extern void   set_stored_macroblock_parameters (void);
 extern void   StoreMV8x8(int);
 extern void   RestoreMV8x8(int);
 extern void   store_macroblock_parameters (int);
@@ -64,7 +64,7 @@ extern void   update_refresh_map(int intra, int intra1, Macroblock *currMB);
 extern void   SetMotionVectorsMB (Macroblock*, int);
 extern void   SetCoeffAndReconstruction8x8 (Macroblock*);
 
-extern int    GetBestTransformP8x8();
+extern int    GetBestTransformP8x8(void);
 extern int    I16Offset (int, int);
 extern int    CheckReliabilityOfRef (int, int, int, int);
 extern int    Mode_Decision_for_Intra4x4Macroblock (double, int*);

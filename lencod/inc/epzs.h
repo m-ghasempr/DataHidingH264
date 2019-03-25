@@ -57,8 +57,8 @@ typedef enum
 extern EPZSColocParams *EPZSCo_located;
 extern int ***EPZSDistortion;  //!< Array for storing SAD Values
 
-extern int EPZSInit();
-extern void EPZSDelete ();
+extern int EPZSInit(void);
+extern void EPZSDelete (void);
 extern void EPZSOutputStats(FILE *stat,short stats_file);
 extern void EPZSSliceInit(EPZSColocParams* p, StorablePicture **listX[6]);
 extern int EPZSPelBlockMotionSearch (pel_t **, short, int, int, char ***, short ****, 
@@ -67,5 +67,8 @@ extern int EPZSPelBlockMotionSearch (pel_t **, short, int, int, char ***, short 
 extern int EPZSBiPredBlockMotionSearch (pel_t **,	short, int, int, char  ***, short  ****, 
                                         int, int, int, short, short, short, short, 
                                         short *, short *,	short *, short *, int, int, int);	     
+
+extern int EPZSSubPelBlockMotionSearch (pel_t **, short, int, int, int, int, int, int, 
+                         short*, short*, int, int, int, int);
 
 #endif

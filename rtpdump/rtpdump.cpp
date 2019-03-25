@@ -2,16 +2,23 @@
 // rtpdump.cpp : Defines the entry point for the console application.
 //
 
+#include "stdafx.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
+#ifdef WIN32
+#include <Winsock2.h>
+#else
+#include <netinet/in.h>
+#endif
 
-#include "stdafx.h"
 
 int main(int argc, char* argv[])
 
 {
-  unsigned int bufsize, pacno=0;;
+  unsigned int bufsize, pacno=0, temp32;
+  unsigned short temp16;
   unsigned char buf[65000];
   int i, intime;
   FILE *f;
@@ -19,7 +26,7 @@ int main(int argc, char* argv[])
 
   if (argc != 2)
   {
-    printf ("Usage: %s <H.264 RTP packet file\n");
+    printf ("Usage: %s <H.264 RTP packet file>\n", argv[0]);
     return -1;
   }
 
@@ -48,15 +55,18 @@ int main(int argc, char* argv[])
     for (i=0; i< 25; i++)
       printf ("%02x ", buf[i]);
     printf ("\n");
-    printf ("Version (V): %d\n", buf[0] & 0x3);
-    printf ("Padding (P): %d\n", (buf[0] & 0x4) >> 2);
-    printf ("Extension (X): %d\n", (buf[0] & 0x8) >> 3);
-    printf ("CSRC count (CC): %d\n", (buf[0] & 0xf0) >> 4);
-    printf ("Marker bit (M): %d\n", buf[1] & 0x1);
-    printf ("Payload Type (PT): %d\n", (buf[1] & 0xfe) >> 1);
-    printf ("Sequence Number: %d\n", buf[2] | (buf[3] << 8));
-    printf ("Timestamp: %d\n", buf[4] | (buf[5] <<8) | (buf[6] <<16) | (buf[7] <<24));
-    printf ("SSRC: %d\n", buf[8] | (buf[9] <<8) | (buf[10] <<16) | (buf[11] <<24));
+    printf ("Version (V): %d\n", (buf[0] >> 6) & 0x03);
+    printf ("Padding (P): %d\n", (buf[0] >> 5) & 0x01);
+    printf ("Extension (X): %d\n", (buf[0] >> 4) & 0x01);
+    printf ("CSRC count (CC): %d\n", (buf[0] >> 0) & 0x0F);
+    printf ("Marker bit (M): %d\n", (buf[1] >> 7) & 0x01);
+    printf ("Payload Type (PT): %d\n", (buf[1] >> 0) & 0x7F);
+    memcpy (&temp16, &buf[2], 2);
+    printf ("Sequence Number: %d\n", ntohs(temp16));
+    memcpy (&temp32, &buf[4], 4);
+    printf ("Timestamp: %d\n", ntohl(temp32));
+    memcpy (&temp32, &buf[4], 4);
+    printf ("SSRC: %d\n", ntohl(temp32));
 
     printf ("First Byte: 0x%x\n", buf[12]);
   }

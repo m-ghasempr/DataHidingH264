@@ -16,10 +16,10 @@
 #define _EXPLICIT_GOP_H_
 
 // GOP Pyramid
-void init_gop_structure(); 
-void interpret_gop_structure();
-void create_pyramid();
-void clear_gop_structure();
-void encode_enhancement_layer();
+void init_gop_structure(void); 
+void interpret_gop_structure(void);
+void create_pyramid(void);
+void clear_gop_structure(void);
+void encode_enhancement_layer(void);
 
 #endif

@@ -101,6 +101,11 @@
 #include "sei.h"
 #include "memalloc.h"
 
+#ifdef WIN32
+#include <Winsock2.h>
+#else
+#include <netinet/in.h>
+#endif
 
 FILE *bits;
 
@@ -225,18 +230,21 @@ int DecomposeRTPpacket (RTPpacket_t *p)
 
   // Extract header information
 
-  p->v  = p->packet[0] & 0x3;
-  p->p  = (p->packet[0] & 0x4) >> 2;
-  p->x  = (p->packet[0] & 0x8) >> 3;
-  p->cc = (p->packet[0] & 0xf0) >> 4;
+  p->v  = (p->packet[0] >> 6) & 0x03;
+  p->p  = (p->packet[0] >> 5) & 0x01;
+  p->x  = (p->packet[0] >> 4) & 0x01;
+  p->cc = (p->packet[0] >> 0) & 0x0F;
 
-  p->m  = p->packet[1] & 0x1;
-  p->pt = (p->packet[1] & 0xfe) >> 1;
+  p->m  = (p->packet[1] >> 7) & 0x01;
+  p->pt = (p->packet[1] >> 0) & 0x7F;
 
-  p->seq = p->packet[2] | (p->packet[3] << 8);
+  memcpy (&p->seq, &p->packet[2], 2);
+  p->seq = ntohs((unsigned short)p->seq);
 
   memcpy (&p->timestamp, &p->packet[4], 4);// change to shifts for unified byte sex
+  p->timestamp = ntohl(p->timestamp);
   memcpy (&p->ssrc, &p->packet[8], 4);// change to shifts for unified byte sex
+  p->ssrc = ntohl(p->ssrc);
 
   // header consistency checks
   if (     (p->v != 2)

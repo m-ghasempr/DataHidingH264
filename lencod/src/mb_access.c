@@ -14,6 +14,7 @@
 #include <assert.h>
 
 #include "global.h"
+#include "mb_access.h"
 
 /*!
  ************************************************************************
@@ -44,7 +45,7 @@ int mb_is_available(int mbAddr, int currMbAddr)
  *    the current macroblock for prediction and context determination;
  ************************************************************************
  */
-void CheckAvailabilityOfNeighbors()
+void CheckAvailabilityOfNeighbors(void)
 {
   const int mb_nr = img->current_mb_nr;
   Macroblock *currMB = &img->mb_data[mb_nr];
@@ -99,8 +100,10 @@ void get_mb_block_pos (int mb_addr, int *x, int*y)
   }
   else
   {
-    *x = (mb_addr % img->PicWidthInMbs);
-    *y = (mb_addr / img->PicWidthInMbs);
+    //*x = (mb_addr % img->PicWidthInMbs);
+    //*y = (mb_addr / img->PicWidthInMbs);
+    *x = xPicPos[mb_addr];
+    *y = yPicPos[mb_addr];
   }
 }
 
@@ -185,8 +188,11 @@ void getNonAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int luma, Pixel
 
   if (pix->available || img->DeblockCall)
   {
-    pix->x = (xN + maxW) % maxW;
-    pix->y = (yN + maxH) % maxH;
+    //pix->x = (xN + maxW) % maxW;
+    //pix->y = (yN + maxH) % maxH;
+    pix->x = (xN + maxW) & (maxW - 1);
+    pix->y = (yN + maxH) & (maxH - 1);
+
 
     get_mb_pos(pix->mb_addr, &(pix->pos_x), &(pix->pos_y));
 

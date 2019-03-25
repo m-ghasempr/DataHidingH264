@@ -121,10 +121,10 @@ int diffy8[16][16];//for P8X8 mode
 extern int Iprev_bits;
 extern int Pprev_bits;
 
-void rc_alloc();
-void rc_free();
+void rc_alloc(void);
+void rc_free(void);
 
-void rc_init_seq();
+void rc_init_seq(void);
 void rc_init_GOP(int np, int nb);
 void rc_update_pict_frame(int nbits);
 void rc_init_pict(int fieldpic,int topfield, int targetcomputation);
@@ -132,13 +132,13 @@ void rc_update_pict(int nbits);
 void setbitscount(int nbits);
 
 int updateQuantizationParameter(int topfield);
-void updateRCModel ();
-void updateMADModel ();
-Boolean skipThisFrame ();
+void updateRCModel (void);
+void updateMADModel (void);
+Boolean skipThisFrame (void);
 void RCModelEstimator (int n_windowSize);
 void MADModelEstimator (int n_windowSize);
-double calc_MAD();
-double ComputeFrameMAD();
+double calc_MAD(void);
+double ComputeFrameMAD(void);
 int Qstep2QP( double Qstep );
 double QP2Qstep( int QP );
 

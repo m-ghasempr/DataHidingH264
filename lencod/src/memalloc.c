@@ -761,3 +761,155 @@ void free_mem6Dshort(short ******array6D, int list, int refs, int blocktype, int
     error ("free_mem6Dshort: trying to free unused memory",100);
   }
 }
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 2D memory array -> double array2D[rows][columns]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem2Ddouble(double ***array2D, int rows, int columns)
+{
+  int i;
+  
+  if((*array2D      = (double**)calloc(rows,        sizeof(double*))) == NULL)
+    no_mem_exit("get_mem2Ddouble: array2D");
+  if(((*array2D)[0] = (double* )calloc(rows*columns,sizeof(double ))) == NULL)
+    no_mem_exit("get_mem2Ddouble: array2D");
+  
+  for(i=1 ; i<rows ; i++)
+    (*array2D)[i] =  (*array2D)[i-1] + columns  ;
+  
+  return rows*columns*sizeof(double);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 2D memory array -> double array2D[rows][columns]
+ *    Note that array is shifted towards offset allowing negative values
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem2Ddb_offset(double ***array2D, int rows, int columns, int offset)
+{
+  int i;
+  
+  if((*array2D      = (double**)calloc(rows,        sizeof(double*))) == NULL)
+    no_mem_exit("get_mem2Ddouble: array2D");
+  if(((*array2D)[0] = (double* )calloc(rows*columns,sizeof(double ))) == NULL)
+    no_mem_exit("get_mem2Ddouble: array2D");
+  
+  (*array2D)[0] += offset;
+
+  for(i=1 ; i<rows ; i++)
+    (*array2D)[i] =  (*array2D)[i-1] + columns  ;
+  
+  return rows*columns*sizeof(double);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    free 2D double memory array
+ *    which was allocated with get_mem2Ddouble()
+ ************************************************************************
+ */
+void free_mem2Ddouble(double **array2D)
+{
+  if (array2D)
+  {
+    if (array2D[0]) 
+      free (array2D[0]);
+    else error ("free_mem2Ddouble: trying to free unused memory",100);
+
+    free (array2D);
+
+  } else
+  {
+    error ("free_mem2Ddouble: trying to free unused memory",100);
+  }
+}
+
+
+/*!
+************************************************************************
+* \brief
+*    free 2D double memory array (with offset)
+*    which was allocated with get_mem2Ddouble()
+************************************************************************
+*/
+void free_mem2Ddb_offset(double **array2D, int offset)
+{
+  if (array2D)
+  {
+    (*array2D)[0] -= offset;
+    if (array2D[0]) 
+      free (array2D[0]);
+    else error ("free_mem2Ddb_offset: trying to free unused memory",100);
+    
+    free (array2D);
+    
+  } else
+  {
+    error ("free_mem2Ddb_offset: trying to free unused memory",100);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 2D memory array -> int array2D[rows][columns]
+ *    Note that array is shifted towards offset allowing negative values
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem2Dint_offset(int ***array2D, int rows, int columns, int offset)
+{
+  int i;
+  
+  if((*array2D      = (int**)calloc(rows, sizeof(int*))) == NULL)
+    no_mem_exit("get_mem2Dint: array2D");
+  if(((*array2D)[0] = (int* )calloc(rows*columns,sizeof(int))) == NULL)
+    no_mem_exit("get_mem2Dint: array2D");
+  
+  (*array2D)[0] += offset;
+
+  for(i=1 ; i<rows ; i++)
+    (*array2D)[i] =  (*array2D)[i-1] + columns  ;
+  
+  return rows*columns*sizeof(int);
+}
+
+
+/*!
+************************************************************************
+* \brief
+*    free 2D double memory array (with offset)
+*    which was allocated with get_mem2Ddouble()
+************************************************************************
+*/
+void free_mem2Dint_offset(int **array2D, int offset)
+{
+  if (array2D)
+  {
+    (*array2D)[0] -= offset;
+    if (array2D[0]) 
+      free (array2D[0]);
+    else error ("free_mem2Dint_offset: trying to free unused memory",100);
+    
+    free (array2D);
+    
+  } else
+  {
+    error ("free_mem2Dint_offset: trying to free unused memory",100);
+  }
+}

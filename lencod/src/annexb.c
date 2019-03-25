@@ -51,10 +51,7 @@ int WriteAnnexbNALU (NALU_t *n)
   putc (1, f);
   BitsWritten += 24;
 
-  n->buf[0] =
-    n->forbidden_bit << 7      |
-    n->nal_reference_idc << 5  |
-    n->nal_unit_type;
+  n->buf[0] = (unsigned char) ((n->forbidden_bit << 7) | (n->nal_reference_idc << 5) | n->nal_unit_type);
 
 // printf ("First Byte %x, nal_ref_idc %x, nal_unit_type %d\n", n->buf[0], n->nal_reference_idc, n->nal_unit_type);
 
@@ -107,7 +104,7 @@ void OpenAnnexbFile (char *Filename)
  *    none.  Funtion trerminates the program in case of an error
  ********************************************************************************************
 */
-void CloseAnnexbFile() {
+void CloseAnnexbFile(void) {
   if (fclose (f))
   {
     printf ("Fatal: cannot close Annex B bytestream file, exit (-1)\n");

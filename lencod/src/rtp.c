@@ -23,6 +23,12 @@
 
 #include "rtp.h"
 
+#ifdef WIN32
+#include <Winsock2.h>
+#else
+#include <netinet/in.h>
+#endif
+
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
 #define SYMTRACESTRING(s) strncpy(sym.tracestring,s,TRACESTRING_SIZE)
@@ -70,6 +76,9 @@ FILE *f;
 int ComposeRTPPacket (RTPpacket_t *p)
 
 {
+  unsigned int temp32;
+  unsigned short temp16;
+
   // Consistency checks through assert, only used for debug purposes
   assert (p->v == 2);
   assert (p->p == 0);
@@ -84,17 +93,24 @@ int ComposeRTPPacket (RTPpacket_t *p)
 
   // Compose RTP header, little endian
 
-  p->packet[0] = (   (p->v)
-                  |  (p->p << 2)
-                  |  (p->x << 3)
-                  |  (p->cc << 4) );
-  p->packet[1] = (   (p->m)
-                  |  (p->pt << 1) );
-  p->packet[2] = p->seq & 0xff;
-  p->packet[3] = (p->seq >> 8) & 0xff;
+  p->packet[0] = (  ((p->v  & 0x03) << 6)
+                  | ((p->p  & 0x01) << 5)
+                  | ((p->x  & 0x01) << 4)
+                  | ((p->cc & 0x0F) << 0) );
 
-  memcpy (&p->packet[4], &p->timestamp, 4);  // change to shifts for unified byte sex
-  memcpy (&p->packet[8], &p->ssrc, 4);// change to shifts for unified byte sex
+  p->packet[1] = (  ((p->m  & 0x01) << 7)
+                  | ((p->pt & 0x7F) << 0) );
+
+  // sequence number, msb first
+  temp16 = htons((unsigned short)p->seq);
+  memcpy (&p->packet[2], &temp16, 2);  // change to shifts for unified byte sex
+
+  //declare a temporary variable to perform network byte order converson
+  temp32 = htonl(p->timestamp);
+  memcpy (&p->packet[4], &temp32, 4);  // change to shifts for unified byte sex
+
+  temp32 = htonl(p->ssrc);
+  memcpy (&p->packet[8], &temp32, 4);// change to shifts for unified byte sex
 
   // Copy payload 
 

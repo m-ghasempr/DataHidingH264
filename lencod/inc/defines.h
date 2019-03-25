@@ -27,6 +27,8 @@
 
 typedef unsigned char byte;    //!< byte type definition
 
+#define BEST_NZ_COEFF	1		// yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
+
 //FREXT Profile IDC definitions
 #define FREXT_HP        100      //!< YUV 4:2:0/8 "High"
 #define FREXT_Hi10P     110      //!< YUV 4:2:0/10 "High 10"
@@ -57,7 +59,6 @@ enum {
 #define RUNBEFORE_NUM  7
 
 #define CAVLC_LEVEL_LIMIT 2063
-
 
 //--- block types for CABAC
 #define LUMA_16DC       0

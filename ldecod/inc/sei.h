@@ -61,5 +61,8 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
 void interpret_reserved_info( byte* payload, int size, ImageParameters *img );
 void interpret_buffering_period_info( byte* payload, int size, ImageParameters *img );
 void interpret_picture_timing_info( byte* payload, int size, ImageParameters *img );
+void interpret_film_grain_characteristics_info( byte* payload, int size, ImageParameters *img );
+void interpret_deblocking_filter_display_preference_info( byte* payload, int size, ImageParameters *img );
+void interpret_stereo_video_info_info( byte* payload, int size, ImageParameters *img );
 
 #endif

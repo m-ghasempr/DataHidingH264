@@ -21,8 +21,8 @@
 #define _CABAC_H_
 
 // CABAC
-int get_pic_bin_count();
-void reset_pic_bin_count();
+int get_pic_bin_count(void);
+void reset_pic_bin_count(void);
 
 void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len);
 int  arienco_bits_written(EncodingEnvironmentPtr eep);
@@ -38,7 +38,7 @@ void init_contexts_MotionInfo (MotionInfoContexts  *enco_ctx);
 void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
 void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
-void writeHeaderToBuffer();
+void writeHeaderToBuffer(void);
 int  writeSyntaxElement_CABAC(SyntaxElement *se, DataPartition *this_dataPart);
 void writeMB_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeIntraPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
@@ -55,8 +55,8 @@ void print_ctx_TextureInfo(TextureInfoContexts *enco_ctx);
 void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeFieldModeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp); //GB
 void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter, EncodingEnvironmentPtr eep_dp);
-void cabac_new_slice();
-void CheckAvailabilityOfNeighborsCABAC();
+void cabac_new_slice(void);
+void CheckAvailabilityOfNeighborsCABAC(void);
 
 void writeMB_transform_size_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 

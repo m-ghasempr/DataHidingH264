@@ -64,8 +64,6 @@ void create_pyramid()
     int Bframes = input->successive_Bframe;
     int *curGOPLevelfrm,*curGOPLeveldist ;
     int curlevel = GOPlevels ;
-    int prvlevelrefs = input->successive_Bframe;
-    int levelrefs = input->successive_Bframe;
     int i;
 
     while (((Bframes + 1 ) >> GOPlevels) > 1)

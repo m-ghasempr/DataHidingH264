@@ -60,6 +60,10 @@ short ScalingList8x8[2][64];
 short UseDefaultScalingMatrix4x4Flag[6];
 short UseDefaultScalingMatrix8x8Flag[2];
 
+
+int *qp_per_matrix;
+int *qp_rem_matrix;
+
 static const short Quant_intra_default[16] =
 {
  6,13,20,28,
@@ -359,6 +363,20 @@ void PatchMatrix(void)
  */
 void allocate_QMatrix ()
 {
+  int bitdepth_qp_scale = 6*(input->BitDepthLuma - 8);
+  int i;
+
+  if ((qp_per_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
+    no_mem_exit("init_global_buffers: qp_per_matrix");
+  if ((qp_rem_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
+    no_mem_exit("init_global_buffers: qp_per_matrix");
+
+  for (i = 0; i < MAX_QP + bitdepth_qp_scale + 1; i++)
+  {
+    qp_per_matrix[i] = i / 6;
+    qp_rem_matrix[i] = i % 6;
+  }
+
   get_mem4Dint(&LevelScale4x4Luma,      2, 6, 4, 4);
   get_mem5Dint(&LevelScale4x4Chroma, 2, 2, 6, 4, 4);
   get_mem4Dint(&LevelScale8x8Luma,      2, 6, 8, 8);
@@ -376,6 +394,9 @@ void allocate_QMatrix ()
  */
 void free_QMatrix ()
 {
+  free(qp_rem_matrix);
+  free(qp_per_matrix);
+
   free_mem4Dint(LevelScale4x4Luma,      2, 6);
   free_mem5Dint(LevelScale4x4Chroma, 2, 2, 6);
   free_mem4Dint(LevelScale8x8Luma,      2, 6);

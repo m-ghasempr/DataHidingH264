@@ -49,7 +49,7 @@ typedef struct
 } NALU_t;
 
 
-NALU_t *AllocNALU();
+NALU_t *AllocNALU(int);
 void FreeNALU(NALU_t *n);
 
 #endif

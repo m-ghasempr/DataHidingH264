@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 10.1 (FRExt)
+ *     JM 10.2 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -68,7 +68,7 @@
 #include "erc_api.h"
 
 #define JM          "10 (FRExt)"
-#define VERSION     "10.1"
+#define VERSION     "10.2"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -435,7 +435,7 @@ void init_conf(struct inp_par *inp, char *config_filename)
   int NAL_mode;
 
   // picture error concealment
-  int temp;
+  long int temp;
   char tempval[100];
 
   // read the decoder configuration file

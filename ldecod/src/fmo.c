@@ -527,9 +527,9 @@ static void FmoGenerateType5MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
   for( j = 0; j < img->PicWidthInMbs; j++ )
     for( i = 0; i < img->PicHeightInMapUnits; i++ )
         if( k++ < sizeOfUpperLeftGroup )
-            MapUnitToSliceGroupMap[ i * img->PicWidthInMbs + j ] = 1 - pps->slice_group_change_direction_flag;
-        else
             MapUnitToSliceGroupMap[ i * img->PicWidthInMbs + j ] = pps->slice_group_change_direction_flag;
+        else
+            MapUnitToSliceGroupMap[ i * img->PicWidthInMbs + j ] = 1 - pps->slice_group_change_direction_flag;
 
 }
 

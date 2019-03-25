@@ -268,7 +268,7 @@ void se_linfo(int se, int dummy, int *len,int *info)
   {
     sign=1;
   }
-  n=abs(se) << 1;
+  n=absm(se) << 1;
 
   /*
   n+1 is the number in the code table.  Based on this we find length and info
@@ -350,7 +350,7 @@ void levrun_linfo_c2x2(int level,int run,int *len,int *info)
   {
     sign=1;
   }
-  levabs=abs(level);
+  levabs=absm(level);
   if (levabs <= LEVRUN[run])
   {
     n=NTAB[levabs-1][run]+1;
@@ -410,7 +410,7 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
   else
     sign=0;
 
-  levabs=abs(level);
+  levabs=absm(level);
   if (levabs <= LEVRUN[run])
   {
     n=NTAB[levabs-1][run]+1;
@@ -476,7 +476,7 @@ void levrun_linfo_intra(int level,int run,int *len,int *info)
   else
     sign=0;
 
-  levabs=abs(level);
+  levabs=absm(level);
   if (levabs <= LEVRUN[run])
   {
     n=NTAB[levabs-1][run]+1;
@@ -1111,7 +1111,7 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPar
   int level, levabs, sign;
 
   level = se->value1;
-  levabs = abs(level);
+  levabs = absm(level);
   sign = (level < 0 ? 1 : 0);
 
   
@@ -1159,7 +1159,7 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
 
   int level = se->value1;
 
-  int levabs = abs(level);
+  int levabs = absm(level);
   int sign = (level < 0 ? 1 : 0);  
 
   int shift = vlc-1;

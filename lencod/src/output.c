@@ -58,18 +58,27 @@ int testEndian()
  ************************************************************************
  * \brief
  *    Convert image plane to temporary buffer for file writing
+ * \param imgX
+ *    Pointer to image plane
+ * \param buf
+ *    Buffer for file output
+ * \param size_x
+ *    horizontal size
+ * \param size_y
+ *    vertical size
+ * \param symbol_size_in_bytes
+ *    number of bytes used per pel
+ * \param crop_left
+ *    pixels to crop from left
+ * \param crop_right
+ *    pixels to crop from right
+ * \param crop_top
+ *    pixels to crop from top
+ * \param crop_bottom
+ *    pixels to crop from bottom
  ************************************************************************
  */
-void img2buf ( imgpel** imgX,            //!< Pointer to image plane
-               unsigned char* buf,       //!< Buffer for file output
-               int size_x,               //!< horizontal size of picture
-               int size_y,               //!< vertical size of picture
-               int symbol_size_in_bytes, //!< number of bytes in file used to represent a pel
-               int crop_left,            //!< pixels to crop from left
-               int crop_right,           //!< pixels to crop from right
-               int crop_top,             //!< pixels to crop from top
-               int crop_bottom           //!< pixels to crop from bottom
-               )
+void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
 {
   int i,j;
 

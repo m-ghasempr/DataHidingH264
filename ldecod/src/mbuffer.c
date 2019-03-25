@@ -1125,7 +1125,8 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
         {
           if ((dpb.fs_ref[i]->frame->used_for_reference)&&(!dpb.fs_ref[i]->frame->is_long_term))
           {
-            if (img->framepoc > dpb.fs_ref[i]->frame->poc)
+            if (img->framepoc >= dpb.fs_ref[i]->frame->poc) //!KS use >= for error concealment
+//            if (img->framepoc > dpb.fs_ref[i]->frame->poc)
             {
               listX[0][list0idx++] = dpb.fs_ref[i]->frame;
             }
@@ -2320,7 +2321,7 @@ void store_picture_in_dpb(StorablePicture* p)
   {
     // picture error concealment
     if (img->conceal_mode != 0)
-    conceal_non_ref_pics(2);
+      conceal_non_ref_pics(2);
     remove_unused_frame_from_dpb();
 
     if(img->conceal_mode != 0)
@@ -2781,9 +2782,9 @@ void flush_dpb()
   //diagnostics
 //  printf("Flush remaining frames from dpb. dpb.size=%d, dpb.used_size=%d\n",dpb.size,dpb.used_size);
 
-  if(img->conceal_mode == 0)
-    if (img->conceal_mode != 0)
-      conceal_non_ref_pics(0);
+//  if(img->conceal_mode == 0)
+  if (img->conceal_mode != 0)
+    conceal_non_ref_pics(0);
 
   // mark all frames unused
   for (i=0; i<dpb.used_size; i++)

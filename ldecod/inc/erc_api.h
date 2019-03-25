@@ -132,7 +132,6 @@ int ercConcealInterFrame( frame *recfr, objectBuffer_t *object_list,
 
 
 /* Thomson APIs for concealing entire frame loss */
-// This code reflects JVT-P072
 
 #include "mbuffer.h"
 #include "output.h"
@@ -152,7 +151,6 @@ void init_lists_for_non_reference_loss(int , PictureStructure );
 
 void conceal_non_ref_pics(int diff);
 void conceal_lost_frames(ImageParameters *img);
-void copy_to_conceal(StorablePicture *src, StorablePicture *dst, ImageParameters *img);
 
 void sliding_window_poc_management(StorablePicture *p);
 
@@ -162,10 +160,6 @@ void write_lost_ref_after_idr(int pos);
 FrameStore *last_out_fs;
 int pocs_in_dpb[100];
 int comp(const void *, const void *);
-StorablePicture *get_pic_from_dpb(int misssingpoc, int *pos);
-void update_ref_list_for_concealment();
-// JVT-P072 ends
-
 
 
 #endif

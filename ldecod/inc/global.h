@@ -813,3 +813,4 @@ void readIPCMBytes_CABAC(SyntaxElement *sym, Bitstream *currStream);
 void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps);
 void CalculateQuantParam(void);
 void CalculateQuant8Param(void);
+

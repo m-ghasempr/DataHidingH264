@@ -504,14 +504,24 @@ void uninit_out_buffer()
  */
 void clear_picture(StorablePicture *p)
 {
-  int i;
+  int i,j;
 
   for(i=0;i<p->size_y;i++)
-    memset(p->imgY[i], img->dc_pred_value, p->size_x*sizeof(imgpel));
+  {
+    for (j=0; j<p->size_x; j++)
+      p->imgY[i][j] = img->dc_pred_value;
+  }
   for(i=0;i<p->size_y_cr;i++)
-    memset(p->imgUV[0][i], img->dc_pred_value, p->size_x_cr*sizeof(imgpel));
+  {
+    for (j=0; j<p->size_x_cr; j++)
+      p->imgUV[0][i][j] = img->dc_pred_value;
+  }
   for(i=0;i<p->size_y_cr;i++)
-    memset(p->imgUV[1][i], img->dc_pred_value, p->size_x_cr*sizeof(imgpel));
+  {
+    for (j=0; j<p->size_x_cr; j++)
+      p->imgUV[1][i][j] = img->dc_pred_value;
+  }
+    
 }
 
 /*!

@@ -544,9 +544,12 @@ int dct_luma_16x16(int new_intra_mode)
   int **levelscale,**leveloffset;
   int **invlevelscale;
   Boolean lossless_qpprime = ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
+  const byte (*pos_scan)[2] = is_field_mode ? FIELD_SCAN : SNGL_SCAN;
 
-  qp_per    = (currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6;
-  qp_rem    = (currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6;
+  // Note that we could just use currMB->qp here
+  qp_per    = qp_per_matrix[(currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)];
+  qp_rem    = qp_rem_matrix[(currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)];
+
   q_bits    = Q_BITS+qp_per;
   levelscale    = LevelScale4x4Luma[1][qp_rem];
   leveloffset   = LevelOffset4x4Luma[1][qp_per];
@@ -647,16 +650,8 @@ int dct_luma_16x16(int new_intra_mode)
 
   for (coeff_ctr=0;coeff_ctr<16;coeff_ctr++)
   {
-    if (is_field_mode) 
-    {  // Alternate scan for field coding
-        i=FIELD_SCAN[coeff_ctr][0];
-        j=FIELD_SCAN[coeff_ctr][1];
-    }
-    else 
-    {
-        i=SNGL_SCAN[coeff_ctr][0];
-        j=SNGL_SCAN[coeff_ctr][1];
-    }
+    i=pos_scan[coeff_ctr][0];
+    j=pos_scan[coeff_ctr][1];
 
     run++;
 
@@ -741,16 +736,9 @@ int dct_luma_16x16(int new_intra_mode)
       for (coeff_ctr=1;coeff_ctr<16;coeff_ctr++) // set in AC coeff
       {
 
-        if (is_field_mode) 
-        {  // Alternate scan for field coding
-          i=FIELD_SCAN[coeff_ctr][0];
-          j=FIELD_SCAN[coeff_ctr][1];
-        }
-        else 
-        {
-          i=SNGL_SCAN[coeff_ctr][0];
-          j=SNGL_SCAN[coeff_ctr][1];
-        }
+        i=pos_scan[coeff_ctr][0];
+        j=pos_scan[coeff_ctr][1];
+
         run++;
 
         if(lossless_qpprime)
@@ -864,7 +852,11 @@ int dct_luma_16x16(int new_intra_mode)
       {
         jj = img->pix_y+j;
         for (i=0;i<16;i++)
-            enc_picture->imgY[jj][img->pix_x+i]=(imgpel)(M1[j][i]+img->mprr_2[new_intra_mode][j][i]);
+        {
+          enc_picture->imgY[jj][img->pix_x+i]=(imgpel)(M1[j][i]+img->mprr_2[new_intra_mode][j][i]);
+          if(img->type==SP_SLICE)
+            lrec[jj][img->pix_x+i]=-16; //signals an I16 block in the SP frame 
+        }
       }
     }
     else
@@ -873,7 +865,11 @@ int dct_luma_16x16(int new_intra_mode)
       {
         jj = img->pix_y+j;
         for (i=0;i<16;i++)
+        {
           enc_picture->imgY[jj][img->pix_x+i]=(imgpel)clip1a((M1[j][i]+((long)img->mprr_2[new_intra_mode][j][i]<<DQ_BITS)+DQ_ROUND)>>DQ_BITS);
+          if(img->type==SP_SLICE)
+            lrec[jj][img->pix_x+i]=-16; //signals an I16 block in the SP frame 
+        }
       }
     }
   }
@@ -913,7 +909,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   int   b4      = 2*(pos_y & 0x01) + (pos_x & 0x01);
   int*  ACLevel = img->cofAC[b8][b4][0];
   int*  ACRun   = img->cofAC[b8][b4][1];
-  short pix_y;
+  int   pix_y, pix_x;
 
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   short is_field_mode = (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field));
@@ -921,6 +917,8 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   Boolean lossless_qpprime = ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
   int **levelscale,**leveloffset;
   int **invlevelscale;
+  const byte (*pos_scan)[2] = is_field_mode ? FIELD_SCAN : SNGL_SCAN;
+
 
   qp_per    = (currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6; 
   qp_rem    = (currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6; 
@@ -970,17 +968,8 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   for (coeff_ctr=0;coeff_ctr < 16;coeff_ctr++)
   {
 
-    if (is_field_mode) 
-    {  
-      // Alternate scan for field coding
-      i=FIELD_SCAN[coeff_ctr][0];
-      j=FIELD_SCAN[coeff_ctr][1];
-    }
-    else 
-    {
-      i=SNGL_SCAN[coeff_ctr][0];
-      j=SNGL_SCAN[coeff_ctr][1];
-    }
+    i=pos_scan[coeff_ctr][0];
+    j=pos_scan[coeff_ctr][1];
     
     run++;
     ilev=0;
@@ -1024,6 +1013,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
       {
         ilev=level;
       }
+#if 0
       else if(qp_per<4)
       {
         ilev=(level*invlevelscale[i][j]+(1<<(3-qp_per)))>>(4-qp_per);
@@ -1032,6 +1022,12 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
       {
         ilev=(level*invlevelscale[i][j])<<(qp_per-4);
       }
+#else
+      else
+      {
+        ilev=((((level*invlevelscale[i][j])<< qp_per) + 8 ) >> 4);
+      }
+#endif
     }
     if(!lossless_qpprime)
       m4[j][i]=ilev;
@@ -1113,9 +1109,10 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
       for (j=0; j < BLOCK_SIZE; j++)
       {
         pix_y = img->pix_y+block_y+j;
+        pix_x = img->pix_x+block_x;
         for (i=0; i < BLOCK_SIZE; i++)
         {
-          enc_picture->imgY[pix_y][img->pix_x+block_x+i]=img->m7[j][i];
+          enc_picture->imgY[pix_y][pix_x + i]=img->m7[j][i];
         }
       }
     }
@@ -1174,6 +1171,7 @@ int dct_chroma(int uv,int cr_cbp)
   int ***invlevelscale;
   short pix_c_x, pix_c_y;
   short is_field_mode = (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field));
+  const byte (*pos_scan)[2] = is_field_mode ? FIELD_SCAN : SNGL_SCAN;
 
   Boolean lossless_qpprime = ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
 
@@ -1181,8 +1179,10 @@ int dct_chroma(int uv,int cr_cbp)
   qp_c      = Clip3(-img->bitdepth_chroma_qp_scale,51,qp_c);
   qp_c      = (qp_c < 0)? qp_c : QP_SCALE_CR[qp_c - MIN_QP];
 
-  qp_per    = (qp_c + img->bitdepth_chroma_qp_scale)/6;              
-  qp_rem    = (qp_c + img->bitdepth_chroma_qp_scale)%6;              
+
+  qp_per    = qp_per_matrix[(qp_c + img->bitdepth_chroma_qp_scale)];
+  qp_rem    = qp_rem_matrix[(qp_c + img->bitdepth_chroma_qp_scale)];
+
   q_bits    = Q_BITS+qp_per;
 
   levelscale = LevelScale4x4Chroma[uv][intra];
@@ -1563,16 +1563,9 @@ int dct_chroma(int uv,int cr_cbp)
       for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
       {
 
-        if (is_field_mode) 
-        {  // Alternate scan for field coding
-          i=FIELD_SCAN[coeff_ctr][0];
-          j=FIELD_SCAN[coeff_ctr][1];
-        }
-        else 
-        {
-          i=SNGL_SCAN[coeff_ctr][0];
-          j=SNGL_SCAN[coeff_ctr][1];
-        }
+        i=pos_scan[coeff_ctr][0];
+        j=pos_scan[coeff_ctr][1];
+
         ++run;
         ilev=0;
 
@@ -1648,17 +1641,9 @@ int dct_chroma(int uv,int cr_cbp)
         ACLevel[0] = 0;
         for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// ac coeff
         {
-
-          if (is_field_mode) 
-          {  // Alternate scan for field coding
-            i=FIELD_SCAN[coeff_ctr][0];
-            j=FIELD_SCAN[coeff_ctr][1];
-          }
-          else 
-          {
-            i=SNGL_SCAN[coeff_ctr][0];
-            j=SNGL_SCAN[coeff_ctr][1];
-          }
+          i=pos_scan[coeff_ctr][0];
+          j=pos_scan[coeff_ctr][1];
+          
           img->m7[n2+j][n1+i]=0;
           ACLevel[coeff_ctr] = 0;
         }
@@ -1781,8 +1766,8 @@ int dct_chroma4x4(int uv, int b8, int b4)
   qp_c      = currMB->qp + img->chroma_qp_offset[uv];
   qp_c      = (qp_c < 0)? qp_c : QP_SCALE_CR[qp_c - MIN_QP];
 
-  qp_per    = (qp_c + img->bitdepth_chroma_qp_scale)/6;              
-  qp_rem    = (qp_c + img->bitdepth_chroma_qp_scale)%6;              
+  qp_per    = qp_per_matrix[(qp_c + img->bitdepth_chroma_qp_scale)];
+  qp_rem    = qp_rem_matrix[(qp_c + img->bitdepth_chroma_qp_scale)];
   q_bits    = Q_BITS+qp_per;
 
   levelscale = LevelScale4x4Chroma[uv][intra][qp_rem];
@@ -2179,6 +2164,11 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
       ilev=((sign(level,c_err)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6);
     }
     ilev+=predicted_block[i][j] ; 
+    if(!si_frame_indicator && !sp2_frame_indicator)//stores the SP frame coefficients in lrec, will be useful to encode these and create SI or SP switching frame
+    {
+      lrec[img->pix_y+block_y+j][img->pix_x+block_x+i]= 
+        sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp, ilev); 
+    }
     img->m7[j][i] = sign((absm(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2)>> q_bits_sp, ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
   }
   ACLevel[scan_pos] = 0;
@@ -2458,10 +2448,12 @@ int dct_chroma_sp(int uv,int cr_cbp)
     }
     ilev+= mp1[coeff_ctr];
     m1[coeff_ctr]=sign((absm(ilev)  * quant_coef[qp_rem_sp][0][0] + 2 * qp_const2) >> (q_bits_sp+1), ilev) * dequant_coef[qp_rem_sp][0][0] << qp_per_sp;
+    if(!si_frame_indicator && !sp2_frame_indicator)
+      lrec_uv[uv][img->pix_c_y+4*(coeff_ctr%2)][img->pix_c_x+4*(coeff_ctr/2)]=sign((absm(ilev)  * quant_coef[qp_rem_sp][0][0] + 2 * qp_const2) >> (q_bits_sp+1), ilev);// stores the SP frames coefficients, will be useful to encode SI or switching SP frame
   }
   DCLevel[scan_pos] = 0;
 
-  //  Invers transform of 2x2 DC levels
+  //  Inverse transform of 2x2 DC levels
 
   img->m7[0][0]=(m1[0]+m1[1]+m1[2]+m1[3])/2;
   img->m7[0][4]=(m1[0]-m1[1]+m1[2]-m1[3])/2;
@@ -2558,6 +2550,9 @@ int dct_chroma_sp(int uv,int cr_cbp)
           ilev=((sign(level,c_err)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6);
         }
         ilev+=predicted_chroma_block[n1+i][n2+j];
+        if(!si_frame_indicator && !sp2_frame_indicator)
+          if(!( (n2+j) % 4==0 && (n1+i)%4 ==0 ))	  
+            lrec_uv[uv][img->pix_c_y+n1+j][img->pix_c_x+n2+i]=sign((absm(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp,ilev);//stores the SP frames coefficients, will be useful to encode SI or switching SP frame
         img->m7[n2+j][n1+i] = sign((absm(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp,ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
       }
       ACLevel[scan_pos] = 0;
@@ -2676,7 +2671,7 @@ void copyblock_sp(int block_x,int block_y)
     predicted_block[3][j]=m5[3]-m5[2]*2;
   }
 
-  //  Vertival transform
+  //  Vertical transform
 
   for (i=0; i < BLOCK_SIZE; i++)
   {
@@ -2694,8 +2689,17 @@ void copyblock_sp(int block_x,int block_y)
 
   // Quant
   for (j=0;j < BLOCK_SIZE; j++)
+  {
     for (i=0; i < BLOCK_SIZE; i++)
-       img->m7[j][i]=sign((absm(predicted_block[i][j])* quant_coef[qp_rem][i][j]+qp_const2)>> q_bits,predicted_block[i][j])*dequant_coef[qp_rem][i][j]<<qp_per;
+    {
+      img->m7[j][i]=sign((absm(predicted_block[i][j])* quant_coef[qp_rem][i][j]+qp_const2)>> q_bits,predicted_block[i][j])*dequant_coef[qp_rem][i][j]<<qp_per;
+      if(!si_frame_indicator && !sp2_frame_indicator)
+      {
+        lrec[img->pix_y+block_y+j][img->pix_x+block_x+i] = 
+        sign((abs(predicted_block[i][j]) * quant_coef[qp_rem][i][j] + qp_const2) >> q_bits, predicted_block[i][j]);// stores the SP frames coefficients, will be useful to encode SI or switching SP frame
+      }
+    }
+  }
 
   //     IDCT.
   //     horizontal
@@ -2796,5 +2800,471 @@ int writePCMByteAlign(Bitstream *currStream)
     currStream->bits_to_go = 8;
   }
   return len;
+}
+
+/*!
+ ************************************************************************
+ * \brief Eric Setton 
+ * Encoding of a secondary SP / SI frame.
+ * For an SI frame the predicted block should only come from spatial pred.
+ * The original image signal is the error coefficients of a primary SP in the raw data stream
+ * the difference with the primary SP are :
+ *  - the prediction signal is transformed and quantized (qpsp) but not dequantized 
+ *  - only one kind of prediction is considered and not two 
+ *  - the resulting error coefficients are not quantized before being sent to the VLC
+ *
+ * \para Input:
+ *    block_x,block_y: Block position inside a macro block (0,4,8,12).
+ *
+ * \para Output:
+ *    nonzero: 0 if no levels are nonzero.  1 if there are nonzero levels.              
+ *    coeff_cost: Counter for nonzero coefficients, used to discard expencive levels.
+ *
+ *
+ ************************************************************************
+ */
+
+int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
+{
+  int sign(int a,int b);
+
+  int i,j,i1,j1,ilev,m5[4],m6[4],coeff_ctr;
+  int qp_const,level,scan_pos,run;
+  int nonzero;
+
+  int predicted_block[BLOCK_SIZE][BLOCK_SIZE],c_err,qp_const2;
+  int qp_per,qp_rem,q_bits;
+  int qp_per_sp,qp_rem_sp,q_bits_sp;
+
+  int   pos_x   = block_x >> BLOCK_SHIFT;
+  int   pos_y   = block_y >> BLOCK_SHIFT;
+  int   b8      = 2*(pos_y >> 1) + (pos_x >> 1);
+  int   b4      = 2*(pos_y & 0x01) + (pos_x & 0x01);
+  int*  ACLevel = img->cofAC[b8][b4][0];
+  int*  ACRun   = img->cofAC[b8][b4][1];
+  
+  int level1;
+
+  qp_per    = (img->qpsp-MIN_QP)/6 ;
+  qp_rem    = (img->qpsp-MIN_QP)%6;
+  q_bits    = Q_BITS+qp_per;
+  qp_per_sp    = (img->qpsp-MIN_QP)/6;
+  qp_rem_sp    = (img->qpsp-MIN_QP)%6;
+  q_bits_sp    = Q_BITS+qp_per_sp;
+
+  qp_const=(1<<q_bits)/6;    // inter
+  qp_const2=(1<<q_bits_sp)/2;  //sp_pred
+
+  //  Horizontal transform 
+  for (j=0; j< BLOCK_SIZE; j++)
+    for (i=0; i< BLOCK_SIZE; i++)
+    {
+      //Coefficients obtained from the prior encoding of the SP frame
+      img->m7[j][i]=lrec[img->pix_y+block_y+j][img->pix_x+block_x+i]; 
+      //Predicted block
+      predicted_block[i][j]=img->mpr[j+block_y][i+block_x]; 
+    }
+
+  //Horizontal transform
+  for (j=0; j < BLOCK_SIZE; j++)
+    {
+      for (i=0; i < 2; i++)
+    {
+      i1=3-i;
+      m5[i]=predicted_block[i][j]+predicted_block[i1][j];
+      m5[i1]=predicted_block[i][j]-predicted_block[i1][j];
+    }
+    predicted_block[0][j]=(m5[0]+m5[1]);
+    predicted_block[2][j]=(m5[0]-m5[1]);
+    predicted_block[1][j]=m5[3]*2+m5[2];
+    predicted_block[3][j]=m5[3]-m5[2]*2;
+  }
+
+  //  Vertical transform of the predicted block 
+
+  for (i=0; i < BLOCK_SIZE; i++)
+  {
+    for (j=0; j < 2; j++)
+    {
+      j1=3-j;
+      m5[j]=predicted_block[i][j]+predicted_block[i][j1];
+      m5[j1]=predicted_block[i][j]-predicted_block[i][j1];
+    }
+    predicted_block[i][0]=(m5[0]+m5[1]);
+    predicted_block[i][2]=(m5[0]-m5[1]);
+    predicted_block[i][1]=m5[3]*2+m5[2];
+    predicted_block[i][3]=m5[3]-m5[2]*2;
+  }
+
+  // Quant
+  nonzero=FALSE;
+
+  run=-1;
+  scan_pos=0;
+  
+  for (coeff_ctr=0;coeff_ctr < 16;coeff_ctr++)     // 8 times if double scan, 16 normal scan
+  {
+
+    if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+    {  // Alternate scan for field coding
+        i=FIELD_SCAN[coeff_ctr][0];
+        j=FIELD_SCAN[coeff_ctr][1];
+    }
+    else 
+    {
+        i=SNGL_SCAN[coeff_ctr][0];
+        j=SNGL_SCAN[coeff_ctr][1];
+    }
+    
+    run++;
+    ilev=0;
+    
+    //quantization of the predicted block
+    level1 = (abs (predicted_block[i][j]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp;  
+    //substracted from lrec 
+    c_err = img->m7[j][i]-sign(level1, predicted_block[i][j]);   //substracting the predicted block 
+
+    
+    level = abs(c_err);  
+    if (level != 0)
+    {
+      nonzero=TRUE;
+      if (level > 1)
+        *coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
+      else
+        *coeff_cost += COEFF_COST[input->disthres][run];
+      ACLevel[scan_pos] = sign(level,c_err);
+      ACRun  [scan_pos] = run;
+      ++scan_pos;
+      run=-1;                     // reset zero level counter     
+    }
+    //from now on we are in decoder land
+    ilev=c_err + sign(level1,predicted_block[i][j]) ;  // adding the quantized predicted block 
+    img->m7[j][i] = ilev  *dequant_coef[qp_rem_sp][i][j] << qp_per_sp; 
+    
+  }
+  ACLevel[scan_pos] = 0;
+  
+    
+  //     IDCT.
+  //     horizontal
+
+  for (j=0; j < BLOCK_SIZE; j++)
+  {
+    for (i=0; i < BLOCK_SIZE; i++)
+    {
+      m5[i]=img->m7[j][i];
+    }
+    m6[0]=(m5[0]+m5[2]);
+    m6[1]=(m5[0]-m5[2]);
+    m6[2]=(m5[1]>>1)-m5[3];
+    m6[3]=m5[1]+(m5[3]>>1);
+
+    for (i=0; i < 2; i++)
+    {
+      i1=3-i;
+      img->m7[j][i]=m6[i]+m6[i1];
+      img->m7[j][i1]=m6[i]-m6[i1];
+    }
+  }
+
+  //  vertical
+
+  for (i=0; i < BLOCK_SIZE; i++)
+  {
+    for (j=0; j < BLOCK_SIZE; j++)
+    {
+      m5[j]=img->m7[j][i];
+    }
+    m6[0]=(m5[0]+m5[2]);
+    m6[1]=(m5[0]-m5[2]);
+    m6[2]=(m5[1]>>1)-m5[3];
+    m6[3]=m5[1]+(m5[3]>>1);
+
+    for (j=0; j < 2; j++)
+    {
+      j1=3-j;
+      img->m7[j][i] =min(255,max(0,(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS));
+      img->m7[j1][i]=min(255,max(0,(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS));
+    }
+  }
+
+  //  Decoded block moved to frame memory
+  for (j=0; j < BLOCK_SIZE; j++)
+    for (i=0; i < BLOCK_SIZE; i++){
+      enc_picture->imgY[img->pix_y+block_y+i][img->pix_x+block_x+j]=img->m7[i][j]; 
+    }
+  return nonzero;
+}
+
+
+/*!
+ ************************************************************************
+ * \brief Eric Setton 
+ * Encoding of the chroma of a  secondary SP / SI frame.
+ * For an SI frame the predicted block should only come from spatial pred.
+ * The original image signal is the error coefficients of a primary SP in the raw data stream
+ * the difference with the primary SP are :
+ *  - the prediction signal is transformed and quantized (qpsp) but not dequantized 
+ *  - the resulting error coefficients are not quantized before being sent to the VLC
+ *
+ * \par Input:
+ *    uv    : Make difference between the U and V chroma component             
+ *    cr_cbp: chroma coded block pattern
+ *
+ * \par Output:
+ *    cr_cbp: Updated chroma coded block pattern.
+ *
+ ************************************************************************
+ */
+int dct_chroma_sp2(int uv,int cr_cbp)
+{
+  int i,j,i1,j2,ilev,n2,n1,j1,mb_y,coeff_ctr,qp_const,c_err,level ,scan_pos,run;
+  int m1[BLOCK_SIZE],m5[BLOCK_SIZE],m6[BLOCK_SIZE];
+  int coeff_cost;
+  int cr_cbp_tmp;
+  int predicted_chroma_block[MB_BLOCK_SIZE/2][MB_BLOCK_SIZE/2],qp_const2,mp1[BLOCK_SIZE];
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
+  int qp_per,qp_rem,q_bits;
+  int qp_per_sp,qp_rem_sp,q_bits_sp;
+
+  int   b4;
+  int*  DCLevel = img->cofDC[uv+1][0];
+  int*  DCRun   = img->cofDC[uv+1][1];
+  int*  ACLevel;
+  int*  ACRun;
+  int  level1;
+ 
+  qp_per    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)/6;
+  qp_rem    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)%6;
+  q_bits    = Q_BITS+qp_per;
+  qp_const=(1<<q_bits)/6;    // inter
+
+  qp_per_sp    = ((img->qpsp<0?img->qpsp:QP_SCALE_CR[img->qpsp])-MIN_QP)/6;
+  qp_rem_sp    = ((img->qpsp<0?img->qpsp:QP_SCALE_CR[img->qpsp])-MIN_QP)%6;
+  q_bits_sp    = Q_BITS+qp_per_sp;
+  qp_const2=(1<<q_bits_sp)/2;  //sp_pred
+
+
+  for (j=0; j < MB_BLOCK_SIZE>>1; j++)
+    for (i=0; i < MB_BLOCK_SIZE>>1; i++)
+    {
+      predicted_chroma_block[i][j]=img->mpr[j][i];
+      img->m7[j][i]=lrec_uv[uv][img->pix_c_y+j][img->pix_c_x+i];
+    }
+
+  for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
+  {
+    for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
+    {
+
+      //  Horizontal transform.
+      for (j=0; j < BLOCK_SIZE; j++)
+      {
+        mb_y=n2+j;
+        for (i=0; i < 2; i++)
+        {
+          i1=3-i;
+          m5[i]=predicted_chroma_block[i+n1][mb_y]+predicted_chroma_block[i1+n1][mb_y];
+          m5[i1]=predicted_chroma_block[i+n1][mb_y]-predicted_chroma_block[i1+n1][mb_y];
+        }
+        predicted_chroma_block[n1][mb_y]  =(m5[0]+m5[1]);
+        predicted_chroma_block[n1+2][mb_y]=(m5[0]-m5[1]);
+        predicted_chroma_block[n1+1][mb_y]=m5[3]*2+m5[2];
+        predicted_chroma_block[n1+3][mb_y]=m5[3]-m5[2]*2;
+      }
+
+      //  Vertical transform.
+
+      for (i=0; i < BLOCK_SIZE; i++)
+      {
+        j1=n1+i;
+        for (j=0; j < 2; j++)
+        {
+          j2=3-j;
+          m5[j]=predicted_chroma_block[j1][n2+j]+predicted_chroma_block[j1][n2+j2];
+          m5[j2]=predicted_chroma_block[j1][n2+j]-predicted_chroma_block[j1][n2+j2];
+        }
+        predicted_chroma_block[j1][n2+0]=(m5[0]+m5[1]);
+        predicted_chroma_block[j1][n2+2]=(m5[0]-m5[1]);
+        predicted_chroma_block[j1][n2+1]=m5[3]*2+m5[2];
+        predicted_chroma_block[j1][n2+3]=m5[3]-m5[2]*2;
+      }
+    }
+  }
+
+  //   DC coefficients already transformed and quantized 
+  m1[0]= img->m7[0][0];
+  m1[1]= img->m7[4][0];
+  m1[2]= img->m7[0][4];
+  m1[3]= img->m7[4][4];
+
+  //     2X2 transform of predicted DC coeffs.
+  mp1[0]=(predicted_chroma_block[0][0]+predicted_chroma_block[4][0]+predicted_chroma_block[0][4]+predicted_chroma_block[4][4]);
+  mp1[1]=(predicted_chroma_block[0][0]-predicted_chroma_block[4][0]+predicted_chroma_block[0][4]-predicted_chroma_block[4][4]);
+  mp1[2]=(predicted_chroma_block[0][0]+predicted_chroma_block[4][0]-predicted_chroma_block[0][4]-predicted_chroma_block[4][4]);
+  mp1[3]=(predicted_chroma_block[0][0]-predicted_chroma_block[4][0]-predicted_chroma_block[0][4]+predicted_chroma_block[4][4]);
+
+  run=-1;
+  scan_pos=0;
+
+  for (coeff_ctr=0; coeff_ctr < 4; coeff_ctr++)
+  {
+    run++;
+    ilev=0;
+
+    //quantization of predicted DC coeff  
+    level1 = (abs (mp1[coeff_ctr]) * quant_coef[qp_rem_sp][0][0] + 2 * qp_const2) >> (q_bits_sp + 1);
+    //substratcted from lrecUV
+    c_err = m1[coeff_ctr] - sign(level1, mp1[coeff_ctr]);
+    level = abs(c_err);
+
+    if (level  != 0)
+    {
+      currMB->cbp_blk |= 0xf0000 << (uv << 2) ;  // if one of the 2x2-DC levels is != 0 the coded-bit
+      cr_cbp=max(1,cr_cbp);
+      DCLevel[scan_pos] = sign(level ,c_err);
+      DCRun  [scan_pos] = run;
+      scan_pos++;
+      run=-1;
+    }
+    
+    //from now on decoder world
+    ilev = c_err + sign(level1,mp1[coeff_ctr]) ; // we have perfect reconstruction here
+
+    m1[coeff_ctr]= ilev  * dequant_coef[qp_rem_sp][0][0] << qp_per_sp; 
+  
+  }
+  DCLevel[scan_pos] = 0;
+
+  //  Invers transform of 2x2 DC levels
+
+  img->m7[0][0]=(m1[0]+m1[1]+m1[2]+m1[3])/2;
+  img->m7[4][0]=(m1[0]-m1[1]+m1[2]-m1[3])/2; 
+  img->m7[0][4]=(m1[0]+m1[1]-m1[2]-m1[3])/2; 
+  img->m7[4][4]=(m1[0]-m1[1]-m1[2]+m1[3])/2;
+
+  //     Quant of chroma AC-coeffs.
+  coeff_cost=0;
+  cr_cbp_tmp=0;
+
+  for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
+  {
+    for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
+    {
+      b4      = 2*(n2/4) + (n1/4);
+      ACLevel = img->cofAC[uv+4][b4][0];
+      ACRun   = img->cofAC[uv+4][b4][1];
+
+      run      = -1;
+      scan_pos =  0;
+
+      for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
+      {
+
+        if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+        {  // Alternate scan for field coding
+          j=FIELD_SCAN[coeff_ctr][0];
+          i=FIELD_SCAN[coeff_ctr][1];
+        }
+        else 
+        {
+          j=SNGL_SCAN[coeff_ctr][0];
+          i=SNGL_SCAN[coeff_ctr][1];
+        }
+        ++run;
+        ilev=0;
+	// quantization on prediction
+	level1 = (abs(predicted_chroma_block[n1+j][n2+i]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp;
+	//substracted from lrec 
+	c_err  = img->m7[n1+i][n2+j] - sign(level1, predicted_chroma_block[n1+j][n2+i]); 
+	level  = abs(c_err) ;
+
+        if (level  != 0)
+        {
+          currMB->cbp_blk |=  1 << (16 + (uv << 2) + ((n2 >> 1) + (n1 >> 2))) ;
+          if (level > 1)
+            coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
+          else
+            coeff_cost += COEFF_COST[input->disthres][run];
+
+          cr_cbp_tmp=2;
+          ACLevel[scan_pos] = sign(level,c_err);
+          ACRun  [scan_pos] = run;
+          ++scan_pos;
+          run=-1;
+        }
+
+	//from now on decoder land
+        ilev=c_err + sign(level1,predicted_chroma_block[n1+j][n2+i]);
+	img->m7[n1+i][n2+j] = ilev * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
+      }
+	ACLevel[scan_pos] = 0;      
+    }
+  }
+  // * reset chroma coeffs
+
+  if(cr_cbp_tmp==2)
+      cr_cbp=2;
+  //     IDCT.
+
+      //     Horizontal.
+  for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
+  {
+    for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
+    {
+      for (j=0; j < BLOCK_SIZE; j++)
+      {
+        for (i=0; i < BLOCK_SIZE; i++)
+        {
+          m5[i]=img->m7[n1+i][n2+j];
+        }
+        m6[0]=(m5[0]+m5[2]);
+        m6[1]=(m5[0]-m5[2]);
+        m6[2]=(m5[1]>>1)-m5[3];
+        m6[3]=m5[1]+(m5[3]>>1);
+
+        for (i=0; i < 2; i++)
+        {
+          i1=3-i;
+          img->m7[n1+i][n2+j]=m6[i]+m6[i1];
+          img->m7[n1+i1][n2+j]=m6[i]-m6[i1];
+        }
+      }
+
+      //     Vertical.
+      for (i=0; i < BLOCK_SIZE; i++)
+      {
+        for (j=0; j < BLOCK_SIZE; j++)
+        {
+          m5[j]=img->m7[n1+i][n2+j];
+        }
+        m6[0]=(m5[0]+m5[2]);
+        m6[1]=(m5[0]-m5[2]);
+        m6[2]=(m5[1]>>1)-m5[3];
+        m6[3]=m5[1]+(m5[3]>>1);
+
+        for (j=0; j < 2; j++)
+        {
+          j2=3-j;
+          img->m7[n1+i][n2+j] =min(255,max(0,(m6[j]+m6[j2]+DQ_ROUND)>>DQ_BITS));
+          img->m7[n1+i][n2+j2]=min(255,max(0,(m6[j]-m6[j2]+DQ_ROUND)>>DQ_BITS));
+        }
+      }
+    }
+  }
+
+  //  Decoded block moved to memory
+  for (j=0; j < BLOCK_SIZE; j++)
+    for (i=0; i < BLOCK_SIZE; i++)
+    {
+	enc_picture->imgUV[uv][img->pix_c_y+i][img->pix_c_x+j]= img->m7[i][j];
+	enc_picture->imgUV[uv][img->pix_c_y+i][img->pix_c_x+j+4]= img->m7[i+4][j];
+	enc_picture->imgUV[uv][img->pix_c_y+i+4][img->pix_c_x+j]= img->m7[i][j+4];
+	enc_picture->imgUV[uv][img->pix_c_y+i+4][img->pix_c_x+j+4]= img->m7[i+4][j+4];
+    }
+  
+  return cr_cbp;
 }
 

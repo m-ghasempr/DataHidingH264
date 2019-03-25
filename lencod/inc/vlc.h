@@ -35,7 +35,7 @@ void  cbp_linfo_intra(int cbp, int dummy, int *len,int *info);
 void  cbp_linfo_inter(int cbp, int dummy, int *len,int *info);
 
 // CAVLC
-void  CAVLC_init();
+void  CAVLC_init(void);
 int writeCoeff4x4_CAVLC (int block_type, int b8, int b4, int param);
 
 int   writeSyntaxElement_VLC(SyntaxElement *se, DataPartition *this_dataPart);

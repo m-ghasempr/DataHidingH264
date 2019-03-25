@@ -1,3 +1,26 @@
+Changes in Version JM 10.2 (since JM 10.1)
+------------------------------------------
+- encoder: fast subpixel motion estimation for EPZS [JVT-Q079] (AT)
+- encoder: SI picture implementation (ES)
+- encoder: lossless coding fixes (SSu)
+- encoder: add warning for bit/mb limit (AT)
+- encoder: enable I_PCM (for VLC coding) by default (KS)
+- encoder: fix non-rd-optimized mode decision (AT)
+- encoder: fix memory allocation in search module (TP)
+- encoder: fix bitrate output (PP)
+- encoder: fix data partitioning with constrained intra prediction (KS)
+- encoder: fix bidirectional prediction with RDOpt=2 (AT)
+- encoder: fix MBAFF with constrained intra prediction (KS)
+- encoder: fix MBAFF with slice mode 2 and restrict slice mode 1 (KS)
+- decoder: SI/SP picture updates (ES)
+- decoder: add check for QP range (MT)
+- decoder: fix/add SEI parsing: pan/scan, timing, stereo, deblocking filter, film grain (MT)
+- decoder: fix dummy croma component output for bit depth > 8 (KS)
+- decoder: work around problems in error concealment (KS)
+- decoder: fix idr psnr output (SB)
+- encoder/decoder: update RTP format (SW)
+
+
 Changes in Version JM 10.1 (since JM 10.0)
 ------------------------------------------
 - encoder/decoder: apply chroma motion vector adjustment only for 4:2:0 (SZ/KS)
@@ -1083,6 +1106,7 @@ OD      Olivier Deygas          olivier.deygas@st.com
 PK      Petr Kadlec             Kadlec@FTW.at
 PL      Peter List              Peter.List@t-systems.de
 PN      Pavel Novotny           pnovotny@lsil.com
+PP      Purvin Pandit           purvin.pandit@thomson.net
 PW      Ping Wu                 pwu@tandbergtv.com
 RG      Rajeev Gandhi           rajeev@motorola.com
 RK      Ragip Kurceren          ragip.kurceren@nokia.com
@@ -1098,13 +1122,14 @@ SN	Satoshi Nakagawa	nakagawa@okilab.net
 SR      Shankar Regunathan      shanre@microsoft.com
 SeS	Sergey A. Sablin	sergey@elecard.net.ru
 SSu	Shijun Sun		ssun@sharplabs.com
-SW      Stephan Wenger          stewe@cs.tu-berlin.de
+SW      Stephan Wenger          stewe@stewe.org
 SY      Steve Yao               steveyao@sandvideo.com
 SZ      Steve Zeng              stevezeng@rogers.com
 TH      Till Hallbach           halbach@tele.ntnu.no
 THi	Tobias Hinz		hinz@hhi.de
 TK      Thomas Kunlin           thomas.kunlin@st.com
 TO      Tobias Oelbaum          drehvial@gmx.net
+TP	Tom Pycke		tom.pycke@ugent.be
 TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp
 TSh     Tamar Shoham            Tamar.Shoham@comverse.com
 TSt     Thomas Stockhammer      stockhammer@lnt.ei.tum.de

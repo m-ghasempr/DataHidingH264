@@ -50,7 +50,7 @@ void unary_exp_golomb_mv_encode(EncodingEnvironmentPtr eep_dp,
                                 unsigned int max_bin);
 
 
-void cabac_new_slice()
+void cabac_new_slice(void)
 {
   last_dquant=0;
 }
@@ -63,7 +63,7 @@ void cabac_new_slice()
  *    and set pointers in current macroblock
  ************************************************************************
  */
-void CheckAvailabilityOfNeighborsCABAC()
+void CheckAvailabilityOfNeighborsCABAC(void)
 {
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   PixelPos up, left;
@@ -673,7 +673,8 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   
   if (!block_b.available)
     b=0;
-  else if (IS_DIRECT(&img->mb_data[block_b.mb_addr]) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && bslice))
+  //else if (IS_DIRECT(&img->mb_data[block_b.mb_addr]) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && bslice))
+  else if ((IS_DIRECT(&img->mb_data[block_b.mb_addr]) && !giRDOpt_B8OnlyFlag) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && bslice))
     b=0;
   else
   {
@@ -685,7 +686,8 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   if (!block_a.available)
     a=0;
-  else if (IS_DIRECT(&img->mb_data[block_a.mb_addr]) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && bslice))
+  // else if (IS_DIRECT(&img->mb_data[block_a.mb_addr]) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && bslice))
+  else if ((IS_DIRECT(&img->mb_data[block_a.mb_addr]) && !giRDOpt_B8OnlyFlag) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && bslice))
     a=0;
   else 
   {

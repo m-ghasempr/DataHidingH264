@@ -76,15 +76,15 @@
 
 #include "fmo.h"
 
-       char *GetConfigFileContent (char *Filename);
+char *GetConfigFileContent (char *Filename);
 static void ParseContent (char *buf, int bufsize);
 static int ParameterNameToMapIndex (char *s);
-static int InitEncoderParams();
+static int InitEncoderParams(void);
 static int TestEncoderParams(int bitdepth_qp_scale);
-static int DisplayEncoderParams();
-static void PatchInp ();
-static void ProfileCheck();
-static void LevelCheck();
+static int DisplayEncoderParams(void);
+static void PatchInp (void);
+static void ProfileCheck(void);
+static void LevelCheck(void);
 
 
 #define MAX_ITEMS_TO_PARSE  10000
@@ -96,7 +96,7 @@ static void LevelCheck();
  *   print help message and exit
  ***********************************************************************
  */
-void JMHelpExit ()
+void JMHelpExit (void)
 {
   fprintf( stderr, "\n   lencod [-h] [-d defenc.cfg] {[-f curenc1.cfg]...[-f curencN.cfg]}"
     " {[-p EncParam1=EncValue1]..[-p EncParamM=EncValueM]}\n\n"    
@@ -459,7 +459,7 @@ static int ParameterNameToMapIndex (char *s)
     else
       i++;
   return -1;
-};
+}
 
 /*!
  ***********************************************************************
@@ -469,7 +469,7 @@ static int ParameterNameToMapIndex (char *s)
  *    -1 for error
  ***********************************************************************
  */
-static int InitEncoderParams()
+static int InitEncoderParams(void)
 {
   int i = 0;
 
@@ -482,7 +482,7 @@ static int InitEncoderParams()
       i++;
   }
   return -1;
-};
+}
 
 /*!
  ***********************************************************************
@@ -554,7 +554,7 @@ static int TestEncoderParams(int bitdepth_qp_scale)
     i++;
   }
   return -1;
-};
+}
 
 
 
@@ -566,7 +566,7 @@ static int TestEncoderParams(int bitdepth_qp_scale)
  *    -1 for error
  ***********************************************************************
  */
-static int DisplayEncoderParams()
+static int DisplayEncoderParams(void)
 {
   int i = 0;
 
@@ -585,7 +585,7 @@ static int DisplayEncoderParams()
   }
   printf("******************************************************\n");
   return -1;
-};
+}
 
 /*!
  ************************************************************************
@@ -613,7 +613,7 @@ unsigned CeilLog2( unsigned uiVal)
  *    Checks the input parameters for consistency.
  ***********************************************************************
  */
-static void PatchInp ()
+static void PatchInp (void)
 {
   int bitdepth_qp_scale = 6*(input->BitDepthLuma - 8);
   
@@ -780,9 +780,25 @@ static void PatchInp ()
   }
   if (img->auto_crop_bottom || img->auto_crop_right)
   {
-    printf ("Warning: Automatical cropping activated: Coded frame Size: %dx%d\n", input->img_width+img->auto_crop_right, input->img_height+img->auto_crop_bottom);
+    fprintf (stderr, "Warning: Automatic cropping activated: Coded frame Size: %dx%d\n", input->img_width+img->auto_crop_right, input->img_height+img->auto_crop_bottom);
   }
 
+  if ((input->slice_mode==1)&&(input->MbInterlace!=0))
+  {
+    if ((input->slice_argument%2)!=0)
+    {
+      fprintf ( stderr, "Warning: slice border within macroblock pair. ");
+      if (input->slice_argument > 1)
+      {
+        input->slice_argument--;
+      }
+      else
+      {
+        input->slice_argument++;
+      }
+      fprintf ( stderr, "Using %d MBs per slice.\n", input->slice_argument);
+    }
+  }
   /*
   // add check for MAXSLICEGROUPIDS
   if(input->num_slice_groups_minus1>=MAXSLICEGROUPIDS)
@@ -954,7 +970,7 @@ static void PatchInp ()
 
   if( (input->WeightedPrediction > 0 || input->WeightedBiprediction > 0) && (input->MbInterlace))
   {
-    printf("Weighted prediction coding is not supported for MB AFF currently.");
+    snprintf(errortext, ET_SIZE, "Weighted prediction coding is not supported for MB AFF currently.");
     error (errortext, 500);
   }
   if ( input->NumFramesInELSubSeq > 0 && input->WeightedPrediction > 0)
@@ -1042,7 +1058,7 @@ static void PatchInp ()
   LevelCheck();
 }
 
-void PatchInputNoFrames()
+void PatchInputNoFrames(void)
 {
   // Tian Dong: May 31, 2002
   // If the frames are grouped into two layers, "FramesToBeEncoded" in the config file
@@ -1054,7 +1070,7 @@ void PatchInputNoFrames()
   FirstFrameIn2ndIGOP = input->no_frames;
 }
 
-static void ProfileCheck()
+static void ProfileCheck(void)
 {
   if((input->ProfileIDC != 66 ) &&
      (input->ProfileIDC != 77 ) && 
@@ -1145,16 +1161,16 @@ static void ProfileCheck()
   
 }
 
-static void LevelCheck()
+static void LevelCheck(void)
 {  
   if ( (input->LevelIDC>=30) && (input->directInferenceFlag==0))
   {
-    printf("\nLevelIDC 3.0 and above require direct_8x8_inference to be set to 1. Please check your settings.\n");
+    fprintf( stderr, "\nWarning: LevelIDC 3.0 and above require direct_8x8_inference to be set to 1. Please check your settings.\n");
     input->directInferenceFlag=1;
   }
   if ( ((input->LevelIDC<21) || (input->LevelIDC>41)) && (input->PicInterlace > 0 || input->MbInterlace > 0) )
   {
-    snprintf(errortext, ET_SIZE, "nInterlace modes only supported for LevelIDC in the range of 2.1 and 4.1. Please check your settings.\n");
+    snprintf(errortext, ET_SIZE, "\nInterlace modes only supported for LevelIDC in the range of 2.1 and 4.1. Please check your settings.\n");
     error (errortext, 500);
   }
 

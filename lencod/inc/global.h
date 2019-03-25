@@ -481,6 +481,8 @@ imgpel **imgY_org;           //!< Reference luma image
 imgpel ***imgUV_org;         //!< Reference chroma image
 int    **img4Y_tmp;          //!< for quarter pel interpolation
 
+unsigned int *yPicPos;
+unsigned int *xPicPos;
 unsigned int log2_max_frame_num_minus4;
 unsigned int log2_max_pic_order_cnt_lsb_minus4;
 
@@ -643,6 +645,13 @@ typedef struct
   int sp_periodicity;           //!< The periodicity of SP-pictures
   int qpsp;                     //!< SP Picture QP for prediction error
   int qpsp_pred;                //!< SP Picture QP for predicted block
+ 
+  int si_frame_indicator;       //!< Flag indicating whether SI frames should be encoded rather than SP frames (0: not used, 1: used)
+  int sp2_frame_indicator;      //!< Flag indicating whether switching SP frames should be encoded rather than SP frames (0: not used, 1: used)
+  int sp_output_indicator;      //!< Flag indicating whether coefficients are output to allow future encoding of switchin SP frames (0: not used, 1: used)
+  char sp_output_filename[FILE_NAME_SIZE]; //!<Filename where SP coefficients are output
+  char sp2_input_filename1[FILE_NAME_SIZE]; //!<Filename of coefficients of the first bitstream when encoding SP frames to switch bitstreams 
+  char sp2_input_filename2[FILE_NAME_SIZE]; //!<Filenames of coefficients of the second bitstream when encoding SP frames to switch bitstreams
 
   int WeightedPrediction;        //!< Weighted prediciton for P frames (0: not used, 1: explicit)
   int WeightedBiprediction;      //!< Weighted prediciton for B frames (0: not used, 1: explicit, 2: implicit)
@@ -692,6 +701,8 @@ typedef struct
   int EPZSMinThresScale;
   int EPZSMaxThresScale;
   int EPZSMedThresScale;
+  int EPZSSubPelME;
+  int EPZSSubPelThresScale;
 
   int chroma_qp_index_offset;
 #ifdef _FULL_SEARCH_RANGE_
@@ -1024,9 +1035,9 @@ typedef struct
   int bitdepth_chroma_qp_scale;
   int bitdepth_lambda_scale;
   // Lagrangian Parameters
-  double lambda_md[10][52];     //!< Mode decision Lambda
-  double lambda_me[10][52];     //!< Motion Estimation Lambda
-  int lambda_mf[10][52];        //!< Integer formatted Motion Estimation Lambda
+  double **lambda_md;     //!< Mode decision Lambda
+  double **lambda_me;     //!< Motion Estimation Lambda
+  int    **lambda_mf;     //!< Integer formatted Motion Estimation Lambda
 
   unsigned int dc_pred_value;   //!< value for DC prediction (depends on pel bit depth)
   int max_imgpel_value;         //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
@@ -1161,6 +1172,7 @@ typedef struct
   char  part8x8bwref[4];
   imgpel rec_mbY8x8[16][16];    
   imgpel mpr8x8[16][16];
+  int lrec[16][16]; // transform and quantized coefficients will be stored here for SP frames
 } RD_8x8DATA;
 
 typedef struct
@@ -1201,7 +1213,7 @@ int  p_dec;                      //!< decoded image file handle
  */
 
 void intrapred_luma(int CurrPixX,int CurrPixY, int *left_available, int *up_available, int *all_available);
-void init();
+void init(void);
 int  dct_luma(int pos_mb1,int pos_mb2,int *cnt_nonz, int intra);
 int  dct_luma_sp(int pos_mb1,int pos_mb2,int *cnt_nonz);
 void copyblock_sp(int pos_mb1,int pos_mb2);
@@ -1214,17 +1226,17 @@ int  dct_chroma_DC(int uv, int cr_cbp);
 int  motion_search(int isi);
 int  sign(int a,int b);
 void intrapred_chroma(int,int,int uv);
-void intrapred_luma_16x16();
+void intrapred_luma_16x16(void);
 int  find_sad_16x16(int *intra_mode);
 
 int dct_luma_16x16(int);
 
-void init_poc();
+void init_poc(void);
 
-void init_img();
-void report();
-void information_init();
-int  get_picture_type();
+void init_img(void);
+void report(void);
+void information_init(void);
+int  get_picture_type(void);
 int clip1a(int a);
 void DeblockFrame(ImageParameters *img, imgpel **, imgpel ***) ;
 void MarkAllMacroblockModes(ImageParameters *img, imgpel **, imgpel ***);
@@ -1239,7 +1251,7 @@ int  find_SATD (int c_diff[MB_PIXELS], int blocktype);
 pel_t* FastLineX (int, pel_t*, int, int, int, int);
 pel_t* UMVLineX  (int, pel_t*, int, int, int, int);
 
-void LumaResidualCoding ();
+void LumaResidualCoding (void);
 void ChromaResidualCoding (int*);
 void IntraChromaPrediction (int*, int*, int*);
 void ChromaPrediction4x4 (int, int, int, int, int, int, short, short);
@@ -1249,7 +1261,7 @@ int writeMBLayer (int rdopt, int *coeff_rate);
 extern int*   refbits;
 extern int**** motion_cost;
 
-void  Get_Direct_Motion_Vectors ();
+void  Get_Direct_Motion_Vectors (void);
 void  PartitionMotionSearch     (int, int, int);
 int   BIDPartitionCost          (int, int, short, short, int);
 int   LumaResidualCoding8x8     (int*, int64*, int, short, int, int, short, short);
@@ -1258,9 +1270,9 @@ int   writeMotionVector8x8      (int  i0, int  j0, int  i1, int  j1, int  reffra
 int   writeReferenceFrame       (int, int, int, int, int);
 int   writeAbpCoeffIndex        (int, int, int, int);
 int   writeIntra4x4Modes        (int);
-int   writeChromaIntraPredMode  ();
+int   writeChromaIntraPredMode  (void);
 
-void estimate_weighting_factor_B_slice();
+void estimate_weighting_factor_B_slice(void);
 void estimate_weighting_factor_P_slice(int offset);
 int  test_wp_P_slice(int offset);
 int  test_wp_B_slice(int method);
@@ -1279,17 +1291,17 @@ int  Get_Direct_CostMB  (int);
 int  B8Mode2Value (int b8mode, int b8pdir);
 
 int  GetSkipCostMB (int lambda_factor);
-void FindSkipModeMotionVector ();
+void FindSkipModeMotionVector (void);
 
 
 // dynamic mem allocation
-int  init_global_buffers();
-void free_global_buffers();
+int  init_global_buffers(void);
+void free_global_buffers(void);
 void no_mem_exit  (char *where);
 
 int  get_mem_mv  (short*******);
 void free_mem_mv (short******);
-void free_img    ();
+void free_img    (void);
 
 int  get_mem_ACcoeff  (int*****);
 int  get_mem_DCcoeff  (int****);
@@ -1297,9 +1309,9 @@ void free_mem_ACcoeff (int****);
 void free_mem_DCcoeff (int***);
 
 int  decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bit_frame, double lambda_picture);
-void combine_field();
+void combine_field(void);
 
-Picture *malloc_picture();
+Picture *malloc_picture(void);
 void     free_picture (Picture *pic);
 
 int   encode_one_slice(int SLiceGroupId, Picture *pic, int TotalCodedMBs);   //! returns the number of MBs in the slice
@@ -1307,16 +1319,16 @@ int   encode_one_slice(int SLiceGroupId, Picture *pic, int TotalCodedMBs);   //!
 void  start_macroblock(int mb_addr, int mb_field);
 void  set_MB_parameters (int mb_addr);           //! sets up img-> according to input-> and currSlice->
 
-int   writeMotionInfo2NAL ();
+int   writeMotionInfo2NAL (void);
 
 void  terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock);
 int   slice_too_big(int rlc_bits);
 void  write_one_macroblock(int eos_bit);
-void  proceed2nextMacroblock();
+void  proceed2nextMacroblock(void);
 
 void free_slice_list(Picture *currPic);
 
-void report_stats_on_error();
+void report_stats_on_error(void);
 
 #if TRACE
 void  trace2out(SyntaxElement *se);
@@ -1324,10 +1336,10 @@ void  trace2out(SyntaxElement *se);
 
 
 void error(char *text, int code);
-int  start_sequence();
-int  terminate_sequence();
-int  start_slice();
-int  terminate_slice();
+int  start_sequence(void);
+int  terminate_sequence(void);
+int  start_slice(void);
+int  terminate_slice(int);
 int  write_PPS(int, int);
 
 // B pictures
@@ -1338,33 +1350,33 @@ void get_dir(int *dir_sad);
 void compare_sad(int tot_intra_sad, int fw_sad, int bw_sad, int bid_sad, int dir_sad, int);
 int  BlkSize2CodeNumber(int blc_size_h, int blc_size_v);
 
-void InitMotionVectorSearchModule();
+void InitMotionVectorSearchModule(void);
 
-int  field_flag_inference();
+int  field_flag_inference(void);
 
-void set_mbaff_parameters();  // For MB AFF
+void set_mbaff_parameters(void);  // For MB AFF
 void writeVlcByteAlign(Bitstream* currStream);
 
 
 int   writeLumaCoeff4x4_CABAC     (int, int, int);
 int   writeLumaCoeff8x8_CABAC     (int, int);
-int   writeCBPandLumaCoeff        ();
-int   writeChromaCoeff            ();
+int   writeCBPandLumaCoeff        (void);
+int   writeChromaCoeff            (void);
 int   writeMB_bits_for_4x4_luma   (int, int, int);
-int   writeMB_bits_for_16x16_luma ();
+int   writeMB_bits_for_16x16_luma (void);
 int   writeMB_bits_for_luma       (int);
 int   writeMB_bits_for_DC_chroma  (int);
 int   writeMB_bits_for_AC_chroma  (int);
-int   writeMB_bits_for_CBP        ();
+int   writeMB_bits_for_CBP        (void);
 
 int   SingleUnifiedMotionSearch   (int, int, int**, int***, int*****, int, int*****, double);
 
 //============= rate-distortion optimization ===================
-void  clear_rdopt      ();
-void  init_rdopt       ();
-void  RD_Mode_Decision ();
+void  clear_rdopt      (void);
+void  init_rdopt       (void);
+void  RD_Mode_Decision (void);
 //============= rate-distortion opt with packet losses ===========
-void decode_one_macroblock();
+void decode_one_macroblock(void);
 void decode_one_mb (int, Macroblock*);
 void decode_one_b8block (int, int, int, int, int);
 void Get_Reference_Block(imgpel **imY, int block_y, int block_x, int mvhor, int mvver, imgpel **out);
@@ -1374,21 +1386,21 @@ void DecOneForthPix(imgpel **dY, imgpel ***dref);
 void compute_residue(int mode);
 void compute_residue_b8block (int, int);
 void compute_residue_mb (int);
-void UpdateDecoders();
+void UpdateDecoders(void);
 void Build_Status_Map(byte **s_map);
 void Error_Concealment(imgpel **inY, byte **s_map, imgpel ***refY);
 void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_map);
 //============= restriction of reference frames based on the latest intra-refreshes==========
-void UpdatePixelMap();
+void UpdatePixelMap(void);
 
 //============= fast full integer search =======================
 #ifdef _FAST_FULL_ME_
-void  ClearFastFullIntegerSearch    ();
-void  ResetFastFullIntegerSearch    ();
+void  ClearFastFullIntegerSearch    (void);
+void  ResetFastFullIntegerSearch    (void);
 #endif
 
-void process_2nd_IGOP();
-void SetImgType();
+void process_2nd_IGOP(void);
+void SetImgType(void);
 
 // Tian Dong: for IGOPs
 extern Boolean In2ndIGOP;
@@ -1397,8 +1409,8 @@ extern int start_tr_in_this_IGOP;
 extern int FirstFrameIn2ndIGOP;
 #define IMG_NUMBER (img->number-start_frame_no_in_this_IGOP)
 
-void AllocNalPayloadBuffer();
-void FreeNalPayloadBuffer();
+void AllocNalPayloadBuffer(void);
+void FreeNalPayloadBuffer(void);
 void SODBtoRBSP(Bitstream *currStream);
 int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_num_bytes);
 int Bytes_After_Header;
@@ -1418,13 +1430,36 @@ void fasthigh_complexity_encode_md (void);
 
 int RDCost_for_4x4Blocks_Chroma (int b8, int b4, int  chroma);
 
-#endif
+
 
 #include "context_ini.h"
 
-void store_coding_state_cs_cm();
-void reset_coding_state_cs_cm();
+void store_coding_state_cs_cm(void);
+void reset_coding_state_cs_cm(void);
 
 int writeIPCMBytes(Bitstream *currStream);
 int writePCMByteAlign(Bitstream *currStream);
 
+
+int  dct_luma_sp2(int pos_mb1,int pos_mb2,int *cnt_nonz);
+int  dct_chroma_sp2(int ,int);
+
+int check_for_SI16();
+int **lrec ;
+int ***lrec_uv;
+int si_frame_indicator;
+
+int sp2_frame_indicator;
+int number_sp2_frames;
+//#define sp_output_indicator 0 //will be in the config file
+//#define sp_output_filename "sp_stored.txt" // will be in the config file
+void output_SP_coefficients();
+void read_SP_coefficients();
+
+int giRDOpt_B8OnlyFlag;
+
+#ifdef BEST_NZ_COEFF
+int gaaiMBAFF_NZCoeff[4][12];
+#endif
+
+#endif

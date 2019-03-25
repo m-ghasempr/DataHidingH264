@@ -25,8 +25,8 @@
 #include "vlc.h"
 
 // Local helpers
-static int IdentifyProfile();
-static int IdentifyLevel();
+static int IdentifyProfile(void);
+static int IdentifyLevel(void);
 static int GenerateVUISequenceParameters(Bitstream *bitstream);
 
 extern ColocatedParams *Co_located;
@@ -56,7 +56,7 @@ static const byte ZZ_SCAN8[64] =
  *
  *************************************************************************************
 */
-void GenerateParameterSets ()
+void GenerateParameterSets (void)
 {
   int i;
   seq_parameter_set_rbsp_t *sps = NULL; 
@@ -117,7 +117,7 @@ void GenerateParameterSets ()
 *
 *************************************************************************************
 */
-void FreeParameterSets ()
+void FreeParameterSets (void)
 {
   int i;
   for (i=0; i<MAXPPS; i++)
@@ -134,7 +134,7 @@ void FreeParameterSets ()
 /*! 
 *************************************************************************************
 * \brief
-*    int GenerateSeq_parameter_set_NALU ();
+*    int GenerateSeq_parameter_set_NALU (void);
 *
 * \note
 *    Uses the global variables through GenerateSequenceParameterSet()
@@ -146,7 +146,7 @@ void FreeParameterSets ()
 *************************************************************************************
 */
 
-NALU_t *GenerateSeq_parameter_set_NALU ()
+NALU_t *GenerateSeq_parameter_set_NALU (void)
 {
   NALU_t *n = AllocNALU(64000);
   int RBSPlen = 0;
@@ -839,7 +839,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, unsigned char
  *
  *************************************************************************************
  */
-int IdentifyProfile()
+int IdentifyProfile(void)
 {
   return input->ProfileIDC;
 };
@@ -857,7 +857,7 @@ int IdentifyProfile()
  *    the config file parameters (primarily the picture size)
  *************************************************************************************
  */
-int IdentifyLevel()
+int IdentifyLevel(void)
 {
   return input->LevelIDC;
 };

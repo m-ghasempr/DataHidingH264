@@ -63,7 +63,6 @@ void tracebits(
     error (errortext, 600);
   }
 
-
   putc('@', p_trace);
   chars = fprintf(p_trace, "%i", bitcounter);
   while(chars++ < 6)

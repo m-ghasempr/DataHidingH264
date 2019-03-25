@@ -193,6 +193,9 @@ int terminate_slice(int lastslice)
   {
     store_contexts();
   }
+  
+  if (img->type != I_SLICE || img->type != SI_SLICE)
+    free_ref_pic_list_reordering_buffer (currSlice);
   return 0;   
 }
 
@@ -303,7 +306,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
           end_of_slice = TRUE;
         }
         NumberOfCodedMBs++;       // only here we are sure that the coded MB is actually included in the slice
-        proceed2nextMacroblock (CurrentMbAddr);
+        proceed2nextMacroblock ();
       }
       else
       {
@@ -312,7 +315,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
         if(img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
                                         // which means it's impossible to encode picture using current slice bits restriction
         {
-          snprintf (errortext, ET_SIZE, "Error encoding first MB with spcified parameter, bits of current MB may be too big");
+          snprintf (errortext, ET_SIZE, "Error encoding first MB with specified parameter, bits of current MB may be too big");
           error (errortext, 300);
         }
       }
@@ -390,7 +393,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
         
         //=========== start coding the MB pair as a field MB pair =============
         //---------------------------------------------------------------------
-        img->field_mode = 1;  // MB coded as frame
+        img->field_mode = 1;  // MB coded as field
         img->top_field = 1;   // Set top field to 1
         img->buf_cycle <<= 1;
         input->num_ref_frames <<= 1;
@@ -455,23 +458,68 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       rdopt =  img->field_mode ? &rddata_top_field_mb : &rddata_top_frame_mb;
       copy_rdopt_data (0);  // copy the MB data for Top MB from the temp buffers
       write_one_macroblock (1);     // write the Top MB data to the bitstream
-      NumberOfCodedMBs++;   // only here we are sure that the coded MB is actually included in the slice
       terminate_macroblock (&end_of_slice, &recode_macroblock);     // done coding the Top MB 
-      proceed2nextMacroblock (CurrentMbAddr);        // Go to next macroblock
-      
-      //Rate control
-      img->bot_MB = 1;//for Rate control
-      // go to the Bottom MB in the MB pair
-      img->top_field = 0;
-      start_macroblock (CurrentMbAddr+1, img->field_mode);
 
-      rdopt = img->field_mode ? &rddata_bot_field_mb : &rddata_bot_frame_mb;
-      copy_rdopt_data (1);  // copy the MB data for Bottom MB from the temp buffers
+      if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
+      {
+        CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
+        if (CurrentMbAddr == -1)   // end of slice
+        {
+          end_of_slice = TRUE;
+        }
+        NumberOfCodedMBs++;       // only here we are sure that the coded MB is actually included in the slice
+        proceed2nextMacroblock ();
+
+
+        //Rate control
+        img->bot_MB = 1;//for Rate control
+        // go to the Bottom MB in the MB pair
+        img->top_field = 0;
+        start_macroblock (CurrentMbAddr, img->field_mode);
+        
+        rdopt = img->field_mode ? &rddata_bot_field_mb : &rddata_bot_frame_mb;
+        copy_rdopt_data (1);  // copy the MB data for Bottom MB from the temp buffers
+        
+        write_one_macroblock (0);     // write the Bottom MB data to the bitstream
+        terminate_macroblock (&end_of_slice, &recode_macroblock);     // done coding the Top MB 
+        if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
+        {
+          CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
+          if (CurrentMbAddr == -1)   // end of slice
+          {
+            end_of_slice = TRUE;
+          }
+          NumberOfCodedMBs++;       // only here we are sure that the coded MB is actually included in the slice
+          proceed2nextMacroblock ();
+        }
+        else
+        {
+          //Go back to the beginning of the macroblock pair to recode it
+          img->current_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
+          img->current_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
+          if(img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
+            // which means it's impossible to encode picture using current slice bits restriction
+          {
+            snprintf (errortext, ET_SIZE, "Error encoding first MB with specified parameter, bits of current MB may be too big");
+            error (errortext, 300);
+          }
+        }
+        
+      }
+
+      else
+      {
+        //!Go back to the previous MB to recode it
+        img->current_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
+        if(img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
+                                        // which means it's impossible to encode picture using current slice bits restriction
+        {
+          snprintf (errortext, ET_SIZE, "Error encoding first MB with specified parameter, bits of current MB may be too big");
+          error (errortext, 300);
+        }
+      }
+
       
-      write_one_macroblock (0);     // write the Bottom MB data to the bitstream
-      NumberOfCodedMBs++;   // only here we are sure that the coded MB is actually included in the slice
-      terminate_macroblock (&end_of_slice, &recode_macroblock);     // done coding the Top MB 
-      proceed2nextMacroblock (CurrentMbAddr);        // Go to next macroblock
       
       if (MBPairIsField)    // if MB Pair was coded as field the buffer size variables back to frame mode
       {
@@ -480,15 +528,11 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
         img->num_ref_idx_l0_active -= 1;
         img->num_ref_idx_l0_active >>= 1;
       }
+
       img->field_mode = img->top_field = 0; // reset to frame mode
       
-      
-      // go to next MB pair, not next MB
-      CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
-      CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
-      
       if (CurrentMbAddr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (CurrentMbAddr)))
-        end_of_slice = TRUE;        // just in case it does n't get set in terminate_macroblock
+        end_of_slice = TRUE;        // just in case it doesn't get set in terminate_macroblock
     }
   }  
 /*
@@ -618,7 +662,8 @@ static void init_slice (int start_mb_addr)
   init_ref_pic_list_reordering();
 
   //Perform reordering based on poc distances for PyramidCoding
-  if (img->type==P_SLICE && input->PyramidCoding && input->PyramidRefReorder)
+  //if (img->type==P_SLICE && input->PyramidCoding && input->PyramidRefReorder)
+  if (img->type==P_SLICE && input->PyramidRefReorder)
   {
     
     int i, num_ref;
@@ -1067,20 +1112,20 @@ void SetLagrangianMultipliers()
   {
     for (j = 0; j < 5; j++)
     {
-      for (qp = 0; qp < 52; qp++)
+      for (qp = -img->bitdepth_luma_qp_scale; qp < 52; qp++)
       {          
-        qp_temp = max(0.0,(double)qp - SHIFT_QP);
+        qp_temp = (double)qp + img->bitdepth_luma_qp_scale - SHIFT_QP;
 
         if (input->UseExplicitLambdaParams) // consideration of explicit weights.
         {
-          img->lambda_md[j][qp] = input->LambdaWeight[j] * pow (2, img->bitdepth_lambda_scale + qp_temp/3.0);
+          img->lambda_md[j][qp] = input->LambdaWeight[j] * pow (2, qp_temp/3.0);
           // Scale lambda due to hadamard qpel only consideration
           img->lambda_md[j][qp] = (input->hadamard == 2 ? 0.95 : 1.00) * img->lambda_md[j][qp];
           img->lambda_me[j][qp] = sqrt(img->lambda_md[j][qp]);
           img->lambda_mf[j][qp] = LAMBDA_FACTOR (img->lambda_me[j][qp]);
           if (j == B_SLICE)
           {
-            img->lambda_md[5][qp] = input->LambdaWeight[5] * pow (2, img->bitdepth_lambda_scale + qp_temp/3.0);
+            img->lambda_md[5][qp] = input->LambdaWeight[5] * pow (2, qp_temp/3.0);
             img->lambda_md[5][qp] = (input->hadamard == 2 ? 0.95 : 1.00) * img->lambda_md[5][qp];
             img->lambda_me[5][qp] = sqrt(img->lambda_md[5][qp]);
             img->lambda_mf[5][qp] = LAMBDA_FACTOR (img->lambda_me[5][qp]);
@@ -1089,10 +1134,10 @@ void SetLagrangianMultipliers()
         else
         {                          
           if (input->successive_Bframe>0)
-            img->lambda_md[j][qp] = 0.68 * pow (2, img->bitdepth_lambda_scale + qp_temp/3.0) 
+            img->lambda_md[j][qp] = 0.68 * pow (2, qp_temp/3.0) 
             * (j == B_SLICE ? Clip3(2.00,4.00,(qp_temp / 6.0)) : (j == SP_SLICE) ? Clip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
           else
-            img->lambda_md[j][qp] = 0.85 * pow (2, img->bitdepth_lambda_scale + qp_temp/3.0) 
+            img->lambda_md[j][qp] = 0.85 * pow (2, qp_temp/3.0) 
             * ( (j == B_SLICE) ? 4.0 : (j == SP_SLICE) ? Clip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
           // Scale lambda due to hadamard qpel only consideration
           img->lambda_md[j][qp] = (input->hadamard == 2 ? 0.95 : 1.00) * img->lambda_md[j][qp];
@@ -1123,7 +1168,7 @@ void SetLagrangianMultipliers()
   {
     for (j = 0; j < 6; j++)
     {
-      for (qp = 0; qp < 52; qp++)
+      for (qp = -img->bitdepth_luma_qp_scale; qp < 52; qp++)
       {
         img->lambda_md[j][qp] = img->lambda_me[j][qp] = QP2QUANT[max(0,qp-SHIFT_QP)];
         img->lambda_mf[j][qp] = LAMBDA_FACTOR (img->lambda_me[j][qp]);

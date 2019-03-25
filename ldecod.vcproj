@@ -3,6 +3,7 @@
 	ProjectType="Visual C++"
 	Version="7.10"
 	Name="ldecod"
+	RootNamespace="ldecod"
 	SccProjectName=""
 	SccLocalPath="">
 	<Platforms>
@@ -38,6 +39,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
 				OutputFile="./bin/ldecod.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="TRUE"
@@ -101,6 +103,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
 				OutputFile="./bin/ldecod.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"

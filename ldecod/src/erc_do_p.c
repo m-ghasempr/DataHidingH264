@@ -568,7 +568,7 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
   int b8, b4;
   int yuv = dec_picture->chroma_format_idc - 1;
   
-  int ref_frame = mv[2];
+  int ref_frame = max (mv[2], 0); // !!KS: quick fix, we sometimes seem to get negative ref_pic here, so restrict to zero an above
 
   /* Update coordinates of the current concealed macroblock */
   img->mb_x = x/MB_BLOCK_SIZE;
@@ -828,7 +828,10 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
   } while (numOfPredBlocks == 0);
   
   if(numOfPredBlocks == 0)
-    assert (numOfPredBlocks != 0);
+  {
+    return 0;
+    // assert (numOfPredBlocks != 0); !!!KS hmm, trying to continue...
+  }
   return (distortion/numOfPredBlocks);
 }
 
@@ -1086,8 +1089,7 @@ get_last_ref_pic_from_dpb()
 ************************************************************************
 */
 
-static void
-copy_to_conceal(StorablePicture *src, StorablePicture *dst, ImageParameters *img)
+static void copy_to_conceal(StorablePicture *src, StorablePicture *dst, ImageParameters *img)
 {
     int i=0;
     int mv[3];
@@ -1306,7 +1308,8 @@ void conceal_lost_frames(ImageParameters *img)
 
         copy_prev_pic_to_concealed_pic(picture, img);
 
-        if(UnusedShortTermFrameNum == 0)
+        //if (UnusedShortTermFrameNum == 0)
+        if(img->IDR_concealment_flag == 1)
         {
             picture->slice_type = I_SLICE;
             picture->idr_flag = 1;
@@ -1339,7 +1342,7 @@ void conceal_lost_frames(ImageParameters *img)
 ************************************************************************
 */
 
-static void update_ref_list_for_concealment()
+void update_ref_list_for_concealment()
 {
     unsigned i, j;
     for (i=0, j=0; i<dpb.used_size; i++)
@@ -1498,10 +1501,10 @@ void init_lists_for_non_reference_loss(int currSliceType, PictureStructure currP
 ************************************************************************
 */
 
-static StorablePicture *get_pic_from_dpb(int missingpoc, int *pos)
+StorablePicture *get_pic_from_dpb(int missingpoc, unsigned int *pos)
 {
     int used_size = dpb.used_size - 1;
-    int i, concealfrom;
+    int i, concealfrom = 0;
 
     if(img->conceal_mode == 1)
         concealfrom = missingpoc - img->poc_gap;

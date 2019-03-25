@@ -51,6 +51,9 @@ extern seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
 // #define PRINT_PROGRESSIVE_REFINEMENT_END_INFO      // uncomment to print Progressive refinement segment start SEI info
 // #define PRINT_PROGRESSIVE_REFINEMENT_END_INFO      // uncomment to print Progressive refinement segment end SEI info
 // #define PRINT_MOTION_CONST_SLICE_GROUP_SET_INFO    // uncomment to print Motion-constrained slice group set SEI info
+// #define PRINT_FILM_GRAIN_CHARACTERISTICS_INFO      // uncomment to print Film grain characteristics SEI info
+// #define PRINT_DEBLOCKING_FILTER_DISPLAY_PREFERENCE_INFO // uncomment to print deblocking filter display preference SEI info
+// #define PRINT_STEREO_VIDEO_INFO_INFO               // uncomment to print stero video SEI info
 
 /*!
  ************************************************************************
@@ -150,6 +153,14 @@ void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
       break;
     case  SEI_MOTION_CONSTRAINED_SLICE_GROUP_SET:
       interpret_motion_constrained_slice_group_set_info( msg+offset, payload_size, img );
+    case  SEI_FILM_GRAIN_CHARACTERISTICS:
+      interpret_film_grain_characteristics_info ( msg+offset, payload_size, img );
+      break;
+    case  SEI_DEBLOCKING_FILTER_DISPLAY_PREFERENCE:
+      interpret_deblocking_filter_display_preference_info ( msg+offset, payload_size, img );
+      break;
+    case  SEI_STEREO_VIDEO_INFO:
+      interpret_stereo_video_info_info ( msg+offset, payload_size, img );
       break;
     default:
       interpret_reserved_info( msg+offset, payload_size, img );
@@ -817,6 +828,9 @@ void interpret_user_data_registered_itu_t_t35_info( byte* payload, int size, Ima
  */
 void interpret_pan_scan_rect_info( byte* payload, int size, ImageParameters *img )
 {
+  int pan_scan_rect_cancel_flag;
+  int pan_scan_cnt_minus1, i;
+  int pan_scan_rect_repetition_period;
   int pan_scan_rect_id, pan_scan_rect_left_offset, pan_scan_rect_right_offset;
   int pan_scan_rect_top_offset, pan_scan_rect_bottom_offset;
 
@@ -831,19 +845,26 @@ void interpret_pan_scan_rect_info( byte* payload, int size, ImageParameters *img
 
   pan_scan_rect_id = ue_v("SEI: pan_scan_rect_id", buf);
 
-  pan_scan_rect_left_offset   = se_v("SEI: pan_scan_rect_left_offset"  , buf);
-  pan_scan_rect_right_offset  = se_v("SEI: pan_scan_rect_right_offset" , buf);
-  pan_scan_rect_top_offset    = se_v("SEI: pan_scan_rect_top_offset"   , buf);
-  pan_scan_rect_bottom_offset = se_v("SEI: pan_scan_rect_bottom_offset", buf);
-
+  pan_scan_rect_cancel_flag = u_1("SEI: pan_scan_rect_cancel_flag", buf);
+  if (!pan_scan_rect_cancel_flag) {
+    pan_scan_cnt_minus1 = ue_v("SEI: pan_scan_cnt_minus1", buf);
+    for (i = 0; i <= pan_scan_cnt_minus1; i++) {
+      pan_scan_rect_left_offset   = se_v("SEI: pan_scan_rect_left_offset"  , buf);
+      pan_scan_rect_right_offset  = se_v("SEI: pan_scan_rect_right_offset" , buf);
+      pan_scan_rect_top_offset    = se_v("SEI: pan_scan_rect_top_offset"   , buf);
+      pan_scan_rect_bottom_offset = se_v("SEI: pan_scan_rect_bottom_offset", buf);
 #ifdef PRINT_PAN_SCAN_RECT
-  printf("Pan scan rectangle SEI message\n");
-  printf("pan_scan_rect_id            = %d\n", pan_scan_rect_id);
-  printf("pan_scan_rect_left_offset   = %d\n", pan_scan_rect_left_offset);
-  printf("pan_scan_rect_right_offset  = %d\n", pan_scan_rect_right_offset);
-  printf("pan_scan_rect_top_offset    = %d\n", pan_scan_rect_top_offset);
-  printf("pan_scan_rect_bottom_offset = %d\n", pan_scan_rect_bottom_offset);
+      printf("Pan scan rectangle SEI message %d/%d\n", i, pan_scan_cnt_minus1);
+      printf("pan_scan_rect_id            = %d\n", pan_scan_rect_id);
+      printf("pan_scan_rect_left_offset   = %d\n", pan_scan_rect_left_offset);
+      printf("pan_scan_rect_right_offset  = %d\n", pan_scan_rect_right_offset);
+      printf("pan_scan_rect_top_offset    = %d\n", pan_scan_rect_top_offset);
+      printf("pan_scan_rect_bottom_offset = %d\n", pan_scan_rect_bottom_offset);
 #endif
+    }
+    pan_scan_rect_repetition_period = ue_v("SEI: pan_scan_rect_repetition_period", buf);
+  }
+
   free (buf);
 #ifdef PRINT_PAN_SCAN_RECT
 #undef PRINT_PAN_SCAN_RECT
@@ -1252,6 +1273,227 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
 #endif
 }
 
+/*!
+ ************************************************************************
+ *  \brief
+ *     Interpret the film grain characteristics SEI message
+ *  \param payload
+ *     a pointer that point to the sei payload
+ *  \param size
+ *     the size of the sei message
+ *  \param img
+ *     the image pointer
+ *    
+ ************************************************************************
+ */
+void interpret_film_grain_characteristics_info( byte* payload, int size, ImageParameters *img )
+{
+  int film_grain_characteristics_cancel_flag;
+  int model_id, separate_colour_description_present_flag;
+  int film_grain_bit_depth_luma_minus8, film_grain_bit_depth_chroma_minus8, film_grain_full_range_flag, film_grain_colour_primaries, film_grain_transfer_characteristics, film_grain_matrix_coefficients;
+  int blending_mode_id, log2_scale_factor, comp_model_present_flag[3];
+  int num_intensity_intervals_minus1, num_model_values_minus1;
+  int intensity_interval_lower_bound, intensity_interval_upper_bound;
+  int comp_model_value;
+  int film_grain_characteristics_repetition_period;
+
+  int c, i, j;
+  
+  Bitstream* buf;
+
+  buf = malloc(sizeof(Bitstream));
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  film_grain_characteristics_cancel_flag = u_1("SEI: film_grain_characteristics_cancel_flag", buf);
+#ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+  printf("film_grain_characteristics_cancel_flag = %d\n", film_grain_characteristics_cancel_flag);
+#endif
+  if(!film_grain_characteristics_cancel_flag)
+  {
+
+    model_id                                    = u_v(2, "SEI: model_id", buf);
+    separate_colour_description_present_flag    = u_1("SEI: separate_colour_description_present_flag", buf);
+#ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+    printf("model_id = %d\n", model_id);
+    printf("separate_colour_description_present_flag = %d\n", separate_colour_description_present_flag);
+#endif
+    if (separate_colour_description_present_flag)
+    {
+      film_grain_bit_depth_luma_minus8          = u_v(3, "SEI: film_grain_bit_depth_luma_minus8", buf);
+      film_grain_bit_depth_chroma_minus8        = u_v(3, "SEI: film_grain_bit_depth_chroma_minus8", buf);
+      film_grain_full_range_flag                = u_v(1, "SEI: film_grain_full_range_flag", buf);
+      film_grain_colour_primaries               = u_v(8, "SEI: film_grain_colour_primaries", buf);
+      film_grain_transfer_characteristics       = u_v(8, "SEI: film_grain_transfer_characteristics", buf);
+      film_grain_matrix_coefficients            = u_v(8, "SEI: film_grain_matrix_coefficients", buf);
+#ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+      printf("film_grain_bit_depth_luma_minus8 = %d\n", film_grain_bit_depth_luma_minus8);
+      printf("film_grain_bit_depth_chroma_minus8 = %d\n", film_grain_bit_depth_chroma_minus8);
+      printf("film_grain_full_range_flag = %d\n", film_grain_full_range_flag);
+      printf("film_grain_colour_primaries = %d\n", film_grain_colour_primaries);
+      printf("film_grain_transfer_characteristics = %d\n", film_grain_transfer_characteristics);
+      printf("film_grain_matrix_coefficients = %d\n", film_grain_matrix_coefficients);
+#endif
+    }
+    blending_mode_id                            = u_v(2, "SEI: blending_mode_id", buf);
+    log2_scale_factor                           = u_v(4, "SEI: log2_scale_factor", buf);
+#ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+    printf("blending_mode_id = %d\n", blending_mode_id);
+    printf("log2_scale_factor = %d\n", log2_scale_factor);
+#endif
+    for (c = 0; c < 3; c ++)
+    {
+      comp_model_present_flag[c]                = u_1("SEI: comp_model_present_flag", buf);
+#ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+      printf("comp_model_present_flag = %d\n", comp_model_present_flag[c]);
+#endif
+    }
+    for (c = 0; c < 3; c ++)
+      if (comp_model_present_flag[c])
+      {
+        num_intensity_intervals_minus1          = u_v(8, "SEI: num_intensity_intervals_minus1", buf);
+        num_model_values_minus1                 = u_v(3, "SEI: num_model_values_minus1", buf);
+#ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+        printf("num_intensity_intervals_minus1 = %d\n", num_intensity_intervals_minus1);
+        printf("num_model_values_minus1 = %d\n", num_model_values_minus1);
+#endif
+        for (i = 0; i <= num_intensity_intervals_minus1; i ++)
+        {
+          intensity_interval_lower_bound        = u_v(8, "SEI: intensity_interval_lower_bound", buf);
+          intensity_interval_upper_bound        = u_v(8, "SEI: intensity_interval_upper_bound", buf);
+#ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+          printf("intensity_interval_lower_bound = %d\n", intensity_interval_lower_bound);
+          printf("intensity_interval_upper_bound = %d\n", intensity_interval_upper_bound);
+#endif
+          for (j = 0; j <= num_model_values_minus1; j++)
+          {
+            comp_model_value                    = se_v("SEI: comp_model_value", buf);
+#ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+            printf("comp_model_value = %d\n", comp_model_value);
+#endif
+          }
+        }
+      }
+    film_grain_characteristics_repetition_period = ue_v("SEI: film_grain_characteristics_repetition_period", buf);
+#ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+    printf("film_grain_characteristics_repetition_period = %d\n", film_grain_characteristics_repetition_period);
+#endif
+  }
+
+  free (buf);
+#ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+#undef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
+#endif
+}
+
+/*!
+ ************************************************************************
+ *  \brief
+ *     Interpret the deblocking filter display preference SEI message
+ *  \param payload
+ *     a pointer that point to the sei payload
+ *  \param size
+ *     the size of the sei message
+ *  \param img
+ *     the image pointer
+ *    
+ ************************************************************************
+ */
+void interpret_deblocking_filter_display_preference_info( byte* payload, int size, ImageParameters *img )
+{
+  int deblocking_display_preference_cancel_flag;
+  int display_prior_to_deblocking_preferred_flag, dec_frame_buffering_constraint_flag, deblocking_display_preference_repetition_period;
+  
+  Bitstream* buf;
+
+  buf = malloc(sizeof(Bitstream));
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  deblocking_display_preference_cancel_flag             = u_1("SEI: deblocking_display_preference_cancel_flag", buf);
+#ifdef PRINT_DEBLOCKING_FILTER_DISPLAY_PREFERENCE_INFO
+  printf("deblocking_display_preference_cancel_flag = %d\n", deblocking_display_preference_cancel_flag);
+#endif
+  if(!deblocking_display_preference_cancel_flag)
+  {
+    display_prior_to_deblocking_preferred_flag            = u_1("SEI: display_prior_to_deblocking_preferred_flag", buf);
+    dec_frame_buffering_constraint_flag                   = u_1("SEI: dec_frame_buffering_constraint_flag", buf);
+    deblocking_display_preference_repetition_period       = ue_v("SEI: deblocking_display_preference_repetition_period", buf);
+#ifdef PRINT_DEBLOCKING_FILTER_DISPLAY_PREFERENCE_INFO
+    printf("display_prior_to_deblocking_preferred_flag = %d\n", display_prior_to_deblocking_preferred_flag);
+    printf("dec_frame_buffering_constraint_flag = %d\n", dec_frame_buffering_constraint_flag);
+    printf("deblocking_display_preference_repetition_period = %d\n", deblocking_display_preference_repetition_period);
+#endif
+  }
+
+  free (buf);
+#ifdef PRINT_DEBLOCKING_FILTER_DISPLAY_PREFERENCE_INFO
+#undef PRINT_DEBLOCKING_FILTER_DISPLAY_PREFERENCE_INFO
+#endif
+}
+
+/*!
+ ************************************************************************
+ *  \brief
+ *     Interpret the stereo video info SEI message
+ *  \param payload
+ *     a pointer that point to the sei payload
+ *  \param size
+ *     the size of the sei message
+ *  \param img
+ *     the image pointer
+ *    
+ ************************************************************************
+ */
+void interpret_stereo_video_info_info( byte* payload, int size, ImageParameters *img )
+{
+  int field_views_flags;
+  int top_field_is_left_view_flag, current_frame_is_left_view_flag, next_frame_is_second_view_flag;
+  int left_view_self_contained_flag;
+  int right_view_self_contained_flag;
+  
+  Bitstream* buf;
+
+  buf = malloc(sizeof(Bitstream));
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  field_views_flags = u_1("SEI: field_views_flags", buf);
+#ifdef PRINT_STEREO_VIDEO_INFO_INFO
+  printf("field_views_flags = %d\n", field_views_flags);
+#endif
+  if (field_views_flags)
+  {
+    top_field_is_left_view_flag         = u_1("SEI: top_field_is_left_view_flag", buf);
+#ifdef PRINT_STEREO_VIDEO_INFO_INFO
+    printf("top_field_is_left_view_flag = %d\n", top_field_is_left_view_flag);
+#endif
+  }
+  else
+  {
+    current_frame_is_left_view_flag     = u_1("SEI: current_frame_is_left_view_flag", buf);
+    next_frame_is_second_view_flag      = u_1("SEI: next_frame_is_second_view_flag", buf);
+#ifdef PRINT_STEREO_VIDEO_INFO_INFO
+    printf("current_frame_is_left_view_flag = %d\n", current_frame_is_left_view_flag);
+    printf("next_frame_is_second_view_flag = %d\n", next_frame_is_second_view_flag);
+#endif
+  }
+
+  left_view_self_contained_flag         = u_1("SEI: left_view_self_contained_flag", buf);
+  right_view_self_contained_flag        = u_1("SEI: right_view_self_contained_flag", buf);
+#ifdef PRINT_STEREO_VIDEO_INFO_INFO
+  printf("left_view_self_contained_flag = %d\n", left_view_self_contained_flag);
+  printf("right_view_self_contained_flag = %d\n", right_view_self_contained_flag);
+#endif
+
+  free (buf);
+#ifdef PRINT_STEREO_VIDEO_INFO_INFO
+#undef PRINT_STEREO_VIDEO_INFO_INFO
+#endif
+}
 
 /*!
  ************************************************************************
@@ -1552,10 +1794,18 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
             }
           }
         }
-        if(active_sps->vui_seq_parameters.nal_hrd_parameters.time_offset_length) //!KS which HRD params shall be used?
         {
-          time_offset=0;
-          // time_offset = i_v(active_sps->vui_seq_parameters.nal_hrd_parameters.time_offset_length, "SEI: time_offset"   , buf);
+          int time_offset_length;
+          if (active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag)
+            time_offset_length = active_sps->vui_seq_parameters.vcl_hrd_parameters.time_offset_length;
+          else if (active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag)
+            time_offset_length = active_sps->vui_seq_parameters.nal_hrd_parameters.time_offset_length;
+          else
+            time_offset_length = 24;
+          if (time_offset_length)
+            time_offset = u_v(time_offset_length, "SEI: time_offset"   , buf); // TODO interpretation is unsigned, need signed interpretation (i_v)
+          else
+            time_offset = 0;
 #ifdef PRINT_PCITURE_TIMING_INFO
           printf("time_offset   = %d\n",time_offset);
 #endif    

@@ -20,15 +20,15 @@
 #define MAXSLICEGROUPIDS 8
 
 int FmoInit(ImageParameters * img, pic_parameter_set_rbsp_t * pps, seq_parameter_set_rbsp_t * sps);
-void FmoUninit ();
+void FmoUninit (void);
 int FmoFinit (seq_parameter_set_rbsp_t * sps);
 int FmoMB2SliceGroup (int mb);
 int FmoGetFirstMBOfSliceGroup (int SliceGroupID);
 int FmoGetFirstMacroblockInSlice (int SliceGroup);
 int FmoGetNextMBNr (int CurrentMbNr);
 int FmoGetLastCodedMBOfSliceGroup (int SliceGroupID);
-int FmoStartPicture ();
-int FmoEndPicture();
+int FmoStartPicture (void);
+int FmoEndPicture(void);
 int FmoSliceGroupCompletelyCoded(int SliceGroupID);
 void FmoSetLastMacroblockInSlice (int mb);
 

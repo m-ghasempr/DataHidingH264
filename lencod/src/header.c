@@ -186,7 +186,7 @@ int SliceHeader()
   {
     if (img->type==SP_SLICE) // Switch Flag only for SP pictures
     {
-      len += u_1 ("SH: sp_for_switch_flag", 0, bitstream);   // 1 for switching SP, 0 for normal SP
+      len += u_1 ("SH: sp_for_switch_flag", (si_frame_indicator || sp2_frame_indicator), bitstream);   // 1 for switching SP, 0 for normal SP
     }
     len += se_v ("SH: slice_qs_delta", (img->qpsp - 26), bitstream );
   }

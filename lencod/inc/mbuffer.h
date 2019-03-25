@@ -160,15 +160,15 @@ extern DecodedPictureBuffer dpb;
 extern StorablePicture **listX[6];
 extern int listXsize[6];
 
-void             init_dpb();
-void             free_dpb();
-FrameStore*      alloc_frame_store();
+void             init_dpb(void);
+void             free_dpb(void);
+FrameStore*      alloc_frame_store(void);
 void             free_frame_store(FrameStore* f);
 StorablePicture* alloc_storable_picture(PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
 void             free_storable_picture(StorablePicture* p);
 void             store_picture_in_dpb(StorablePicture* p);
 void             replace_top_pic_with_frame(StorablePicture* p);
-void             flush_dpb();
+void             flush_dpb(void);
 
 void             dpb_split_field(FrameStore *fs);
 void             dpb_combine_field(FrameStore *fs);
@@ -179,7 +179,7 @@ void             reorder_ref_pic_list(StorablePicture **list, int *list_size,
                                       int num_ref_idx_lX_active_minus1, int *reordering_of_pic_nums_idc, 
                                       int *abs_diff_pic_num_minus1, int *long_term_pic_idx);
 
-void             init_mbaff_lists();
+void             init_mbaff_lists(void);
 void             alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
 void             free_ref_pic_list_reordering_buffer(Slice *currSlice);
 

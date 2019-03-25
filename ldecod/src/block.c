@@ -1058,8 +1058,7 @@ void itrans_sp(struct img_par *img,  //!< image parameters
   int qp_rem_sp = (img->qpsp-MIN_QP)%6;
   int q_bits_sp    = Q_BITS+qp_per_sp;
   int qp_const2=(1<<q_bits_sp)/2;  //sp_pred
-
-  if (img->type == SI_SLICE) //ES  modified
+  if (img->type == SI_SLICE) //ES modified
   {
     qp_per = (img->qpsp-MIN_QP)/6;
     qp_rem = (img->qpsp-MIN_QP)%6;

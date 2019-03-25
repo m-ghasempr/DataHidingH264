@@ -133,9 +133,12 @@ static const short Offset8_inter_default[64] = {
  */
 void allocate_QOffsets ()
 {
-  get_mem4Dint(&LevelOffset4x4Luma,      2, 13, 4, 4);
-  get_mem5Dint(&LevelOffset4x4Chroma, 2, 2, 13, 4, 4);
-  get_mem4Dint(&LevelOffset8x8Luma,      2, 13, 8, 8);
+  int max_qp_per_luma = (3 + 6*(input->BitDepthLuma) - MIN_QP)/6 + 1;
+  int max_qp_per_cr = (3 + 6*(input->BitDepthChroma) - MIN_QP)/6 + 1;
+  int max_qp_per = max(max_qp_per_luma,max_qp_per_cr);
+  get_mem4Dint(&LevelOffset4x4Luma,      2, max_qp_per, 4, 4);
+  get_mem5Dint(&LevelOffset4x4Chroma, 2, 2, max_qp_per, 4, 4);
+  get_mem4Dint(&LevelOffset8x8Luma,      2, max_qp_per, 8, 8);
 }
 
 /*!
@@ -146,9 +149,12 @@ void allocate_QOffsets ()
  */
 void free_QOffsets ()
 {
-  free_mem4Dint(LevelOffset4x4Luma,      2, 13);
-  free_mem5Dint(LevelOffset4x4Chroma, 2, 2, 13);
-  free_mem4Dint(LevelOffset8x8Luma,      2, 13);
+  int max_qp_per_luma = (3 + 6*(input->BitDepthLuma) - MIN_QP)/6 + 1;
+  int max_qp_per_cr = (3 + 6*(input->BitDepthChroma) - MIN_QP)/6 + 1;
+  int max_qp_per = max(max_qp_per_luma,max_qp_per_cr);
+  free_mem4Dint(LevelOffset4x4Luma,      2, max_qp_per);
+  free_mem5Dint(LevelOffset4x4Chroma, 2, 2, max_qp_per);
+  free_mem4Dint(LevelOffset8x8Luma,      2, max_qp_per);
 }
 
 
@@ -447,8 +453,11 @@ void CalculateOffsetParam ()
   int qp_per;
   int img_type = (img->type == SI_SLICE ? I_SLICE : (img->type == SP_SLICE ? P_SLICE : img->type));
   
+  int max_qp_per_luma = (51 + img->bitdepth_luma_qp_scale - MIN_QP)/6 + 1;
+  int max_qp_per_cr = (51 + img->bitdepth_chroma_qp_scale - MIN_QP)/6 + 1;
+  
   AdaptRndWeight = input->AdaptRndWFactor[img->nal_reference_idc!=0][img_type];
-  for (k = 0; k < 13; k++)
+  for (k = 0; k < max(max_qp_per_luma,max_qp_per_cr); k++)
   {
     qp_per = Q_BITS + k - OffsetBits;
     for (j = 0; j < 4; j++)
@@ -519,7 +528,10 @@ void CalculateOffset8Param ()
   int i, j, k, temp;
   int q_bits;
   
-  for (k = 0; k < 13; k++)
+  int max_qp_per_luma = (51 + img->bitdepth_luma_qp_scale - MIN_QP)/6 + 1;
+  int max_qp_per_cr = (51 + img->bitdepth_chroma_qp_scale - MIN_QP)/6 + 1;
+
+  for (k = 0; k < max(max_qp_per_luma,max_qp_per_cr); k++)
   {
     q_bits = Q_BITS_8 + k - OffsetBits;
     for (j = 0; j < 8; j++)

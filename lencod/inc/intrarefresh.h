@@ -18,9 +18,9 @@
 #define _INTRAREFRESH_H_
 
 void RandomIntraInit(int xsize, int ysize, int refresh);
-void RandomIntraUninit();
+void RandomIntraUninit(void);
 int RandomIntra (int mb);   //! returns 1 for MBs that need forced Intra
-void RandomIntraNewPicture ();  //! to be called once per picture  
+void RandomIntraNewPicture (void);  //! to be called once per picture  
 
 
 #endif //_INTRAREFRESH_H_

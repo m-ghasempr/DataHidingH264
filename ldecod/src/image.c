@@ -340,7 +340,7 @@ void find_snr(
   framesize_in_bytes = (((int64)size_y*size_x) + ((int64)size_y_cr*size_x_cr)*2) * symbol_size_in_bytes;
 
   if (psnrPOC==0 && img->psnr_number)
-    img->idr_psnr_number=img->psnr_number + 1;
+    img->idr_psnr_number = img->number*img->ref_poc_gap/(input->poc_scale);
 
   img->psnr_number=max(img->psnr_number,img->idr_psnr_number+psnrPOC);
 
@@ -721,7 +721,7 @@ void set_ref_pic_num()
 int read_new_slice()
 {
   NALU_t *nalu = AllocNALU(MAX_CODED_FRAME_SIZE);
-  int current_header;
+  int current_header = 0;
   int ret;
   int BitsUsedByHeader;
   Slice *currSlice = img->currentSlice;
@@ -941,6 +941,7 @@ int read_new_slice()
 
         currStream             = currSlice->partArr[1].bitstream;
         currStream->ei_flag    = 0;
+        currSlice->dp_mode     = PAR_DP_3;
         currStream->frame_bitoffset = currStream->read_len = 0;
         memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
         currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
@@ -971,6 +972,7 @@ int read_new_slice()
         break;
       case NALU_TYPE_DPC:
         /* LC: inserting the code related to DP processing */
+        currSlice->dp_mode     = PAR_DP_3;
         currStream             = currSlice->partArr[2].bitstream;
         currStream->ei_flag    = 0;
         currStream->frame_bitoffset = currStream->read_len = 0;
@@ -1059,7 +1061,7 @@ void init_picture(struct img_par *img, struct inp_par *inp)
       // picture error concealment
       if(inp->conceal_mode !=0)
       {
-        if((img->frame_num) < (img->pre_frame_num))
+        if((img->frame_num) < ((img->pre_frame_num + 1) % img->MaxFrameNum))
         {
           /* Conceal lost IDR frames and any frames immediately 
              following the IDR. Use frame copy for these since 

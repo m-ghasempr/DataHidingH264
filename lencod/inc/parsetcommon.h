@@ -33,10 +33,14 @@
 #define MAXPPS  256
 
 //! Boolean Type
+#ifdef FALSE
+#  define Boolean int
+#else
 typedef enum {
   FALSE,
   TRUE
 } Boolean;
+#endif
 
 #define MAXIMUMVALUEOFcpb_cnt   32
 typedef struct
@@ -186,8 +190,8 @@ typedef struct
     vui_seq_parameters_t vui_seq_parameters;                  // vui_seq_parameters_t
 } seq_parameter_set_rbsp_t;
 
-pic_parameter_set_rbsp_t *AllocPPS ();
-seq_parameter_set_rbsp_t *AllocSPS ();
+pic_parameter_set_rbsp_t *AllocPPS (void);
+seq_parameter_set_rbsp_t *AllocSPS (void);
 void FreePPS (pic_parameter_set_rbsp_t *pps);
 void FreeSPS (seq_parameter_set_rbsp_t *sps);
 

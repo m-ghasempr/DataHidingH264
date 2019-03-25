@@ -46,10 +46,10 @@ int     simplified_pred_SAD_uplayer;     // Up layer SAD prediction
 short   simplified_pred_MV_uplayer_X;    // Up layer MV predictor X-component
 short   simplified_pred_MV_uplayer_Y;    // Up layer MV predictor Y-component
 
-void    simplified_init_FME();
-int     simplified_get_mem_FME();
-void    simplified_free_mem_FME();
-void    simplified_decide_intrabk_SAD();
+void    simplified_init_FME(void);
+int     simplified_get_mem_FME(void);
+void    simplified_free_mem_FME(void);
+void    simplified_decide_intrabk_SAD(void);
 void    simplified_skip_intrabk_SAD(int, int);
 void    simplified_setup_FME(short, int, int, int, int, short ******);
 

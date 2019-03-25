@@ -43,7 +43,7 @@ typedef CSobj* CSptr;
 
 
 void  delete_coding_state  (CSptr);  //!< delete structure
-CSptr create_coding_state  ();       //!< create structure
+CSptr create_coding_state  (void);       //!< create structure
 
 void  store_coding_state   (CSptr);  //!< store parameters
 void  reset_coding_state   (CSptr);  //!< restore parameters

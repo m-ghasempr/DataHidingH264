@@ -180,7 +180,7 @@ int exit_macroblock(struct img_par *img,struct inp_par *inp,int eos_bit)
       currSlice->next_header = SOP;
 */
 //the
-    assert (nal_startcode_follows (img, inp, eos_bit) == TRUE);
+//    assert (nal_startcode_follows (img, inp, eos_bit) == TRUE);
     return TRUE;
   }
   // ask for last mb in the slice  UVLC
@@ -2798,9 +2798,12 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 
   int need_transform_size_flag;
   Boolean lossless_qpprime = ((img->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
-  
+
   // Residue Color Transform
   Boolean residual_transform_dc = ((img->residue_transform_flag==1) && (IS_OLDINTRA(currMB)||currMB->mb_type==I8MB) );
+
+  if(img->type==SP_SLICE  && currMB->mb_type!=I16MB )
+    smb=1;
 
   // QPI
   //init constants for every chroma qp offset
@@ -2891,6 +2894,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 
       dP->readSyntaxElement(&currSE,img,inp,dP);
       currMB->delta_quant = currSE.value1;
+      if ((currMB->delta_quant < -(26 + img->bitdepth_luma_qp_scale/2)) || (currMB->delta_quant > (25 + img->bitdepth_luma_qp_scale/2)))
+        error ("mb_qp_delta is out of range", 500);
 
       img->qp= ((img->qp + currMB->delta_quant + 52 + 2*img->bitdepth_luma_qp_scale)%(52+img->bitdepth_luma_qp_scale)) -
                  img->bitdepth_luma_qp_scale;
@@ -2927,6 +2932,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #endif
     dP->readSyntaxElement(&currSE,img,inp,dP);
     currMB->delta_quant = currSE.value1;
+    if ((currMB->delta_quant < -(26 + img->bitdepth_luma_qp_scale/2)) || (currMB->delta_quant > (25 + img->bitdepth_luma_qp_scale/2)))
+      error ("mb_qp_delta is out of range", 500);
     
     img->qp= ((img->qp + currMB->delta_quant + 52 + 2*img->bitdepth_luma_qp_scale)%(52+img->bitdepth_luma_qp_scale)) -
                img->bitdepth_luma_qp_scale;
@@ -3942,6 +3949,9 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   int residue_transform_flag = img->residue_transform_flag;
   int residue_R, residue_G, residue_B, temp;
 
+  if(img->type==SP_SLICE && currMB->mb_type!=I16MB)
+    smb=1;// modif ES added
+
   if(currMB->mb_type==IPCM)
   {
     //copy readed data into imgY and set parameters
@@ -4608,12 +4618,20 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
       // -------------------------------------------
       if (smb && mv_mode!=IBLOCK)
       {
-        itrans_sp(img,ioff,joff,i,j);
+	if(!IS_NEWINTRA (currMB))// modif ES added
+	  itrans_sp(img,ioff,joff,i,j);
+	else //modif ES added
+	  itrans(img,ioff,joff,i,j,0); // modif ES added
       }
       else
       {
-        if(need_4x4_transform)
-          itrans   (img,ioff,joff,i,j, 0);      // use DCT transform and make 4x4 block m7 from prediction block mpr
+	if(need_4x4_transform)
+        {
+          if(img->type==SP_SLICE && currMB->mb_type != I16MB) // ES added
+	    itrans_sp   (img,ioff,joff,i,j);//ES added
+	  else
+	    itrans   (img,ioff,joff,i,j, 0);      // use DCT transform and make 4x4 block m7 from prediction block mpr
+	}
       }
       if(need_4x4_transform)
       {

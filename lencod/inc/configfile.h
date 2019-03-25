@@ -43,7 +43,7 @@ Mapping Map[] = {
     {"IDRIntraEnable",           &configinput.idr_enable,                   0,   0.0,                       1,  0.0,              1.0              },
     {"StartFrame",               &configinput.start_frame,                  0,   0.0,                       2,  0.0,              0.0              },
     {"IntraPeriod",              &configinput.intra_period,                 0,   0.0,                       2,  0.0,              0.0              },
-    {"EnableOpenGOP",            &configinput.EnableOpenGOP,                0,   0.0,                       3,  0.0,              1.0              },
+    {"EnableOpenGOP",            &configinput.EnableOpenGOP,                0,   0.0,                       1,  0.0,              1.0              },
     {"FramesToBeEncoded",        &configinput.no_frames,                    0,   1.0,                       2,  1.0,              0.0              },
     {"QPISlice",                 &configinput.qp0,                          0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP  },
     {"QPPSlice",                 &configinput.qpN,                          0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP  },
@@ -80,6 +80,12 @@ Mapping Map[] = {
     {"SPPicturePeriodicity",     &configinput.sp_periodicity,               0,   0.0,                       2,  0.0,              0.0              },
     {"QPSPSlice",                &configinput.qpsp,                         0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP  },
     {"QPSP2Slice",               &configinput.qpsp_pred,                    0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP  },
+    {"SI_FRAMES",                &configinput.si_frame_indicator,           0,   0.0,                       1,  0.0,              1.0              },
+    {"SP_output",                &configinput.sp_output_indicator,          0,   0.0,                       1,  0.0,              1.0              },
+    {"SP_output_name",           &configinput.sp_output_filename,           1,   0.0,                       0,  0.0,              0.0              },
+    {"SP2_FRAMES",               &configinput.sp2_frame_indicator,          0,   0.0,                       1,  0.0,              1.0              },
+    {"SP2_input_name1",          &configinput.sp2_input_filename1,          1,   0.0,                       0,  0.0,              0.0              },
+    {"SP2_input_name2",          &configinput.sp2_input_filename2,          1,   0.0,                       0,  0.0,              0.0              }, 
     {"SymbolMode",               &configinput.symbol_mode,                  0,   0.0,                       1,  (double) UVLC,    (double) CABAC   },
     {"OutFileMode",              &configinput.of_mode,                      0,   0.0,                       1,  0.0,              1.0              },
     {"PartitionMode",            &configinput.partition_mode,               0,   0.0,                       1,  0.0,              1.0              },
@@ -96,7 +102,7 @@ Mapping Map[] = {
     {"Intra4x4DirDisable",       &configinput.Intra4x4DirDisable,           0,   0.0,                       1,  0.0,              1.0              },
     {"Intra16x16ParDisable",     &configinput.Intra16x16ParDisable,         0,   0.0,                       1,  0.0,              1.0              },
     {"Intra16x16PlaneDisable",   &configinput.Intra16x16PlaneDisable,       0,   0.0,                       1,  0.0,              1.0              },
-    {"EnableIPCM",               &configinput.EnableIPCM,                   0,   0.0,                       1,  0.0,              1.0              },
+    {"EnableIPCM",               &configinput.EnableIPCM,                   0,   1.0,                       1,  0.0,              1.0              },
     {"ChromaIntraDisable",       &configinput.ChromaIntraDisable,           0,   0.0,                       1,  0.0,              1.0              },
 
 #ifdef _FULL_SEARCH_RANGE_
@@ -211,6 +217,8 @@ Mapping Map[] = {
     {"EPZSMinThresScale",        &configinput.EPZSMinThresScale,            0,   0.0,                       0,  0.0,              0.0              },
     {"EPZSMaxThresScale",        &configinput.EPZSMaxThresScale,            0,   1.0,                       0,  0.0,              0.0              },
     {"EPZSMedThresScale",        &configinput.EPZSMedThresScale,            0,   1.0,                       0,  0.0,              0.0              },
+    {"EPZSSubPelME",             &configinput.EPZSSubPelME,                 0,   1.0,                       1,  0.0,              1.0              },
+    {"EPZSSubPelThresScale",     &configinput.EPZSSubPelThresScale,         0,   2.0,                       0,  0.0,              0.0              },
     {"ChromaQPOffset",           &configinput.chroma_qp_index_offset,       0,   0.0,                       1,-51.0,             51.0              },
 
     // Fidelity Range Extensions
@@ -265,7 +273,7 @@ extern Mapping Map[];
 
 
 void Configure (int ac, char *av[]);
-void PatchInputNoFrames();
+void PatchInputNoFrames(void);
 
 #endif
 

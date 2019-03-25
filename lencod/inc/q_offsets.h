@@ -21,8 +21,8 @@ extern int ****LevelOffset8x8Luma;
 
 extern int AdaptRndWeight;
 
-void Init_QOffsetMatrix ();
-void CalculateOffsetParam();
-void CalculateOffset8Param();
-void free_QOffsets ();
+void Init_QOffsetMatrix (void);
+void CalculateOffsetParam(void);
+void CalculateOffset8Param(void);
+void free_QOffsets (void);
 #endif

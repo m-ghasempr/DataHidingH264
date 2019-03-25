@@ -23,6 +23,7 @@
 #include "image.h"
 #include "memalloc.h"
 #include "mb_access.h"
+#include "refbuf.h"
 
 #include "epzs.h"
 
@@ -37,6 +38,15 @@ static const short blk_child[8]  = {1, 2, 4, 4, 5, 7, 7, 7}; //!< {skip, 16x16, 
 static const int   minthres_base[8] = {0,  64,  32,  32,  16,  8,  8,  4};
 static const int   medthres_base[8] = {0, 256, 128, 128,  64, 32, 32, 16};
 static const int   maxthres_base[8] = {0, 768, 384, 384, 192, 96, 96, 48};
+static const int   search_point_hp_x[10] = {0,-2, 0, 2,  0, -2,  2,  2, -2, -2};
+static const int   search_point_hp_y[10] = {0, 0, 2, 0, -2,  2,  2, -2, -2,  2};
+static const int   search_point_qp_x[10] = {0,-1, 0, 1,  0, -1,  1,  1, -1, -1};
+static const int   search_point_qp_y[10] = {0, 0, 1, 0, -1,  1,  1, -1, -1,  1};
+//static const int   next_subpel_pos_start[5][5] = {};
+//static const int   next_subpel_pos_end  [5][5] = {};
+
+
+
 static short img_width;
 static short img_height;  
 static short weight1, weight2, offsetBi;
@@ -68,10 +78,11 @@ const  char c_EPZSDualPattern[5][20] = { "Disabled","Diamond", "Square", "Extend
 const  char c_EPZSFixed[3][20] = { "Disabled","All P", "All P + B"};
 const  char c_EPZSOther[2][20] = { "Disabled","Enabled"};
 
-int medthres[8];
-int maxthres[8];
-int minthres[8];
-int mv_scale[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES];
+static int medthres[8];
+static int maxthres[8];
+static int minthres[8];
+static int subthres[8];
+static int mv_scale[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES];
 
 static byte **EPZSMap;  //!< Memory Map definition 
 int ***EPZSDistortion;  //!< Array for storing SAD Values
@@ -87,11 +98,12 @@ EPZSStructure *window_predictor, *window_predictor_extended;
 EPZSStructure *sdiamond,*square,*ediamond,*ldiamond;
 EPZSColocParams *EPZSCo_located;
 
-int (*computeBiPredSad)(pel_t **, int, int, int, int, int, int, int, int, int);
+static int (*computeBiPredSad)(pel_t **, int, int, int, int, int, int, int, int, int);
 
 static pel_t *(*get_ref_line1)(int, pel_t *, int, int, int, int);
 static pel_t *(*get_ref_line2)(int, pel_t *, int, int, int, int);
 static pel_t *(*get_ref_line) (int, pel_t *, int, int, int, int);  
+static pel_t *(*get_line) (pel_t**, int, int, int, int);
 static pel_t *ref_pic;
 static pel_t *ref_pic1;
 static pel_t *ref_pic2;
@@ -250,9 +262,9 @@ static int RoundLog2 (int iValue)
 void EPZSWindowPredictorInit (short search_range, EPZSStructure * predictor, short mode)
 {
   int pos;
-  short searchpos, fieldsearchpos;
-  short prednum = 0;
-  short i;
+  int searchpos, fieldsearchpos;
+  int prednum = 0;
+  int i;
   if (mode == 0)
   {
     for (pos = RoundLog2 (search_range) - 2; pos > -1; pos--)
@@ -318,7 +330,7 @@ void EPZSWindowPredictorInit (short search_range, EPZSStructure * predictor, sho
 ************************************************************************
 */
 int
-EPZSInit ()
+EPZSInit (void)
 {
   int pel_error_me = 1 << (img->bitdepth_luma - 8);
   int i, memory_size = 0;
@@ -334,6 +346,7 @@ EPZSInit ()
     medthres[i] = input->EPZSMedThresScale * medthres_base[i] * pel_error_me;
     maxthres[i] = input->EPZSMaxThresScale * maxthres_base[i] * pel_error_me;
     minthres[i] = input->EPZSMinThresScale * minthres_base[i] * pel_error_me;
+    subthres[i] = input->EPZSSubPelThresScale * medthres_base[i] * pel_error_me;
   }
   
   //! Definition of pottential EPZS patterns.
@@ -428,7 +441,7 @@ EPZSInit ()
 *    Delete EPZS Alocated memory
 ************************************************************************
 */
-void EPZSDelete ()
+void EPZSDelete (void)
 {
   if (input->EPZSTemporal)
     freeEPZScolocated (EPZSCo_located);
@@ -1905,8 +1918,8 @@ EPZSPelBlockMotionSearch (pel_t ** cur_pic,	  // <--  original pixel values for 
           && (( 4 * prevSad[pic_pix_x2] < min_mcost) ||
           ((3 * prevSad[pic_pix_x2] < min_mcost) && (prevSad[pic_pix_x2] <= stopCriterion))))              
         {
-          *mv_x = tempmv_x;
-          *mv_y = tempmv_y;  
+          *mv_x = (short) tempmv_x;
+          *mv_y = (short) tempmv_y;  
           return min_mcost;  
         } 
         
@@ -1949,12 +1962,12 @@ EPZSPelBlockMotionSearch (pel_t ** cur_pic,	  // <--  original pixel values for 
     if (input->EPZSSpatialMem && ref == 0)  
 #endif
     {
-      motion[0]  = tempmv_x;
-      motion[1]  = tempmv_y;
+      motion[0]  = (short) tempmv_x;
+      motion[1]  = (short) tempmv_y;
     }
     
-    *mv_x = tempmv_x;
-    *mv_y = tempmv_y;
+    *mv_x = (short) tempmv_x;
+    *mv_y = (short) tempmv_y;
     return min_mcost;
 }
 
@@ -2285,8 +2298,8 @@ EPZSBiPredBlockMotionSearch (pel_t ** cur_pic,	  // <--  original pixel values f
       }
     }
   }
-  *mv_x = tempmv_x;
-  *mv_y = tempmv_y;  
+  *mv_x = (short) tempmv_x;
+  *mv_y = (short) tempmv_y;  
   return min_mcost;
 }
 
@@ -2308,6 +2321,7 @@ EPZSOutputStats (FILE * stat, short stats_file)
     fprintf (stat, " EPZS Temporal Predictors     : %s\n",c_EPZSOther[input->EPZSTemporal]);
     fprintf (stat, " EPZS Spatial Predictors      : %s\n",c_EPZSOther[input->EPZSSpatialMem]);
     fprintf (stat, " EPZS Thresholds (16x16)      : (%d %d %d)\n",medthres[1], minthres[1], maxthres[1]);
+    fprintf (stat, " EPZS Subpel ME               : %s\n",c_EPZSOther[input->EPZSSubPelME]);
   }
   else
   {
@@ -2317,5 +2331,621 @@ EPZSOutputStats (FILE * stat, short stats_file)
     fprintf (stat, " EPZS Temporal Predictors          : %s\n",c_EPZSOther[input->EPZSTemporal]);
     fprintf (stat, " EPZS Spatial Predictors           : %s\n",c_EPZSOther[input->EPZSSpatialMem]);    
     fprintf (stat, " EPZS Thresholds (16x16)           : (%d %d %d)\n",medthres[1], minthres[1], maxthres[1]);
+    fprintf (stat, " EPZS Subpel ME                    : %s\n",c_EPZSOther[input->EPZSSubPelME]);
   }
 }
+
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Fast sub pixel block motion search to support EPZS
+ ***********************************************************************
+ */
+int                                               //  ==> minimum motion cost after search
+EPZSSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values for the AxB block
+                         short     ref,           // <--  reference frame (0... or -1 (backward))
+                         int       list,          // <--  reference picture list 
+                         int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
+                         int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
+                         int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
+                         int       pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
+                         int       pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
+                         short*    mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
+                         short*    mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
+                         int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
+                         int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
+                         int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                         int       lambda_factor  // <--  lagrangian parameter for determining motion cost
+                         )
+{
+
+  int   j, i, k;
+  int   c_diff[MB_PIXELS];
+  int   diff[16], *d;
+  int   pos, best_pos = 0, second_pos = 0, mcost, abort_search;
+  int   second_mcost = INT_MAX;
+  int   y0, y1, y2, y3;
+  int   x0;
+  int   ry0, ry4, ry8, ry12, rx0;
+  
+  int   cand_mv_x, cand_mv_y;
+  int   y_offset, ypels =(128 - 64 * (blocktype == 3));
+  
+  int   check_position0 = (!input->rdopt && img->type!=B_SLICE && ref==0 && blocktype==1 && *mv_x==0 && *mv_y==0 && input->hadamard);
+  int   blocksize_x     = input->blc_size[blocktype][0];
+  int   blocksize_y     = input->blc_size[blocktype][1];
+  int   pic4_pix_x      = ((pic_pix_x + IMG_PAD_SIZE)<< 2);
+  int   pic4_pix_y      = ((pic_pix_y + IMG_PAD_SIZE)<< 2);
+  int   min_pos2        = (input->hadamard == 1 ? 0 : 1);
+  int   max_pos2        = (input->hadamard ? max(1,search_pos2) : search_pos2);
+  int   list_offset     = img->mb_data[img->current_mb_nr].list_offset; 
+  int   apply_weights   = ((active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
+    (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));  
+  int   halfpelhadamard  = input->hadamard == 2 ? 0 : input->hadamard;
+  int   qpelstart        = input->hadamard == 2 ? 0 : 1;
+  int   test8x8transform = input->Transform8x8Mode && blocktype <= 4 && halfpelhadamard;
+  int   cmv_x, cmv_y;
+  
+  StorablePicture *ref_picture = listX[list+list_offset][ref];
+  pel_t **ref_pic = (apply_weights && input->UseWeightedReferenceME)? ref_picture->imgY_ups_w : ref_picture->imgY_ups;      
+  pel_t *ref_line;
+  pel_t *orig_line;  
+  int img_width  = ((ref_picture->size_x + 2*IMG_PAD_SIZE - 1)<<2);
+  int img_height = ((ref_picture->size_y + 2*IMG_PAD_SIZE - 1)<<2);
+  int max_pos_x4 = ((ref_picture->size_x - blocksize_x + 2*IMG_PAD_SIZE)<<2);
+  int max_pos_y4 = ((ref_picture->size_y - blocksize_y + 2*IMG_PAD_SIZE)<<2);
+  int start_pos = 5, end_pos = max_pos2;
+  /*********************************
+   *****                       *****
+   *****  HALF-PEL REFINEMENT  *****
+   *****                       *****
+   *********************************/
+  
+  //===== set function for getting pixel values =====
+  if ((pic4_pix_x + *mv_x > 1) && (pic4_pix_x + *mv_x < max_pos_x4 - 1) &&
+    (pic4_pix_y + *mv_y > 1) && (pic4_pix_y + *mv_y < max_pos_y4 - 1)   )
+  {
+    get_line = FastLine4X;
+  }
+  else
+  {
+    get_line = UMVLine4X;    
+  }
+  
+  
+  //===== loop over search positions =====
+  for (best_pos = 0, pos = min_pos2; pos < 5; pos++)
+  {
+    cand_mv_x = *mv_x + (search_point_hp_x[pos]);    // quarter-pel units
+    cand_mv_y = *mv_y + (search_point_hp_y[pos]);    // quarter-pel units
+    
+    //----- set motion vector cost -----
+    mcost = MV_COST (lambda_factor, 0, cand_mv_x, cand_mv_y, pred_mv_x, pred_mv_y);
+    
+    if (check_position0 && pos==0)
+    {
+      mcost -= WEIGHTED_COST (lambda_factor, 16);
+    }
+
+    if (mcost >= min_mcost) continue;
+  
+    cmv_x = cand_mv_x + pic4_pix_x;
+    cmv_y = cand_mv_y + pic4_pix_y;
+    
+    //----- add up SATD -----
+    for (y0=0, abort_search=0; y0<blocksize_y && !abort_search; y0+=4)
+    {
+      y_offset = (y0>7)*ypels;
+      ry0  = (y0<<2) + cmv_y;
+      ry4  = ry0 + 4;
+      ry8  = ry4 + 4;
+      ry12 = ry8 + 4;
+      y1 = y0 + 1;
+      y2 = y1 + 1;
+      y3 = y2 + 1;
+      
+      for (x0=0; x0<blocksize_x; x0+=BLOCK_SIZE)
+      {
+        rx0 = (x0<<2) + cmv_x;
+        d   = diff;
+        
+        orig_line = &orig_pic [y0][x0];    
+        ref_line  = get_line (ref_pic, ry0, rx0, img_height, img_width);
+        *d++      = *orig_line++ - *(ref_line     );
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line   - *(ref_line += 4);
+        
+        orig_line = &orig_pic [y1][x0];    
+        ref_line  = get_line (ref_pic, ry4, rx0, img_height, img_width);
+        *d++      = *orig_line++ - *(ref_line     );
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line   - *(ref_line += 4);
+        
+        orig_line = &orig_pic [y2][x0];
+        ref_line  = get_line (ref_pic, ry8, rx0, img_height, img_width);
+        *d++      = *orig_line++ - *(ref_line     );
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line   - *(ref_line += 4);
+        
+        orig_line = &orig_pic [y3][x0];    
+        ref_line  = get_line (ref_pic, ry12, rx0, img_height, img_width);
+        *d++      = *orig_line++ - *(ref_line     );
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d        = *orig_line   - *(ref_line += 4);
+        
+        if (!test8x8transform)
+        {
+          if ((mcost += SATD (diff, halfpelhadamard)) > min_mcost)
+          {
+            abort_search = 1;
+            break;
+          }
+        }
+        else
+        {
+          i = (x0&0x7) +  (x0>7) * 64 + y_offset;
+          for(k=0, j=y0; j<BLOCK_SIZE + y0; j++, k+=BLOCK_SIZE)
+            memcpy(&(c_diff[i + ((j&0x7)<<3)]), &diff[k], BLOCK_SIZE*sizeof(int));
+        }
+      }
+    }
+    
+    
+    if(test8x8transform)
+      mcost += find_SATD (c_diff, blocktype);
+        
+    if (mcost < min_mcost)
+    {
+      second_mcost = min_mcost;
+      second_pos  = best_pos;
+      min_mcost = mcost;
+      best_pos  = pos;
+    }
+    else
+    if (mcost < second_mcost)
+    {      
+      second_mcost = mcost;
+      second_pos  = pos;
+    }
+  }
+
+  if (best_pos ==0 && (pred_mv_x == *mv_x) && (pred_mv_y - *mv_y)== 0 && min_mcost < subthres[blocktype])
+      return min_mcost;
+  
+  if (best_pos != 0 && second_pos != 0)
+  {
+    switch (best_pos ^ second_pos)
+    {
+    case 1:
+      start_pos = 6;
+      end_pos   = 7;
+      break;
+    case 3:
+      start_pos = 5;
+      end_pos   = 6;
+      break;
+    case 5:
+      start_pos = 8;
+      end_pos   = 9;
+      break;
+    case 7:
+      start_pos = 7;
+      end_pos   = 8;
+      break;
+    default:
+      break;
+    }    
+  }
+  else 
+  {
+    switch (best_pos + second_pos)
+    {
+    case 0:
+      start_pos = 5;
+      end_pos   = 5;
+      break;
+    case 1:
+      start_pos = 8;
+      end_pos   = 10;
+      break;
+    case 2:
+      start_pos = 5;
+      end_pos   = 7;
+      break;
+    case 5:
+      start_pos = 6;
+      end_pos   = 8;
+      break;
+    case 7:
+      start_pos = 7;
+      end_pos   = 9;
+      break;
+    default:
+      break;
+    }        
+  }
+
+
+  if (best_pos !=0 || (abs(pred_mv_x - *mv_x) + abs(pred_mv_y - *mv_y)))
+  {
+    for (pos = start_pos; pos < end_pos; pos++)
+    {
+      cand_mv_x = *mv_x + (search_point_hp_x[pos]);    // quarter-pel units
+      cand_mv_y = *mv_y + (search_point_hp_y[pos]);    // quarter-pel units
+      
+      //----- set motion vector cost -----
+      mcost = MV_COST (lambda_factor, 0, cand_mv_x, cand_mv_y, pred_mv_x, pred_mv_y);
+      
+      if (check_position0 && pos==0)
+      {
+        mcost -= WEIGHTED_COST (lambda_factor, 16);
+      }
+      
+      if (mcost >= min_mcost) continue;
+      
+      cmv_x = cand_mv_x + pic4_pix_x;
+      cmv_y = cand_mv_y + pic4_pix_y;
+      
+      //----- add up SATD -----
+      for (y0=0, abort_search=0; y0<blocksize_y && !abort_search; y0+=4)
+      {
+        y_offset = (y0>7)*ypels;
+        ry0  = (y0<<2) + cmv_y;
+        ry4  = ry0 + 4;
+        ry8  = ry4 + 4;
+        ry12 = ry8 + 4;
+        y1 = y0 + 1;
+        y2 = y1 + 1;
+        y3 = y2 + 1;
+        
+        for (x0=0; x0<blocksize_x; x0+=BLOCK_SIZE)
+        {
+          rx0 = (x0<<2) + cmv_x;
+          d   = diff;
+          
+          orig_line = &orig_pic [y0][x0];    
+          ref_line  = get_line (ref_pic, ry0, rx0, img_height, img_width);
+          *d++      = *orig_line++ - *(ref_line     );
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line   - *(ref_line += 4);
+          
+          orig_line = &orig_pic [y1][x0];    
+          ref_line  = get_line (ref_pic, ry4, rx0, img_height, img_width);
+          *d++      = *orig_line++ - *(ref_line     );
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line   - *(ref_line += 4);
+          
+          orig_line = &orig_pic [y2][x0];
+          ref_line  = get_line (ref_pic, ry8, rx0, img_height, img_width);
+          *d++      = *orig_line++ - *(ref_line     );
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line   - *(ref_line += 4);
+          
+          orig_line = &orig_pic [y3][x0];    
+          ref_line  = get_line (ref_pic, ry12, rx0, img_height, img_width);
+          *d++      = *orig_line++ - *(ref_line     );
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d        = *orig_line   - *(ref_line += 4);
+          
+          if (!test8x8transform)
+          {
+            if ((mcost += SATD (diff, halfpelhadamard)) > min_mcost)
+            {
+              abort_search = 1;
+              break;
+            }
+          }
+          else
+          {
+            i = (x0&0x7) +  (x0>7) * 64 + y_offset;
+            for(k=0, j=y0; j<BLOCK_SIZE + y0; j++, k+=BLOCK_SIZE)
+              memcpy(&(c_diff[i + ((j&0x7)<<3)]), &diff[k], BLOCK_SIZE*sizeof(int));
+          }
+  }
+}
+      
+      
+      if(test8x8transform)
+        mcost += find_SATD (c_diff, blocktype);
+      
+      if (mcost < min_mcost)
+      {
+        min_mcost = mcost;
+        best_pos  = pos;
+      }
+    }
+  }
+
+  if (best_pos)
+  {
+    *mv_x += (search_point_hp_x [best_pos]);
+    *mv_y += (search_point_hp_y [best_pos]);
+  }
+  
+  if (input->hadamard == 2)
+    min_mcost = INT_MAX;
+  
+  test8x8transform = input->Transform8x8Mode && blocktype <= 4 && input->hadamard;
+  
+  /************************************
+  *****                          *****
+  *****  QUARTER-PEL REFINEMENT  *****
+  *****                          *****
+  ************************************/
+  //===== set function for getting pixel values =====
+  if ((pic4_pix_x + *mv_x > 0) && (pic4_pix_x + *mv_x < max_pos_x4) &&
+    (pic4_pix_y + *mv_y > 0) && (pic4_pix_y + *mv_y < max_pos_y4)   )
+  {
+    get_line = FastLine4X;
+  }
+  else
+  {
+    get_line = UMVLine4X;    
+  }
+
+  second_pos = 0;
+  second_mcost = INT_MAX;
+  //===== loop over search positions =====
+  for (best_pos = 0, pos = qpelstart; pos < 5; pos++)
+  {
+    cand_mv_x = *mv_x + search_point_qp_x[pos];    // quarter-pel units
+    cand_mv_y = *mv_y + search_point_qp_y[pos];    // quarter-pel units
+    
+    //----- set motion vector cost -----
+    mcost = MV_COST (lambda_factor, 0, cand_mv_x, cand_mv_y, pred_mv_x, pred_mv_y);
+    
+    if (mcost >= min_mcost) continue;
+    cmv_x = cand_mv_x + pic4_pix_x;
+    cmv_y = cand_mv_y + pic4_pix_y;
+    
+    //----- add up SATD -----
+    for (y0=0, abort_search=0; y0<blocksize_y && !abort_search; y0+=4)
+    {
+      y_offset = (y0>7)*ypels;
+      ry0 = (y0<<2) + cmv_y;
+      ry4  = ry0 + 4;
+      ry8  = ry4 + 4;
+      ry12 = ry8 + 4;
+      y1 = y0 + 1;
+      y2 = y1 + 1;
+      y3 = y2 + 1;
+      
+      for (x0=0; x0<blocksize_x; x0+=BLOCK_SIZE)
+      {
+        rx0  = (x0<<2) + cmv_x;
+        d    = diff;
+        
+        orig_line = &orig_pic [y0][x0];    
+        ref_line  = get_line (ref_pic, ry0, rx0, img_height, img_width);
+        *d++      = *orig_line++ - *(ref_line     );
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line   - *(ref_line += 4);
+        
+        orig_line = &orig_pic [y1][x0];    
+        ref_line  = get_line (ref_pic, ry4, rx0, img_height, img_width);
+        *d++      = *orig_line++ - *(ref_line     );
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line   - *(ref_line += 4);
+        
+        orig_line = &orig_pic [y2][x0];
+        ref_line  = get_line (ref_pic, ry8, rx0, img_height, img_width);
+        *d++      = *orig_line++ - *(ref_line     );
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line   - *(ref_line += 4);
+        
+        orig_line = &orig_pic [y3][x0];    
+        ref_line  = get_line (ref_pic, ry12, rx0, img_height, img_width);
+        *d++      = *orig_line++ - *(ref_line     );
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d++      = *orig_line++ - *(ref_line += 4);
+        *d        = *orig_line   - *(ref_line += 4);
+        
+        if (!test8x8transform)
+        {
+          if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+          {
+            abort_search = 1;
+            break;
+          }
+        }
+        else
+        {
+          i = (x0&0x7) + (x0>7) * 64 + y_offset;
+          for(k=0, j=y0; j<y0 + BLOCK_SIZE; j++, k+=BLOCK_SIZE)
+            memcpy(&(c_diff[i + ((j&0x7)<<3)]), &diff[k], BLOCK_SIZE*sizeof(int));
+        }
+      }
+    }
+    
+    if(test8x8transform)
+      mcost += find_SATD (c_diff, blocktype);
+    
+    if (mcost < min_mcost)
+    {
+      min_mcost = mcost;
+      best_pos  = pos;
+    }
+    if (mcost < min_mcost)
+    {
+      second_mcost = min_mcost;
+      second_pos  = best_pos;
+      min_mcost = mcost;
+      best_pos  = pos;
+    }
+    else
+    if (mcost < second_mcost)
+    {
+      second_mcost = mcost;
+      second_pos  = pos;
+    }
+  }
+
+  if (best_pos ==0 && (pred_mv_x == *mv_x) && (pred_mv_y - *mv_y)== 0 && min_mcost < subthres[blocktype])
+  {
+      return min_mcost;
+  }
+
+  start_pos = 5;
+  end_pos = search_pos4;
+
+  if (best_pos != 0 && second_pos != 0)
+  {
+    switch (best_pos ^ second_pos)
+    {
+    case 1:
+      start_pos = 6;
+      end_pos   = 7;
+      break;
+    case 3:
+      start_pos = 5;
+      end_pos   = 6;
+      break;
+    case 5:
+      start_pos = 8;
+      end_pos   = 9;
+      break;
+    case 7:
+      start_pos = 7;
+      end_pos   = 8;
+      break;
+    default:
+      break;
+    }    
+  }
+  else 
+  {
+    switch (best_pos + second_pos)
+    {
+    //case 0:
+      //start_pos = 5;
+      //end_pos   = 5;
+      //break;
+    case 1:
+      start_pos = 8;
+      end_pos   = 10;
+      break;
+    case 2:
+      start_pos = 5;
+      end_pos   = 7;
+      break;
+    case 5:
+      start_pos = 6;
+      end_pos   = 8;
+      break;
+    case 7:
+      start_pos = 7;
+      end_pos   = 9;
+      break;
+    default:
+      break;
+    }    
+  }
+
+  if (best_pos !=0 || (abs(pred_mv_x - *mv_x) + abs(pred_mv_y - *mv_y)))
+  {
+    for (pos = start_pos; pos < end_pos; pos++)
+    {
+      cand_mv_x = *mv_x + search_point_qp_x[pos];    // quarter-pel units
+      cand_mv_y = *mv_y + search_point_qp_y[pos];    // quarter-pel units
+      
+      //----- set motion vector cost -----
+      mcost = MV_COST (lambda_factor, 0, cand_mv_x, cand_mv_y, pred_mv_x, pred_mv_y);
+      
+      if (mcost >= min_mcost) continue;
+      cmv_x = cand_mv_x + pic4_pix_x;
+      cmv_y = cand_mv_y + pic4_pix_y;
+      
+      //----- add up SATD -----
+      for (y0=0, abort_search=0; y0<blocksize_y && !abort_search; y0+=4)
+      {
+        y_offset = (y0>7)*ypels;
+        ry0 = (y0<<2) + cmv_y;
+        ry4  = ry0 + 4;
+        ry8  = ry4 + 4;
+        ry12 = ry8 + 4;
+        y1 = y0 + 1;
+        y2 = y1 + 1;
+        y3 = y2 + 1;
+        
+        for (x0=0; x0<blocksize_x; x0+=BLOCK_SIZE)
+        {
+          rx0  = (x0<<2) + cmv_x;
+          d    = diff;
+          
+          orig_line = &orig_pic [y0][x0];    
+          ref_line  = get_line (ref_pic, ry0, rx0, img_height, img_width);
+          *d++      = *orig_line++ - *(ref_line     );
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line   - *(ref_line += 4);
+          
+          orig_line = &orig_pic [y1][x0];    
+          ref_line  = get_line (ref_pic, ry4, rx0, img_height, img_width);
+          *d++      = *orig_line++ - *(ref_line     );
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line   - *(ref_line += 4);
+          
+          orig_line = &orig_pic [y2][x0];
+          ref_line  = get_line (ref_pic, ry8, rx0, img_height, img_width);
+          *d++      = *orig_line++ - *(ref_line     );
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line   - *(ref_line += 4);
+          
+          orig_line = &orig_pic [y3][x0];    
+          ref_line  = get_line (ref_pic, ry12, rx0, img_height, img_width);
+          *d++      = *orig_line++ - *(ref_line     );
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d++      = *orig_line++ - *(ref_line += 4);
+          *d        = *orig_line   - *(ref_line += 4);
+          
+          if (!test8x8transform)
+          {
+            if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+            {
+              abort_search = 1;
+              break;
+            }
+          }
+          else
+          {
+            i = (x0&0x7) + (x0>7) * 64 + y_offset;
+            for(k=0, j=y0; j<y0 + BLOCK_SIZE; j++, k+=BLOCK_SIZE)
+              memcpy(&(c_diff[i + ((j&0x7)<<3)]), &diff[k], BLOCK_SIZE*sizeof(int));
+          }
+        }
+      }
+      
+      if(test8x8transform)
+        mcost += find_SATD (c_diff, blocktype);
+      
+      if (mcost < min_mcost)
+      {
+        min_mcost = mcost;
+        best_pos  = pos;
+      }
+    }
+  }
+  if (best_pos)
+  {
+    *mv_x += search_point_qp_x [best_pos];
+    *mv_y += search_point_qp_y [best_pos];
+  }
+  
+  //===== return minimum motion cost =====
+  return min_mcost;
+}
+
