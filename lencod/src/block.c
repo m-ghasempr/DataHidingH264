@@ -144,6 +144,7 @@ void intrapred_luma(int img_x,int img_y)
   int block_available_up        = (img->ipredmode[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
   int block_available_up_right  = (img->ipredmode[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0);
   int block_available_left      = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
+  int block_available_up_left   = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE] >=0);
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
@@ -153,19 +154,34 @@ void intrapred_luma(int img_x,int img_y)
       block_available_up        = (img->ipredmode_top[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
       block_available_up_right  = (img->ipredmode_top[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0);
       block_available_left      = (img->ipredmode_top[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
+      block_available_up_left   = (img->ipredmode_top[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE] >=0);
     }
     else
     {
       block_available_up        = (img->ipredmode_bot[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
       block_available_up_right  = (img->ipredmode_bot[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0);
       block_available_left      = (img->ipredmode_bot[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
+      block_available_up_left   = (img->ipredmode_bot[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE] >=0);
     }
   }
   
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
   {
+    if(img->field_mode)
+    {
+      if(img_x%MB_BLOCK_SIZE == 12 && img_y%MB_BLOCK_SIZE )
+        block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
+    }
+    else
+    {
+      if(img_x%MB_BLOCK_SIZE == 12 && img_y%(2*MB_BLOCK_SIZE) )
+        block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
+    }
+
+    /*
     if(img_x%MB_BLOCK_SIZE == 12)   
       block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
+      */
   }
   i = (img_x & 15);
   j = (img_y & 15);
@@ -218,8 +234,7 @@ void intrapred_luma(int img_x,int img_y)
     P_I = P_J = P_K = P_L = 128;
   }
 
-  // XXXGJC -- not quite right for this boundary
-  if (block_available_up && block_available_left)
+  if (block_available_up_left)
   {
     P_X = imgY_pred[img_y-1][img_x-1];
   }
@@ -284,27 +299,8 @@ void intrapred_luma(int img_x,int img_y)
   if(!block_available_up)img->mprr[VERT_PRED][0][0]=-1;
   if(!block_available_left)img->mprr[HOR_PRED][0][0]=-1;
 
-  /*  Prediction according to 'diagonal' modes */
-  if (block_available_up && block_available_left)
+  if (block_available_up) 
   {
-    // Mode DIAG_DOWN_RIGHT_PRED
-    img->mprr[DIAG_DOWN_RIGHT_PRED][3][0] = (P_L + 2*P_K + P_J + 2) / 4; 
-    img->mprr[DIAG_DOWN_RIGHT_PRED][2][0] =
-    img->mprr[DIAG_DOWN_RIGHT_PRED][3][1] = (P_K + 2*P_J + P_I + 2) / 4; 
-    img->mprr[DIAG_DOWN_RIGHT_PRED][1][0] =
-    img->mprr[DIAG_DOWN_RIGHT_PRED][2][1] = 
-    img->mprr[DIAG_DOWN_RIGHT_PRED][3][2] = (P_J + 2*P_I + P_X + 2) / 4; 
-    img->mprr[DIAG_DOWN_RIGHT_PRED][0][0] =
-    img->mprr[DIAG_DOWN_RIGHT_PRED][1][1] =
-    img->mprr[DIAG_DOWN_RIGHT_PRED][2][2] =
-    img->mprr[DIAG_DOWN_RIGHT_PRED][3][3] = (P_I + 2*P_X + P_A + 2) / 4; 
-    img->mprr[DIAG_DOWN_RIGHT_PRED][0][1] =
-    img->mprr[DIAG_DOWN_RIGHT_PRED][1][2] =
-    img->mprr[DIAG_DOWN_RIGHT_PRED][2][3] = (P_X + 2*P_A + P_B + 2) / 4;
-    img->mprr[DIAG_DOWN_RIGHT_PRED][0][2] =
-    img->mprr[DIAG_DOWN_RIGHT_PRED][1][3] = (P_A + 2*P_B + P_C + 2) / 4;
-    img->mprr[DIAG_DOWN_RIGHT_PRED][0][3] = (P_B + 2*P_C + P_D + 2) / 4;
-
     // Mode DIAG_DOWN_LEFT_PRED
     img->mprr[DIAG_DOWN_LEFT_PRED][0][0] = (P_A + P_C + 2*(P_B) + 2) / 4;
     img->mprr[DIAG_DOWN_LEFT_PRED][0][1] = 
@@ -322,24 +318,6 @@ void intrapred_luma(int img_x,int img_y)
     img->mprr[DIAG_DOWN_LEFT_PRED][2][3] = 
     img->mprr[DIAG_DOWN_LEFT_PRED][3][2] = (P_F + P_H + 2*(P_G) + 2) / 4;
     img->mprr[DIAG_DOWN_LEFT_PRED][3][3] = (P_G + 3*(P_H) + 2) / 4;
-
-    // Mode VERT_RIGHT_PRED
-    img->mprr[VERT_RIGHT_PRED][0][0] = 
-    img->mprr[VERT_RIGHT_PRED][2][1] = (P_X + P_A + 1) / 2;
-    img->mprr[VERT_RIGHT_PRED][0][1] = 
-    img->mprr[VERT_RIGHT_PRED][2][2] = (P_A + P_B + 1) / 2;
-    img->mprr[VERT_RIGHT_PRED][0][2] = 
-    img->mprr[VERT_RIGHT_PRED][2][3] = (P_B + P_C + 1) / 2;
-    img->mprr[VERT_RIGHT_PRED][0][3] = (P_C + P_D + 1) / 2;
-    img->mprr[VERT_RIGHT_PRED][1][0] = 
-    img->mprr[VERT_RIGHT_PRED][3][1] = (P_I + 2*P_X + P_A + 2) / 4;
-    img->mprr[VERT_RIGHT_PRED][1][1] = 
-    img->mprr[VERT_RIGHT_PRED][3][2] = (P_X + 2*P_A + P_B + 2) / 4;
-    img->mprr[VERT_RIGHT_PRED][1][2] = 
-    img->mprr[VERT_RIGHT_PRED][3][3] = (P_A + 2*P_B + P_C + 2) / 4;
-    img->mprr[VERT_RIGHT_PRED][1][3] = (P_B + 2*P_C + P_D + 2) / 4;
-    img->mprr[VERT_RIGHT_PRED][2][0] = (P_X + 2*P_I + P_J + 2) / 4;
-    img->mprr[VERT_RIGHT_PRED][3][0] = (P_I + 2*P_J + P_K + 2) / 4;
 
     // Mode VERT_LEFT_PRED
     img->mprr[VERT_LEFT_PRED][0][0] = (P_A + P_B + 1) / 2;
@@ -359,6 +337,11 @@ void intrapred_luma(int img_x,int img_y)
     img->mprr[VERT_LEFT_PRED][3][2] = (P_D + 2*P_E + P_F + 2) / 4;
     img->mprr[VERT_LEFT_PRED][3][3] = (P_E + 2*P_F + P_G + 2) / 4;
 
+  }
+
+  /*  Prediction according to 'diagonal' modes */
+  if (block_available_up && block_available_left) 
+  {
     // Mode HOR_UP_PRED
     img->mprr[HOR_UP_PRED][0][0] = (P_I + P_J + 1) / 2;
     img->mprr[HOR_UP_PRED][0][1] = (P_I + 2*P_J + P_K + 2) / 4;
@@ -376,6 +359,46 @@ void intrapred_luma(int img_x,int img_y)
     img->mprr[HOR_UP_PRED][3][1] = 
     img->mprr[HOR_UP_PRED][3][2] = 
     img->mprr[HOR_UP_PRED][3][3] = P_L;
+  }
+
+  /*  Prediction according to 'diagonal' modes */
+  if (block_available_up && block_available_left) 
+  {
+    // Mode DIAG_DOWN_RIGHT_PRED
+    img->mprr[DIAG_DOWN_RIGHT_PRED][3][0] = (P_L + 2*P_K + P_J + 2) / 4; 
+    img->mprr[DIAG_DOWN_RIGHT_PRED][2][0] =
+    img->mprr[DIAG_DOWN_RIGHT_PRED][3][1] = (P_K + 2*P_J + P_I + 2) / 4; 
+    img->mprr[DIAG_DOWN_RIGHT_PRED][1][0] =
+    img->mprr[DIAG_DOWN_RIGHT_PRED][2][1] = 
+    img->mprr[DIAG_DOWN_RIGHT_PRED][3][2] = (P_J + 2*P_I + P_X + 2) / 4; 
+    img->mprr[DIAG_DOWN_RIGHT_PRED][0][0] =
+    img->mprr[DIAG_DOWN_RIGHT_PRED][1][1] =
+    img->mprr[DIAG_DOWN_RIGHT_PRED][2][2] =
+    img->mprr[DIAG_DOWN_RIGHT_PRED][3][3] = (P_I + 2*P_X + P_A + 2) / 4; 
+    img->mprr[DIAG_DOWN_RIGHT_PRED][0][1] =
+    img->mprr[DIAG_DOWN_RIGHT_PRED][1][2] =
+    img->mprr[DIAG_DOWN_RIGHT_PRED][2][3] = (P_X + 2*P_A + P_B + 2) / 4;
+    img->mprr[DIAG_DOWN_RIGHT_PRED][0][2] =
+    img->mprr[DIAG_DOWN_RIGHT_PRED][1][3] = (P_A + 2*P_B + P_C + 2) / 4;
+    img->mprr[DIAG_DOWN_RIGHT_PRED][0][3] = (P_B + 2*P_C + P_D + 2) / 4;
+
+     // Mode VERT_RIGHT_PRED
+    img->mprr[VERT_RIGHT_PRED][0][0] = 
+    img->mprr[VERT_RIGHT_PRED][2][1] = (P_X + P_A + 1) / 2;
+    img->mprr[VERT_RIGHT_PRED][0][1] = 
+    img->mprr[VERT_RIGHT_PRED][2][2] = (P_A + P_B + 1) / 2;
+    img->mprr[VERT_RIGHT_PRED][0][2] = 
+    img->mprr[VERT_RIGHT_PRED][2][3] = (P_B + P_C + 1) / 2;
+    img->mprr[VERT_RIGHT_PRED][0][3] = (P_C + P_D + 1) / 2;
+    img->mprr[VERT_RIGHT_PRED][1][0] = 
+    img->mprr[VERT_RIGHT_PRED][3][1] = (P_I + 2*P_X + P_A + 2) / 4;
+    img->mprr[VERT_RIGHT_PRED][1][1] = 
+    img->mprr[VERT_RIGHT_PRED][3][2] = (P_X + 2*P_A + P_B + 2) / 4;
+    img->mprr[VERT_RIGHT_PRED][1][2] = 
+    img->mprr[VERT_RIGHT_PRED][3][3] = (P_A + 2*P_B + P_C + 2) / 4;
+    img->mprr[VERT_RIGHT_PRED][1][3] = (P_B + 2*P_C + P_D + 2) / 4;
+    img->mprr[VERT_RIGHT_PRED][2][0] = (P_X + 2*P_I + P_J + 2) / 4;
+    img->mprr[VERT_RIGHT_PRED][3][0] = (P_I + 2*P_J + P_K + 2) / 4;
 
     // Mode HOR_DOWN_PRED
     img->mprr[HOR_DOWN_PRED][0][0] = 
@@ -425,12 +448,15 @@ void intrapred_luma_16x16()
   int mb_width = img->width/16;
   int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
   int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+  int mb_available_up_left = (img->mb_x==0 || img->mb_y==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
 
   if(input->UseConstrainedIntraPred)
   {
     if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
       mb_available_up   = 0;
     if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
+      mb_available_left = 0;
+    if (mb_available_up_left && (img->intra_block[mb_nr-mb_width-1][3]==0))
       mb_available_left = 0;
   }
 
@@ -439,12 +465,14 @@ void intrapred_luma_16x16()
     if(img->top_field)
     {
       mb_available_up = (img->mb_y/2 == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+      mb_available_up_left = (img->mb_y/2 == 0 || img->mb_x==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
       pix_y   = img->field_pix_y; // set pix_y to field pix_y
       imgY_pred = imgY_top; // set the prediction image to top field
     }
     else
     {
       mb_available_up = ((img->mb_y-1)/2 == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+      mb_available_up_left = ((img->mb_y-1)/2 == 0 || img->mb_x==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
       imgY_pred = imgY_bot;
       pix_y   = img->field_pix_y; // set pix_y to field pix_y
     }
@@ -488,7 +516,7 @@ void intrapred_luma_16x16()
       img->mprr_2[DC_PRED_16  ][j][i]=s0;      // store DC prediction
     }
   }
-  if (!mb_available_up || !mb_available_left) // edge
+  if (!mb_available_up || !mb_available_left || !mb_available_up_left) // edge
     return;
 
   // 16 bit integer plan pred

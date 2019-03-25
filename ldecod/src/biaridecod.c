@@ -53,6 +53,8 @@
 
 extern int symbolCount;
 
+int binCount = 0;
+
 /************************************************************************
  * M a c r o s
  ************************************************************************
@@ -179,6 +181,8 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
   register unsigned int range = dep->Drange;
 	register unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 0x03];
 
+//  fprintf(p_trace, "%d  0x%04x  %d  %d\n", binCount++, dep->Drange, bi_ct->state, bi_ct->MPS );
+
 	range -= rLPS;
 
 	if (value < range) /* MPS */ 
@@ -224,6 +228,8 @@ unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep)
   register unsigned int bit = 0;
 	register unsigned int value  = (dep->Dvalue<<1);
 
+//  fprintf(p_trace, "%d  0x%04x\n", binCount++, dep->Drange );
+
 	if (--Dbits_to_go < 0) 
 		get_byte();	
 	/* Shift in next bit and add to value */	
@@ -251,6 +257,8 @@ unsigned int biari_decode_final(DecodingEnvironmentPtr dep)
 {
   register unsigned int value  = dep->Dvalue;
   register unsigned int range  = dep->Drange - 2;
+
+//  fprintf(p_trace, "%d  0x%04x\n", binCount++, dep->Drange );
 		
 	if (value >= range) 
 	{

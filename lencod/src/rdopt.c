@@ -148,7 +148,7 @@ void UpdatePixelMap()
   if (img->type==INTRA_IMG)
   {
     for (y=0; y<img->height; y++)
-    for (x=0; x<img->height; x++)
+    for (x=0; x<img->width; x++)
     {
       pixel_map[y][x]=1;
     }
@@ -433,7 +433,9 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
   int     upMode;
   int     leftMode;
   int     mostProbableMode;
-  
+
+  int left_available, up_available, all_available;
+
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
     pic_pix_y   = img->field_pix_y+block_y;
@@ -442,7 +444,15 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
     imgY_orig   = (img->top_field ? imgY_org_top:imgY_org_bot);
   }
 
-  upMode           = ipredmodes[pic_block_x+1][pic_block_y  ];
+  if( mb_adaptive && img->field_mode && img->top_field && pic_block_y>0 && pic_block_y%4==0 && img->field_anchor[2*pic_block_y-1][pic_block_x] == 0 ) // BUG FIX (above is FRAME)
+  {
+    upMode = img->ipredmode[pic_block_x+1][2*pic_block_y];
+  }
+  else
+  {
+    upMode = ipredmodes[pic_block_x+1][pic_block_y  ];
+  }
+  //upMode           = ipredmodes[pic_block_x+1][pic_block_y  ];
   leftMode         = ipredmodes[pic_block_x  ][pic_block_y+1];
   mostProbableMode = (upMode < 0 || leftMode < 0) ? DC_PRED : upMode < leftMode ? upMode : leftMode;
   *min_cost = (1<<20);
@@ -451,12 +461,20 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
   //===== INTRA PREDICTION FOR 4x4 BLOCK =====
   intrapred_luma (pic_pix_x, pic_pix_y);
 
+  left_available  = (ipredmodes[pic_block_x][pic_block_y+1] >= 0 ? 1 : 0);
+  up_available    = (ipredmodes[pic_block_x+1][pic_block_y] >= 0 ? 1 : 0);
+  all_available   = (left_available && up_available && ipredmodes[pic_block_x][pic_block_y] >= 0 ? 1 : 0);
 
   //===== LOOP OVER ALL 4x4 INTRA PREDICTION MODES =====
   for (ipmode=0; ipmode<NO_INTRA_PMODE; ipmode++)
-  {
+  {/*
     if ((ipmode==DC_PRED || ipmode==HOR_PRED  || ipredmodes[pic_block_x+1][pic_block_y] >= 0) &&
         (ipmode==DC_PRED || ipmode==VERT_PRED || ipredmodes[pic_block_x][pic_block_y+1] >= 0)  )
+        */
+    if( (ipmode==DC_PRED) ||
+        ((ipmode==VERT_PRED||ipmode==VERT_LEFT_PRED||ipmode==DIAG_DOWN_LEFT_PRED) && up_available ) ||
+        ((ipmode==HOR_PRED||ipmode==HOR_UP_PRED) && left_available ) ||
+        (all_available) )
     {
       if (!input->rdopt)
       {
@@ -722,7 +740,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
   //----- block 8x8 mode -----
   if (input->symbol_mode == UVLC)
   {
-    n_linfo2 (b8value, dummy, &mrate, &dummy);
+    ue_linfo (b8value, dummy, &mrate, &dummy);
     rate += mrate;
   }
   else
@@ -1435,15 +1453,15 @@ int RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
       // cod counter and macroblock mode are written ==> do not consider code counter
       tmp_cc = img->cod_counter;
       rate   = writeMBHeader (1); 
-      n_linfo2 (tmp_cc, dummy, &cc_rate, &dummy);
+      ue_linfo (tmp_cc, dummy, &cc_rate, &dummy);
       rate  -= cc_rate;
       img->cod_counter = tmp_cc;
     }
     else
     {
       // cod counter is just increased  ==> get additional rate
-      n_linfo2 (img->cod_counter+1, dummy, &rate,    &dummy);
-      n_linfo2 (img->cod_counter,   dummy, &cc_rate, &dummy);
+      ue_linfo (img->cod_counter+1, dummy, &rate,    &dummy);
+      ue_linfo (img->cod_counter,   dummy, &cc_rate, &dummy);
       rate -= cc_rate;
     }
   }
@@ -2542,19 +2560,22 @@ void encode_one_macroblock ()
     {
       int mb_available_up;
       int mb_available_left;
+      int mb_available_up_left;
       
       min_rdcost = max_rdcost;
       
       // precompute all new chroma intra prediction modes
-      IntraChromaPrediction8x8(&mb_available_up, &mb_available_left);
+      IntraChromaPrediction8x8(&mb_available_up, &mb_available_left, &mb_available_up_left);
 
-      for (currMB->c_ipred_mode=VERT_PRED_8; currMB->c_ipred_mode<=PLANE_8; currMB->c_ipred_mode++)
+      for (currMB->c_ipred_mode=DC_PRED_8; currMB->c_ipred_mode<=PLANE_8; currMB->c_ipred_mode++)
       {
+        
         // bypass if c_ipred_mode is not allowed
         if ((currMB->c_ipred_mode==VERT_PRED_8 && !mb_available_up) ||
-           (currMB->c_ipred_mode==HOR_PRED_8 && !mb_available_left) ||
-           (currMB->c_ipred_mode==PLANE_8 && (!mb_available_left || !mb_available_up)))
+            (currMB->c_ipred_mode==HOR_PRED_8 && !mb_available_left) ||
+            (currMB->c_ipred_mode==PLANE_8 && (!mb_available_left || !mb_available_up || !mb_available_up_left)))
            continue;
+           
 
         //===== GET BEST MACROBLOCK MODE =====
         for (ctr16x16=0, index=0; index<7; index++)
@@ -2586,10 +2607,10 @@ void encode_one_macroblock ()
           }
           if (bframe && mode == 0 && currMB->cbp && (currMB->cbp&15) != 15)
           {
-              img->NoResidueDirect = 1;
-              if (RDCost_for_macroblocks (lambda_mode, mode, &min_rdcost))
-              {
-                store_macroblock_parameters (mode);
+            img->NoResidueDirect = 1;
+            if (RDCost_for_macroblocks (lambda_mode, mode, &min_rdcost))
+            {
+              store_macroblock_parameters (mode);
             }
           }
         }
@@ -2663,7 +2684,7 @@ void encode_one_macroblock ()
       }
     }
     // precompute all chroma intra prediction modes
-    IntraChromaPrediction8x8(NULL, NULL);
+    IntraChromaPrediction8x8(NULL, NULL, NULL);
     img->i16offset = 0;
     dummy = 0;
     ChromaResidualCoding (&dummy);

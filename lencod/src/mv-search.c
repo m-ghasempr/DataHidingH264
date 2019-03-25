@@ -599,7 +599,8 @@ SetMotionVectorPredictor (int  pmv[2],
     }
     else
     {
-      if(rFrameUR == ref_frame)
+      if( block_available_upright && refFrArr[pic_block_y-1][pic_block_x+blockshape_x/4] == ref_frame)
+      //if(rFrameUR == ref_frame) // not correct
         mvPredType = MVPRED_UR;
     }
   }
@@ -897,15 +898,21 @@ FastFullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  not used
   int   max_pos       = (2*search_range+1)*(2*search_range+1);              // number of search positions
   int   lambda_factor = LAMBDA_FACTOR (lambda);                             // factor for determining lagragian motion cost
   int   best_pos      = 0;                                                  // position with minimum motion cost
-  int   block_index   = (pic_pix_y-img->pix_y)+((pic_pix_x-img->pix_x)>>2); // block index for indexing SAD array
-  int*  block_sad     = BlockSAD[refindex][blocktype][block_index];         // pointer to SAD array
-  int   pix_y         = img->pix_y;
+  int   block_index;                                                        // block index for indexing SAD array
+  int*  block_sad;                                                          // pointer to SAD array
+  int   pix_y;
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
     pix_y = img->field_pix_y;
     block_index   = (pic_pix_y-pix_y)+((pic_pix_x-img->pix_x)>>2); 
     block_sad     = BlockSAD[refindex][blocktype][block_index];
+  }
+  else
+  {
+    block_index   = (pic_pix_y-img->pix_y)+((pic_pix_x-img->pix_x)>>2); // block index for indexing SAD array
+    block_sad     = BlockSAD[refindex][blocktype][block_index];         // pointer to SAD array
+    pix_y         = img->pix_y;
   }
 
   //===== set up fast full integer search if needed / set search center =====

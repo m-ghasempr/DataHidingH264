@@ -88,7 +88,7 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
  */
 void DeblockFrame(ImageParameters *img, byte **imgY, byte ***imgUV)
 {
-  int       mb_x, mb_y ;
+  int mb_x, mb_y ;
   
   for( mb_y=0 ; mb_y<(img->height>>4) ; mb_y++ )
     for( mb_x=0 ; mb_x<(img->width>>4) ; mb_x++ )
@@ -110,6 +110,7 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
   byte          Strength[4], *SrcY, *SrcU, *SrcV ;
   Macroblock    *MbP, *MbQ ; 
   int           sizey;
+  int           QPC;
   
   SrcY = imgY    [mb_y<<4] + (mb_x<<4) ;                                                      // pointers to source
   SrcU = imgUV[0][mb_y<<3] + (mb_x<<3) ;
@@ -138,8 +139,9 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
           EdgeLoop( SrcY + (edge<<2)* ((dir)? img->width:1 ), Strength, QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width, 0) ; 
           if( (imgUV != NULL) && !(edge & 1) )
           {
-            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QP_SCALE_CR[QP], MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
-            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QP_SCALE_CR[QP], MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
+            QPC  = (QP_SCALE_CR[MbP->qp] + QP_SCALE_CR[MbQ->qp]) >> 1;
+            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QPC, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
+            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QPC, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
           }
         }
       }
@@ -184,7 +186,7 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
     blkP = BLK_NUM[dir][(edge-1) & 3][idx] ; 
     
 
-    if( ( img->type != SP_IMG_1) && (img->type != SP_IMG_MULT)  && (img->type != SI_IMG)
+    if( ( img->type != SP_IMG) && (img->type != SI_IMG)
           && !(MbP->mb_type==I4MB || MbP->mb_type==I16MB)
           && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB) )
     {
@@ -195,7 +197,7 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
         blk_y  = block_y + (blkQ >> 2) ;   blk_y2 = blk_y -  dir ;
         blk_x  = block_x + (blkQ  & 3)+4 ; blk_x2 = blk_x - !dir ;
 
-        if( (img->type == B_IMG_1)  || (img->type == B_IMG_MULT) )
+        if( (img->type == B_IMG) )
         {
           Strength[idx] =  (abs( fw_mv[blk_x][blk_y][0] - fw_mv[blk_x2][blk_y2][0]) >= 4) |
                            (abs( fw_mv[blk_x][blk_y][1] - fw_mv[blk_x2][blk_y2][1]) >= 4) |

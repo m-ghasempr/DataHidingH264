@@ -79,9 +79,7 @@ seq_parameter_set_rbsp_t *active_sps;
 // global picture format dependend buffers, mem allocation in decod.c ******************
 int  **refFrArr;                                //!< Array for reference frames of each block
 byte **imgY;                                    //!< array for the decoded luma component
-byte **imgY_pf;                                 //!< Post filter luma image
 byte ***imgUV;                                  //!< array for the chroma component
-byte ***imgUV_pf;                               //!< Post filter luma image
 
 int   **moving_block;           //<! stationary block buffer
 int   **moving_block_frm;       //<! stationary block buffer - frame
@@ -667,7 +665,6 @@ struct inp_par
   char infile[100];                       //<! Telenor H.26L input
   char outfile[100];                      //<! Decoded YUV 4:2:0 output
   char reffile[100];                      //<! Optional YUV 4:2:0 reference file for SNR measurement
-  int  postfilter;                        //<! postfilter (0=OFF,1=ON)
 //  int symbol_mode;                        //<! Specifies the mode the symbols are mapped on bits
   int FileFormat;                         //<! File format of the Input file, PAR_OF_ANNEXB or PAR_OF_RTP
 //  int partition_mode;                     //<! Specifies the mode of data partitioning
@@ -698,7 +695,7 @@ FILE *p_trace;
 // prototypes
 void init_conf(struct inp_par *inp, char *config_filename);
 void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr);
-void find_snr(struct snr_par *snr,struct img_par *img, FILE *p_ref, int postfilter);
+void find_snr(struct snr_par *snr,struct img_par *img, FILE *p_ref);
 void init(struct img_par *img);
 
 void init_poc();
@@ -713,9 +710,9 @@ void init_frame(struct img_par *img, struct inp_par *inp);
 void exit_frame(struct img_par *img, struct inp_par *inp);
 void DeblockFrame(struct img_par *img, byte **imgY, byte ***imgUV ) ;
 
-void write_frame(struct img_par *img,int,FILE *p_out);
+void write_frame(struct img_par *img, FILE *p_out);
 void write_prev_Pframe(struct img_par *img,FILE *p_out);// B pictures
-void copy_Pframe(struct img_par *img,int);// B pictures
+void copy_Pframe(struct img_par *img);// B pictures
 
 
 int  read_new_slice();
@@ -822,7 +819,6 @@ void init_bottom(struct img_par *img, struct inp_par *inp);
 void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_header);
 void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_header);
 void store_field_MV(struct img_par *img);
-void store_direct_moving_flag(struct img_par *img);
 
 #define PAYLOAD_TYPE_IDERP 8
 int RBSPtoSODB(byte *streamBuffer, int last_byte_pos);

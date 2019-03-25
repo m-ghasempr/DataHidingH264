@@ -258,6 +258,30 @@ void free_mem3Dint(int ***array3D, int frames)
   }
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *    free 4D memory array 
+ *    which was alocated with get_mem4Dint()
+ ************************************************************************
+ */
+void free_mem4Dint(int ****array4D, int idx, int frames )
+{
+  int  j;
+
+  if (array4D)
+  {
+    for(j=0;j<idx;j++)
+      free_mem3Dint( array4D[j], frames) ;
+    free (array4D);
+  } else
+  {
+    error ("free_mem4D: trying to free unused memory",100);
+  }
+}
+
+
 /*!
  ************************************************************************
  * \brief

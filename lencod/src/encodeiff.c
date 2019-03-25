@@ -1271,7 +1271,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
   
   // First write the element to the MEM bitstream buffer
   sym.type = SE_HEADER;       // This will be true for all symbols generated here
-  sym.mapping = n_linfo2;       // Mapping rule: Simple code number to len/info
+  sym.mapping = ue_linfo;       // Mapping rule: Simple code number to len/info
   if ( pp->payloadType == 0 || pp->payloadType == PAYLOAD_TYPE_IDERP )
   {
     // write the parameter set
@@ -1326,7 +1326,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     }
 
 
-    sym.mapping = dquant_linfo;
+    sym.mapping = se_linfo;
     sym.value1 = pp->initialQP - (MAX_QP - MIN_QP +1)/2;
     writeSyntaxElement2Buf_UVLC (&sym, bitstream);
     
@@ -1350,7 +1350,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
         
         if (!pp->lf_disable)
         {
-          sym.mapping = dquant_linfo;
+          sym.mapping = se_linfo;
           sym.value1 = pp->lf_alpha_c0_offset_div2;
           writeSyntaxElement2Buf_UVLC (&sym, bitstream);
 
@@ -1359,7 +1359,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
         }
     }
 
-    sym.mapping = n_linfo2;
+    sym.mapping = ue_linfo;
     iff_writeERPS(&sym, pp, bitstream); // Tian: to support ERPS (Annex U), Feb 27, 2002
 
     // Tian Dong: June 10, 2002
@@ -1404,10 +1404,10 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->firstMBInSliceY;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-    sym.mapping = dquant_linfo;
+    sym.mapping = se_linfo;
     sym.value1 = pp->initialQP - (MAX_QP - MIN_QP + 1)/2;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-    sym.mapping = n_linfo2;
+    sym.mapping = ue_linfo;
     // write the slice id
     sym.value1 = pp->sliceID;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);

@@ -869,6 +869,7 @@ typedef struct
 
   int redundant_pic_cnt; // JVT-D101
 
+  int **field_anchor;
 
   //the following should probably go in sequence parameters
   // unsigned int log2_max_frame_num_minus4;
@@ -1012,11 +1013,6 @@ FILE *p_trace;                   //!< Trace file
 
 void intrapred_luma(int CurrPixX,int CurrPixY);
 void init();
-void find_snr();
-void oneforthpix();
-void oneforthpix_2();
-int  encode_oneIorP_Frame();
-int  encode_oneB_Frame();
 int  find_sad(int hadamard, int m7[16][16]);
 int  dct_luma(int pos_mb1,int pos_mb2,int *cnt_nonz,int);
 int  dct_luma_sp(int pos_mb1,int pos_mb2,int *cnt_nonz);
@@ -1036,13 +1032,9 @@ void init_poc();
 void push_poc(unsigned int topvalue, unsigned int bottomvalue, unsigned int ref_frame_ind );
 
 void init_img();
-// void init_stat();
 void report();
 void information_init();
-void init_frame();
 int  get_picture_type();
-// void read_one_new_frame();
-void write_reconstructed_image();
 void DeblockFrame(ImageParameters *img, byte **, byte ***) ;
 
 
@@ -1054,7 +1046,7 @@ pel_t* UMVLineX  (int, pel_t*, int, int);
 
 void LumaResidualCoding ();
 void ChromaResidualCoding (int*);
-void IntraChromaPrediction8x8 (int*, int*);
+void IntraChromaPrediction8x8 (int*, int*, int*);
 void SetRefFrameInfo (int, int);
 int  writeMBHeader   (int rdopt); 
 
@@ -1097,24 +1089,17 @@ int  get_mem_DCcoeff  (int****);
 void free_mem_ACcoeff (int****);
 void free_mem_DCcoeff (int***);
 
-void put_buffer_frame();
-void init_field();
 void split_field_top();
 void split_field_bot();
-void put_buffer_top();
-void put_buffer_bot();
 int  decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bit_frame, double lambda_picture);
 int  get_mem4global_buffers_field();
 void free_mem4global_buffers_field();
 // void read_one_new_field();
 void combine_field();
-void find_distortion();
 
 // Added for (re-) structuring the TML soft
 Picture *malloc_picture();
 void free_picture (Picture *pic);
-void code_a_picture (Picture *pic);
-int   encode_one_frame();
 int   encode_one_slice(int SLiceGroupId, Picture *pic);   //! returns the number of MBs in the slice
 
 void  encode_one_macroblock();
@@ -1130,9 +1115,6 @@ void  proceed2nextMacroblock();
 void  proceed2nextSuperMacroblock();    //!< For MB level field/frame coding tools
 void  back2topmb();             //!< For MB level field/frame coding tools
 void proceed2lowermb();           //!< For MB level field/frame coding tools
-void copy_motion_vectors_MB(int bot_block); //!< For MB level field/frame coding tools
-void assign_mem2mvs (RD_DATA *var);   //!< For MB level field/frame coding tools
-void copy_rdopt_data (int field_type);    //!< For MB level field/frame coding tools
 
 void  LumaResidualCoding_P();
 void  ChromaCoding_P(int *cr_cbp);
@@ -1145,7 +1127,6 @@ void free_slice_list(Picture *currPic);
 #if TRACE
 void  trace2out(SyntaxElement *se);
 #endif
-Boolean dummy_slice_too_big(int bits_slice);
 
 
 // CABAC
@@ -1188,7 +1169,6 @@ int  start_sequence();
 int  terminate_sequence();
 int  start_slice();
 int  terminate_slice();
-int  writeout_picture(Picture *pic);
 
 // B pictures
 int  motion_search_Bframe(int tot_intra_sad);
@@ -1203,29 +1183,15 @@ void SetRefFrameInfo_B();
 int  writeMotionInfo2NAL_Bframe();
 int  BlkSize2CodeNumber(int blc_size_h, int blc_size_v);
 
-void interpolate_frame();
-void interpolate_frame_to_fb();
-
 void InitRefbuf ();
 void InitMotionVectorSearchModule();
 void InitRefbuf_fld ();
 void copy2mref_fld();
-void store_field_MV(int frame_number);
-void store_direct_moving_flag(int frame_number);
 
 
 void  SetRefFrameInfo (int, int);
 
-void frame_picture(Picture *frame);
-void field_picture(Picture *top, Picture *bottom);
-//void top_field_picture(int *bits_fld);
-//void bottom_field_picture(int *bits_fld);
-void distortion_fld(float *dis_fld_y, float *dis_fld_u, float *dis_fld_v);
-int  picture_structure_decision(Picture *frame, Picture *top, Picture *bot);
-void field_mode_buffer(int bit_field, float snr_field_y, float snr_field_u, float snr_field_v);
-void frame_mode_buffer(int bit_frame, float snr_frame_y, float snr_frame_u, float snr_frame_v);
 void set_ref_field(int *k);
-void rotate_buffer();
 void set_mbaff_parameters();  // For MB AFF
 void writeVlcByteAlign(Bitstream* currStream);
 
@@ -1295,7 +1261,6 @@ int rpc_bits_to_go;
 void modify_redundant_pic_cnt(unsigned char *streamBuffer);
 // End JVT-D101
 
-void estimate_weighting_factor ();
 int poc_distance( int refa, int refb);
 
 #endif

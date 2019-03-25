@@ -60,8 +60,6 @@
 
 #include "global.h"
 #include "fmo.h"
-#include "encodeiff.h"
-#include "sei.h"
 #include "parsetcommon.h"
 #include "parset.h"
 #include "nalucommon.h"

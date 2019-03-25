@@ -193,14 +193,14 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
 
   pps->num_ref_idx_l0_active_minus1          = ue_v ("PPS: num_ref_idx_l0_active_minus1"           , s);
   pps->num_ref_idx_l1_active_minus1          = ue_v ("PPS: num_ref_idx_l1_active_minus1"           , s);
-  pps->weighted_pred_flag                    = u_1  ("PPS: wheighted prediction flag"              , s);
+  pps->weighted_pred_flag                    = u_1  ("PPS: weighted prediction flag"               , s);
   pps->weighted_bipred_idc                   = u_v  ( 2, "PPS: weighted_bipred_idc"                , s);
   pps->pic_init_qp_minus26                   = se_v ("PPS: pic_init_qp_minus26"                    , s);
   pps->pic_init_qs_minus26                   = se_v ("PPS: pic_init_qs_minus26"                    , s);
   pps->chroma_qp_index_offset                = se_v ("PPS: chroma_qp_index_offset"                 , s);
   pps->deblocking_filter_parameters_present_flag = u_1 ("PPS: deblocking_filter_parameters_present_flag", s);
   pps->constrained_intra_pred_flag           = u_1  ("PPS: constrained_intra_pred_flag"            , s);
-  pps->redundant_pic_cnt_present_flag        = u_1  ("PPS: vui_pic_parameters_flag"                 , s);
+  pps->redundant_pic_cnt_present_flag        = u_1  ("PPS: redundant_pic_cnt_present_flag"         , s);
   pps->frame_cropping_flag                   = u_1  ("PPS: frame_cropping_flag"                , s);
 
   if (pps->frame_cropping_flag)
@@ -279,7 +279,7 @@ void ProcessSPS (NALU_t *nalu)
 void ProcessPPS (NALU_t *nalu)
 {
   DataPartition *dp;
-  pic_parameter_set_rbsp_t *pps = AllocPPS();
+  pic_parameter_set_rbsp_t *pps;
   int dummy;
 
   dp = AllocPartition(1);

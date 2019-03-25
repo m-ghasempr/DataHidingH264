@@ -51,7 +51,6 @@
 #include "global.h"
 #include "mbuffer.h"
 #include "memalloc.h"
-#include "encodeiff.h"
 
 /*!
  ************************************************************************

@@ -65,8 +65,7 @@
 #define SYMTRACESTRING(s) // do nothing
 #endif
 
-extern void tracebits(const char *trace_str,  int len,  int info,int value1,
-    int value2) ;
+extern void tracebits(const char *trace_str,  int len,  int info,int value1);
 
 
 int UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
@@ -377,7 +376,7 @@ int readSyntaxElement_VLC(SyntaxElement *sym, Bitstream *currStream)
   sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
 
 #if TRACE
-  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
+  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1);
 #endif
 
   return 1;
@@ -906,7 +905,7 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP)
 
   if (len < 15)
   {
-    sign = len % 2;
+    sign = (len - 1) & 1;
     level = (len-1) / 2 + 1;
   }
   else if (len == 15)
@@ -933,7 +932,7 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP)
     exit(-1);
   }
 
-  if (!sign) 
+  if (sign)
     level = -level;
 
   sym->inf = level;
@@ -1335,7 +1334,7 @@ int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
 
 
 #if TRACE
-  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
+  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1);
 #endif
 
   return 1;

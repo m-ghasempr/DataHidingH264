@@ -401,10 +401,8 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
     len+=GenerateVUISequenceParameters();    // currently a dummy, asserting
 
   SODBtoRBSP(partition->bitstream);     // copies the last couple of bits into the byte buffer
-  // Get rid of the helper structures
-  LenInBytes = len/8;
-  if (len%8 !=0)
-    LenInBytes++;
+  
+  LenInBytes=partition->bitstream->byte_pos;
 
   free (partition->bitstream);
   free (partition);
@@ -514,9 +512,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
 
   SODBtoRBSP(partition->bitstream);     // copies the last couple of bits into the byte buffer
   
-  LenInBytes = len/8;
-  if (len%8 !=0)
-    LenInBytes++;
+  LenInBytes=partition->bitstream->byte_pos;
 
   // Get rid of the helper structures
   free (partition->bitstream);
@@ -549,7 +545,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
  */
 int IdentifyProfile()
 {
-  return 0;       // Baseline
+  return PROFILE_IDC;       // Baseline
 };
 
 /*! 
@@ -569,7 +565,7 @@ int IdentifyProfile()
  */
 int IdentifyLevel()
 {
-  return 0;
+  return LEVEL_IDC;
 };
 
 

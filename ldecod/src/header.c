@@ -111,20 +111,16 @@ int RestOfSliceHeader()
 
   int val;
 
-  int multpred=active_sps->num_ref_frames>1;
-  
   // set the img->type to the old style defines
   switch (currSlice->picture_type)
   {
   case 0:
   case 5:
-    if (multpred) currSlice->picture_type = INTER_IMG_MULT;
-    else currSlice->picture_type = INTER_IMG_1;
+    currSlice->picture_type = INTER_IMG;
     break;
   case 1:
   case 6:
-    if (multpred) currSlice->picture_type = B_IMG_MULT;
-    else currSlice->picture_type = B_IMG_1;
+    currSlice->picture_type = B_IMG;
     break;
   case 2:
   case 7:
@@ -132,8 +128,7 @@ int RestOfSliceHeader()
     break;
   case 3:
   case 8:
-    if (multpred) currSlice->picture_type = SP_IMG_MULT;
-    else currSlice->picture_type = SP_IMG_1;
+    currSlice->picture_type = SP_IMG;
     break;
   default:
     error("Invalid Slice Type", 500);
@@ -200,22 +195,22 @@ int RestOfSliceHeader()
     img->redundant_pic_cnt = u_1 ("SH: redundant_pic_cnt", currStream);
   }
 
-  if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+  if(img->type==B_IMG)
   {
     img->direct_type = u_1 ("SH: direct_spatial_mv_pred_flag", currStream);
   }
 
-  img->num_ref_pic_active_fwd = 0;
-  img->num_ref_pic_active_bwd = 0;
+  img->num_ref_pic_active_fwd = active_pps->num_ref_idx_l0_active_minus1 + 1;
+  img->num_ref_pic_active_bwd = active_pps->num_ref_idx_l1_active_minus1 + 1;
 
-  val = u_1 ("SH: num_ref_idx_override_flag", currStream);
-  if (val)
+  if(img->type==INTER_IMG || img->type == SP_IMG || img->type==B_IMG)
   {
-    if(img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type==B_IMG_1 || img->type==B_IMG_MULT)
+    val = u_1 ("SH: num_ref_idx_override_flag", currStream);
+    if (val)
     {
       img->num_ref_pic_active_fwd = 1 + ue_v ("SH: num_ref_pic_active_fwd_minus1", currStream);
       
-      if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+      if(img->type==B_IMG)
       {
         img->num_ref_pic_active_bwd = 1 + ue_v ("SH: num_ref_pic_active_bwd_minus1", currStream);
       }
@@ -224,11 +219,11 @@ int RestOfSliceHeader()
 
   ref_pic_list_reordering();
 
-  img->apply_weights = ((img->weighted_pred_flag && (currSlice->picture_type == INTER_IMG_1 || currSlice->picture_type == INTER_IMG_MULT || currSlice->picture_type == SP_IMG_1 || currSlice->picture_type == SP_IMG_MULT) )
-          || ((img->weighted_bipred_idc > 0 ) && (currSlice->picture_type == B_IMG_1 || currSlice->picture_type == B_IMG_MULT )));
+  img->apply_weights = ((img->weighted_pred_flag && (currSlice->picture_type == INTER_IMG || currSlice->picture_type == SP_IMG) )
+          || ((img->weighted_bipred_idc > 0 ) && (currSlice->picture_type == B_IMG)));
 
-  if ((active_pps->weighted_pred_flag&&(img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT))||
-      (active_pps->weighted_bipred_idc==1 && (img->type==B_IMG_1 || img->type==B_IMG_MULT)))
+  if ((active_pps->weighted_pred_flag&&(img->type==INTER_IMG|| img->type == SP_IMG))||
+      (active_pps->weighted_bipred_idc==1 && (img->type==B_IMG)))
   {
     pred_weight_table();
   }
@@ -247,9 +242,9 @@ int RestOfSliceHeader()
   val = se_v("SH: slice_qp_delta", currStream);
   currSlice->qp = img->qp = 26 + active_pps->pic_init_qp_minus26 + val;
 
-  if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT || img->type == SI_IMG) 
+  if(img->type==SP_IMG || img->type == SI_IMG) 
   {
-    if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT)
+    if(img->type==SP_IMG)
     {
       img->sp_switch = u_1 ("SH: sp_for_switch_flag", currStream);
     }
@@ -362,7 +357,7 @@ static void ref_pic_list_reordering()
     }
   }
 
-  if (img->type==B_IMG_1 || img->type==B_IMG_MULT)
+  if (img->type==B_IMG)
   {
     val = currSlice->ref_pic_list_reordering_flag_l1 = u_1 ("SH: ref_pic_list_reordering_flag_l1", currStream);
     
@@ -444,7 +439,7 @@ static void pred_weight_table()
       }
     }
   }
-  if ((img->type == B_IMG_1 || img->type == B_IMG_MULT) && img->weighted_bipred_idc == 1)
+  if ((img->type == B_IMG) && img->weighted_bipred_idc == 1)
   {
     for (i=0; i<img->num_ref_pic_active_bwd; i++)
     {
@@ -754,7 +749,7 @@ void decoding_poc(struct img_par *img)
             //soon to be obsolete
   if(!img->current_slice_nr)
   { 
-    if((img->type != B_IMG_MULT && img->type != B_IMG_1) || !img->disposable_flag) 
+    if((img->type != B_IMG) || !img->disposable_flag) 
     {
       img->pstruct_next_P = img->structure;
       if(img->structure == TOP_FIELD)
@@ -827,8 +822,8 @@ int dumppoc(struct img_par *img) {
     printf ("field_pic_flag                        %d\n", img->field_pic_flag);
     printf ("bottom_field_flag                     %d\n", img->bottom_field_flag);
     printf ("POC SPS\n");
-    printf ("log2_max_frame_num_minus4             %d\n", LOG2_MAX_FRAME_NUM_MINUS4);         // POC200301
-    printf ("log2_max_pic_order_cnt_lsb_minus4     %d\n", LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4);
+    printf ("log2_max_frame_num_minus4             %d\n", active_sps->log2_max_frame_num_minus4);         // POC200301
+    printf ("log2_max_pic_order_cnt_lsb_minus4     %d\n", active_sps->log2_max_pic_order_cnt_lsb_minus4);
     printf ("pic_order_cnt_type                    %d\n", img->pic_order_cnt_type);
     printf ("num_ref_frames_in_pic_order_cnt_cycle %d\n", img->num_ref_frames_in_pic_order_cnt_cycle);
     printf ("delta_pic_order_always_zero_flag      %d\n", img->delta_pic_order_always_zero_flag);

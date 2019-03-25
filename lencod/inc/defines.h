@@ -53,15 +53,9 @@
 
 #define TRACE           0   //!< 0:Trace off 1:Trace on
 
-// NAL Stuff
-
-// This could, in theory, be in parameter of the encoder config file.  In fact,
-// it was, tr_modulues and picidmodulus, which were never used by anyone and
-// are hence deleted.  Note: the JM50g software incorrectly implemented this
-// value as a log2_max_frame_num_PLUS4, meaning that 12 was sent in order to
-// sigbal an 8 bit frame_num.  This is corrected.
-
-//#define LOG2_MAX_FRAME_NUM_MINUS4   4           // POC200301 moved to parsetcommoh.h
+// APJ: Added the following define
+#define PROFILE_IDC     66
+#define LEVEL_IDC       21
 
 // CAVLC
 #define LUMA              0
@@ -195,9 +189,9 @@
 #define PLANE_16        3
 
 // 8x8 chroma intra prediction modes
-#define VERT_PRED_8     0
+#define DC_PRED_8       0
 #define HOR_PRED_8      1
-#define DC_PRED_8       2
+#define VERT_PRED_8     2
 #define PLANE_8         3
 
 /*

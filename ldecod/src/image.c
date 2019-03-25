@@ -236,13 +236,13 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
   post_poc( img );                    // POC200301
 
-  if((img->type==B_IMG_1 || img->type==B_IMG_MULT) && !img->disposable_flag)
+  if((img->type==B_IMG) && !img->disposable_flag)
     copy_stored_B_motion_info(img);
 
   store_field_MV(img);
 
   if (p_ref)
-    find_snr(snr,img,p_ref,inp->postfilter);      // if ref sequence exist
+    find_snr(snr,img,p_ref);      // if ref sequence exist
 
 #ifdef WIN32
   _ftime (&tstruct2);   // end time ms
@@ -256,10 +256,10 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   if(img->type == INTRA_IMG) // I picture
     fprintf(stdout,"%3d(I)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
         frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
-  else if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT) // P pictures
+  else if(img->type == INTER_IMG) // P pictures
     fprintf(stdout,"%3d(P)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
     frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
-  else if(img->type == SP_IMG_1 || img->type == SP_IMG_MULT) // SP pictures
+  else if(img->type == SP_IMG) // SP pictures
     fprintf(stdout,"%3d(SP) %3d %5d %7.4f %7.4f %7.4f %5d\n",
     frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
   else if (img->type == SI_IMG)
@@ -274,14 +274,14 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
   fflush(stdout);
 
-  if(img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT) // I or P pictures
-    copy_Pframe(img, inp->postfilter);  // imgY-->imgY_prev, imgUV-->imgUV_prev
-  else if(img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG) // SP pictures
-    copy_Pframe(img, inp->postfilter);  // imgY-->imgY_prev, imgUV-->imgUV_prev
+  if(img->type == INTRA_IMG || img->type == INTER_IMG) // I or P pictures
+    copy_Pframe(img);  // imgY-->imgY_prev, imgUV-->imgUV_prev
+  else if(img->type == SP_IMG || img->type == SI_IMG) // SP pictures
+    copy_Pframe(img);  // imgY-->imgY_prev, imgUV-->imgUV_prev
   else if(!img->disposable_flag)  // stored B pictures
-    copy_Pframe(img, inp->postfilter);  // imgY-->imgY_prev, imgUV-->imgUV_prev
+    copy_Pframe(img);  // imgY-->imgY_prev, imgUV-->imgUV_prev
   else // B pictures
-    write_frame(img,inp->postfilter,p_out);         // write image to output YUV file
+    write_frame(img,p_out);         // write image to output YUV file
   
   //! TO 19.11.2001 Known Problem: for init_frame we have to know the picture type of the actual frame
   //! in case the first slice of the P-Frame following the I-Frame was lost we decode this P-Frame but 
@@ -289,7 +289,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   //! guess the right picture type. This is a hack a should be removed by the time there is a clean
   //! solution where we do not have to know the picture type for the function init_frame.
   if(img->type == INTRA_IMG)
-    img->type = INTER_IMG_1;
+    img->type = INTER_IMG;
   //! End TO 19.11.2001
 
   if(img->type <= INTRA_IMG || img->type >= SI_IMG || !img->disposable_flag)   // I or P pictures
@@ -324,8 +324,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 void find_snr(
   struct snr_par *snr,   //!< pointer to snr parameters
   struct img_par *img,   //!< pointer to image parameters
-  FILE *p_ref,           //!< filestream to reference YUV file
-  int postfilter)        //!< postfilterin on (=1) or off (=1)
+  FILE *p_ref)           //!< filestream to reference YUV file
 {
   int i,j;
   int diff_y,diff_u,diff_v;
@@ -485,7 +484,7 @@ void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int bloc
       if ((dx&1) == 1) {
         for (j = 0; j < BLOCK_SIZE; j++)
           for (i = 0; i < BLOCK_SIZE; i++)
-            block[i][j] = (block[i][j] + mref[ref_frame][max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+dx/2))])/2;
+            block[i][j] = (block[i][j] + mref[ref_frame][max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+dx/2))] +1 )/2;
       }
     }
     else if (dx == 0) {  /* No horizontal interpolation */
@@ -501,7 +500,7 @@ void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int bloc
       if ((dy&1) == 1) {
         for (j = 0; j < BLOCK_SIZE; j++)
           for (i = 0; i < BLOCK_SIZE; i++)
-           block[i][j] = (block[i][j] + mref[ref_frame][max(0,min(maxold_y,y_pos+j+dy/2))][max(0,min(maxold_x,x_pos+i))])/2;
+           block[i][j] = (block[i][j] + mref[ref_frame][max(0,min(maxold_y,y_pos+j+dy/2))][max(0,min(maxold_x,x_pos+i))] +1 )/2;
       }
     }
     else if (dx == 2) {  /* Vertical & horizontal interpolation */
@@ -523,7 +522,7 @@ void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int bloc
       if ((dy&1) == 1) {
         for (j = 0; j < BLOCK_SIZE; j++)
           for (i = 0; i < BLOCK_SIZE; i++)
-            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[i][j+2+dy/2]+16)/32)))/2;
+            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[i][j+2+dy/2]+16)/32)) +1 )/2;
       }
     }
     else if (dy == 2) {  /* Horizontal & vertical interpolation */
@@ -545,7 +544,7 @@ void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int bloc
       if ((dx&1) == 1) {
         for (j = 0; j < BLOCK_SIZE; j++)
           for (i = 0; i < BLOCK_SIZE; i++)
-            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[j][i+2+dx/2]+16)/32)))/2;
+            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[j][i+2+dx/2]+16)/32))+1)/2;
       }
     }
     else {  /* Diagonal interpolation */
@@ -566,7 +565,7 @@ void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int bloc
           pres_x = max(0,min(maxold_x,pres_x));
           for (result = 0, y = -2; y < 4; y++)
             result += mref[ref_frame][max(0,min(maxold_y,y_pos+j+y))][pres_x]*COEF[y+2];
-          block[i][j] = (block[i][j] + max(0, min(255, (result+16)/32))) / 2;
+          block[i][j] = (block[i][j] + max(0, min(255, (result+16)/32)) +1 ) / 2;
         }
       }
 
@@ -813,7 +812,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   {
     nextP_tr=prevP_tr=img->tr;
   }
-  else if(img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)
+  else if(img->type == INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag)
   {
 #ifdef _ADAPT_LAST_GROUP_
     for (i = img->buf_cycle-1; i > 0; i--)
@@ -833,7 +832,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   if (img->type > SI_IMG)
   {
     set_ec_flag(SE_PTYPE);
-    img->type = INTER_IMG_1;  // concealed element
+    img->type = INTER_IMG;  // concealed element
   }
 
   img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
@@ -870,6 +869,10 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     img->ipredmode_bot[i+1][0]=-1;
   for(j=0;j<(img->height /2)/BLOCK_SIZE+1;j++)
     img->ipredmode_bot[0][j+1]=-1;
+
+  img->ipredmode    [0][0]=-1;
+  img->ipredmode_top[0][0]=-1;
+  img->ipredmode_bot[0][0]=-1;
 
   // CAVLC init
   for (i=0;i < img->width/MB_BLOCK_SIZE; i++)
@@ -912,7 +915,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
 //  printf("short size, used, (%d, %d)\n", frm->short_size, frm->short_used );
 
   // JVT-D097
-  if (img->type!=B_IMG_1 && img->type!=B_IMG_MULT && 
+  if (img->type!=B_IMG && 
       img->num_slice_groups_minus1 == 1 && img->mb_allocation_map_type > 3)
     FmoUpdateEvolvingMBAmap (img, inp, MBAmap);
   // End JVT-D097
@@ -926,7 +929,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
  */
 void exit_frame(struct img_par *img, struct inp_par *inp)
 {
-  if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)
+  if(img->type==INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag)
     copy2fb(img);
 
   if (img->structure == FRAME)
@@ -955,7 +958,7 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
 
   currRegion = erc_object_list + (currMBNum<<2);
 
-  if(img->type != B_IMG_1 && img->type != B_IMG_MULT) //non-B frame
+  if(img->type != B_IMG) //non-B frame
   {
     for (i=0; i<4; i++)
     {
@@ -1103,7 +1106,7 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
 
   // do reference frame buffer reordering
   reorder_mref(img);
-  if ( (img->weighted_bipred_idc > 0  && (img->type == B_IMG_1 || img->type == B_IMG_MULT)) || (img->weighted_pred_flag && img->type !=INTRA_IMG))
+  if ( (img->weighted_bipred_idc > 0  && (img->type == B_IMG)) || (img->weighted_pred_flag && img->type !=INTRA_IMG))
     fill_wp_params(img);
 
 
@@ -1157,7 +1160,7 @@ void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_hea
   
   // do reference frame buffer reordering
   reorder_mref(img);
-  if ( (img->weighted_bipred_idc > 0  && (img->type == B_IMG_1 || img->type == B_IMG_MULT)) || (img->weighted_pred_flag && img->type !=INTRA_IMG))
+  if ( (img->weighted_bipred_idc > 0  && (img->type == B_IMG)) || (img->weighted_pred_flag && img->type !=INTRA_IMG))
     fill_wp_params(img);
   
 
@@ -1232,7 +1235,7 @@ void init_top(struct img_par *img, struct inp_par *inp)
   {
     nextP_tr=prevP_tr=img->tr;
   }
-  else if(img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)  // I or P pictures
+  else if(img->type == INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag)  // I or P pictures
   {
 #ifdef _ADAPT_LAST_GROUP_
 
@@ -1253,7 +1256,7 @@ void init_top(struct img_par *img, struct inp_par *inp)
   if (img->type > SI_IMG)
   {
     set_ec_flag(SE_PTYPE);
-    img->type = INTER_IMG_1;  // concealed element
+    img->type = INTER_IMG;  // concealed element
   }
 
   img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
@@ -1276,6 +1279,7 @@ void init_top(struct img_par *img, struct inp_par *inp)
     img->ipredmode[0][j+1]=-1;
     img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
   }
+  img->ipredmode[0][0] = -1;
 
   if(img->constrained_intra_pred_flag)
   {
@@ -1306,7 +1310,7 @@ void init_top(struct img_par *img, struct inp_par *inp)
   img->bw_refFrArr = img->bw_refFrArr_top;
 
   // JVT-D097
-  if (img->type!=B_IMG_1 && img->type!=B_IMG_MULT && 
+  if (img->type!=B_IMG && 
       img->num_slice_groups_minus1 == 1 && img->mb_allocation_map_type > 3)
     FmoUpdateEvolvingMBAmap (img, inp, MBAmap);
   // End JVT-D097
@@ -1354,12 +1358,12 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   }
 #endif
 */
-  if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)
+  if(img->type==INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag)
     copy2fb(img);       // trying to match exit_frame() in frame mode
 
   if (!img->mb_frame_field_flag)
   {
-    if((img->type==B_IMG_1 || img->type==B_IMG_MULT) && !img->disposable_flag)
+    if((img->type==B_IMG) && !img->disposable_flag)
     {
       // copy motion information of stored B-picture for direct mode 
       for (i=0 ; i<img->width/4+4 ; i++)
@@ -1381,7 +1385,7 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   {
     nextP_tr=prevP_tr=img->tr;
   }
-  else if (img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)  // I or P pictures
+  else if (img->type == INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag)  // I or P pictures
   {
 #ifdef _ADAPT_LAST_GROUP_
     if (img->number==1)
@@ -1403,7 +1407,7 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   if (img->type > SI_IMG)
   {
     set_ec_flag(SE_PTYPE);
-    img->type = INTER_IMG_1;  // concealed element
+    img->type = INTER_IMG;  // concealed element
   }
 
   img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
@@ -1418,6 +1422,7 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
     img->ipredmode[0][j+1]=-1;
     img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
   }
+  img->ipredmode[0][0] = -1;
 
   if(img->constrained_intra_pred_flag)
   {
@@ -1444,7 +1449,7 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   img->bw_refFrArr = img->bw_refFrArr_bot;
 
   // JVT-D097
-  if (img->type!=B_IMG_1 && img->type!=B_IMG_MULT && 
+  if (img->type!=B_IMG && 
       img->num_slice_groups_minus1 == 1 && img->mb_allocation_map_type > 3)
     FmoUpdateEvolvingMBAmap (img, inp, MBAmap);
   // End JVT-D097
@@ -1470,7 +1475,7 @@ void frame_postprocessing(struct img_par *img, struct inp_par *inp)
   mcef = mcef_fld;
   imgY = imgY_top;
   imgUV = imgUV_top;
-  if (img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)  // I or P pictures
+  if (img->type == INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag)  // I or P pictures
   {
     split_field_top(img);
     copy2fb(img);
@@ -1479,7 +1484,7 @@ void frame_postprocessing(struct img_par *img, struct inp_par *inp)
   img->number++;
   imgY = imgY_bot;
   imgUV = imgUV_bot;
-  if (img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)  // I or P pictures
+  if (img->type == INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag)  // I or P pictures
   {
     split_field_bot(img);
     copy2fb(img);
@@ -1496,7 +1501,7 @@ void frame_postprocessing(struct img_par *img, struct inp_par *inp)
   img->buf_cycle /= 2;
   img->number /= 2;
 
-  if((img->number)&&(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag))
+  if((img->number)&&(img->type==INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag))
   {
     for (i = img->buf_cycle; i > 2; i--)
     {
@@ -1567,7 +1572,7 @@ void field_postprocessing(struct img_par *img, struct inp_par *inp)
 
   combine_field(img);
 
-  if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)
+  if(img->type==INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag)
   {
     img->number++;
     imgY = imgY_bot;
@@ -1581,7 +1586,7 @@ void field_postprocessing(struct img_par *img, struct inp_par *inp)
   imgY = imgY_frm;
   imgUV = imgUV_frm;
 
-  if((img->number>1)&&(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag))
+  if((img->number>1)&&(img->type==INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag))
   {
     for (i = img->buf_cycle-1; i > 0; i--)
       last_P_no_frm[i] = last_P_no_frm[i-1];
@@ -1633,7 +1638,7 @@ void store_field_MV(struct img_par *img)
 {
   int i, j;
 
-  if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)
+  if(img->type==INTRA_IMG || img->type == INTER_IMG || img->type == SP_IMG || img->type == SI_IMG || !img->disposable_flag)
   {
     if (img->structure != FRAME)
     {
@@ -1725,21 +1730,6 @@ void store_field_MV(struct img_par *img)
     }
   }
 }
-/*
-void store_direct_moving_flag(struct img par *img)
-{
-  int i, j;  
-    if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG)
-    for (i=0 ; i<img->width/4 ; i++)
-      for (j=0 ; j<img->height/8 ; j++)
-        {                      
-          moving_block_frm[2*j][i]=((refFrArr_frm[2*j][i]!=0) 
-            || (abs(img->mv_frm[i+4][2*j][0])>>1) || (abs(img->mv_frm[i+4][2*j][1])>>1) );          
-          moving_block_frm[2*j+1][i]=((refFrArr_frm[2*j+1][i]!=0) 
-            || (abs(img->mv_frm[i+4][2*j+1][0])>>1) || (abs(img->mv_frm[i+4][2*j+1][1])>>1));
-        }      
-}
-*/
 
 void copy_stored_B_motion_info(struct img_par *img)
 {
@@ -1822,7 +1812,7 @@ void fill_wp_params(struct img_par *img)
   int log_weight_denom;
   int p0, pt;
 //  int p1;
-  int bframe = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
+  int bframe = (img->type==B_IMG);
   int fwd_ref[MAX_REFERENCE_PICTURES], bwd_ref[MAX_REFERENCE_PICTURES];
   int index;
   int max_bwd_ref, max_fwd_ref;
@@ -1832,7 +1822,7 @@ void fill_wp_params(struct img_par *img)
   max_fwd_ref = img->num_ref_pic_active_fwd;
 
 
-if ((img->weighted_bipred_idc > 0) && (img->type == B_IMG_1 || img->type == B_IMG_MULT))
+if ((img->weighted_bipred_idc > 0) && (img->type == B_IMG))
   {
     if (!img->disposable_flag )
     {

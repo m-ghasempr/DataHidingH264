@@ -60,10 +60,8 @@ int   writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffe
 void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream);
 int   writeSyntaxElement2Buf_Fixed(SyntaxElement *se, Bitstream* this_streamBuffer );
 int   symbol2uvlc(SyntaxElement *se);
-void  n_linfo(int n, int *len,int *info);
-void  n_linfo2(int n, int dummy, int *len,int *info);
-void  mvd_linfo2(int mvd, int dummy, int *len,int *info);
-void  dquant_linfo(int mvd, int dummy, int *len,int *info);
+void  ue_linfo(int n, int dummy, int *len,int *info);
+void  se_linfo(int mvd, int dummy, int *len,int *info);
 void  cbp_linfo_intra(int cbp, int dummy, int *len,int *info);
 void  cbp_linfo_inter(int cbp, int dummy, int *len,int *info);
 

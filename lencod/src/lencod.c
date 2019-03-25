@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.1
+ *     JM 6.1a
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -83,13 +83,15 @@
 #include "leaky_bucket.h"
 #include "memalloc.h"
 #include "mbuffer.h"
-#include "encodeiff.h"
 #include "intrarefresh.h"
 #include "fmo.h"
+#include "encodeiff.h"
 #include "sei.h"
+#include "parset.h"
+#include "image.h"
 
 #define JM      "6"
-#define VERSION "6.1"
+#define VERSION "6.1a"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -190,7 +192,7 @@ int main(int argc,char **argv)
     push_poc(img->toppoc, img->bottompoc, REFFRAME);               //push poc values into array
     
     //frame_num for this frame
-    img->frame_num = IMG_NUMBER;
+    img->frame_num = IMG_NUMBER % (1 << (LOG2_MAX_FRAME_NUM_MINUS4 + 4));
     img->idr_flag = !IMG_NUMBER;            //for 2nd field, idr is reset in SliceHeader() //5.0f
     
     //the following is sent in the slice header
@@ -263,6 +265,7 @@ int main(int argc,char **argv)
         img->layer = 1;
 
       img->frame_num++;                 //increment frame_num once for B-frames
+      img->frame_num %= (1 << (LOG2_MAX_FRAME_NUM_MINUS4 + 4));
       img->idr_flag=0;                                        //B-frames cannot be idr  //5.0f
       img->disposable_flag = TRUE;      // These B frames are disposable (are the non-disposable B frames implemented???)
 
@@ -353,8 +356,6 @@ void init_poc()
   //the following should probably go in sequence parameters
   // frame poc's increase by 2, field poc's by 1
 
-  // variable below gone for good, see defines.h LOG2_MAX_FRAME_NUM_MINUS4
-  //  img->log2_max_frame_num_minus4 = 4;           // used to be 12, bug?;
   img->pic_order_cnt_type=input->pic_order_cnt_type;        // POC200301
   img->num_ref_frames_in_pic_order_cnt_cycle=1;
   img->delta_pic_order_always_zero_flag=0;
@@ -596,6 +597,7 @@ void init_img()
     img->ipredmode[0][j+1]=-1;
     img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
   }
+  img->ipredmode[0][0]=-1;
 
   if(input->InterlaceCodingOption >= MB_CODING)
   {
@@ -613,8 +615,9 @@ void init_img()
     img->ipredmode_top[img->width/BLOCK_SIZE+1][j+1]=-1;
     img->ipredmode_bot[0][j+1]=-1;
     img->ipredmode_bot[img->width/BLOCK_SIZE+1][j+1]=-1;
-
     }
+    img->ipredmode_top[0][0]=-1;
+    img->ipredmode_bot[0][0]=-1;
   }
 
   img->mb_y_upd=0;
@@ -1386,6 +1389,9 @@ int init_global_buffers()
 
   memory_size += get_mem2Dint(&abp_type_FrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
+  memory_size += get_mem2Dint(&(img->field_anchor),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+
+
   if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
   {    
     // allocate memory for temp B-frame motion vector buffer: fw_refFrArr, bw_refFrArr
@@ -1411,13 +1417,6 @@ int init_global_buffers()
     memory_size += get_mem3Dint(&tmp_bwMV_bot, 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
   }
   }
-
-
-  // allocate memory for post filter frame buffers: imgY_pf, imgUV_pf
-  // byte imgY_pf[288][352];
-  // byte imgUV_pf[2][144][176];
-  memory_size += get_mem2D(&imgY_pf, img->height, img->width);
-  memory_size += get_mem3D(&imgUV_pf, 2, img->height_cr, img->width_cr);
 
   // allocate memory for B frame coding: nextP_imgY, nextP_imgUV
   // byte nextP_imgY[288][352];
@@ -1571,9 +1570,6 @@ void free_global_buffers()
     free(mref_frm_w);
   free(mcef_frm);
 
-  free_mem2D(imgY_pf);       // free post filtering frame buffers
-  free_mem3D(imgUV_pf,2);
-
   free_mem2D(nextP_imgY);    // free next frame buffers (for B frames)
   free_mem3D(nextP_imgUV,2);
 
@@ -1702,15 +1698,12 @@ void free_global_buffers()
 
   // CAVLC mem free
   for(j=0;j<img->width/MB_BLOCK_SIZE;j++)
-  for(i=0;i<img->height/MB_BLOCK_SIZE;i++)
   {
-    if(img->nz_coeff[j][i][0] != NULL) free(img->nz_coeff[j][i][0]);
-    if(img->nz_coeff[j][i]    != NULL) free(img->nz_coeff[j][i]);
-  };
+    free_mem3Dint(img->nz_coeff[j], img->height/MB_BLOCK_SIZE);
+  }
   if (img->nz_coeff !=NULL) free(img->nz_coeff );
 
-
-
+  free_mem2Dint(img->field_anchor);
 }
 
 /*!

@@ -59,50 +59,29 @@
  *    Copy decoded P frame to temporary image array
  ************************************************************************
  */
-void copy_Pframe(struct img_par *img, int postfilter)
+void copy_Pframe(struct img_par *img)
 {
   int i,j;
 
   /*
    * the mmin, mmax macros are taken out, because it makes no sense due to limited range of data type
    */
-
-  if(postfilter)
-  {
-    for(i=0;i<img->height;i++)
-      for(j=0;j<img->width;j++)
-      {
-        imgY_prev[i][j] = imgY_pf[i][j];
-      }
-    for(i=0;i<img->height_cr;i++)
-      for(j=0;j<img->width_cr;j++)
-      {
-        imgUV_prev[0][i][j] = imgUV_pf[0][i][j];
-      }
-    for(i=0;i<img->height_cr;i++)
-      for(j=0;j<img->width_cr;j++)
-      {
-        imgUV_prev[1][i][j] = imgUV_pf[1][i][j];
-      }
-  }
-  else
-  {
-    for(i=0;i<img->height;i++)
-      for(j=0;j<img->width;j++)
-      {
-        imgY_prev[i][j] = imgY[i][j];
-      }
-    for(i=0;i<img->height_cr;i++)
-      for(j=0;j<img->width_cr;j++)
-      {
-        imgUV_prev[0][i][j] = imgUV[0][i][j];
-      }
-    for(i=0;i<img->height_cr;i++)
-      for(j=0;j<img->width_cr;j++)
-      {
-        imgUV_prev[1][i][j] = imgUV[1][i][j];
-      }
-  }
+  
+  for(i=0;i<img->height;i++)
+    for(j=0;j<img->width;j++)
+    {
+      imgY_prev[i][j] = imgY[i][j];
+    }
+  for(i=0;i<img->height_cr;i++)
+    for(j=0;j<img->width_cr;j++)
+    {
+      imgUV_prev[0][i][j] = imgUV[0][i][j];
+    }
+  for(i=0;i<img->height_cr;i++)
+    for(j=0;j<img->width_cr;j++)
+    {
+      imgUV_prev[1][i][j] = imgUV[1][i][j];
+    }
 }
 
 

@@ -52,9 +52,9 @@
 #include "header.h"
 #include "rtp.h"
 #include "mbuffer.h"
-#include "encodeiff.h"
 #include "defines.h"
 #include "vlc.h"
+#include "parset.h"
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
@@ -161,12 +161,12 @@ int SliceHeader()
     len +=  u_1 ("SH: direct_spatial_mv_pred_flag", input->direct_type, partition);
   }
 
-  // num_ref_idx_active_override_flag here always 1
-  len +=  u_1 ("SH: num_ref_idx_active_override_flag", 1, partition);
-
-  if (1) // if (num_ref_idx_active_override_flag)
+  if ((img->type == INTER_IMG) || (img->type == B_IMG) || (img->type == BS_IMG) || (img->type==INTER_IMG && img->types==SP_IMG))
   {
-    if (img->type==INTER_IMG || img->type==B_IMG || img->type==BS_IMG || (img->type==INTER_IMG && img->types==SP_IMG))
+    // num_ref_idx_active_override_flag here always 1
+    len +=  u_1 ("SH: num_ref_idx_active_override_flag", 1, partition);
+    
+    if (1) // if (num_ref_idx_active_override_flag)
     {
       len += ue_v ("SH: num_ref_pic_active_fwd_minus1", img->num_ref_pic_active_fwd_minus1, partition);
       if (img->type==B_IMG || img->type==BS_IMG)
@@ -174,8 +174,8 @@ int SliceHeader()
         len += ue_v ("SH: num_ref_pic_active_bwd_minus1", img->num_ref_pic_active_bwd_minus1, partition);
       }
     }
-  }
 
+  }
   len += ref_pic_list_reordering();
 
   if ((img->type == INTER_IMG && input->WeightedPrediction) || 
@@ -546,7 +546,7 @@ int Partition_BC_Header(int PartNo)
   assert (PartNo > 0 && PartNo < img->currentSlice->max_part_nr);
 
   sym->type = SE_HEADER;         // This will be true for all symbols generated here
-  sym->mapping = n_linfo2;       // Mapping rule: Simple code number to len/info
+  sym->mapping = ue_linfo;       // Mapping rule: Simple code number to len/info
 
 
   SYMTRACESTRING("RTP-PH: Picture ID");

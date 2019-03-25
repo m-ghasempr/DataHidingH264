@@ -42,13 +42,9 @@
 #ifndef _IMAGE_H_
 #define _IMAGE_H_
 
-//! TAPs used in the oneforthpix()routine
-const int ONE_FOURTH_TAP[3][2] =
-{
-  {20,20},
-  {-5,-4},
-  { 1, 0},
-};
+int encode_one_frame ();
+Boolean dummy_slice_too_big(int bits_slice);
+void copy_rdopt_data (int field_type);    //!< For MB level field/frame coding tools
 
 #endif
 

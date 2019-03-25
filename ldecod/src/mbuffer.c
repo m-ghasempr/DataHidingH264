@@ -838,7 +838,7 @@ void fill_PN_gap(ImageParameters *img)
 
   if (fb==0 || fb!=frm) return;
 
-  if ( img->type == B_IMG_MULT || img->type ==  B_IMG_1 ) return;
+  if ( img->type == B_IMG ) return;
 
   pn_expected = (fb->picbuf_short[0]->picID+1) % (img->buf_cycle);
   pn_new = img->pn;
@@ -878,7 +878,7 @@ void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
   
   size = img->num_ref_pic_active_bwd;
 
-  if (img->type!=B_IMG_1 || img->type!=B_IMG_MULT)
+  if (img->type!=B_IMG)
   {
     if ((currSlice->remapping_of_pic_nums_idc_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l1");
     if ((currSlice->abs_diff_pic_num_minus1_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: abs_diff_pic_num_minus1_l1");

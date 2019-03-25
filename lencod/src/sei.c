@@ -38,7 +38,6 @@
  *     implementation of SEI related functions
  *  \author(s)
  *      - Dong Tian                             <tian@cs.tut.fi>
- *      - 
  *
  ************************************************************************
  */
@@ -80,9 +79,8 @@ Boolean seiHasSubseq_characteristics=FALSE;
  ************************************************************************
  */
 
-//!< sei_message[0]: this struct is to store the sei message packtized independently 
-//!< sei_message[1]: this struct is to store the sei message packtized together with slice data
-
+//! sei_message[0]: this struct is to store the sei message packtized independently 
+//! sei_message[1]: this struct is to store the sei message packtized together with slice data
 sei_struct sei_message[2];
 
 void InitSEIMessages()
@@ -567,7 +565,7 @@ void ComposeSparePictureMessage(int delta_spare_frame_num, int ref_area_indicato
   SyntaxElement sym;
 
   sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;
+  sym.mapping = ue_linfo;
 
   sym.value1 = delta_spare_frame_num;
   writeSyntaxElement2Buf_UVLC(&sym, bitstream);
@@ -604,7 +602,7 @@ Boolean CompressSpareMBMap(unsigned char **map_sp, Bitstream *bitstream)
 
   // initialization
   sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;
+  sym.mapping = ue_linfo;
   noc = 0;
   bit0 = 0;
   bit1 = 1;
@@ -759,7 +757,7 @@ void FinalizeSpareMBMap()
   Bitstream *dest, *source;
 
   sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;
+  sym.mapping = ue_linfo;
 
   source = seiSparePicturePayload.data;
   dest = malloc(sizeof(Bitstream));
@@ -888,7 +886,7 @@ void FinalizeSubseqInfo(int currLayer)
   Bitstream *dest = seiSubseqInfo[currLayer].data;
 
   sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;
+  sym.mapping = ue_linfo;
 
   sym.value1 = seiSubseqInfo[currLayer].subseq_layer_num;
   writeSyntaxElement2Buf_UVLC(&sym, dest);
@@ -1077,7 +1075,7 @@ void FinalizeSubseqChar()
   Bitstream *dest = seiSubseqChar.data;
 
   sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;
+  sym.mapping = ue_linfo;
 
   sym.value1 = seiSubseqChar.subseq_layer_num;
   writeSyntaxElement2Buf_UVLC(&sym, dest);
@@ -1184,7 +1182,7 @@ void FinalizeSceneInformation()
   Bitstream *dest = seiSceneInformation.data;
 
   sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;
+  sym.mapping = ue_linfo;
 
   sym.bitpattern = seiSceneInformation.scene_id;
   sym.len = 8;
@@ -1294,7 +1292,7 @@ void FinalizePanScanRectInfo()
 
 
   sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;
+  sym.mapping = ue_linfo;
 
   sym.value1 = seiPanScanRectInfo.pan_scan_rect_id;
   writeSyntaxElement2Buf_UVLC(&sym, dest);
@@ -1401,7 +1399,7 @@ void FinalizeUser_data_unregistered()
   Bitstream *dest = seiUser_data_unregistered.data;
 
   sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;
+  sym.mapping = ue_linfo;
 
 // #define PRINT_USER_DATA_UNREGISTERED_INFO
   for( i = 0; i < seiUser_data_unregistered.total_byte; i++)
@@ -1520,7 +1518,7 @@ void FinalizeUser_data_registered_itu_t_t35()
   Bitstream *dest = seiUser_data_registered_itu_t_t35.data;
 
   sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;
+  sym.mapping = ue_linfo;
 
   sym.bitpattern = seiUser_data_registered_itu_t_t35.itu_t_t35_country_code;
   sym.len = 8;
@@ -1641,7 +1639,7 @@ void FinalizeRandomAccess()
   Bitstream *dest = seiRandomAccess.data;
 
   sym.type = SE_HEADER;
-  sym.mapping = n_linfo2;
+  sym.mapping = ue_linfo;
 
   sym.value1 = seiRandomAccess.recovery_point_flag;
   writeSyntaxElement2Buf_UVLC(&sym, dest);

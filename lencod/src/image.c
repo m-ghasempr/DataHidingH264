@@ -79,7 +79,37 @@
 #define FROM_SAVE 4712
 static void copy_mv_to_or_from_save (int direction);
 
+static void code_a_picture(Picture *pic);
+static void frame_picture (Picture *frame);
+static void field_picture(Picture *top, Picture *bottom);
 
+static void write_reconstructed_image();
+static int  writeout_picture(Picture *pic);
+
+static int  picture_structure_decision(Picture *frame, Picture *top, Picture *bot);
+static void distortion_fld (float *dis_fld_y, float *dis_fld_u, float *dis_fld_v);
+static void find_snr();
+static void find_distortion();
+
+static void field_mode_buffer(int bit_field, float snr_field_y, float snr_field_u, float snr_field_v);
+static void frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame_u, float snr_frame_v);
+
+static void init_frame();
+static void init_field();
+
+static void put_buffer_frame();
+static void put_buffer_top();
+static void put_buffer_bot();
+
+static void interpolate_frame();
+static void interpolate_frame_to_fb();
+
+static void estimate_weighting_factor ();
+
+static void rotate_buffer();
+static void store_field_MV(int frame_number);
+static void store_direct_moving_flag (int frame_number);
+static void copy_motion_vectors_MB(int bot_block); //!< For MB level field/frame coding tools
 
 static void CopyFrameToOldImgOrgVariables (Sourceframe *sf);
 static void CopyTopFieldToOldImgOrgVariables (Sourceframe *sf);
@@ -112,6 +142,13 @@ static int FrameNumberInFile;       // The current frame number in the input fil
 
 static Sourceframe *srcframe;
 
+const int ONE_FOURTH_TAP[3][2] =
+{
+  {20,20},
+  {-5,-4},
+  { 1, 0},
+};
+
 
 /*!
  ************************************************************************
@@ -124,7 +161,7 @@ static Sourceframe *srcframe;
  *    coding
  ************************************************************************
  */
-void code_a_picture(Picture *pic)
+static void code_a_picture(Picture *pic)
 {
   int NumberOfCodedMBs = 0;
   int SliceGroup = 0;
@@ -323,7 +360,7 @@ int encode_one_frame ()
         UpdatePixelMap ();
     }
 
-  find_snr (snr, img);
+  find_snr ();
 
   time (&ltime2);               // end time sec
 #ifdef WIN32
@@ -404,7 +441,7 @@ int encode_one_frame ()
  *
  ************************************************************************
  */
-int writeout_picture(Picture *pic)
+static int writeout_picture(Picture *pic)
 {
   Bitstream *currStream;
   int partition, slice;
@@ -432,7 +469,7 @@ int writeout_picture(Picture *pic)
  *    Encodes a frame picture
  ************************************************************************
  */
-void frame_picture (Picture *frame)
+static void frame_picture (Picture *frame)
 {
 //  int i;
 
@@ -455,7 +492,6 @@ void frame_picture (Picture *frame)
   copy_mref (img);
 
 
-//  read_one_new_frame ();
   CopyFrameToOldImgOrgVariables (srcframe);
 
   if (input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
@@ -500,7 +536,7 @@ void frame_picture (Picture *frame)
  *    Encodes a field picture, consisting of top and bottom field
  ************************************************************************
  */
-void field_picture (Picture *top, Picture *bottom)
+static void field_picture (Picture *top, Picture *bottom)
 {
   stat->em_prev_bits_fld = 0;
   stat->em_prev_bits = &stat->em_prev_bits_fld;
@@ -575,7 +611,7 @@ void field_picture (Picture *top, Picture *bottom)
  *    Distortion Field
  ************************************************************************
  */
-void distortion_fld (float *dis_fld_y, float *dis_fld_u, float *dis_fld_v)
+static void distortion_fld (float *dis_fld_y, float *dis_fld_u, float *dis_fld_v)
 {
 
   img->number /= 2;
@@ -607,9 +643,7 @@ void distortion_fld (float *dis_fld_y, float *dis_fld_u, float *dis_fld_v)
  *    Picture Structure Decision
  ************************************************************************
  */
-
-
-int picture_structure_decision (Picture *frame, Picture *top, Picture *bot)
+static int picture_structure_decision (Picture *frame, Picture *top, Picture *bot)
 {
   double lambda_picture;
   int spframe = (img->type == INTER_IMG && img->types == SP_IMG);
@@ -637,7 +671,7 @@ int picture_structure_decision (Picture *frame, Picture *top, Picture *bot)
  *    Field Mode Buffer
  ************************************************************************
  */
-void field_mode_buffer (int bit_field, float snr_field_y, float snr_field_u, float snr_field_v)
+static void field_mode_buffer (int bit_field, float snr_field_y, float snr_field_u, float snr_field_v)
 {
   put_buffer_frame ();
   imgY = imgY_com;
@@ -660,12 +694,8 @@ void field_mode_buffer (int bit_field, float snr_field_y, float snr_field_u, flo
  *    Frame Mode Buffer
  ************************************************************************
  */
-void frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame_u, float snr_frame_v)
+static void frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame_u, float snr_frame_v)
 {
-  if (input->InterlaceCodingOption != FRAME_CODING)
-    if (input->symbol_mode == CABAC)
-      img->current_mb_nr = img->current_mb_nr * 2;      //! Why the heck is this dependent on CABAC???
-
   put_buffer_frame ();
 
   if (img->type != B_IMG)       //all I- and P-frames
@@ -730,7 +760,7 @@ static void init_mmco()
  *    Initializes the parameters for a new frame
  ************************************************************************
  */
-void init_frame ()
+static void init_frame ()
 {
   int i, j, k;
   int prevP_no, nextP_no;
@@ -880,7 +910,7 @@ void init_frame ()
  *    Initializes the parameters for a new field
  ************************************************************************
  */
-void init_field ()
+static void init_field ()
 {
   int i, j, k;
   int prevP_no, nextP_no;
@@ -1056,7 +1086,7 @@ void init_field ()
  *    Estimates reference picture weighting factors
  ************************************************************************
  */
-void estimate_weighting_factor ()
+static void estimate_weighting_factor ()
 {
   int i, j, n;
   int x,z;
@@ -1292,7 +1322,7 @@ void estimate_weighting_factor ()
  *     This can be done more elegant!
  ************************************************************************
  */
-void write_reconstructed_image ()
+static void write_reconstructed_image ()
 {
     int i, j, k;
     int start = 0, inc = 1;
@@ -1306,12 +1336,12 @@ void write_reconstructed_image ()
               {
                 for (i = start; i < img->height; i += inc)
                   for (j = 0; j < img->width; j++)
-                    fputc (min (imgY[i][j], 255), p_dec);
+                    fputc (imgY[i][j], p_dec);
 
                 for (k = 0; k < 2; ++k)
                   for (i = start; i < img->height / 2; i += inc)
                     for (j = 0; j < img->width / 2; j++)
-                      fputc (min (imgUV[k][i][j], 255), p_dec);
+                      fputc (imgUV[k][i][j], p_dec);
               }
 
             // write reconstructed image (IBPBP) : only intra written
@@ -1319,12 +1349,12 @@ void write_reconstructed_image ()
               {
                 for (i = start; i < img->height; i += inc)
                   for (j = 0; j < img->width; j++)
-                    fputc (min (imgY[i][j], 255), p_dec);
+                    fputc (imgY[i][j], p_dec);
 
                 for (k = 0; k < 2; ++k)
                   for (i = start; i < img->height / 2; i += inc)
                     for (j = 0; j < img->width / 2; j++)
-                      fputc (min (imgUV[k][i][j], 255), p_dec);
+                      fputc (imgUV[k][i][j], p_dec);
               }
 
             // next P picture. This is saved with recon B picture after B picture coding
@@ -1343,11 +1373,11 @@ void write_reconstructed_image ()
           {
             for (i = start; i < img->height; i += inc)
               for (j = 0; j < img->width; j++)
-                fputc (min (imgY[i][j], 255), p_dec);
+                fputc (imgY[i][j], p_dec);
             for (k = 0; k < 2; ++k)
               for (i = start; i < img->height / 2; i += inc)
                 for (j = 0; j < img->width / 2; j++)
-                  fputc (min (imgUV[k][i][j], 255), p_dec);
+                  fputc (imgUV[k][i][j], p_dec);
 
             // If this is last B frame also store P frame
             if (img->b_frame_to_code == input->successive_Bframe)
@@ -1355,11 +1385,11 @@ void write_reconstructed_image ()
                 // save P picture
                 for (i = start; i < img->height; i += inc)
                   for (j = 0; j < img->width; j++)
-                    fputc (min (nextP_imgY[i][j], 255), p_dec);
+                    fputc (nextP_imgY[i][j], p_dec);
                 for (k = 0; k < 2; ++k)
                   for (i = start; i < img->height / 2; i += inc)
                     for (j = 0; j < img->width / 2; j++)
-                      fputc (min (nextP_imgUV[k][i][j], 255), p_dec);
+                      fputc (nextP_imgUV[k][i][j], p_dec);
               }
           }
       }
@@ -1371,7 +1401,7 @@ void write_reconstructed_image ()
  *    Choose interpolation method depending on MV-resolution
  ************************************************************************
  */
-void interpolate_frame_to_fb ()
+static void interpolate_frame_to_fb ()
 {                             // write to mref[]
   add_frame (img);
   init_mref ();
@@ -1386,7 +1416,7 @@ void interpolate_frame_to_fb ()
  *    Choose interpolation method depending on MV-resolution
  ************************************************************************
  */
-void interpolate_frame ()
+static void interpolate_frame ()
 {                             // write to mref[]
   init_mref ();
   init_Refbuf (img);
@@ -1420,9 +1450,9 @@ static void GenerateFullPelRepresentation (pel_t ** Fourthpel,
  *    Uses (writes) img4Y_tmp.  This should be moved to a static variable
  *    in this module
  ************************************************************************/
-void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
-                         pel_t ** out4Y, pel_t ** outU, pel_t ** outV,
-                         pel_t * ref11)
+static void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
+                                pel_t ** out4Y, pel_t ** outU, pel_t ** outV,
+                                pel_t * ref11)
 {
    int is;
     int i, j, j4;
@@ -1489,7 +1519,7 @@ void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
                                                         j - IMG_PAD_SIZE * 4,
                                                         min (ie2 + 2,
                                                              i + 2) -
-                                                        IMG_PAD_SIZE * 4)) /
+                                                        IMG_PAD_SIZE * 4)+1) /
                                     2))));
         }
     for (i = 0; i < ie2 + 4; i++)
@@ -1514,7 +1544,7 @@ void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
                                                               4,
                                                               i -
                                                               IMG_PAD_SIZE *
-                                                              4)) / 2))));
+                                                              4)+1) / 2))));
               }
             else if ((j % 4 == 0 && i % 4 == 1) || (j % 4 == 2 && i % 4 == 3))
               {
@@ -1536,7 +1566,7 @@ void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
                                                               4,
                                                               i -
                                                               IMG_PAD_SIZE *
-                                                              4 - 1)) / 2))));
+                                                              4 - 1) + 1) / 2))));
               }
             else
               {
@@ -1556,7 +1586,7 @@ void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
                                                               4, min (ie2 + 2,
                                                                       i + 1) -
                                                               IMG_PAD_SIZE *
-                                                              4)) / 2))));
+                                                              4) + 1) / 2))));
               }
           }
       }
@@ -1580,7 +1610,7 @@ void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
  *    Find SNR for all three components
  ************************************************************************
  */
-void find_snr ()
+static void find_snr ()
 {
   int i, j;
   int diff_y, diff_u, diff_v;
@@ -1645,7 +1675,7 @@ void find_snr ()
  *    Find distortion for all three components
  ************************************************************************
  */
-void find_distortion ()
+static void find_distortion ()
 {
   int i, j;
   int diff_y, diff_u, diff_v;
@@ -1686,7 +1716,7 @@ void find_distortion ()
 }
 
 
-void rotate_buffer ()
+static void rotate_buffer ()
 {
   Frame *f;
   
@@ -1706,7 +1736,7 @@ void rotate_buffer ()
   }
 }
 
-void store_field_MV (int frame_number)
+static void store_field_MV (int frame_number)
 {
     int i, j;
 
@@ -1858,7 +1888,7 @@ void store_field_MV (int frame_number)
       }
 }
 
-void store_direct_moving_flag (int frame_number)
+static void store_direct_moving_flag (int frame_number)
 {
     int i, j;
 
@@ -1893,22 +1923,6 @@ void store_direct_moving_flag (int frame_number)
 Boolean dummy_slice_too_big (int bits_slice)
 {
   return FALSE;
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *  
- ************************************************************************
- */
-void assign_mem2mvs (RD_DATA * var)
-{
-  get_mem_mv (&(var->mv));
-  get_mem_mv (&(var->all_mv));
-  get_mem_mv (&(var->all_bmv));
-  get_mem_mv (&(var->p_fwMV));
-  get_mem_mv (&(var->p_bwMV));
 }
 
 
@@ -2259,7 +2273,8 @@ void copy_rdopt_data (int bot_block)
       }
       
   }
-  
+
+/*
   if (!MBPairIsField && img->mb_y < 2)        // to ensure that if the MB is coded as frame 
   {                         // invalid modes like TOP_PRED don't go into the 
     for (k = 0, j = 1; j < 5; j++)  // zero row field MB's
@@ -2272,6 +2287,7 @@ void copy_rdopt_data (int bot_block)
       }
       
   }
+*/
   
 
   // point the field motion vectors to either top or bottom field 
@@ -2280,7 +2296,7 @@ void copy_rdopt_data (int bot_block)
   
 }                             // end of copy_rdopt_data
   
-void copy_motion_vectors_MB (int bot_block)
+static void copy_motion_vectors_MB (int bot_block)
 {
   int ***tmp_mv_fld, ***tmp_fwMV_fld, ***tmp_bwMV_fld;
   int *****mv_fld, *****all_mv_fld, *****all_bmv_fld;
@@ -2887,7 +2903,7 @@ static int CalculateFrameNumber()
  *    ys: vertical size of frame in pixels, must be divisible by 2
  ************************************************************************
  */
-void GenerateFieldComponent (char *src, char *top, char *bot, int xs, int ys)
+static void GenerateFieldComponent (char *src, char *top, char *bot, int xs, int ys)
 {
   int fieldline;
   assert (ys % 2 == 0);
@@ -2913,7 +2929,7 @@ void GenerateFieldComponent (char *src, char *top, char *bot, int xs, int ys)
  *    sf: Sourceframe structure to which the frame is written
  ************************************************************************
  */
-void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, Sourceframe *sf)
+static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, Sourceframe *sf)
 {
   int i;
 
@@ -2978,7 +2994,7 @@ assert (FrameNumberInFile == FrameNoInFile);
  *    point to frame coding variables 
  ************************************************************************
  */
-void put_buffer_frame()
+static void put_buffer_frame()
 {
   fb = frm;
 
@@ -3009,7 +3025,7 @@ void put_buffer_frame()
  *    point to top field coding variables 
  ************************************************************************
  */
-void put_buffer_top()
+static void put_buffer_top()
 {
   fb = fld;
 
@@ -3044,7 +3060,7 @@ void put_buffer_top()
  *    point to bottom field coding variables 
  ************************************************************************
  */
-void put_buffer_bot()
+static void put_buffer_bot()
 {
   fb = fld;
 

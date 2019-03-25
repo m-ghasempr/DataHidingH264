@@ -59,13 +59,12 @@
 #include "global.h"
 #include "header.h"
 #include "rtp.h"
-#include "encodeiff.h"
-#include "sei.h"
 #include "nalu.h"
 #include "annexb.h"
 #include "parset.h"
 #include "fmo.h"
 #include "vlc.h"
+#include "image.h"
 
 //! Local declarations
 
@@ -236,7 +235,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
 {
   Boolean end_of_slice = FALSE;
   Boolean recode_macroblock;
-  int len;
+  int len, i, j;
   int NumberOfCodedMBs = 0;
   int CurrentMbInScanOrder;
   int MBRowSize = img->width / MB_BLOCK_SIZE;
@@ -444,6 +443,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
             img->height = input->img_height / 2;      // set image height as frame height
           }
 
+
           if (MBPairIsField)
             img->top_field = 1;
           else
@@ -453,6 +453,11 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
           CurrentMbInScanOrder -= MBRowSize;
           set_MB_parameters (CurrentMbInScanOrder);
           start_macroblock ();
+          for (i=0;i<4;i++)
+            for (j=0;j<4;j++)
+            {
+              img->field_anchor[img->block_y+j][img->block_x+i] = img->field_mode;
+            }
 //          img->update_stats = 1;        // Now update the stats                 //! This variable seems never be used
           rdopt =  img->field_mode ? &rddata_top_field_mb : &rddata_top_frame_mb;
           copy_rdopt_data (0);  // copy the MB data for Top MB from the temp buffers
@@ -467,6 +472,11 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
           img->top_field = 0;
           set_MB_parameters (CurrentMbInScanOrder);
           start_macroblock ();
+          for (i=0;i<4;i++)
+            for (j=0;j<4;j++)
+            {
+              img->field_anchor[img->block_y+j][img->block_x+i] = img->field_mode;
+            }
 //          img->update_stats = 1;        // Now update the stats                 //! This variable seems never be used
           rdopt = img->field_mode ? &rddata_bot_field_mb : &rddata_bot_frame_mb;
           copy_rdopt_data (1);  // copy the MB data for Bottom MB from the temp buffers
@@ -573,8 +583,6 @@ static void init_slice ()
  *    Pointer to a Slice
  ************************************************************************
  */
-
-
 static Slice *malloc_slice()
 {
   int i;
@@ -670,9 +678,6 @@ static void free_slice(Slice *slice)
 }
 
 
-
-
-// JVT-D101: redundant slices
 /*!
  ************************************************************************
  * \brief
@@ -684,136 +689,4 @@ void modify_redundant_pic_cnt(unsigned char *buffer)
   unsigned char tmp = 1 << (rpc_bits_to_go-1);
   buffer[rpc_bytes_to_go] |= tmp;
 }
-// End JVT-D101
 
-
-
-/*
-//! some leftovers from the old terminate_slice(), no more used
-
-    case PAR_OF_RTP:
-      printf ("RTP not implemented, commented code needs more work\n");
-      if (input->symbol_mode==CABAC)
-      {
-        write_terminating_bit (1);
-      }
-
-      for (i=0; i<currSlice->max_part_nr; i++)
-      {
-        currStream = (currSlice->partArr[i]).bitstream;
-
-        if (input->symbol_mode == CABAC)
-        {
-          eep = &((currSlice->partArr[i]).ee_cabac);
-          arienco_done_encoding(eep);
-                                        currStream->bits_to_go = eep->Ebits_to_go;
-                                        currStream->byte_buf = 0;
-                                }
-        
-        if (currStream->bits_to_go < 8) // trailing bits to process
-        {
-          currStream->byte_buf <<= currStream->bits_to_go;
-          stat->bit_use_stuffingBits[img->type]+=currStream->bits_to_go;
-          currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
-          currStream->bits_to_go = 8;
-        }
-        bytes_written = currStream->byte_pos; // number of written bytes
-        
-        if(img->type == B_IMG && i > 0)    // to be really sure
-          currStream->write_flag = 0;
-
-        if(currStream->write_flag == 1)                                                   
-        {
-          int Marker;
-          int FirstBytePacketType, subFirstBytePacketType;
-         
-          // Tian Dong (Sept 2002):
-          // The SEI message will be encapsulated together with the slice data into a compound
-          // packet (the newly name is "aggregation packet", see draft-wenger-avt-rtp-jvt-01.txt)
-          FirstBytePacketType = subFirstBytePacketType = 0;
-          if (isAggregationPacket())  // has spare reference picture information to be packetized
-          {
-            FirstBytePacketType = AGGREGATION_PACKET_TYPE; //! compound packet (aggregation packet) See VCEG-N72
-            if ( FirstFrameIn2ndIGOP == img->number )
-              subFirstBytePacketType = (PAYLOAD_TYPE_IDERP << 4);
-            if (input->partition_mode==PAR_DP_1 || img->type == B_IMG)
-              subFirstBytePacketType |= 0;
-            else
-              subFirstBytePacketType |= i+1; //! See VCEG-N72
-          }
-          else 
-          {
-            if ( FirstFrameIn2ndIGOP == img->number )
-              FirstBytePacketType = (PAYLOAD_TYPE_IDERP << 4);
-            if ( input->partition_mode==PAR_DP_1 || img->type == B_IMG)
-              FirstBytePacketType |= 0;
-            else
-              FirstBytePacketType |= i+1; //! See VCEG-N72
-          }
-          
-          // Calculate the Marker bit
-          LastPartition=0;
-          if (input->partition_mode == PAR_DP_3 && img->type != B_IMG)
-          {
-            if (currSlice->partArr[1].bitstream->write_flag == 1)  // something in partition 1
-              LastPartition=1;
-            if (currSlice->partArr[2].bitstream->write_flag == 1)  // something in partition 2
-              LastPartition=2;
-          }
-          Marker = 0;
-          if (img->current_mb_nr == img->total_number_mb)   // last MB is in this slice
-            if ((input->partition_mode==PAR_DP_1) ||          // Single SLice
-                (input->partition_mode==PAR_DP_3 && i == LastPartition ))   // Last partition containing bits
-              Marker = 1;
-
-          // and write the RTP packet
-          currStream->byte_pos = bytes_written; 
-          currStream->bits_to_go = 8;
-          currStream->byte_buf = 0;
-
-                                        if (input->symbol_mode==UVLC)  //GB stopbit is inserted in arienco_done_encoding for CABAC
-                                                SODBtoRBSP(currStream);
-
-          bytes_written = currStream->byte_pos;
-          temp_byte_pos = bytes_written;
-
-          if (input->symbol_mode==CABAC) 
-          {
-                  eep = &((currSlice->partArr[i]).ee_cabac);
-                  bytes_written = RBSPtoEBSP(currStream->streamBuffer, Bytes_After_Header, bytes_written,eep->E);
-          }
-                else
-                  bytes_written = RBSPtoEBSP(currStream->streamBuffer, Bytes_After_Header, bytes_written,0);
-
-          *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
-
-          // Tian Dong (Sept 2002):
-          if (isAggregationPacket())
-            rtp_bytes_written = aggregationRTPWriteBits (Marker, FirstBytePacketType, subFirstBytePacketType, currStream->streamBuffer, bytes_written, out);
-          else
-            rtp_bytes_written = RTPWriteBits (Marker, FirstBytePacketType, currStream->streamBuffer, bytes_written, out);
-
-          // JVT-D101, write the redundant slice
-          if(input->redundant_slice_flag)
-          {
-            // seems that SODBtoRBSP() and RBSPtoEBSP() did not change bits of slice header, 
-            // therefore a bit position in slice header is unchanged.
-            img->redundant_pic_cnt = 1;
-            modify_redundant_pic_cnt(currStream->streamBuffer);
-            rtp_bytes_written = RTPWriteBits (Marker, FirstBytePacketType, currStream->streamBuffer, bytes_written, out);
-          }
-          // End JVT-D101
-        }
-        // stat->bit_ctr += 8*bytes_written;
-        stat->bit_ctr += 8*bytes_written*(img->redundant_pic_cnt+1); // JVT-D101: modified from the above line
-
-        // Provide the next partition with a 'fresh' buffer
-        currStream->stored_bits_to_go = 8;
-        currStream->stored_byte_buf   = 0;
-        currStream->stored_byte_pos   = 0;
-        currStream->bits_to_go = 8;
-        currStream->byte_buf   = 0;
-        currStream->byte_pos   = 0;
-      }
-    return 0;
-*/

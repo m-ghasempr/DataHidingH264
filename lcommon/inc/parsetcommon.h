@@ -61,9 +61,6 @@
 #define MAXIMUMPARSETNALUSIZE   1500
 #define SIZEslice_group_id      (sizeof (int) * 60000)    // should be sufficient for HUGE pictures, need one int per MB in a picture
 
-#define LOG2_MAX_FRAME_NUM_MINUS4   4           // POC200301 moved from defines.h
-#define LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4 4     // POC200301 newly added
-
 #define MAXSPS  32
 #define MAXPPS  128
 

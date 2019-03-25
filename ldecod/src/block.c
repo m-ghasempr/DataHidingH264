@@ -122,6 +122,7 @@ int intrapred(
   int block_available_up;
   int block_available_up_right;
   int block_available_left;
+  int block_available_up_left; // new
 
   byte predmode = img->ipredmode[img_block_x+1][img_block_y+1];
 
@@ -133,28 +134,46 @@ int intrapred(
   {
     predmode = img->ipredmode_bot[img_block_x+1][img_block_y+1];
 
-    block_available_up = (img->ipredmode_bot[img_block_x+1][img_block_y] >=0);
+    block_available_up        = (img->ipredmode_bot[img_block_x+1][img_block_y] >=0);
     block_available_up_right  = (img->ipredmode_bot[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0); // ???
-    block_available_left = (img->ipredmode_bot[img_block_x][img_block_y+1] >=0);
+    block_available_left      = (img->ipredmode_bot[img_block_x][img_block_y+1] >=0);
+    block_available_up_left   = (img->ipredmode_bot[img_block_x][img_block_y] >=0);
+
+    if(img->mb_frame_field_flag && img_x%MB_BLOCK_SIZE == 12 && img_y%MB_BLOCK_SIZE )
+      block_available_up_right = 0;
   }
   else
   {
     predmode = img->ipredmode_top[img_block_x+1][img_block_y+1];
 
-    block_available_up = (img->ipredmode_top[img_block_x+1][img_block_y] >=0);
+    block_available_up        = (img->ipredmode_top[img_block_x+1][img_block_y] >=0);
     block_available_up_right  = (img->ipredmode_top[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0); // ???
-    block_available_left = (img->ipredmode_top[img_block_x][img_block_y+1] >=0);
+    block_available_left      = (img->ipredmode_top[img_block_x][img_block_y+1] >=0);
+    block_available_up_left   = (img->ipredmode_top[img_block_x][img_block_y] >=0);
+
+    if(img->mb_frame_field_flag && img_x%MB_BLOCK_SIZE == 12 && img_y%MB_BLOCK_SIZE )
+      block_available_up_right = 0;
   }
   }
   else
   {
-    block_available_up = (img->ipredmode[img_block_x+1][img_block_y] >=0);              /// can use frm
+    block_available_up        = (img->ipredmode[img_block_x+1][img_block_y] >=0);              /// can use frm
     block_available_up_right  = (img->ipredmode[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0); // ???  /// can use frm
-    block_available_left = (img->ipredmode[img_block_x][img_block_y+1] >=0);            /// can use frm
+    block_available_left      = (img->ipredmode[img_block_x][img_block_y+1] >=0);            /// can use frm
+    block_available_up_left   = (img->ipredmode[img_block_x][img_block_y] >=0);
+
+    if(img->mb_frame_field_flag && img_x%MB_BLOCK_SIZE == 12 && img_y%(2*MB_BLOCK_SIZE) )
+      block_available_up_right = 0;
+  }
+  if( img_x+4 == img->width )
+  {
+    block_available_up_right = 0;
   }
 
+/*
   if(img_x%MB_BLOCK_SIZE == 12 && img->mb_frame_field_flag)
     block_available_up_right = 0;
+    */
 
   i = (img_x & 15);
   j = (img_y & 15);
@@ -207,7 +226,7 @@ int intrapred(
     P_I = P_J = P_K = P_L = 128;
   }
 
-  if (block_available_up && block_available_left)
+  if (block_available_up_left)
   {
     P_X = imgY[img_y-1][img_x-1];
   }

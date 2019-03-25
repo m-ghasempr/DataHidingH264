@@ -277,9 +277,18 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
     {
       biari_encode_symbol(eep_dp, 0, ctx->mb_type_contexts[0] + act_ctx );
     }
+    else if( act_sym == 25 ) // PCM-MODE
+    {
+      biari_encode_symbol(eep_dp, 1, ctx->mb_type_contexts[0] + act_ctx );
+
+      biari_encode_symbol_final(eep_dp, 1);
+    }
     else // 16x16 Intra
     {
       biari_encode_symbol(eep_dp, 1, ctx->mb_type_contexts[0] + act_ctx );
+
+      biari_encode_symbol_final(eep_dp, 0);
+
       mode_sym = act_sym-1; // Values in the range of 0...23
       act_ctx  = 4;
       act_sym  = mode_sym/12;
@@ -442,6 +451,13 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
 
     if(act_sym==mode16x16) // additional info for 16x16 Intra-mode
     {
+      if( mode_sym==25 )
+      {
+        biari_encode_symbol_final(eep_dp, 1 );
+        return;
+      }
+      biari_encode_symbol_final(eep_dp, 0 );
+
       act_ctx = 8;
       act_sym = mode_sym/12;
       biari_encode_symbol(eep_dp, (unsigned char) act_sym, ctx->mb_type_contexts[1] + act_ctx ); // coding of AC/no AC
@@ -841,12 +857,11 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   else
   {
     biari_encode_symbol(eep_dp, 1, &ctx->mv_res_contexts[0][act_ctx] );
-    mv_sign = (mv_pred_res<0) ? 1: 0;
-    act_ctx=5*k+4;
-    biari_encode_symbol_eq_prob(eep_dp, (unsigned char) mv_sign);
     act_sym--;
     act_ctx=5*k;
     unary_exp_golomb_mv_encode(eep_dp,act_sym,ctx->mv_res_contexts[1]+act_ctx,3);
+    mv_sign = (mv_pred_res<0) ? 1: 0;
+    biari_encode_symbol_eq_prob(eep_dp, (unsigned char) mv_sign);
   }
 }
 
@@ -972,12 +987,11 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   else
   {
     biari_encode_symbol(eep_dp, 1, &ctx->mv_res_contexts[0][act_ctx] );
-    mv_sign = (mv_pred_res<0) ? 1: 0;
-    act_ctx=5*k+4;
-    biari_encode_symbol_eq_prob(eep_dp, (unsigned char) mv_sign);
     act_sym--;
     act_ctx=5*k;
     unary_exp_golomb_mv_encode(eep_dp,act_sym,ctx->mv_res_contexts[1]+act_ctx,3);
+    mv_sign = (mv_pred_res<0) ? 1: 0;
+    biari_encode_symbol_eq_prob(eep_dp, (unsigned char) mv_sign);
   }
 }
 

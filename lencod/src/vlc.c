@@ -84,12 +84,11 @@
  *
  *************************************************************************************
  */
-
 int ue_v (char *tracestring, int value, DataPartition *part)
 {
   SyntaxElement symbol, *sym=&symbol;
   sym->type = SE_HEADER;
-  sym->mapping = n_linfo2;               // Mapping rule: unsigned integer
+  sym->mapping = ue_linfo;               // Mapping rule: unsigned integer
   sym->value1 = value;
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
@@ -122,12 +121,11 @@ int ue_v (char *tracestring, int value, DataPartition *part)
  *
  *************************************************************************************
  */
-
 int se_v (char *tracestring, int value, DataPartition *part)
 {
   SyntaxElement symbol, *sym=&symbol;
   sym->type = SE_HEADER;
-  sym->mapping = dquant_linfo;               // Mapping rule: signed integer
+  sym->mapping = se_linfo;               // Mapping rule: signed integer
   sym->value1 = value;
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
@@ -161,7 +159,6 @@ int se_v (char *tracestring, int value, DataPartition *part)
  *
  *************************************************************************************
  */
-
 int u_1 (char *tracestring, int value, DataPartition *part)
 {
   SyntaxElement symbol, *sym=&symbol;
@@ -176,6 +173,7 @@ int u_1 (char *tracestring, int value, DataPartition *part)
   assert (part->bitstream->streamBuffer != NULL);
   return writeSyntaxElement_fixed(sym, part);
 }
+
 
 /*! 
  *************************************************************************************
@@ -217,51 +215,69 @@ int u_v (int n, char *tracestring, int value, DataPartition *part)
 }
 
 
+/*!
+ ************************************************************************
+ * \brief
+ *    mapping for ue(v) syntax elements
+ * \param ue
+ *    value to be mapped
+ * \param info
+ *    returns mapped value
+ * \param len
+ *    returns mapped value length
+ ************************************************************************
+ */
+void ue_linfo(int ue, int dummy, int *len,int *info)
+{
+  int i,nn;
+
+  nn=(ue+1)/2;
+
+  for (i=0; i < 16 && nn != 0; i++)
+  {
+    nn /= 2;
+  }
+  *len= 2*i + 1;
+  *info=ue+1-(int)pow(2,i);
+}
+
 
 /*!
  ************************************************************************
  * \brief
- *    n_linfo
- * \par Input:
- *    Number in the code table
- * \par Output:
- *    lenght and info
+ *    mapping for ue(v) syntax elements
+ * \param ue
+ *    value to be mapped
+ * \param info
+ *    returns mapped value
+ * \param len
+ *    returns mapped value length
  ************************************************************************
  */
-void n_linfo(int n, int *len,int *info)
+void se_linfo(int se, int dummy, int *len,int *info)
 {
-  int i,nn;
 
-  nn=(n+1)/2;
+  int i,n,sign,nn;
 
+  sign=0;
+
+  if (se <= 0)
+  {
+    sign=1;
+  }
+  n=abs(se) << 1;
+
+  /*
+  n+1 is the number in the code table.  Based on this we find length and info
+  */
+
+  nn=n/2;
   for (i=0; i < 16 && nn != 0; i++)
   {
     nn /= 2;
   }
-  *len= 2*i + 1;
-  *info=n+1-(int)pow(2,i);
-}
-
-/*!
- ************************************************************************
- * \par Input:
- *    Number in the code table
- * \par Output:
- *    lenght and info
- ************************************************************************
- */
-void n_linfo2(int n, int dummy, int *len,int *info)
-{
-  int i,nn;
-
-  nn=(n+1)/2;
-
-  for (i=0; i < 16 && nn != 0; i++)
-  {
-    nn /= 2;
-  }
-  *len= 2*i + 1;
-  *info=n+1-(int)pow(2,i);
+  *len=i*2 + 1;
+  *info=n - (int)pow(2,i) + sign;
 }
 
 
@@ -276,7 +292,7 @@ void n_linfo2(int n, int dummy, int *len,int *info)
 void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
 {
   extern const int NCBP[48][2];
-  n_linfo(NCBP[cbp][0],len,info);
+  ue_linfo(NCBP[cbp][0], dummy, len, info);
 }
 
 
@@ -291,75 +307,7 @@ void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
 void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
 {
   extern const int NCBP[48][2];
-  n_linfo(NCBP[cbp][1],len,info);
-}
-/*!
- ************************************************************************
- * \par Input:
- *    delta quant
- * \par Output:
- *    lenght and info
- ************************************************************************
- */
-void dquant_linfo(int dquant, int dummy, int *len,int *info)
-{
-
-  int i,n,sign,nn;
-
-  sign=0;
-
-  if (dquant <= 0)
-  {
-    sign=1;
-  }
-  n=abs(dquant) << 1;
-
-  /*
-  n+1 is the number in the code table.  Based on this we find length and info
-  */
-
-  nn=n/2;
-  for (i=0; i < 16 && nn != 0; i++)
-  {
-    nn /= 2;
-  }
-  *len=i*2 + 1;
-  *info=n - (int)pow(2,i) + sign;
-}
-
-
-/*!
- ************************************************************************
- * \par Input:
- *    motion vector differense
- * \par Output:
- *    lenght and info
- ************************************************************************
- */
-void mvd_linfo2(int mvd, int dummy, int *len,int *info)
-{
-
-  int i,n,sign,nn;
-
-  sign=0;
-
-  if (mvd <= 0)
-  {
-    sign=1;
-  }
-  n=abs(mvd) << 1;
-
-  /*
-  n+1 is the number in the code table.  Based on this we find length and info
-  */
-
-  nn=n/2;
-  for (i=0; i < 16 && nn != 0; i++)
-  {
-    nn /= 2;
-  }
-  *len=i*2 + 1;
-  *info=n - (int)pow(2,i) + sign;
+  ue_linfo(NCBP[cbp][1], dummy, len, info);
 }
 
 
@@ -418,6 +366,7 @@ void levrun_linfo_c2x2(int level,int run,int *len,int *info)
   *len= 2*i + 1;
   *info=n-(int)pow(2,i)+sign;
 }
+
 
 /*!
  ************************************************************************
@@ -478,6 +427,7 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
   *info=n-(int)pow(2,i)+sign;
 
 }
+
 
 /*!
  ************************************************************************
@@ -543,6 +493,7 @@ void levrun_linfo_intra(int level,int run,int *len,int *info)
   *info=n-(int)pow(2,i)+sign;
 }
 
+
 /*!
  ************************************************************************
  * \brief
@@ -561,6 +512,7 @@ int symbol2uvlc(SyntaxElement *sym)
   sym->bitpattern = (1<<suffix_len)|(sym->inf&((1<<suffix_len)-1));
   return 0;
 }
+
 
 /*!
  ************************************************************************
@@ -586,6 +538,7 @@ int writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
   return (se->len);
 }
 
+
 /*!
  ************************************************************************
  * \brief
@@ -606,6 +559,7 @@ int writeSyntaxElement_fixed(SyntaxElement *se, DataPartition *this_dataPart)
 
   return (se->len);
 }
+
 
 /*!
  ************************************************************************
@@ -641,6 +595,7 @@ int writeSyntaxElement_Intra4x4PredictionMode(SyntaxElement *se, DataPartition *
   return (se->len);
 }
 
+
 /*!
  ************************************************************************
  * \brief
@@ -665,6 +620,7 @@ int writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffer 
 
   return (se->len);
 }
+
 
 /*!
  ************************************************************************
@@ -695,6 +651,7 @@ void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
     }
   }
 }
+
 
 /*!
  ************************************************************************
@@ -744,7 +701,6 @@ int symbol2vlc(SyntaxElement *sym)
   }
   return 0;
 }
-
 
 
 /*!
@@ -868,8 +824,6 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *th
 }
 
 
-
-
 /*!
  ************************************************************************
  * \brief
@@ -988,6 +942,7 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPar
   return (se->len);
 }
 
+
 /*!
  ************************************************************************
  * \brief
@@ -1090,8 +1045,6 @@ int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart)
 }
 
 
-
-
 /*!
  ************************************************************************
  * \brief
@@ -1104,12 +1057,12 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPar
 
   level = se->value1;
   levabs = abs(level);
-  sign = (level < 0 ? 0 : 1);  /* note reversed */
+  sign = (level < 0 ? 1 : 0);
 
-
+  
   if (levabs < 8)
   {
-    se->len = levabs * 2 - sign;
+    se->len = levabs * 2 + sign - 1;
     se->inf = 1;
   }
   else if (levabs < 8+8)
@@ -1136,6 +1089,7 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPar
 
   return (se->len);
 }
+
 
 /*!
  ************************************************************************
@@ -1184,53 +1138,6 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
 
   return (se->len);
 }
-
-
-/*!
- ************************************************************************
- * \brief
- *    Write out a trace string on the trace file
- ************************************************************************
- */
-#if TRACE
-void trace2out(SyntaxElement *sym)
-{
-  static int bitcounter = 0;
-  int i, chars;
-
-  if (p_trace != NULL)
-  {
-    putc('@', p_trace);
-    chars = fprintf(p_trace, "%i", bitcounter);
-    while(chars++ < 6)
-      putc(' ',p_trace);
-
-    chars += fprintf(p_trace, "%s", sym->tracestring);
-    while(chars++ < 55)
-      putc(' ',p_trace);
-
-  // Align bitpattern
-    if(sym->len<15)
-    {
-      for(i=0 ; i<15-sym->len ; i++)
-        fputc(' ', p_trace);
-    }
-    
-    // Print bitpattern
-    bitcounter += sym->len;
-    for(i=1 ; i<=sym->len ; i++)
-    {
-      if((sym->bitpattern >> (sym->len-i)) & 0x1)
-        fputc('1', p_trace);
-      else
-        fputc('0', p_trace);
-    }
-    fprintf(p_trace, " (%3d) \n",sym->value1);
-  }
-  fflush (p_trace);
-}
-#endif
-
 
 /*!
  ************************************************************************

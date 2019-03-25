@@ -58,7 +58,6 @@
  */
 void write_frame(
   struct img_par *img,  //!< image parameter
-  int postfilter,       //!< postfilter on (=1) or off (=0)
   FILE *p_out)          //!< filestream to output file
 {
   int i,j;
@@ -67,42 +66,21 @@ void write_frame(
    * the mmin, mmax macros are taken out, because it makes no sense due to limited range of data type
    */
 
-  if(postfilter)
-  {
-    for(i=0;i<img->height;i++)
-      for(j=0;j<img->width;j++)
-      {
-        fputc(imgY_pf[i][j],p_out);
-      }
-    for(i=0;i<img->height_cr;i++)
-      for(j=0;j<img->width_cr;j++)
-      {
-        fputc(imgUV_pf[0][i][j],p_out);
-      }
-    for(i=0;i<img->height_cr;i++)
-      for(j=0;j<img->width_cr;j++)
-      {
-        fputc(imgUV_pf[1][i][j],p_out);
-      }
-  }
-  else
-  {
-    for(i=0;i<img->height;i++)
-      for(j=0;j<img->width;j++)
-      {
-        fputc(imgY[i][j],p_out);
-      }
-    for(i=0;i<img->height_cr;i++)
-      for(j=0;j<img->width_cr;j++)
-      {
-        fputc(imgUV[0][i][j],p_out);
-      }
-    for(i=0;i<img->height_cr;i++)
-      for(j=0;j<img->width_cr;j++)
-      {
-        fputc(imgUV[1][i][j],p_out);
-      }
-  }
+  for(i=0;i<img->height;i++)
+    for(j=0;j<img->width;j++)
+    {
+      fputc(imgY[i][j],p_out);
+    }
+  for(i=0;i<img->height_cr;i++)
+    for(j=0;j<img->width_cr;j++)
+    {
+      fputc(imgUV[0][i][j],p_out);
+    }
+  for(i=0;i<img->height_cr;i++)
+    for(j=0;j<img->width_cr;j++)
+    {
+      fputc(imgUV[1][i][j],p_out);
+    }
   fflush(p_out);
 }
 
@@ -160,8 +138,7 @@ void tracebits(
     const char *trace_str,  //!< tracing information, char array describing the symbol
     int len,                //!< length of syntax element in bits
     int info,               //!< infoword of syntax element
-    int value1,
-    int value2)
+    int value1)
 {
 
   int i, chars;

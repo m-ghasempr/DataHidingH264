@@ -104,8 +104,8 @@
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
 #define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB)
 #define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB       && (MB)->mb_type!=0)
-#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->   type==    B_IMG_1 ||  img->   type==    B_IMG_MULT))
-#define IS_COPY(MB)     ((MB)->mb_type==0     && (img->   type==INTER_IMG_1 ||  img->   type==INTER_IMG_MULT || img->type==SP_IMG_1 || img->type==SP_IMG_MULT))
+#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->   type==    B_IMG ))
+#define IS_COPY(MB)     ((MB)->mb_type==0     && (img->   type==INTER_IMG || img->type==SP_IMG))
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
 
 
@@ -115,19 +115,13 @@
 #define MAX_QP          51
 #define SHIFT_QP        12
 
-#define INTER_IMG_1     0
-#define INTER_IMG_MULT  1
+#define INTER_IMG       0
 #define INTRA_IMG       2
-
 // B pictures
-#define B_IMG_1     3
-#define B_IMG_MULT  4
-#define COMPLETE      
-
+#define B_IMG           3
 // SP Pictures
-#define SP_IMG_1    5
-#define SP_IMG_MULT 6
-#define SI_IMG      7
+#define SP_IMG          5
+#define SI_IMG          7
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
@@ -152,9 +146,9 @@
 #define PLANE_16        3
 
 // 8x8 chroma intra prediction modes
-#define VERT_PRED_8     0
+#define DC_PRED_8       0
 #define HOR_PRED_8      1
-#define DC_PRED_8       2
+#define VERT_PRED_8     2
 #define PLANE_8         3
 
 // QCIF format

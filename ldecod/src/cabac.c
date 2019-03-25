@@ -173,7 +173,7 @@ int check_next_mb_and_get_field_mode_CABAC( SyntaxElement *se,
   int length;
   DecodingEnvironmentPtr    dep_dp = &(act_dp->de_cabac);
 
-  int bframe = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
+  int bframe = (img->type==B_IMG);
   int skip   = 0;
   int field  = 0;
   int i;
@@ -321,11 +321,10 @@ void readBiMVD2Buffer_CABAC( SyntaxElement *se,
 
   if (act_sym != 0)
   {
-    act_ctx = 5*k+4;
-    mv_sign = biari_decode_symbol_eq_prob(dep_dp);
     act_ctx=5*k;
     act_sym = unary_exp_golomb_mv_decode(dep_dp,ctx->mv_res_contexts[1]+act_ctx,3);
     act_sym++;
+    mv_sign = biari_decode_symbol_eq_prob(dep_dp);
 
     if(mv_sign)
       act_sym = -act_sym;
@@ -351,7 +350,7 @@ void readB8_typeInfoFromBuffer_CABAC (SyntaxElement *se,
                                       DecodingEnvironmentPtr dep_dp)
 {
   int act_sym = 0;
-  int bframe  = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
+  int bframe  = (img->type==B_IMG);
 
   MotionInfoContexts *ctx = (img->currentSlice)->mot_ctx;
 
@@ -432,7 +431,7 @@ void readMB_skip_flagInfoFromBuffer_CABAC( SyntaxElement *se,
 {
   int a, b;
   int act_ctx;
-  int bframe=(img->type==B_IMG_1 || img->type==B_IMG_MULT);
+  int bframe=(img->type==B_IMG);
   MotionInfoContexts *ctx = (img->currentSlice)->mot_ctx;
   Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
@@ -492,7 +491,7 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
   int a, b;
   int act_ctx;
   int act_sym;
-  int bframe=(img->type==B_IMG_1 || img->type==B_IMG_MULT);
+  int bframe=(img->type==B_IMG);
   int mode_sym;
   int ct = 0;
   int curr_mb_type;
@@ -522,29 +521,37 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
     }
     else // 16x16 Intra
     {
-      act_sym = 1;
-      act_ctx = 4;
-      mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx ); // decoding of AC/no AC
-      act_sym += mode_sym*12;
-      act_ctx = 5;
-      // decoding of cbp: 0,1,2
-        mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
-      if (mode_sym!=0)
+      mode_sym = biari_decode_final(dep_dp);
+      if( mode_sym==25 )
       {
-        act_ctx=6;
-        mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
-        act_sym+=4;
+        curr_mb_type = 25;
+      }
+      else
+      {
+        act_sym = 1;
+        act_ctx = 4;
+        mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx ); // decoding of AC/no AC
+        act_sym += mode_sym*12;
+        act_ctx = 5;
+        // decoding of cbp: 0,1,2
+          mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
         if (mode_sym!=0)
-            act_sym+=4;
-          }
-        // decoding of I pred-mode: 0,1,2,3
-        act_ctx = 7;
-        mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
-        act_sym += mode_sym*2;
-        act_ctx = 8;
-        mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
-        act_sym += mode_sym;
-        curr_mb_type = act_sym;
+        {
+          act_ctx=6;
+          mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
+          act_sym+=4;
+          if (mode_sym!=0)
+              act_sym+=4;
+            }
+          // decoding of I pred-mode: 0,1,2,3
+          act_ctx = 7;
+          mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
+          act_sym += mode_sym*2;
+          act_ctx = 8;
+          mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
+          act_sym += mode_sym;
+          curr_mb_type = act_sym;
+      }
     }
   }
   else if(img->type == SI_IMG)  // SI-frame
@@ -589,29 +596,37 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
       }
       else // 16x16 Intra
       {
-        act_sym = 2;
-        act_ctx = 4;
-        mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx ); // decoding of AC/no AC
-        act_sym += mode_sym*12;
-        act_ctx = 5;
-        // decoding of cbp: 0,1,2
-        mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
-        if (mode_sym!=0)
+        mode_sym = biari_decode_final(dep_dp);
+        if( mode_sym==25 )
         {
-          act_ctx=6;
-          mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
-          act_sym+=4;
-          if (mode_sym!=0)
-            act_sym+=4;
+          curr_mb_type = 26;
         }
-        // decoding of I pred-mode: 0,1,2,3
-        act_ctx = 7;
-        mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
-        act_sym += mode_sym*2;
-        act_ctx = 8;
-        mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
-        act_sym += mode_sym;
-        curr_mb_type = act_sym;
+        else
+        {
+          act_sym = 2;
+          act_ctx = 4;
+          mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx ); // decoding of AC/no AC
+          act_sym += mode_sym*12;
+          act_ctx = 5;
+          // decoding of cbp: 0,1,2
+          mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
+          if (mode_sym!=0)
+          {
+            act_ctx=6;
+            mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
+            act_sym+=4;
+            if (mode_sym!=0)
+              act_sym+=4;
+          }
+          // decoding of I pred-mode: 0,1,2,3
+          act_ctx = 7;
+          mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
+          act_sym += mode_sym*2;
+          act_ctx = 8;
+          mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[0] + act_ctx );
+          act_sym += mode_sym;
+          curr_mb_type = act_sym;
+        }
       }
     }
   }
@@ -693,34 +708,42 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
       }
     }
 
-    if (act_sym<=6 || (((img->type == B_IMG_1 || img->type == B_IMG_MULT)?1:0) && act_sym<=23))
+    if (act_sym<=6 || (((img->type == B_IMG)?1:0) && act_sym<=23))
     {
       curr_mb_type = act_sym;
     }
     else  // additional info for 16x16 Intra-mode
     {
-      act_ctx = 8;
-      mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[1] + act_ctx ); // decoding of AC/no AC
-      act_sym += mode_sym*12;
-
-      // decoding of cbp: 0,1,2
-      act_ctx = 9;
-      mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[1] + act_ctx );
-      if (mode_sym != 0)
+      mode_sym = biari_decode_final(dep_dp);
+      if( mode_sym==25 )
       {
-        act_sym+=4;
+        curr_mb_type = act_sym + 25;
+      }
+      else
+      {
+        act_ctx = 8;
+        mode_sym =  biari_decode_symbol(dep_dp, ctx->mb_type_contexts[1] + act_ctx ); // decoding of AC/no AC
+        act_sym += mode_sym*12;
+
+        // decoding of cbp: 0,1,2
+        act_ctx = 9;
         mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[1] + act_ctx );
         if (mode_sym != 0)
+        {
           act_sym+=4;
-      }
+          mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[1] + act_ctx );
+          if (mode_sym != 0)
+            act_sym+=4;
+        }
 
-      // decoding of I pred-mode: 0,1,2,3
-      act_ctx = 10;
-      mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[1] + act_ctx );
-      act_sym += mode_sym*2;
-      mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[1] + act_ctx );
-      act_sym += mode_sym;
-      curr_mb_type = act_sym;
+        // decoding of I pred-mode: 0,1,2,3
+        act_ctx = 10;
+        mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[1] + act_ctx );
+        act_sym += mode_sym*2;
+        mode_sym = biari_decode_symbol(dep_dp, ctx->mb_type_contexts[1] + act_ctx );
+        act_sym += mode_sym;
+        curr_mb_type = act_sym;
+      }
     }
   }
   se->value1 = curr_mb_type;
@@ -785,23 +808,23 @@ void readRefFrameFromBuffer_CABAC(  SyntaxElement *se,
   int   a, b;
   int   act_ctx;
   int   act_sym;
-  int** refframe_array = ((img->type==B_IMG_1 || img->type==B_IMG_MULT) ? img->fw_refFrArr : refFrArr);
+  int** refframe_array = ((img->type==B_IMG) ? img->fw_refFrArr : refFrArr);
   int   block_y        = img->block_y;
 
   if( img->mb_frame_field_flag )
   {
     if( !img->mb_field )
     {
-      refframe_array = ((img->type==B_IMG_1 || img->type==B_IMG_MULT) ? img->fw_refFrArr_frm : refFrArr_frm);
+      refframe_array = ((img->type==B_IMG) ? img->fw_refFrArr_frm : refFrArr_frm);
     }
     else if ( img->current_mb_nr % 2 )
     {
-      refframe_array = ((img->type==B_IMG_1 || img->type==B_IMG_MULT) ? img->fw_refFrArr_bot : refFrArr_bot);
+      refframe_array = ((img->type==B_IMG) ? img->fw_refFrArr_bot : refFrArr_bot);
       block_y        = ( img->block_y - 4 ) / 2;
     }
     else
     {
-      refframe_array = ((img->type==B_IMG_1 || img->type==B_IMG_MULT) ? img->fw_refFrArr_top : refFrArr_top);
+      refframe_array = ((img->type==B_IMG) ? img->fw_refFrArr_top : refFrArr_top);
       block_y        = img->block_y / 2;
     }
   }
@@ -1027,11 +1050,10 @@ void readMVDFromBuffer_CABAC(SyntaxElement *se,
   }
   else
   {
-    act_ctx=5*k+4;
-    mv_sign = biari_decode_symbol_eq_prob(dep_dp);
     act_ctx=5*k;
     act_sym = unary_exp_golomb_mv_decode(dep_dp,ctx->mv_res_contexts[1]+act_ctx,3);
     act_sym++;
+    mv_sign = biari_decode_symbol_eq_prob(dep_dp);
     mv_pred_res = ((mv_sign != 0) ? (-act_sym) : act_sym);
   }
   se->value1 = mv_pred_res;
@@ -1649,8 +1671,8 @@ int cabac_startcode_follows(struct img_par *img, struct inp_par *inp, int eos_bi
   unsigned int  bit;
   DecodingEnvironmentPtr dep_dp;
   
-  if(img->type == B_IMG_1 || img->type == B_IMG_MULT) dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-  else                                                dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+  if(img->type == B_IMG) dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  else                   dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
   dep_dp = &(dP->de_cabac);
 
   if( eos_bit )

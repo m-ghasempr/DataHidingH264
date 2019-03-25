@@ -50,7 +50,7 @@
  *    For now, everything is just copied to the inp_par structure (gulp)
  *
  **************************************************************************************
- * \par New configuration File Format
+ * \par Configuration File Format
  **************************************************************************************
  * Format is line oriented, maximum of one parameter per line                           \n
  *                                                                                      \n
@@ -439,12 +439,12 @@ static void PatchInp ()
   }
   // consistency check Search_range
 
-  if (input->search_range > 39)   // StW
+/*  if (input->search_range > 39)   // StW
   {
     snprintf(errortext, ET_SIZE, "Error in input parameter search_range, check configuration file");
     error (errortext, 400);
   }
-
+*/
   // consistency check no_multpred
   if (input->no_multpred<1) input->no_multpred=1;
 

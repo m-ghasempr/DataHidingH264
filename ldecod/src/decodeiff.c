@@ -871,13 +871,13 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   //! also: need to define Slice types for SP images
   //! see VCEG-N72r1 for the Slice types, which are mapped here to img->type
   case 0:
-    img->type = currSlice->picture_type = (inp->buf_cycle > 1)?INTER_IMG_MULT:INTER_IMG_1;
+    img->type = INTER_IMG;
     break;
   case 1:
-    img->type = currSlice->picture_type = (inp->buf_cycle > 1)?B_IMG_MULT:B_IMG_1;
+    img->type = B_IMG;
     break;
   case 2:
-    img->type = currSlice->picture_type = (inp->buf_cycle > 1)?SP_IMG_MULT:SP_IMG_1;
+    img->type = SP_IMG;
     break;
   case 3:
     img->type = currSlice->picture_type = INTRA_IMG;
@@ -896,7 +896,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   buf->frame_bitoffset += sym.len;
   bitptr+=sym.len;
 
-  if(img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT)
+  if(img->type==INTER_IMG)
   {
     sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
     sym.mapping(sym.len, sym.inf, &(img->num_ref_pic_active_fwd), &(sym.value2));
@@ -904,7 +904,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
     bitptr+=sym.len;
     img->num_ref_pic_active_fwd++;
   }
-  else if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+  else if(img->type==B_IMG)
   {
  
     sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
@@ -920,7 +920,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
     img->num_ref_pic_active_bwd++;
   }
 
-  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1 || !img->disposable_flag) 
+  if (img->type <= INTRA_IMG || img->type >= SP_IMG || !img->disposable_flag) 
   {
     if (img->structure == FRAME)
     {     
@@ -958,7 +958,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
       img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
     }
   }
-  if(img->type != B_IMG_MULT && img->type != B_IMG_1) {
+  if(img->type != B_IMG) {
     img->pstruct_next_P = img->structure;
     if(img->structure == TOP_FIELD)
     {
@@ -972,7 +972,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
     }
   }
   
-  if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+  if(img->type==B_IMG)
   {
     if(img->disposable_flag==0) 
     {
@@ -1008,7 +1008,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
 
   currSlice->start_mb_nr = pp->firstMBInSliceY * box_ps.pictureWidthInMBs + pp->firstMBInSliceX;
   
-  if ( img->type == B_IMG_1 || img->type == B_IMG_MULT )
+  if ( img->type == B_IMG)
   {
     sym.len = GetfixedSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length,1 );
     img->direct_type= pp->directType = sym.inf ;
@@ -1025,7 +1025,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   currSlice->qp = img->qp = pp->initialQP;
   buf->frame_bitoffset += sym.len;
   bitptr += sym.len;
-  if ( img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG)
+  if ( img->type == SP_IMG || img->type == SI_IMG)
   {
     if ( img->type != SI_IMG )
     {
@@ -1114,8 +1114,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
     done=0;
     // if P or B frame RMPNI
 
-    if ((img->type==INTER_IMG_1)||(img->type==INTER_IMG_MULT)||(img->type==B_IMG_1)||
-        (img->type==B_IMG_MULT)||(img->type==SP_IMG_1)||(img->type==SP_IMG_MULT))
+    if ((img->type==INTER_IMG)||(img->type==B_IMG)||(img->type==SP_IMG))
     {
       do
       {

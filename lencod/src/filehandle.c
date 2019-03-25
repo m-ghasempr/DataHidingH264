@@ -56,8 +56,6 @@
 #include "global.h"
 #include "header.h"
 #include "rtp.h"
-#include "encodeiff.h"
-#include "sei.h"
 #include "nalu.h"
 #include "annexb.h"
 #include "parset.h"

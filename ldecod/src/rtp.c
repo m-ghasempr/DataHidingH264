@@ -1179,13 +1179,13 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
   //! also: need to define Slice types for SP images
   //! see VCEG-N72r1 for the Slice types, which are mapped here to img->type
   case 0:
-    img->type = currSlice->picture_type = ParSet[CurrentParameterSet].UseMultpred?INTER_IMG_MULT:INTER_IMG_1;
+    img->type = currSlice->picture_type = INTER_IMG;
     break;
   case 1:
-    img->type = currSlice->picture_type = ParSet[CurrentParameterSet].UseMultpred?B_IMG_MULT:B_IMG_1;
+    img->type = currSlice->picture_type = B_IMG;
     break;
   case 2:
-    img->type = currSlice->picture_type = ParSet[CurrentParameterSet].UseMultpred?SP_IMG_MULT:SP_IMG_1;
+    img->type = currSlice->picture_type = SP_IMG;
     break;
   case 3:
     img->type = currSlice->picture_type = INTRA_IMG;
@@ -1241,7 +1241,7 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
   img->num_ref_pic_active_fwd = sh->num_ref_pic_active_fwd;
   img->num_ref_pic_active_bwd = sh->num_ref_pic_active_bwd;
 
-  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1 || !img->disposable_flag) 
+  if (img->type <= INTRA_IMG || img->type >= SP_IMG || !img->disposable_flag) 
   {
     if (img->structure == FRAME)
     {     
@@ -1279,11 +1279,11 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
       img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
     }
   }
-  if(img->type == img->type==B_IMG_1 || img->type == B_IMG_MULT) 
+  if(img->type == img->type==B_IMG) 
   {
     img->direct_type=sh->Direct_type;
   }
-  if(img->type != B_IMG_MULT && img->type != B_IMG_1) {
+  if(img->type != B_IMG) {
     img->pstruct_next_P = img->structure;
     if(img->structure == TOP_FIELD)
     {
@@ -1297,7 +1297,7 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
     }
   }
   
-  if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+  if(img->type==B_IMG)
   {
     if(img->disposable_flag==0) {
         if(img->structure == TOP_FIELD)

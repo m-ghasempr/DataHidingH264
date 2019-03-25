@@ -51,6 +51,9 @@
 #include "parsetcommon.h"
 #include "nalu.h"
 
+#define LOG2_MAX_FRAME_NUM_MINUS4   4           // POC200301 moved from defines.h
+#define LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4 4     // POC200301 newly added
+
 // public interface
 NALU_t *GenerateSeq_parameter_set_NALU ();
 NALU_t *GeneratePic_parameter_set_NALU ();

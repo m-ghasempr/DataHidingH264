@@ -91,13 +91,13 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int blk_y, int 
  */
 
 void DeblockFrame(ImageParameters *img, byte **imgY, byte ***imgUV)
-  {
+{
   int       mb_x, mb_y ;
-
+  
   for( mb_y=0 ; mb_y<(img->height>>4) ; mb_y++ )
     for( mb_x=0 ; mb_x<(img->width>>4) ; mb_x++ )
       DeblockMb( img, imgY, imgUV, mb_y, mb_x ) ;
-  } 
+} 
 
 
   /*!
@@ -113,6 +113,7 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
   int           dir, edge, QP ;                                                          
   byte          Strength[4], *SrcY, *SrcU = NULL, *SrcV = NULL;
   Macroblock    *MbP, *MbQ ; 
+  int           QPC;
 
   SrcY = imgY    [mb_y<<4] + (mb_x<<4) ;    // pointers to source
   if (imgUV != NULL)
@@ -140,8 +141,9 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
           EdgeLoop( SrcY + (edge<<2)* ((dir)? img->width:1 ), Strength, QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width, 0 );
           if( (imgUV != NULL) && !(edge & 1) )
           {
-            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QP_SCALE_CR[QP], MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
-            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QP_SCALE_CR[QP], MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
+            QPC  = (QP_SCALE_CR[MbP->qp] + QP_SCALE_CR[MbQ->qp]) >> 1;
+            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QPC, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
+            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QPC, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
           }
         }
       }

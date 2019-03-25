@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.1
+ *     JM 6.1a
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -124,7 +124,7 @@
 #include "erc_api.h"
 
 #define JM          "6"
-#define VERSION     "6.1"
+#define VERSION     "6.1a"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -919,11 +919,9 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
 
   // CAVLC free mem
   for(j=0;j<img->width/MB_BLOCK_SIZE;j++)
-  for(i=0;i<img->height/MB_BLOCK_SIZE;i++)
   {
-    if(img->nz_coeff[j][i][0] != NULL) free(img->nz_coeff[j][i][0]);
-    if(img->nz_coeff[j][i]    != NULL) free(img->nz_coeff[j][i]);
-  };
+    free_mem3Dint(img->nz_coeff[j], img->height/MB_BLOCK_SIZE);
+  }
   if (img->nz_coeff !=NULL) free(img->nz_coeff );
   free_mem2Dint(img->siblock);
 
@@ -979,6 +977,10 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
 
   free_mem2Dint(img->field_anchor);
   free_mem2Dint(field_mb);
+
+  free_mem3Dint(img->wp_weight, 2);
+  free_mem3Dint(img->wp_offset, 2);
+  free_mem4Dint(img->wbp_weight, 2, MAX_REFERENCE_PICTURES);
 
 }
 
