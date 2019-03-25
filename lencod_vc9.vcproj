@@ -1078,18 +1078,6 @@
 				>
 			</File>
 		</Filter>
-		<File
-			RelativePath="bin\encoder.cfg"
-			>
-		</File>
-		<File
-			RelativePath="bin\encoder_yuv422.cfg"
-			>
-		</File>
-		<File
-			RelativePath=".\VTune\lencod.vpj"
-			>
-		</File>
 	</Files>
 	<Globals>
 	</Globals>

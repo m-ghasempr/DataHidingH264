@@ -1,3 +1,10 @@
+Changes in Version JM 16.2 (since JM 16.1)
+------------------------------------------
+- encoder: changes necessary for low delay anchor generation (DHo)
+           see doc/jm16.2_changes.doc for details
+- encoder: update encoder.cfg for high performance based on VCEG common coding condition (KS)
+
+
 Changes in Version JM 16.1 (since JM 16.0)
 ------------------------------------------
 - encoder: check slice group parameter size for slice_group_map_type equal to 2 (KS)
@@ -1353,6 +1360,7 @@ DA      D. Agrafiotis           d.agrafiotis@bristol.ac.uk
 DC      Doug Chin               dougchin@sandvideo.com
 DD      Dmitriy Demin           Dmitriy.Demin@Sun.COM
 DH      Dzung Hoang             dzung.hoang@conexant.com
+DHo     Danny Hong              danny@vidyo.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi

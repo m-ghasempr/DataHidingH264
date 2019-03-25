@@ -128,6 +128,7 @@ Mapping Map[] = {
     {"PSliceSearch8x4",          &cfgparams.InterSearch[0][5],            0,   1.0,                       1,  0.0,              1.0,                             },
     {"PSliceSearch4x8",          &cfgparams.InterSearch[0][6],            0,   1.0,                       1,  0.0,              1.0,                             },
     {"PSliceSearch4x4",          &cfgparams.InterSearch[0][7],            0,   1.0,                       1,  0.0,              1.0,                             },
+    
     // B slice partition modes.
     {"BSliceDirect",             &cfgparams.InterSearch[1][0],            0,   1.0,                       1,  0.0,              1.0,                             },
     {"BSliceSearch16x16",        &cfgparams.InterSearch[1][1],            0,   1.0,                       1,  0.0,              1.0,                             },
@@ -209,9 +210,9 @@ Mapping Map[] = {
     {"ExplicitHierarchyFormat",  &cfgparams.ExplicitHierarchyFormat,      1,   0.0,                       0,  0.0,              0.0,             INPUT_TEXT_SIZE,},
     {"ExplicitSeqCoding",        &cfgparams.ExplicitSeqCoding,            0,   0.0,                       1,  0.0,              3.0,                             },
     {"ExplicitSeqFile",          &cfgparams.ExplicitSeqFile,              1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
-    {"ReferenceReorder",         &cfgparams.ReferenceReorder,             0,   0.0,                       1,  0.0,              3.0,                             },
-    {"PocMemoryManagement",      &cfgparams.PocMemoryManagement,          0,   0.0,                       1,  0.0,              1.0,                             },
-
+    {"LowDelay",                 &cfgparams.LowDelay,                     0,   0.0,                       1,  0.0,              1.0,                             },
+    {"ReferenceReorder",         &cfgparams.ReferenceReorder,             0,   0.0,                       1,  0.0,              2.0,                             },
+    {"MemoryManagement",         &cfgparams.MemoryManagement,          0,   0.0,                       1,  0.0,              2.0,                             },
     {"DFParametersFlag",         &cfgparams.DFSendParameters,             0,   0.0,                       1,  0.0,              1.0,                             },
     {"DFDisableRefISlice",       &cfgparams.DFDisableIdc[1][I_SLICE],     0,   0.0,                       1,  0.0,              2.0,                             },
     {"DFDisableNRefISlice",      &cfgparams.DFDisableIdc[0][I_SLICE],     0,   0.0,                       1,  0.0,              2.0,                             },

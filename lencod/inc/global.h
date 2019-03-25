@@ -183,6 +183,14 @@ typedef struct
   int slice_qp;           //! Assigned QP
   int hierarchy_layer;    //! Hierarchy layer (used with GOP Hierarchy option 2)
   int hierarchyPocDelta;  //! Currently unused
+
+  int temporal_layer;     //! Temporal layer; 
+  //! This information is used for hierarchical coding with temporal scalability feature
+  //! If ReferenceReorder = 2, then
+  //!    reference reordering is applied based on POC and then frames of higher temporal layer are prevented from being referenced
+  //! If MemoryManagement = 2, then
+  //!    after encoding a reference frame with temporal layer T, a list of MMCO commands to delete higher temporal layer frames is created
+
 } GOP_DATA;
 
 //! Buffer structure for decoded reference picture marking commands
@@ -1126,6 +1134,7 @@ typedef struct video_par
 #endif
 
   GOP_DATA *gop_structure;
+
   byte *MBAmap;
   unsigned int PicSizeInMapUnits;
   int FirstMBInSlice[MAXSLICEGROUPIDS];

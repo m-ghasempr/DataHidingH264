@@ -959,6 +959,8 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
   p_dst->slice_qp      = 0;
   p_dst->random_access = 1;
 
+  p_dst->temporal_layer = 0;
+
   // intra-delayed IDR GOP
   if ( p_Inp->intra_delay && p_Inp->intra_period != 1 && p_Inp->idr_period != 1 )
   {
@@ -984,12 +986,14 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
     // IDR picture
     p_cur_gop = p_seq_struct->p_gop + 1;
     p_dst = p_cur_gop->p_frm + idr_idx;
-    p_dst->slice_type    = I_SLICE;
-    p_dst->nal_ref_idc   = p_Inp->EnableOpenGOP ? NALU_PRIORITY_HIGH : NALU_PRIORITY_HIGHEST;
-    p_dst->disp_offset   = p_Inp->intra_delay;
-    p_dst->layer         = 0;
-    p_dst->slice_qp      = 0;
-    p_dst->random_access = 1;
+    p_dst->slice_type     = I_SLICE;
+    p_dst->nal_ref_idc    = p_Inp->EnableOpenGOP ? NALU_PRIORITY_HIGH : NALU_PRIORITY_HIGHEST;
+    p_dst->disp_offset    = p_Inp->intra_delay;
+    p_dst->layer          = 0;
+    p_dst->slice_qp       = 0;
+    p_dst->random_access  = 1;
+    p_dst->temporal_layer = 0;
+
     idr_idx++;
 
     while ( proc_frames < p_Inp->intra_delay )
@@ -1005,12 +1009,13 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
         p_dst = p_cur_gop->p_frm + idr_idx;
         p_src = p_cur_prd->p_frm + idx;
 
-        p_dst->slice_type    = p_src->slice_type;
-        p_dst->nal_ref_idc   = p_src->nal_ref_idc;
-        p_dst->disp_offset   = start_frame - p_src->disp_offset;
-        p_dst->layer         = p_src->layer;
-        p_dst->slice_qp      = p_src->slice_qp;
-        p_dst->random_access = 0;
+        p_dst->slice_type     = p_src->slice_type;
+        p_dst->nal_ref_idc    = p_src->nal_ref_idc;
+        p_dst->disp_offset    = start_frame - p_src->disp_offset;
+        p_dst->layer          = p_src->layer;
+        p_dst->slice_qp       = p_src->slice_qp;
+        p_dst->random_access  = 0;
+        p_dst->temporal_layer = p_src->temporal_layer;
       }      
       // update start_frame
       start_frame -= p_cur_prd->length;      
@@ -1031,12 +1036,13 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
         p_dst = p_cur_gop->p_frm + idr_idx;
         p_src = p_cur_prd_tail->p_frm + idx;
 
-        p_dst->slice_type    = p_src->slice_type;
-        p_dst->nal_ref_idc   = p_src->nal_ref_idc;
-        p_dst->disp_offset   = p_src->disp_offset;
-        p_dst->layer         = p_src->layer;
-        p_dst->slice_qp      = p_src->slice_qp;
-        p_dst->random_access = 0;
+        p_dst->slice_type     = p_src->slice_type;
+        p_dst->nal_ref_idc    = p_src->nal_ref_idc;
+        p_dst->disp_offset    = p_src->disp_offset;
+        p_dst->layer          = p_src->layer;
+        p_dst->slice_qp       = p_src->slice_qp;
+        p_dst->random_access  = 0;
+        p_dst->temporal_layer = p_src->temporal_layer; 
       }
     }
   }
@@ -1059,12 +1065,14 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
     p_cur_gop = p_seq_struct->p_gop + 1;
     p_cur_gop->gop_levels = p_cur_prd->gop_levels;
     p_dst = p_cur_gop->p_frm + idr_idx;
-    p_dst->slice_type    = I_SLICE;
-    p_dst->nal_ref_idc   = p_Inp->EnableOpenGOP ? NALU_PRIORITY_HIGH : NALU_PRIORITY_HIGHEST;
-    p_dst->disp_offset   = p_cur_prd->p_frm[0].disp_offset;
-    p_dst->layer         = 0;
-    p_dst->slice_qp      = 0;
-    p_dst->random_access = 1;
+    p_dst->slice_type     = I_SLICE;
+    p_dst->nal_ref_idc    = p_Inp->EnableOpenGOP ? NALU_PRIORITY_HIGH : NALU_PRIORITY_HIGHEST;
+    p_dst->disp_offset    = p_cur_prd->p_frm[0].disp_offset;
+    p_dst->layer          = 0;
+    p_dst->slice_qp       = 0;
+    p_dst->random_access  = 1;
+    p_dst->temporal_layer = 0;
+
     idr_idx++;
     
     // populate gop structure from selected structure
@@ -1073,12 +1081,13 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
       p_dst = p_cur_gop->p_frm + idr_idx;
       p_src = p_cur_prd->p_frm + idx;
 
-      p_dst->slice_type    = p_src->slice_type;
-      p_dst->nal_ref_idc   = p_src->nal_ref_idc;
-      p_dst->disp_offset   = p_src->disp_offset;
-      p_dst->layer         = p_src->layer;
-      p_dst->slice_qp      = p_src->slice_qp;
-      p_dst->random_access = 0;
+      p_dst->slice_type     = p_src->slice_type;
+      p_dst->nal_ref_idc    = p_src->nal_ref_idc;
+      p_dst->disp_offset    = p_src->disp_offset;
+      p_dst->layer          = p_src->layer;
+      p_dst->slice_qp       = p_src->slice_qp;
+      p_dst->random_access  = 0;
+      p_dst->temporal_layer = p_src->temporal_layer;
     }      
   }
 }
@@ -1156,23 +1165,25 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
     case 0: // disposable B-pics of equal priority
       p_dst = p_cur_prd->p_frm + 0;
 
-      p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
-      p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
-      p_dst->disp_offset   = length - 1;
-      p_dst->layer         = 0;
-      p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[P_SLICE] - p_Inp->qp[B_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
-      p_dst->random_access = 0;
+      p_dst->slice_type     = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
+      p_dst->nal_ref_idc    = NALU_PRIORITY_HIGH;
+      p_dst->disp_offset    = length - 1;
+      p_dst->layer          = 0;
+      p_dst->slice_qp       = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[P_SLICE] - p_Inp->qp[B_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
+      p_dst->random_access  = 0;
+      p_dst->temporal_layer = 0;
 
       for ( idx = 1; idx < length; idx++ )
       {
         p_dst = p_cur_prd->p_frm + idx;
 
-        p_dst->slice_type    = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-        p_dst->nal_ref_idc   = ( p_Inp->BRefPictures == 1 && p_dst->slice_type == B_SLICE ) ? NALU_PRIORITY_LOW : NALU_PRIORITY_DISPOSABLE;
-        p_dst->disp_offset   = idx - 1;
-        p_dst->layer         = 1;
-        p_dst->slice_qp      = p_dst->nal_ref_idc ? p_Inp->qpBRSOffset : 0; //2; 2 when depends on QPPSlice (highest layer QP)
-        p_dst->random_access = 0;
+        p_dst->slice_type       = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+        p_dst->nal_ref_idc      = ( p_Inp->BRefPictures == 1 && p_dst->slice_type == B_SLICE ) ? NALU_PRIORITY_LOW : NALU_PRIORITY_DISPOSABLE;
+        p_dst->disp_offset      = idx - 1;
+        p_dst->layer            = 1;
+        p_dst->slice_qp         = p_dst->nal_ref_idc ? p_Inp->qpBRSOffset : 0; //2; 2 when depends on QPPSlice (highest layer QP)
+        p_dst->random_access    = 0;
+          p_dst->temporal_layer = 0;
       }
       if ( length > 1 )
       {
@@ -1184,35 +1195,38 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
 
       p_dst = p_cur_prd->p_frm + 0;
 
-      p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
-      p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
-      p_dst->disp_offset   = length - 1;
-      p_dst->layer         = 0;
-      p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
-      p_dst->random_access = 0;
+      p_dst->slice_type     = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
+      p_dst->nal_ref_idc    = NALU_PRIORITY_HIGH;
+      p_dst->disp_offset    = length - 1;
+      p_dst->layer          = 0;
+      p_dst->slice_qp       = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
+      p_dst->random_access  = 0;
+      p_dst->temporal_layer = 0;
 
       for ( idx = 1; idx < length2; idx++ )
       {
         p_dst = p_cur_prd->p_frm + idx;
 
-        p_dst->slice_type    = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-        p_dst->nal_ref_idc   = NALU_PRIORITY_LOW;
-        p_dst->disp_offset   = 2*(idx - 1) + 1;
-        p_dst->layer         = 1;
-        p_dst->slice_qp      = p_dst->slice_type == B_SLICE ? 
+        p_dst->slice_type     = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+        p_dst->nal_ref_idc    = NALU_PRIORITY_LOW;
+        p_dst->disp_offset    = 2*(idx - 1) + 1;
+        p_dst->layer          = 1;
+        p_dst->slice_qp       = p_dst->slice_type == B_SLICE ? 
           (p_Inp->HierarchyLevelQPEnable ? -1: p_Inp->qpBRSOffset) : (p_Inp->HierarchyLevelQPEnable ? 1 : 0); // 1
-        p_dst->random_access = 0;
+        p_dst->random_access  = 0;
+        p_dst->temporal_layer = 0;
       }
       for ( idx = length2; idx < length; idx++ )
       {
         p_dst = p_cur_prd->p_frm + idx;
 
-        p_dst->slice_type    = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-        p_dst->nal_ref_idc   = NALU_PRIORITY_DISPOSABLE;
-        p_dst->disp_offset   = (idx - length2) * 2;
-        p_dst->layer         = 2;
-        p_dst->slice_qp      = p_dst->slice_type == B_SLICE ? 0 : 2;//2;
-        p_dst->random_access = 0;
+        p_dst->slice_type     = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+        p_dst->nal_ref_idc    = NALU_PRIORITY_DISPOSABLE;
+        p_dst->disp_offset    = (idx - length2) * 2;
+        p_dst->layer          = 2;
+        p_dst->slice_qp       = p_dst->slice_type == B_SLICE ? 0 : 2;//2;
+        p_dst->random_access  = 0;
+        p_dst->temporal_layer = 0;
       }
       if ( length > 1 )
       {
@@ -1222,12 +1236,13 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
     case 2: // full binary decomposition
       p_dst = p_cur_prd->p_frm + 0;
 
-      p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
-      p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
-      p_dst->disp_offset   = length - 1;
-      p_dst->layer         = 0;
-      p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
-      p_dst->random_access = 0;
+      p_dst->slice_type     = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
+      p_dst->nal_ref_idc    = NALU_PRIORITY_HIGH;
+      p_dst->disp_offset    = length - 1;
+      p_dst->layer          = 0;
+      p_dst->slice_qp       = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
+      p_dst->random_access  = 0;
+      p_dst->temporal_layer = 0;
 
       if ( length > 3 )
       {
@@ -1248,13 +1263,14 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
           {
             p_dst = p_cur_prd->p_frm + order;
 
-            p_dst->slice_type    = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-            p_dst->nal_ref_idc   = (frm == (length >> 1)) ? NALU_PRIORITY_DISPOSABLE : NALU_PRIORITY_LOW;
-            p_dst->disp_offset   = ((length - 1) >> layer) + idx * (length >> (layer - 1));
-            p_dst->layer         = layer;
-            p_dst->slice_qp      = p_dst->slice_type == B_SLICE ? 
+            p_dst->slice_type     = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+            p_dst->nal_ref_idc    = (frm == (length >> 1)) ? NALU_PRIORITY_DISPOSABLE : NALU_PRIORITY_LOW;
+            p_dst->disp_offset    = ((length - 1) >> layer) + idx * (length >> (layer - 1));
+            p_dst->layer          = layer;
+            p_dst->slice_qp       = p_dst->slice_type == B_SLICE ? 
               (p_Inp->HierarchyLevelQPEnable ? (-GOPlevels + layer): (p_dst->nal_ref_idc != NALU_PRIORITY_DISPOSABLE ? p_Inp->qpBRSOffset : 0)) : (p_Inp->HierarchyLevelQPEnable ? layer : 0); // layer
-            p_dst->random_access = 0;
+            p_dst->random_access  = 0;
+            p_dst->temporal_layer = 0;
           }
         }
       }
@@ -1264,12 +1280,13 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
         {
           p_dst = p_cur_prd->p_frm + idx;
 
-          p_dst->slice_type    = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-          p_dst->nal_ref_idc   = NALU_PRIORITY_DISPOSABLE;
-          p_dst->disp_offset   = idx - 1;
-          p_dst->layer         = 1;
-          p_dst->slice_qp      = 0; //2;
-          p_dst->random_access = 0;
+          p_dst->slice_type     = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+          p_dst->nal_ref_idc    = NALU_PRIORITY_DISPOSABLE;
+          p_dst->disp_offset    = idx - 1;
+          p_dst->layer          = 1;
+          p_dst->slice_qp       = 0; //2;
+          p_dst->random_access  = 0;
+          p_dst->temporal_layer = 0;
         }
         if ( length > 1 )
         {
@@ -1281,29 +1298,66 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
       {
         int max_layer = 0;
 
-        p_dst = p_cur_prd->p_frm + 0;
-
-        p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
-        p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
-        p_dst->disp_offset   = length - 1;
-        p_dst->layer         = 0;
-        p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
-        p_dst->random_access = 0;
-
-        for ( idx = 1; idx < length; idx++ )
+        if ( p_Inp->LowDelay) 
         {
-          p_dst = p_cur_prd->p_frm + idx;
+          for ( idx = 0; idx < length-1; idx++ )
+          {
+            p_dst = p_cur_prd->p_frm + idx;
 
-          p_dst->slice_type    = p_Vid->gop_structure[idx - 1].slice_type;
-          p_dst->nal_ref_idc   = p_Vid->gop_structure[idx - 1].reference_idc;
-          p_dst->disp_offset   = p_Vid->gop_structure[idx - 1].display_no;
-          p_dst->layer         = ((p_Vid->gop_structure[idx - 1].hierarchy_layer == 1) ? 0 : 1) + 1; // invert in new notation
-          p_dst->slice_qp      = p_Vid->gop_structure[idx - 1].slice_qp; // warning: the latter SLICE_QP may be the actual QP and *NOT* a modifier!
+            p_dst->slice_type    = p_Vid->gop_structure[idx].slice_type;
+            p_dst->nal_ref_idc   = p_Vid->gop_structure[idx].reference_idc;
+            p_dst->disp_offset   = p_Vid->gop_structure[idx].display_no;
+            p_dst->layer         = ((p_Vid->gop_structure[idx].hierarchy_layer == 1) ? 0 : 1) + 1; // invert in new notation
+            p_dst->slice_qp      = p_Vid->gop_structure[idx].slice_qp; // warning: the latter SLICE_QP may be the actual QP and *NOT* a modifier!
+            p_dst->random_access = 0;
+
+            p_dst->temporal_layer = p_Vid->gop_structure[idx].temporal_layer; 
+       
+            if ( p_Vid->gop_structure[idx - 1].hierarchy_layer > max_layer )
+            {
+              max_layer = p_Vid->gop_structure[idx - 1].hierarchy_layer;
+            }
+          }
+          p_dst = p_cur_prd->p_frm + idx;
+          p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
+          p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
+          p_dst->disp_offset   = length - 1;
+          p_dst->layer         = 0;
+          p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
           p_dst->random_access = 0;
 
-          if ( p_Vid->gop_structure[idx - 1].hierarchy_layer > max_layer )
+          p_dst->temporal_layer = 0;
+        } 
+        else 
+        {
+          p_dst = p_cur_prd->p_frm + 0;
+
+          p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
+          p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
+          p_dst->disp_offset   = length - 1;
+          p_dst->layer         = 0;
+          p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
+          p_dst->random_access = 0;
+
+          p_dst->temporal_layer = 0; // danny@vidyo.com
+
+          for ( idx = 1; idx < length; idx++ )
           {
-            max_layer = p_Vid->gop_structure[idx - 1].hierarchy_layer;
+            p_dst = p_cur_prd->p_frm + idx;
+
+            p_dst->slice_type    = p_Vid->gop_structure[idx - 1].slice_type;
+            p_dst->nal_ref_idc   = p_Vid->gop_structure[idx - 1].reference_idc;
+            p_dst->disp_offset   = p_Vid->gop_structure[idx - 1].display_no;
+            p_dst->layer         = ((p_Vid->gop_structure[idx - 1].hierarchy_layer == 1) ? 0 : 1) + 1; // invert in new notation
+            p_dst->slice_qp      = p_Vid->gop_structure[idx - 1].slice_qp; // warning: the latter SLICE_QP may be the actual QP and *NOT* a modifier!
+            p_dst->random_access = 0;
+
+            p_dst->temporal_layer = 0; // danny@vidyo.com
+
+            if ( p_Vid->gop_structure[idx - 1].hierarchy_layer > max_layer )
+            {
+              max_layer = p_Vid->gop_structure[idx - 1].hierarchy_layer;
+            }
           }
         }
         p_cur_prd->gop_levels = max_layer + 1;
@@ -1501,6 +1555,7 @@ static void populate_frame( InputParameters *p_Inp, SeqStructure *p_seq_struct, 
   p_frm_struct->mod_qp         = p_src->slice_qp;  
   p_frm_struct->field_pic_flag = 0; // need to add better support for field coded pictures
   p_frm_struct->frame_no       = curr_frame + pred_frame + p_src->disp_offset;
+  p_frm_struct->temporal_layer = p_src->temporal_layer;
 
   if ( !(curr_frame + pred_frame + idx) )
   {

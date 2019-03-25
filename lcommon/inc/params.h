@@ -141,8 +141,9 @@ struct inp_par_enc
   // explicit sequence information parameters
   int  ExplicitSeqCoding;
   char ExplicitSeqFile[FILE_NAME_SIZE];  
+  int  LowDelay;                      //!< Apply HierarchicalCoding without delay (i.e., encode in the captured/display order)
   int  ReferenceReorder;              //!< Reordering based on Poc distances
-  int  PocMemoryManagement;           //!< Memory management based on Poc distances for hierarchical coding
+  int  MemoryManagement;              //!< Memory management based on Poc distances for hierarchical coding
 
   int symbol_mode;                   //!< Specifies the mode the symbols are mapped on bits
   int of_mode;                       //!< Specifies the mode of the output file

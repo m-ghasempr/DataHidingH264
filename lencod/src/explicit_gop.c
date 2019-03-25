@@ -63,6 +63,7 @@ void interpret_gop_structure(VideoParameters *p_Vid, InputParameters *p_Inp)
   int nLength = strlen(p_Inp->ExplicitHierarchyFormat);
   int i =0, k, dqp, display_no;
   int slice_read =0, order_read = 0, stored_read = 0, qp_read =0;
+  int tlyr, temporal_layer_read = 0; 
   int coded_frame = 0;
 
   if (nLength > 0)
@@ -163,12 +164,36 @@ void interpret_gop_structure(VideoParameters *p_Vid, InputParameters *p_Inp)
               error (errortext, 400);
             }
           }
-          else if (stored_read == 1 && qp_read == 1 && !(isdigit((int)(*(p_Inp->ExplicitHierarchyFormat+i)))) && (i < nLength - 3))
+
+          else if (stored_read == 1 && qp_read == 1 && temporal_layer_read == 0)
+          {
+            if (!(isdigit((int)(*(p_Inp->ExplicitHierarchyFormat+i)))))
+            {
+              if (p_Inp->ExplicitHierarchyFormat[i] == 't' || p_Inp->ExplicitHierarchyFormat[i] == 'T')
+              {
+                p_Vid->gop_structure[coded_frame].temporal_layer = 0; 
+                if (isdigit((int)(*(p_Inp->ExplicitHierarchyFormat+i+1))))
+                {
+                  sscanf(p_Inp->ExplicitHierarchyFormat+i+1,"%d",&tlyr);
+
+                  p_Vid->gop_structure[coded_frame].temporal_layer = tlyr; 
+                  i++; // temporal layer number is specified
+                }
+              }
+              else
+              {
+                i--; // temporal layer is optional and it is not specified
+              }
+            }
+            temporal_layer_read = 1;
+          }
+          else if (stored_read == 1 && qp_read == 1 && temporal_layer_read == 1 && !(isdigit((int)(*(p_Inp->ExplicitHierarchyFormat+i)))) && (i < nLength - 3))
           {
             stored_read =0;
             qp_read=0;
             order_read=0;
             slice_read=0;
+            temporal_layer_read=0; // danny@vidyo.com
             i--;
             coded_frame ++;
             if (coded_frame >= p_Inp->NumberBFrames )
@@ -189,4 +214,3 @@ void interpret_gop_structure(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   p_Inp->NumberBFrames = coded_frame + 1;
 }
-

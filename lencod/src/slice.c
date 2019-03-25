@@ -438,6 +438,8 @@ int encode_one_slice (VideoParameters *p_Vid, int SliceGroupId, int TotalCodedMB
   CurrentMbAddr = FmoGetFirstMacroblockInSlice (p_Vid, SliceGroupId);
   // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", p_Vid->frame_no, SliceGroupId, p_Vid->current_slice_nr, CurrentMbInScanOrder);
 
+  p_Vid->enc_picture->temporal_layer = p_Vid->p_curr_frm_struct->temporal_layer;
+
   init_slice (p_Vid, &currSlice, CurrentMbAddr);
   // Initialize quantization functions based on rounding/quantization method
   // Done here since we may wish to disable adaptive rounding on occasional intervals (even at a frame or gop level).
@@ -1192,7 +1194,7 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   {
     mmco_long_term(p_Vid, p_Vid->number);
   }
-  else if (p_Vid->nal_reference_idc && p_Inp->PocMemoryManagement)
+  else if (p_Vid->nal_reference_idc && p_Inp->MemoryManagement == 1)
   {
     if (p_Vid->structure == FRAME && p_Vid->p_Dpb->ref_frames_in_buffer == active_sps->num_ref_frames)
       poc_based_ref_management_frame_pic(p_Vid, p_Vid->frame_num);
@@ -1200,6 +1202,12 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
       poc_based_ref_management_field_pic(p_Vid, (p_Vid->frame_num << 1) + 1);      
     else if (p_Vid->structure == BOTTOM_FIELD)
       poc_based_ref_management_field_pic(p_Vid, (p_Vid->frame_num << 1) + 1);
+  }
+
+  else if (p_Vid->nal_reference_idc && p_Inp->MemoryManagement == 2) 
+  {
+    if (p_Vid->structure == FRAME)
+      tlyr_based_ref_management_frame_pic(p_Vid, p_Vid->frame_num);
   }
 
   if (p_Inp->EnableOpenGOP)
@@ -1223,7 +1231,11 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
     }
   }
 
+#if 1 // danny@vidyo.com 
+  init_ref_pic_list_reordering(*currSlice, p_Inp->ReferenceReorder);
+#else
   init_ref_pic_list_reordering(*currSlice);
+#endif
 
     // reference list reordering 
     // RPLR for redundant pictures

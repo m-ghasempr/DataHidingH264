@@ -40,6 +40,9 @@ typedef struct pred_struct_frm
   int layer; // the lower the higher the priority
   int slice_qp;
   int random_access;
+
+  int temporal_layer; 
+
 } PredStructFrm;
 
 // prediction structure
@@ -83,6 +86,11 @@ typedef struct frame_struct
   int num_refs;
   int random_access;      // random access point (IDR or Intra-coded picture that precludes future pictures in display order to reference pictures decoded prior to this picture)
   int atom_idx;           // index in the prediction structure pointed to be *p_atom
+
+#if 1 // danny@vidyo.com
+  int temporal_layer;     
+#endif 
+
   PicStructure *p_frame_pic;
   PicStructure *p_top_fld_pic;
   PicStructure *p_bot_fld_pic;

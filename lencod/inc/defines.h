@@ -27,8 +27,8 @@
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-#define JM                  "16.1 (FRExt)"
-#define VERSION             "16.1"
+#define JM                  "16.2 (FRExt)"
+#define VERSION             "16.2"
 #define EXT_VERSION         "(FRExt)"
 
 #define GET_METIME                1    //!< Enables or disables ME computation time

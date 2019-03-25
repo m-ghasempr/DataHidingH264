@@ -1075,21 +1075,35 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     error (errortext, 400);
   }
 
+  if (p_Inp->PicInterlace) 
+  {
+    if (p_Inp->ReferenceReorder == 2)
+    {
+      snprintf(errortext, ET_SIZE, "ReferenceReorder = 2 is not supported with field encoding\n");
+      error (errortext, 400);
+    }
+    if (p_Inp->ReferenceReorder == 2)
+    {
+      snprintf(errortext, ET_SIZE, "MemoryManagement = 2 is not supported with field encoding\n");
+      error (errortext, 400);
+    }
+  }
+
   if (p_Inp->ReferenceReorder && p_Inp->MbInterlace )
   {
     snprintf(errortext, ET_SIZE, "ReferenceReorder not supported with MBAFF\n");
     error (errortext, 400);
   }
 
-  if (p_Inp->SetFirstAsLongTerm && p_Inp->ReferenceReorder == 1)
+  if (p_Inp->SetFirstAsLongTerm && (p_Inp->ReferenceReorder == 1 || p_Inp->ReferenceReorder == 2))
   {
     printf("SetFirstAsLongTerm is set. ReferenceReorder is not supported and therefore disabled. \n");
     p_Inp->ReferenceReorder = 0;
   }
 
-  if (p_Inp->PocMemoryManagement && p_Inp->MbInterlace )
+  if (p_Inp->MemoryManagement && p_Inp->MbInterlace )
   {
-    snprintf(errortext, ET_SIZE, "PocMemoryManagement not supported with MBAFF\n");
+    snprintf(errortext, ET_SIZE, "MemoryManagement not supported with MBAFF\n");
     error (errortext, 400);
   }
 
@@ -1278,6 +1292,10 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Inp->ChromaMCBuffer = 1;
   }
 
+  if (p_Inp->EnableOpenGOP && p_Inp->ReferenceReorder == 2)
+  {
+    printf("If OpenGOP is enabled than ReferenceReorder is set to 1. \n");
+  }
 
   if (p_Inp->EnableOpenGOP)
     p_Inp->ReferenceReorder = 1;

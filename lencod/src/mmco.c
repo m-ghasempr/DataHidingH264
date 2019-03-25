@@ -159,3 +159,61 @@ void poc_based_ref_management_field_pic(VideoParameters *p_Vid, int current_pic_
   p_Vid->dec_ref_pic_marking_buffer = tmp_drpm3;
 }
 
+
+/*!
+************************************************************************
+* \brief
+*    Temporal layer-based reference management (FRAME)
+************************************************************************
+*/
+
+void tlyr_based_ref_management_frame_pic(VideoParameters *p_Vid, int current_pic_num)
+{
+  unsigned i, first = 1, pic_num = 0;
+  DecRefPicMarking_t *drpm, *current_drpm, *tmp_drpm;
+
+  if (p_Vid->dec_ref_pic_marking_buffer!=NULL)
+    return;
+
+  if ( p_Vid->currentPicture->idr_flag )
+    return;
+
+  if ((p_Vid->p_Dpb->ref_frames_in_buffer + p_Vid->p_Dpb->ltref_frames_in_buffer)==0)
+    return;
+
+  for (i = 0; i < p_Vid->p_Dpb->used_size; i++)
+  {
+    if (p_Vid->p_Dpb->fs[i]->is_reference && (!(p_Vid->p_Dpb->fs[i]->is_long_term)) && p_Vid->p_Dpb->fs[i]->frame->temporal_layer > p_Vid->enc_picture->temporal_layer)
+    {
+      if (NULL == (tmp_drpm=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) 
+        no_mem_exit("poc_based_ref_management: tmp_drpm2");
+      tmp_drpm->memory_management_control_operation = 1;
+      tmp_drpm->difference_of_pic_nums_minus1 = current_pic_num - p_Vid->p_Dpb->fs[i]->frame->pic_num - 1;
+      
+      if (first) 
+      {
+        drpm = current_drpm = tmp_drpm;
+        first = 0;
+      }
+      else 
+      {
+        current_drpm->Next = tmp_drpm;
+        current_drpm = current_drpm->Next;
+      }
+    }
+  }
+
+  if (first)
+    return;
+
+  if (NULL==(tmp_drpm=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) 
+    no_mem_exit("poc_based_ref_management: tmp_drpm");
+  tmp_drpm->Next=NULL;
+
+  tmp_drpm->memory_management_control_operation = 0;
+
+  current_drpm->Next=tmp_drpm;
+
+  p_Vid->dec_ref_pic_marking_buffer = drpm;
+}
+

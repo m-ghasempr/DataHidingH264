@@ -9,7 +9,7 @@
  *
  *  \author
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
- *      - Karsten Sühring          <suehring@hhi.de>
+ *      - Karsten Suering          <suehring@hhi.de>
  *      - Alexis Michael Tourapis  <alexismt@ieee.org>
  ***********************************************************************
  */
@@ -45,6 +45,8 @@ struct storable_picture
   int         pic_num;
   int         long_term_pic_num;
   int         long_term_frame_idx;
+
+  int         temporal_layer;     
 
   byte        is_long_term;
   int         used_for_reference;

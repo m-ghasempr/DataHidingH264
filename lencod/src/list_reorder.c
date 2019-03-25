@@ -9,7 +9,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *     - Athanasios Leontaris            <aleon@dolby.com>
- *     - Karsten Sühring                 <suehring@hhi.de> 
+ *     - Karsten S?ring                 <suehring@hhi.de> 
  *     - Alexis Michael Tourapis         <alexismt@ieee.org> 
  ***************************************************************************************
  */
@@ -30,13 +30,14 @@
  *    init_ref_pic_list_reordering initializations should go here
  ************************************************************************
  */
-void init_ref_pic_list_reordering(Slice* currSlice)
+void init_ref_pic_list_reordering(Slice* currSlice, int refReorderMethod)
 {
   currSlice->ref_pic_list_reordering_flag[LIST_0] = 0;
   currSlice->ref_pic_list_reordering_flag[LIST_1] = 0;
 
   currSlice->poc_ref_pic_reorder_frame = poc_ref_pic_reorder_frame_default;
-
+  if(refReorderMethod == 2) 
+    currSlice->poc_ref_pic_reorder_frame = tlyr_ref_pic_reorder_frame_default;
 }
 
 /*!
@@ -464,6 +465,222 @@ void poc_ref_pic_reorder_field(Slice *currSlice, StorablePicture **list, unsigne
   }
 }
 
+
+/*!
+************************************************************************
+* \brief
+*    decide reference picture reordering based on temporal layer, Frame only
+************************************************************************
+*/
+void tlyr_ref_pic_reorder_frame_default(Slice *currSlice, StorablePicture **list, 
+                               unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no)
+{
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  InputParameters *p_Inp = currSlice->p_Inp;
+  StorablePicture *p_Enc_Pic = p_Vid->enc_picture;
+
+  unsigned int i,j,k;
+
+  int currPicNum, picNumLXPred;
+
+  int default_order[32];
+  int re_order[32];
+  int tmp_reorder[32];
+  int list_sign[32];
+  int reorder_stop, no_reorder;
+  int poc_diff[32];
+
+  int temporal_layer[32];
+
+  int diff;
+
+  int abs_poc_dist;
+  int maxPicNum;
+  unsigned int num_refs;
+
+  int tmp_poc_diff, tmp_re_order, tmp_list_sign, tmp_temporal_layer;
+  unsigned int beginIdx = 0;
+  char newSize = 0;
+
+
+  maxPicNum  = p_Vid->max_frame_num;
+  currPicNum = p_Vid->frame_num;
+
+  picNumLXPred = currPicNum;
+
+  // First assign default list order.
+  for (i=0; i<num_ref_idx_lX_active; i++)
+  {
+    default_order[i] = list[i]->pic_num;
+  }
+
+  // Now access all references in buffer and assign them
+  // to a potential reordering list. For each one of these
+  // references compute the poc distance compared to current
+  // frame.
+  num_refs = p_Vid->p_Dpb->ref_frames_in_buffer;
+  for (i=0; i<p_Vid->p_Dpb->ref_frames_in_buffer; i++)
+  {
+    poc_diff[i] = 0xFFFF;
+    re_order[i] = p_Vid->p_Dpb->fs_ref[i]->frame->pic_num;
+    
+    temporal_layer[i] = p_Vid->p_Dpb->fs_ref[i]->frame->temporal_layer; 
+
+    if (p_Vid->p_Dpb->fs_ref[i]->is_used==3 && (p_Vid->p_Dpb->fs_ref[i]->frame->used_for_reference)&&(!p_Vid->p_Dpb->fs_ref[i]->frame->is_long_term))
+    {
+      abs_poc_dist = iabs(p_Vid->p_Dpb->fs_ref[i]->frame->poc - p_Enc_Pic->poc) ;
+      poc_diff[i] = abs_poc_dist;
+      if (list_no == LIST_0)
+      {
+        list_sign[i] = (p_Enc_Pic->poc < p_Vid->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
+      }
+      else
+      {
+        list_sign[i] = (p_Enc_Pic->poc > p_Vid->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
+      }
+    }
+  }
+
+  // first, sort the references based on poc (temporal) distance 
+  for (i = 0; i < (num_refs - 1); i++)
+  {
+    for (j = i + 1; j < num_refs; j++)
+    {
+      if (list_sign[i] == list_sign[j] && poc_diff[i] > poc_diff[j])
+      {
+        tmp_poc_diff = poc_diff[i];
+        tmp_re_order = re_order[i];
+        tmp_list_sign = list_sign[i];
+        tmp_temporal_layer = temporal_layer[i];
+        poc_diff[i] = poc_diff[j];
+        re_order[i] = re_order[j];
+        list_sign[i] = list_sign[j];
+        temporal_layer[i] = temporal_layer[j];
+        poc_diff[j] = tmp_poc_diff;
+        re_order[j] = tmp_re_order ;
+        list_sign[j] = tmp_list_sign;
+        temporal_layer[j] = tmp_temporal_layer;
+      }
+    }
+  }
+
+  // use the closest valid reference frame + 3 temporal layer 0 frames
+  for (i = 0; i < num_refs; i++)
+  {  
+    /*
+    if ( (i == 0 && temporal_layer[i] <= p_Enc_Pic->temporal_layer) ||
+         (i && !temporal_layer[i]) ) // valid reference pic
+    */
+    if (temporal_layer[i] <= p_Enc_Pic->temporal_layer) 
+    {
+      tmp_poc_diff = poc_diff[i];
+      tmp_re_order = re_order[i];
+      tmp_list_sign = list_sign[i];
+      tmp_temporal_layer = temporal_layer[i];
+      for (j = i; j > beginIdx; j--) 
+      {
+        poc_diff[j] = poc_diff[j-1];
+        re_order[j] = re_order[j-1];
+        list_sign[j] = list_sign[j-1];
+        temporal_layer[j] = temporal_layer[j-1];
+      }                   
+      poc_diff[beginIdx] = tmp_poc_diff;
+      re_order[beginIdx] = tmp_re_order;
+      list_sign[beginIdx] = tmp_list_sign;
+      temporal_layer[beginIdx] = tmp_temporal_layer;
+      beginIdx += 1;
+
+      newSize++;
+    }
+  }
+  p_Vid->listXsize[0] = newSize; // update with valid size
+
+  // populate list with selections from the pre-analysis stage
+  if ( p_Inp->WPMCPrecision 
+    && p_Vid->pWPX->curr_wp_rd_pass->algorithm != WP_REGULAR
+    && p_Vid->pWPX->num_wp_ref_list[list_no] )
+  {
+    for (i=0; i<num_ref_idx_lX_active; i++)
+    {
+      re_order[i] = p_Vid->pWPX->wp_ref_list[list_no][i].PicNum;
+    }
+  }
+
+  // Check versus default list to see if any
+  // change has happened
+  no_reorder = 1;
+  for (i=0; i<num_ref_idx_lX_active; i++)
+  {
+    if (default_order[i] != re_order[i])
+    {
+      no_reorder = 0;
+    }
+  }
+
+  // If different, then signal reordering
+  if (no_reorder==0)
+  {
+    for (i=0; i<num_ref_idx_lX_active; i++)
+    {
+      diff = re_order[i]-picNumLXPred;
+      if (diff <= 0)
+      {
+        reordering_of_pic_nums_idc[i] = 0;
+        abs_diff_pic_num_minus1[i] = iabs(diff)-1;
+        if (abs_diff_pic_num_minus1[i] < 0)
+          abs_diff_pic_num_minus1[i] = maxPicNum -1;
+      }
+      else
+      {
+        reordering_of_pic_nums_idc[i] = 1;
+        abs_diff_pic_num_minus1[i] = iabs(diff)-1;
+      }
+      picNumLXPred = re_order[i];
+
+      tmp_reorder[i] = re_order[i];
+
+      k = i;
+      for (j=i; j<num_ref_idx_lX_active; j++)
+      {
+        if (default_order[j] != re_order[i])
+        {
+          ++k;
+          tmp_reorder[k] = default_order[j];
+        }
+      }
+      reorder_stop = 1;
+      for(j=i+1; j<num_ref_idx_lX_active; j++)
+      {
+        if (tmp_reorder[j] != re_order[j])
+        {
+          reorder_stop = 0;
+          break;
+        }
+      }
+
+      if (reorder_stop==1)
+      {
+        ++i;
+        break;
+      }
+      memcpy ( default_order, tmp_reorder, num_ref_idx_lX_active * sizeof(int));
+
+    }
+    reordering_of_pic_nums_idc[i] = 3;
+
+    memcpy ( default_order, tmp_reorder, num_ref_idx_lX_active * sizeof(int));
+
+    if (list_no==0)
+    {
+      currSlice->ref_pic_list_reordering_flag[LIST_0] = 1;
+    }
+    else
+    {
+      currSlice->ref_pic_list_reordering_flag[LIST_1] = 1;
+    }
+  }
+}
+
 /*!
 ************************************************************************
 * \brief
@@ -491,21 +708,36 @@ void reorder_lists( Slice *currSlice )
     }
 
     num_ref = currSlice->num_ref_idx_active[LIST_0];
-    if ( currSlice->structure == FRAME )
-      currSlice->poc_ref_pic_reorder_frame(currSlice, p_Vid->listX[LIST_0], num_ref,
-      currSlice->reordering_of_pic_nums_idc[LIST_0],
-      currSlice->abs_diff_pic_num_minus1[LIST_0],
-      currSlice->long_term_pic_idx[LIST_0], LIST_0);
-    else
+
+    if ( p_Inp->ReferenceReorder == 2 ) { // temporal layer based
+      if ( currSlice->structure == FRAME )
+        currSlice->poc_ref_pic_reorder_frame(currSlice, p_Vid->listX[LIST_0], num_ref,
+          currSlice->reordering_of_pic_nums_idc[LIST_0],
+          currSlice->abs_diff_pic_num_minus1[LIST_0],
+          currSlice->long_term_pic_idx[LIST_0], LIST_0);
+    }
+    else 
     {
-      poc_ref_pic_reorder_field(currSlice, p_Vid->listX[LIST_0], num_ref,
+      if ( currSlice->structure == FRAME )
+        currSlice->poc_ref_pic_reorder_frame(currSlice, p_Vid->listX[LIST_0], num_ref,
         currSlice->reordering_of_pic_nums_idc[LIST_0],
         currSlice->abs_diff_pic_num_minus1[LIST_0],
         currSlice->long_term_pic_idx[LIST_0], LIST_0);
-    }
+      else
+      {
+        poc_ref_pic_reorder_field(currSlice, p_Vid->listX[LIST_0], num_ref,
+          currSlice->reordering_of_pic_nums_idc[LIST_0],
+          currSlice->abs_diff_pic_num_minus1[LIST_0],
+          currSlice->long_term_pic_idx[LIST_0], LIST_0);
+      }
+    } 
+
+    currSlice->num_ref_idx_active[LIST_0] = p_Vid->listXsize[0]; 
+
     //reference picture reordering
     reorder_ref_pic_list ( currSlice, p_Vid->listX, p_Vid->listXsize, LIST_0);
   }
+   currSlice->num_ref_idx_active[LIST_0] = p_Vid->listXsize[0]; 
 }
 
 /*!
