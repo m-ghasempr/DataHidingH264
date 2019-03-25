@@ -165,20 +165,20 @@ void encode_one_macroblock_low ()
           //----- set reference frame and direction parameters -----
           if (mode==3)
           {
-            best8x8fwref [3][block  ] = best8x8fwref [3][  block+2] = best_ref[LIST_0];
+            best8x8l0ref [3][block  ] = best8x8l0ref [3][  block+2] = best_ref[LIST_0];
             best8x8pdir  [3][block  ] = best8x8pdir  [3][  block+2] = best_pdir;
-            best8x8bwref [3][block  ] = best8x8bwref [3][  block+2] = best_ref[LIST_1];
+            best8x8l1ref [3][block  ] = best8x8l1ref [3][  block+2] = best_ref[LIST_1];
           }
           else if (mode==2)
           {
-            best8x8fwref [2][2*block] = best8x8fwref [2][2*block+1] = best_ref[LIST_0];
+            best8x8l0ref [2][2*block] = best8x8l0ref [2][2*block+1] = best_ref[LIST_0];
             best8x8pdir  [2][2*block] = best8x8pdir  [2][2*block+1] = best_pdir;
-            best8x8bwref [2][2*block] = best8x8bwref [2][2*block+1] = best_ref[LIST_1];
+            best8x8l1ref [2][2*block] = best8x8l1ref [2][2*block+1] = best_ref[LIST_1];
           }
           else
           {
-            memset(&best8x8fwref [1][0], best_ref[LIST_0], 4 * sizeof(char));
-            memset(&best8x8bwref [1][0], best_ref[LIST_1], 4 * sizeof(char));
+            memset(&best8x8l0ref [1][0], best_ref[LIST_0], 4 * sizeof(char));
+            memset(&best8x8l1ref [1][0], best_ref[LIST_1], 4 * sizeof(char));
             best8x8pdir  [1][0] = best8x8pdir  [1][1] = best8x8pdir  [1][2] = best8x8pdir  [1][3] = best_pdir;
           }
 
@@ -232,8 +232,8 @@ void encode_one_macroblock_low ()
             &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1);
           best8x8mode       [block] = tr8x8.part8x8mode [block];
           best8x8pdir [P8x8][block] = tr8x8.part8x8pdir [block];
-          best8x8fwref[P8x8][block] = tr8x8.part8x8fwref[block];
-          best8x8bwref[P8x8][block] = tr8x8.part8x8bwref[block];
+          best8x8l0ref[P8x8][block] = tr8x8.part8x8l0ref[block];
+          best8x8l1ref[P8x8][block] = tr8x8.part8x8l1ref[block];
         }
 
         // following params could be added in RD_8x8DATA structure
@@ -261,8 +261,8 @@ void encode_one_macroblock_low ()
 
           best8x8mode       [block] = tr4x4.part8x8mode [block];
           best8x8pdir [P8x8][block] = tr4x4.part8x8pdir [block];
-          best8x8fwref[P8x8][block] = tr4x4.part8x8fwref[block];
-          best8x8bwref[P8x8][block] = tr4x4.part8x8bwref[block];
+          best8x8l0ref[P8x8][block] = tr4x4.part8x8l0ref[block];
+          best8x8l1ref[P8x8][block] = tr4x4.part8x8l1ref[block];
         }
         //--- re-set coding state (as it was before 8x8 block coding) ---
         // reset_coding_state (cs_mb);
@@ -338,7 +338,7 @@ void encode_one_macroblock_low ()
   tmp_8x8_flag = currMB->luma_transform_size_8x8_flag;  //save 8x8_flag
   tmp_no_mbpart = currMB->NoMbPartLessThan8x8Flag;      //save no-part-less
 
-  if (img->yuv_format != YUV400)
+  if ((img->yuv_format != YUV400) && !IS_INDEPENDENT(input))
     // precompute all chroma intra prediction modes
     IntraChromaPrediction(NULL, NULL, NULL);
 
@@ -550,13 +550,13 @@ void encode_one_macroblock_low ()
       currMB->luma_transform_size_8x8_flag = 0;
 
     // precompute all chroma intra prediction modes
-    if (img->yuv_format != YUV400)
+    if ((img->yuv_format != YUV400) && !IS_INDEPENDENT(input))
       IntraChromaPrediction(NULL, NULL, NULL);
 
     img->i16offset = 0;
     dummy = 0;
 
-    if (img->yuv_format!=YUV400)
+    if ((img->yuv_format != YUV400) && !IS_INDEPENDENT(input))
       ChromaResidualCoding (&dummy);
 
     if (best_mode==I16MB)

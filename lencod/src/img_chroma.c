@@ -71,8 +71,8 @@ void getSubImagesChroma( StorablePicture *s )
     mul_x = mul_y = 2;
   }
 
-  xpadded_size = s->size_x_cr + 2*img_pad_size_uv_x;
-  ypadded_size = s->size_y_cr + 2*img_pad_size_uv_y;
+  xpadded_size = s->size_x_cr + 2 * img_pad_size_uv_x;
+  ypadded_size = s->size_y_cr + 2 * img_pad_size_uv_y;
 
   maxx = xpadded_size - 1;
   maxy = ypadded_size - 1;

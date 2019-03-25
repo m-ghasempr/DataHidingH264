@@ -251,7 +251,7 @@ void ue_linfo(int ue, int dummy, int *len,int *info)
 
   nn=(ue+1)>>1;
 
-  for (i=0; i < 16 && nn != 0; i++)
+  for (i=0; i < 33 && nn != 0; i++)
   {
     nn >>= 1;
   }
@@ -280,7 +280,7 @@ void se_linfo(int se, int dummy, int *len,int *info)
   int n = iabs(se) << 1;   //  n+1 is the number in the code table.  Based on this we find length and info
   int nn = (n >> 1);
   int i;
-  for (i=0; i < 16 && nn != 0; i++)
+  for (i=0; i < 33 && nn != 0; i++)
   {
     nn >>= 1;
   }
@@ -299,7 +299,7 @@ void se_linfo(int se, int dummy, int *len,int *info)
  */
 void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
 {
-  ue_linfo(NCBP[img->yuv_format ? 1 : 0][cbp][0], dummy, len, info);
+  ue_linfo(NCBP[img->ChromaArrayType ? 1 : 0][cbp][0], dummy, len, info);
 }
 
 
@@ -313,7 +313,7 @@ void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
  */
 void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
 {
-  ue_linfo(NCBP[img->yuv_format ? 1 : 0][cbp][1], dummy, len, info);
+  ue_linfo(NCBP[img->ChromaArrayType ? 1 : 0][cbp][1], dummy, len, info);
 }
 
 
@@ -1220,7 +1220,7 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *dp, int prof
 
     /* Assert to make sure that the code fits in the VLC */
     /* make sure that we are in High Profile to represent level_prefix > 15 */
-    if (numPrefix > 15 && profile_idc < 100)
+    if (numPrefix > 15 && !IS_FREXT_PROFILE( profile_idc ))
     {
       //error( "level_prefix must be <= 15 except in High Profile\n",  1000 );
       se->len = 0x0000FFFF; // This can be some other big number
@@ -1302,7 +1302,7 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *dp,
     iCodeword = (1 << (12 + addbit)) | ((levabsesc - offset) << 1) | sign;
     /* Assert to make sure that the code fits in the VLC */
     /* make sure that we are in High Profile to represent level_prefix > 15 */
-    if (numPrefix > 15 &&  profile_idc < 100)
+    if (numPrefix > 15 &&  !IS_FREXT_PROFILE( profile_idc ))
     {
       //error( "level_prefix must be <= 15 except in High Profile\n",  1000 );
       se->len = 0x0000FFFF; // This can be some other big number

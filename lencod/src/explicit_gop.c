@@ -44,7 +44,7 @@ void create_hierarchy()
         gop_structure[i].slice_type = B_SLICE;
         gop_structure[i].display_no = i * 2 + 1;
         gop_structure[i].hierarchy_layer = 1;
-        gop_structure[i].reference_idc = NALU_PRIORITY_HIGH;
+        gop_structure[i].reference_idc = NALU_PRIORITY_LOW;
         gop_structure[i].slice_qp = imax(0, (input->qpB + (input->HierarchyLevelQPEnable ? -1: input->qpBRSOffset)));
 
       }
@@ -90,7 +90,7 @@ void create_hierarchy()
     {
       for (i = (1 << j) - 1; i < Bframes + 1 - (1 << j); i += (1 << j)) {
         gop_structure[i].hierarchy_layer  = j;
-        gop_structure[i].reference_idc  = NALU_PRIORITY_HIGH;
+        gop_structure[i].reference_idc  = NALU_PRIORITY_LOW;
         gop_structure[i].slice_qp = imax(0, input->qpB + (input->HierarchyLevelQPEnable ? -j: input->qpBRSOffset));
       }
     }
@@ -227,7 +227,7 @@ void interpret_gop_structure()
               break;
             case 'R':
             case 'r':
-              gop_structure[coded_frame].reference_idc= NALU_PRIORITY_HIGH;
+              gop_structure[coded_frame].reference_idc= NALU_PRIORITY_LOW;
               gop_structure[coded_frame].hierarchy_layer = 1;
               img->GopLevels = 2;
               break;
@@ -296,99 +296,88 @@ void interpret_gop_structure()
 */
 void encode_enhancement_layer()
 {
-  int previous_ref_idc = 1;
+  //int previous_ref_idc = 1;
 
-  if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0)) // B-frame(s) to encode
+  if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0) && (input->EnableIDRGOP == 0 || img->idr_gop_number)) // B-frame(s) to encode
   {
-    if (input->PReplaceBSlice)
-      img->type = P_SLICE;            // set image type to P-frame
-    else
-      img->type = B_SLICE;            // set image type to B-frame
+    img->type = ( input->PReplaceBSlice ) ? P_SLICE : B_SLICE;            // set slice type
+    img->layer = (input->NumFramesInELSubSeq == 0) ? 0 : 1;
+    img->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
 
-    if (input->NumFramesInELSubSeq == 0)
-      img->layer = 0;
-    else
-      img->layer = 1;
-
-    if (input->BRefPictures != 1 && input->HierarchicalCoding==0)
-    {
-      img->frame_num++; //increment frame_num once for B-frames
-      img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
-    }
-    img->nal_reference_idc = 0;
-
-    //if (input->HierarchicalCoding == 3 || input->HierarchicalCoding == 1)
     if (input->HierarchicalCoding)
     {
-      for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
+      for(img->b_frame_to_code = 1; img->b_frame_to_code <= input->successive_Bframe; img->b_frame_to_code++)
       {
-
-        img->nal_reference_idc = 0;
-
+        img->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
         img->type = gop_structure[img->b_frame_to_code - 1].slice_type;
 
-        if (previous_ref_idc == 1)
+        if (img->last_ref_idc == 1)
         {
           img->frame_num++;                 //increment frame_num for each stored B slice
-          img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
+          img->frame_num %= max_frame_num;
         }
-
-        if (gop_structure[img->b_frame_to_code - 1].reference_idc== NALU_PRIORITY_HIGH )
-        {
-          img->nal_reference_idc = 1;
-          previous_ref_idc = 1;
-        }
-        else
-          previous_ref_idc = 0;
-
-        img->b_interval =
-          ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
+        
+        img->nal_reference_idc = gop_structure[img->b_frame_to_code - 1].reference_idc;
+        img->b_interval = ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
 
         if (input->HierarchicalCoding == 3)
           img->b_interval = 1.0;
 
-        if(input->intra_period && input->idr_enable)
-          img->toppoc = 2*(((IMG_NUMBER%input->intra_period)-1)*(input->jumpd+1) + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no)));
-        else
-          img->toppoc = 2*((IMG_NUMBER-1)*(input->jumpd + 1) + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code -1].display_no)));
+        if (IMG_NUMBER && (IMG_NUMBER <= input->intra_delay))
+        {
+          if(input->idr_period && ( img->frm_number - img->lastIDRnumber ) % input->idr_period == 0)
+            img->toppoc = (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no));
+          else
+            img->toppoc = 2*((-img->frm_number + img->lastIDRnumber)*(input->jumpd + 1) 
+            + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code -1].display_no)));
 
-        if (img->b_frame_to_code == 1)
-          img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (IMG_NUMBER)*((input->jumpd+1)));
+          if (img->b_frame_to_code == 1)
+            img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (input->intra_delay - IMG_NUMBER)*((input->jumpd + 1)));
+          else
+            img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (input->intra_delay - IMG_NUMBER)*((input->jumpd + 1)) 
+            + (int) (2.0 *img->b_interval * (double) (1+ gop_structure[img->b_frame_to_code - 2].display_no)));
+        }
         else
-          img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (IMG_NUMBER-1)*((input->jumpd+1)) + (int) (2.0 *img->b_interval * (double) (1+ gop_structure[img->b_frame_to_code - 2].display_no)));
+        {
+          if(input->idr_period)
+            img->toppoc = 2*((( ( img->frm_number - img->lastIDRnumber - input->intra_delay) % input->idr_period ) - 1)*(input->jumpd + 1) 
+            + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no)));
+          else
+            img->toppoc = 2*((img->frm_number - img->lastIDRnumber - 1 - input->intra_delay)*(input->jumpd + 1) 
+            + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code -1].display_no)));
 
-        if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
-          img->bottompoc = img->toppoc;     //progressive
-        else
-          img->bottompoc = img->toppoc+1;
+          if (img->b_frame_to_code == 1)
+            img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (img->frm_number - img->lastIDRnumber)*((input->jumpd + 1)));
+          else
+            img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (img->frm_number - img->lastIDRnumber - 1)*((input->jumpd + 1)) 
+            + (int) (2.0 *img->b_interval * (double) (1+ gop_structure[img->b_frame_to_code - 2].display_no)));
+        }
 
+        img->bottompoc = ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING)) ? img->toppoc : img->toppoc + 1;
         img->framepoc = imin (img->toppoc, img->bottompoc);
 
-        img->delta_pic_order_cnt[1]= 0;   // POC200301
+        img->delta_pic_order_cnt[1]= 0;   
+        FrameNumberInFile = CalculateFrameNumber();
 
-        encode_one_frame();  // encode one B-frame
+        encode_one_frame();  // encode one frame
+        
+        img->last_ref_idc = img->nal_reference_idc ? 1 : 0;
+
         if (input->ReportFrameStats)
           report_frame_statistic();
-
-        if (gop_structure[img->b_frame_to_code - 1].reference_idc== NALU_PRIORITY_HIGH && img->b_frame_to_code==input->successive_Bframe)
-        {
-          img->frame_num++;                 //increment frame_num for each stored B slice
-          img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
-        }
       }
       img->b_frame_to_code = 0;
     }
     else
     {
-      for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
+      for(img->b_frame_to_code = 1; img->b_frame_to_code <= input->successive_Bframe; img->b_frame_to_code++)
       {
-
-        img->nal_reference_idc = 0;
-        if (input->BRefPictures == 1 )
+        img->nal_reference_idc = (input->BRefPictures == 1 ) ? NALU_PRIORITY_LOW : NALU_PRIORITY_DISPOSABLE;
+        
+        if (img->last_ref_idc)
         {
-          img->nal_reference_idc = 1;
           img->frame_num++;                 //increment frame_num once for B-frames
-          img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
+          img->frame_num %= max_frame_num;
         }
 
         img->b_interval =
@@ -397,10 +386,21 @@ void encode_enhancement_layer()
         if (input->HierarchicalCoding == 3)
           img->b_interval = 1.0;
 
-        if(input->intra_period && input->idr_enable)
-          img->toppoc = 2*(((IMG_NUMBER% input->intra_period)-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
+        if (IMG_NUMBER && (IMG_NUMBER <= input->intra_delay))
+        { 
+          if(input->idr_period && ( img->frm_number - img->lastIDRnumber ) % input->idr_period == 0)
+            img->toppoc = (int) (img->b_interval * (double)img->b_frame_to_code);
+          else
+            img->toppoc = 2*((-img->frm_number + img->lastIDRnumber)*(input->jumpd + 1) 
+            + (int) (img->b_interval * (double)img->b_frame_to_code));
+        }
         else
-          img->toppoc = 2*((IMG_NUMBER-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
+        {
+          if(input->idr_period)
+            img->toppoc = 2*((( ( img->frm_number - img->lastIDRnumber - input->intra_delay) % input->idr_period )-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
+          else
+            img->toppoc = 2*((img->frm_number - img->lastIDRnumber - 1 - input->intra_delay)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
+        }
 
         if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
           img->bottompoc = img->toppoc;     //progressive
@@ -412,7 +412,7 @@ void encode_enhancement_layer()
         //the following is sent in the slice header
         if (input->BRefPictures != 1)
         {
-          img->delta_pic_order_cnt[0]= 2*(img->b_frame_to_code-1);
+          img->delta_pic_order_cnt[0]= 2 * (img->b_frame_to_code - 1);
         }
         else
         {
@@ -420,14 +420,11 @@ void encode_enhancement_layer()
         }
 
         img->delta_pic_order_cnt[1]= 0;   // POC200301
+        FrameNumberInFile = CalculateFrameNumber();
 
         encode_one_frame();  // encode one B-frame
-
-        if (input->BRefPictures == 1 && img->b_frame_to_code==input->successive_Bframe)
-        {
-          img->frame_num++;                 //increment frame_num for each stored B slice
-          img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
-        }
+        
+        img->last_ref_idc = img->nal_reference_idc ? 1 : 0;
 
         if (input->ReportFrameStats)
           report_frame_statistic();

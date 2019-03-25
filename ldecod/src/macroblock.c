@@ -50,9 +50,7 @@
 
 extern int last_dquant;
 extern ColocatedParams *Co_located;
-
-
-
+extern ColocatedParams *Co_located_JV[MAX_PLANE];  //!< Co_located to be used during 4:4:4 independent mode decoding
 
 /*!
  ************************************************************************
@@ -552,7 +550,7 @@ void read_one_macroblock(struct img_par *img,struct inp_par *inp)
       TRACE_STRING("mb_field_decoding_flag");
       if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)
       {
-        currSE.len = 1;
+        currSE.len = (int64) 1;
         readSyntaxElement_FLC(&currSE, dP->bitstream);
       }
       else
@@ -652,7 +650,7 @@ void read_one_macroblock(struct img_par *img,struct inp_par *inp)
       if ((img->MbaffFrameFlag) && (((mb_nr&0x01)==0) || ((mb_nr&0x01) && prevMbSkipped)))
       {
         TRACE_STRING("mb_field_decoding_flag");
-        currSE.len = 1;
+        currSE.len = (int64) 1;
         readSyntaxElement_FLC(&currSE, dP->bitstream);
         currMB->mb_field = currSE.value1;
       }
@@ -681,7 +679,7 @@ void read_one_macroblock(struct img_par *img,struct inp_par *inp)
         if(img->cod_counter == 0 && ((mb_nr&0x01) == 0))
         {
           TRACE_STRING("mb_field_decoding_flag (of coded bottom mb)");
-          currSE.len = 1;
+          currSE.len = (int64) 1;
           readSyntaxElement_FLC(&currSE, dP->bitstream);
           dP->bitstream->frame_bitoffset--;
           currMB->mb_field = currSE.value1;
@@ -775,7 +773,7 @@ void read_one_macroblock(struct img_par *img,struct inp_par *inp)
     // read UVLC transform_size_8x8_flag
     if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)
     {
-      currSE.len = 1;
+      currSE.len = (int64) 1;
       readSyntaxElement_FLC(&currSE, dP->bitstream);
     }
     else
@@ -949,7 +947,7 @@ void read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
     // here dP is assigned with the same dP as SE_MBTYPE, because IPCM syntax is in the
     // same category as MBTYPE
-    dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+    dP = &(currSlice->partArr[partMap[SE_LUM_DC_INTRA]]);
     readIPCMcoeffsFromNAL(img,inp,dP);
   }
 
@@ -1020,7 +1018,7 @@ void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct data
   if(active_pps->entropy_coding_mode_flag  == CABAC)
   {
     //read luma and chroma IPCM coefficients
-    currSE.len=8;
+    currSE.len = (int64) 8;
     TRACE_STRING("pcm_byte luma");
 
     for(i=0;i<MB_BLOCK_SIZE;i++)
@@ -1031,7 +1029,7 @@ void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct data
         img->cof[(i>>2)][(j>>2)][i & 0x03][j & 0x03]=currSE.value1;
       }
     }
-    if (dec_picture->chroma_format_idc != YUV400)
+    if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
     {
       TRACE_STRING("pcm_byte chroma");
       for(i=0;i<img->mb_cr_size_y;i++)
@@ -1064,10 +1062,10 @@ void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct data
   {
     //read bits to let stream byte aligned
 
-    if((dP->bitstream->frame_bitoffset)%8!=0)
+    if(((dP->bitstream->frame_bitoffset) & 0x07) != 0)
     {
       TRACE_STRING("pcm_alignment_zero_bit");
-      currSE.len=8-(dP->bitstream->frame_bitoffset)%8;
+      currSE.len = (8 - ((dP->bitstream->frame_bitoffset) & 0x07));
       readSyntaxElement_FLC(&currSE, dP->bitstream);
     }
 
@@ -1084,7 +1082,7 @@ void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct data
       }
     }
     currSE.len=img->bitdepth_chroma;
-    if (dec_picture->chroma_format_idc != YUV400)
+    if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
     {
       TRACE_STRING("pcm_sample_chroma (u)");
       for(i=0;i<img->mb_cr_size_y;i++)
@@ -1204,7 +1202,7 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
     }
   }
 
-  if (IntraChromaPredModeFlag && dec_picture->chroma_format_idc != YUV400)
+  if (IntraChromaPredModeFlag && ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img)))
   {
     currSE.type = SE_INTRAPREDMODE;
     TRACE_STRING("intra_chroma_pred_mode");
@@ -2435,6 +2433,22 @@ void CalculateQuant8Param()
         InvLevelScale8x8Luma_Inter[k][i][j] = dequant_coef8[k][j][i]*qmatrix[7][temp];
       }
     }
+
+    if( active_sps->chroma_format_idc == 3 )  // 4:4:4
+    {
+      for(k=0; k<6; k++)
+        for(j=0; j<8; j++)
+        {
+          for(i=0; i<8; i++)
+          {
+            temp = (i<<3)+j;
+            InvLevelScale8x8Chroma_Intra[0][k][i][j] = dequant_coef8[k][j][i]*qmatrix[8][temp];
+            InvLevelScale8x8Chroma_Inter[0][k][i][j] = dequant_coef8[k][j][i]*qmatrix[9][temp];
+            InvLevelScale8x8Chroma_Intra[1][k][i][j] = dequant_coef8[k][j][i]*qmatrix[10][temp];
+            InvLevelScale8x8Chroma_Inter[1][k][i][j] = dequant_coef8[k][j][i]*qmatrix[11][temp];
+          }
+        }
+    }
 }
 
 /*!
@@ -2464,9 +2478,21 @@ void readLumaCoeff8x8_CABAC (struct img_par *img,struct inp_par *inp, int b8)
   int qp_per    = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6;
   int qp_rem    = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6;
   Boolean lossless_qpprime = (Boolean) ((img->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
-  int (*InvLevelScale8x8)[8] = IS_INTRA(currMB)? InvLevelScale8x8Luma_Intra[qp_rem] : InvLevelScale8x8Luma_Inter[qp_rem];
+  int (*InvLevelScale8x8)[8] = NULL;
   // select scan type
   const byte (*pos_scan8x8)[2] = ((img->structure == FRAME) && (!currMB->mb_field)) ? SNGL_SCAN8x8 : FIELD_SCAN8x8;
+
+  if( IS_INDEPENDENT(img) )
+  {
+    if( img->colour_plane_id == 0 )
+      InvLevelScale8x8 = IS_INTRA(currMB)? InvLevelScale8x8Luma_Intra[qp_rem] : InvLevelScale8x8Luma_Inter[qp_rem];
+    else if( img->colour_plane_id == 1 )
+      InvLevelScale8x8 = IS_INTRA(currMB)? InvLevelScale8x8Chroma_Intra[0][qp_rem] : InvLevelScale8x8Chroma_Inter[0][qp_rem];
+    else if( img->colour_plane_id == 2 )
+      InvLevelScale8x8 = IS_INTRA(currMB)? InvLevelScale8x8Chroma_Intra[1][qp_rem] : InvLevelScale8x8Chroma_Inter[1][qp_rem];
+  }
+  else
+    InvLevelScale8x8 = IS_INTRA(currMB)? InvLevelScale8x8Luma_Intra[qp_rem] : InvLevelScale8x8Luma_Inter[qp_rem];
 
   img->is_intra_block = IS_INTRA(currMB);
 
@@ -2824,8 +2850,29 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   qp_rem    = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6;
   qp_const  = 1<<(3-qp_per);
 
-  InvLevelScale4x4 = intra? InvLevelScale4x4Luma_Intra[qp_rem] : InvLevelScale4x4Luma_Inter[qp_rem];
-  InvLevelScale8x8 = intra? InvLevelScale8x8Luma_Intra[qp_rem] : InvLevelScale8x8Luma_Inter[qp_rem];
+  if( IS_INDEPENDENT(img) )
+  {
+    if( img->colour_plane_id == 0 )
+    {
+      InvLevelScale4x4 = intra? InvLevelScale4x4Luma_Intra[qp_rem] : InvLevelScale4x4Luma_Inter[qp_rem];
+      InvLevelScale8x8 = intra? InvLevelScale8x8Luma_Intra[qp_rem] : InvLevelScale8x8Luma_Inter[qp_rem];
+    }
+    else if( img->colour_plane_id == 1 )
+    {
+      InvLevelScale4x4 = intra? InvLevelScale4x4Chroma_Intra[0][qp_rem] : InvLevelScale4x4Chroma_Inter[0][qp_rem];
+      InvLevelScale8x8 = intra? InvLevelScale8x8Chroma_Intra[0][qp_rem] : InvLevelScale8x8Chroma_Inter[0][qp_rem];
+    }
+    else if( img->colour_plane_id == 2 )
+    {
+      InvLevelScale4x4 = intra? InvLevelScale4x4Chroma_Intra[1][qp_rem] : InvLevelScale4x4Chroma_Inter[1][qp_rem];
+      InvLevelScale8x8 = intra? InvLevelScale8x8Chroma_Intra[1][qp_rem] : InvLevelScale8x8Chroma_Inter[1][qp_rem];
+    }
+  }
+  else
+  {
+    InvLevelScale4x4 = intra? InvLevelScale4x4Luma_Intra[qp_rem] : InvLevelScale4x4Luma_Inter[qp_rem];
+    InvLevelScale8x8 = intra? InvLevelScale8x8Luma_Intra[qp_rem] : InvLevelScale8x8Luma_Inter[qp_rem];
+  }
 
   //init constants for every chroma qp offset
   if (dec_picture->chroma_format_idc != YUV400)
@@ -3065,12 +3112,12 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
     }
   }
 
-  if (dec_picture->chroma_format_idc != YUV400)
+  if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
   {
 
     for (i=0;i<4;i++)
       for (j=4;j<(4+img->num_blk8x8_uv);j++) // reset all chroma coeffs before read
-      memset(&img->cof[i][j][0][0], 0, 16 * sizeof(int));
+        memset(&img->cof[i][j][0][0], 0, 16 * sizeof(int));
 
     m2  = img->mb_x * 2;
     jg2 = img->mb_y * 2;
@@ -3616,7 +3663,7 @@ void decode_ipcm_mb(struct img_par *img)
     for(j=0;j<16;j++)
       dec_picture->imgY[img->pix_y+i][img->pix_x+j]=img->cof[(i>>2)][(j>>2)][i & 0x03][j & 0x03];
 
-  if (dec_picture->chroma_format_idc != YUV400)
+  if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
   {
     for(i=0;i<img->mb_cr_size_y;i++)
       for(j=0;j<img->mb_cr_size_x;j++)
@@ -3794,7 +3841,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
     iMBtrans4x4(img, smb);
     
     // chroma decoding *******************************************************
-    if (dec_picture->chroma_format_idc != YUV400)
+    if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
     {
       intra_cr_decoding(yuv, img, smb, currMB);
     }
@@ -3834,7 +3881,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
     }
 
     // chroma decoding *******************************************************
-    if (dec_picture->chroma_format_idc != YUV400)
+    if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
     {
       intra_cr_decoding(yuv, img, smb, currMB);
     }
@@ -3860,7 +3907,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
       }
     }
     // chroma decoding *******************************************************
-    if (dec_picture->chroma_format_idc != YUV400)
+    if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
     {
       intra_cr_decoding(yuv, img, smb, currMB);
     }
@@ -3880,8 +3927,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
     for(j = 0; j < img->mb_size[0][1]; j++)
     {                
       memcpy(&(curComp[img->pix_y + j][img->pix_x]), &(mpr[j][0]), img->mb_size[0][0] * sizeof(imgpel));
-    }            
-    if (dec_picture->chroma_format_idc != YUV400)
+    }
+    if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
     {
       for(uv=0;uv<2;uv++)
       {
@@ -4198,3 +4245,47 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   return 0;
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    change target plane
+ *    for 4:4:4 Independent mode
+ ************************************************************************
+ */
+void change_plane_JV( int nplane )
+{
+    img->colour_plane_id = nplane;
+    img->mb_data = img->mb_data_JV[nplane];
+    dec_picture = dec_picture_JV[nplane];
+    Co_located = Co_located_JV[nplane];
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    make frame picture from each plane data
+ *    for 4:4:4 Independent mode
+ ************************************************************************
+ */
+void make_frame_picture_JV()
+{
+    int uv, line;
+    int nsize;
+    int nplane;
+    dec_picture = dec_picture_JV[0];
+
+    // Copy Storable Params
+    for( nplane=0; nplane<MAX_PLANE; nplane++ )
+    {
+      copy_storable_param_JV( nplane, dec_picture, dec_picture_JV[nplane] );
+    }
+
+    for( uv=0; uv<2; uv++ ){
+      for( line=0; line<img->height; line++ )
+      {
+        nsize = sizeof(imgpel) * img->width;
+        memcpy( dec_picture->imgUV[uv][line], dec_picture_JV[uv+1]->imgY[line], nsize );
+      }
+      free_storable_picture(dec_picture_JV[uv+1]);
+    }
+}

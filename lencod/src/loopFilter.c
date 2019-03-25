@@ -200,10 +200,13 @@ void DeblockMb(ImageParameters *img, imgpel **imgY, imgpel ***imgUV, int MbQAddr
         {
           if (filterNon8x8LumaEdgesFlag[edge])
             EdgeLoopLuma( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge << 2, img->width) ;
-          if( (imgUV != NULL) && (edge_cr >= 0))
+          if( !IS_INDEPENDENT(input) )
           {
-            EdgeLoopChroma( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge_cr, img->width_cr, 0) ;
-            EdgeLoopChroma( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge_cr, img->width_cr, 1) ;
+            if( (imgUV != NULL) && (edge_cr >= 0))
+            {
+              EdgeLoopChroma( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge_cr, img->width_cr, 0) ;
+              EdgeLoopChroma( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge_cr, img->width_cr, 1) ;
+            }
           }
         }
 
@@ -215,10 +218,13 @@ void DeblockMb(ImageParameters *img, imgpel **imgY, imgpel ***imgUV, int MbQAddr
           {
             if (filterNon8x8LumaEdgesFlag[edge])
               EdgeLoopLuma( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 16, img->width) ;
-            if( (imgUV != NULL) && (edge_cr >= 0))
+            if( !IS_INDEPENDENT(input) )
             {
-              EdgeLoopChroma( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, MB_BLOCK_SIZE, img->width_cr, 0) ;
-              EdgeLoopChroma( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, MB_BLOCK_SIZE, img->width_cr, 1) ;
+              if( (imgUV != NULL) && (edge_cr >= 0))
+              {
+                EdgeLoopChroma( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, MB_BLOCK_SIZE, img->width_cr, 0) ;
+                EdgeLoopChroma( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, MB_BLOCK_SIZE, img->width_cr, 1) ;
+              }
             }
           }
           img->DeblockCall = 1;

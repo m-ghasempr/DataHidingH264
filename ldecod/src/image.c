@@ -79,6 +79,7 @@ extern StorablePicture *no_reference_picture;
 int non_conforming_stream;
 
 StorablePicture *dec_picture;
+StorablePicture *dec_picture_JV[MAX_PLANE];  //!< dec_picture to be used during 4:4:4 independent mode decoding
 
 OldSliceParams old_slice;
 
@@ -305,6 +306,26 @@ void buf2img (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
 
 
 /*!
+ ************************************************************************
+ * \brief
+ *    Calculate the value of frame_no
+ ************************************************************************
+*/
+void calculate_frame_no(StorablePicture *p)
+{
+  // calculate frame number
+  int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? p->poc /(input->poc_scale) : p->poc/(input->poc_scale);
+
+  if (psnrPOC==0)// && img->psnr_number)
+    img->idr_psnr_number = img->number*img->ref_poc_gap/(input->poc_scale);
+
+  img->psnr_number=imax(img->psnr_number,img->idr_psnr_number+psnrPOC);
+
+  frame_no = img->idr_psnr_number + psnrPOC;
+}
+
+
+/*!
 ************************************************************************
 * \brief
 *    Find PSNR for all three components.Compare decoded frame with
@@ -336,9 +357,6 @@ void find_snr(
 
   // picture error concealment
   char yuv_types[4][6]= {"4:0:0","4:2:0","4:2:2","4:4:4"};
-
-  // calculate frame number
-  int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? p->poc /(input->poc_scale) : p->poc/(input->poc_scale);
 
   // cropping for luma
   if (p->frame_cropping_flag)
@@ -382,13 +400,6 @@ void find_snr(
   }
 
   framesize_in_bytes = (((int64) comp_size_x[0] * comp_size_y[0]) + ((int64) comp_size_x[1] * comp_size_y[1] ) * 2) * symbol_size_in_bytes;
-
-  if (psnrPOC==0)// && img->psnr_number)
-    img->idr_psnr_number = img->number*img->ref_poc_gap/(input->poc_scale);
-
-  img->psnr_number=imax(img->psnr_number,img->idr_psnr_number+psnrPOC);
-
-  frame_no = img->idr_psnr_number + psnrPOC;
 
   // KS: this buffer should actually be allocated only once, but this is still much faster than the previous version
   buf = malloc ( comp_size_x[0] * comp_size_y[0] * symbol_size_in_bytes );
@@ -1166,6 +1177,7 @@ void init_picture(struct img_par *img, struct inp_par *inp)
 {
   int i,k,l;
   Slice *currSlice = img->currentSlice;
+  int nplane;
 
   if (dec_picture)
   {
@@ -1237,12 +1249,8 @@ void init_picture(struct img_par *img, struct inp_par *inp)
 
   if (img->structure==FRAME ||img->structure==TOP_FIELD)
   {
-#ifdef WIN32
-    _ftime (&(img->tstruct_start));             // start time ms
-#else
-    ftime (&(img->tstruct_start));              // start time ms
-#endif
-    time( &(img->ltime_start));                // start time s
+    ftime (&(img->tstruct_start));             // start time ms
+    time  ( &(img->ltime_start));              // start time s
   }
 
   dec_picture = alloc_storable_picture ((PictureStructure) img->structure, img->width, img->height, img->width_cr, img->height_cr);
@@ -1309,8 +1317,19 @@ void init_picture(struct img_par *img, struct inp_par *inp)
   // TO set Macroblock Map (mark all MBs as 'have to be concealed')
   for(i=0; i<(int)img->PicSizeInMbs; i++)
   {
-    img->mb_data[i].slice_nr = -1;
-    img->mb_data[i].ei_flag = 1;
+    if( IS_INDEPENDENT(img) )
+    {
+      for( nplane=0; nplane<MAX_PLANE; nplane++ )
+      {
+        img->mb_data_JV[nplane][i].slice_nr = -1; 
+        img->mb_data_JV[nplane][i].ei_flag = 1;
+      }
+    }
+    else
+    {
+      img->mb_data[i].slice_nr = -1; 
+      img->mb_data[i].ei_flag = 1;
+    }
   }
 
   img->mb_y = img->mb_x = 0;
@@ -1372,6 +1391,15 @@ void init_picture(struct img_par *img, struct inp_par *inp)
     update_tone_mapping_sei();
   }
 #endif
+
+  if( IS_INDEPENDENT(img) )
+  {
+    dec_picture_JV[0] = dec_picture;
+    dec_picture_JV[1] = alloc_storable_picture (img->structure, img->width, img->height, img->width_cr, img->height_cr);
+    copy_dec_picture_JV( dec_picture_JV[1], dec_picture_JV[0] );
+    dec_picture_JV[2] = alloc_storable_picture (img->structure, img->width, img->height, img->width_cr, img->height_cr);
+    copy_dec_picture_JV( dec_picture_JV[2], dec_picture_JV[0] );
+  }
 }
 
 /*!
@@ -1388,10 +1416,13 @@ void exit_picture()
   int ercSegment;
   frame recfr;
   unsigned int i;
-  int structure, frame_poc, slice_type, refpic, qp, pic_num, chroma_format_idc;
+  int structure, frame_poc, slice_type, refpic, qp, pic_num, chroma_format_idc, is_idr;
+
+  static char cslice_type[8];  
 
   time_t tmp_time;                   // time used by decoding the last frame
   char   yuvFormat[10];
+  int nplane;
 
   // return if the last picture has already been finished
   if (dec_picture==NULL)
@@ -1400,7 +1431,21 @@ void exit_picture()
   }
 
   //deblocking for frame or field
-  DeblockPicture( img, dec_picture );
+  if( IS_INDEPENDENT(img) )
+  {
+    int colour_plane_id = img->colour_plane_id;
+    for( nplane=0; nplane<MAX_PLANE; nplane++ )
+    {
+      change_plane_JV( nplane );
+      DeblockPicture( img, dec_picture );
+    }
+    img->colour_plane_id = colour_plane_id;
+    make_frame_picture_JV();
+  }
+  else
+  {
+    DeblockPicture( img, dec_picture );
+  }
 
   if (dec_picture->MbaffFrameFlag)
     MbAffPostProc();
@@ -1466,6 +1511,7 @@ void exit_picture()
   refpic     = dec_picture->used_for_reference;
   qp         = dec_picture->qp;
   pic_num    = dec_picture->pic_num;
+  is_idr     = dec_picture->idr_flag;
 
   chroma_format_idc= dec_picture->chroma_format_idc;
 
@@ -1477,42 +1523,88 @@ void exit_picture()
     img->pre_frame_num = 0;
   }
 
+  if (input->silent == FALSE)
+  {
+    if (structure==TOP_FIELD || structure==FRAME)
+    {
+      if(slice_type == I_SLICE && is_idr) // IDR picture
+        strcpy(cslice_type,"IDR");
+      else if(slice_type == I_SLICE) // I picture
+        strcpy(cslice_type," I ");
+      else if(slice_type == P_SLICE) // P pictures
+        strcpy(cslice_type," P ");
+      else if(slice_type == SP_SLICE) // SP pictures
+        strcpy(cslice_type,"SP ");
+      else if (slice_type == SI_SLICE)
+        strcpy(cslice_type,"SI ");
+      else if(refpic) // stored B pictures
+        strcpy(cslice_type," B ");
+      else // B pictures
+        strcpy(cslice_type," b ");    
+      if (structure==FRAME)
+        strncat(cslice_type,")       ",8-strlen(cslice_type));
+    }
+    else if (structure==BOTTOM_FIELD)
+    {
+      if(slice_type == I_SLICE && is_idr) // IDR picture
+        strncat(cslice_type,"|IDR)",8-strlen(cslice_type));
+      else if(slice_type == I_SLICE) // I picture
+        strncat(cslice_type,"| I )",8-strlen(cslice_type));
+      else if(slice_type == P_SLICE) // P pictures
+        strncat(cslice_type,"| P )",8-strlen(cslice_type));
+      else if(slice_type == SP_SLICE) // SP pictures
+        strncat(cslice_type,"|SP )",8-strlen(cslice_type));
+      else if (slice_type == SI_SLICE)
+        strncat(cslice_type,"|SI )",8-strlen(cslice_type));
+      else if(refpic) // stored B pictures
+        strncat(cslice_type,"| B )",8-strlen(cslice_type));
+      else // B pictures
+        strncat(cslice_type,"| b )",8-strlen(cslice_type));   
+    }
+  }
+
   if ((structure==FRAME)||structure==BOTTOM_FIELD)
   {
-
-#ifdef WIN32
-    _ftime (&(img->tstruct_end));             // start time ms
-#else
     ftime (&(img->tstruct_end));              // start time ms
-#endif
+    time  ( &(img->ltime_end));               // start time s
 
-    time( &(img->ltime_end));                // start time s
-
-    tmp_time=(img->ltime_end*1000+img->tstruct_end.millitm) - (img->ltime_start*1000+img->tstruct_start.millitm);
+    tmp_time=(img->ltime_end * 1000 + img->tstruct_end.millitm) - (img->ltime_start * 1000 + img->tstruct_start.millitm);
     tot_time=tot_time + tmp_time;
 
     sprintf(yuvFormat,"%s", yuv_types[chroma_format_idc]);
     
     if (input->silent == FALSE)
     {
+      char stype [3] = {0,0,0};
       if(slice_type == I_SLICE) // I picture
-        fprintf(stdout,"%04d(I)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-        frame_no, frame_poc, pic_num, qp, snr->snr[0], snr->snr[1], snr->snr[2], yuvFormat, (int)tmp_time);
+        stype[0] = 'I';
       else if(slice_type == P_SLICE) // P pictures
-        fprintf(stdout,"%04d(P)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-        frame_no, frame_poc, pic_num, qp, snr->snr[0], snr->snr[1], snr->snr[2], yuvFormat, (int)tmp_time);
+        stype[0] = 'P';
       else if(slice_type == SP_SLICE) // SP pictures
-        fprintf(stdout,"%04d(SP) %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-        frame_no, frame_poc, pic_num, qp, snr->snr[0], snr->snr[1], snr->snr[2], yuvFormat, (int)tmp_time);
+      { 
+        stype[0] = 'S'; stype[1] = 'P';
+      }
       else if (slice_type == SI_SLICE)
-        fprintf(stdout,"%04d(SI) %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-        frame_no, frame_poc, pic_num, qp, snr->snr[0], snr->snr[1], snr->snr[2], yuvFormat, (int)tmp_time);
-      else if(refpic) // stored B pictures
-        fprintf(stdout,"%04d(RB) %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-        frame_no, frame_poc, pic_num, qp, snr->snr[0], snr->snr[1], snr->snr[2], yuvFormat, (int)tmp_time);
-      else // B pictures
-        fprintf(stdout,"%04d(B)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-        frame_no, frame_poc, pic_num, qp, snr->snr[0], snr->snr[1], snr->snr[2], yuvFormat, (int)tmp_time);
+      { 
+        stype[0] = 'S'; stype[1] = 'I'; 
+      }
+      else 
+        stype[0] = 'B';
+
+      if (!refpic)
+      {
+        stype[0] += 32;
+        if (stype[1]) stype[1] += 32;
+      }
+
+      if (p_ref != -1)
+        fprintf(stdout,"%04d(%s)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
+          frame_no, stype, frame_poc, pic_num, qp, snr->snr[0], snr->snr[1], snr->snr[2], yuvFormat, (int)tmp_time);
+      else
+      {
+        fprintf(stdout,"%04d(%s)  %8d %5d %5d                          %s %5d\n",
+        frame_no, stype, frame_poc, pic_num, qp, yuvFormat, (int)tmp_time);
+      }
     }
     else
       fprintf(stdout,"Completed Decoding frame %05d.\r",snr->frame_ctr);
@@ -1756,14 +1848,27 @@ int is_new_picture()
  */
 void decode_one_slice(struct img_par *img,struct inp_par *inp)
 {
-
   Boolean end_of_slice = FALSE;
   img->cod_counter=-1;
+
+  if( IS_INDEPENDENT(img) )
+  {
+    change_plane_JV( img->colour_plane_id );
+  }
 
   set_ref_pic_num();
 
   if (img->type == B_SLICE)
+  {
+    if( IS_INDEPENDENT(img) )
+    {
+      compute_colocated_JV(Co_located, listX);
+    }
+    else
+    {
       compute_colocated(Co_located, listX);
+    }
+  }
 
   //reset_ec_flags();
 
@@ -2027,4 +2132,68 @@ void Error_tracking()
       Is_redundant_correct = 0;  // redundant slice is incorrect
     }
   }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    copy StorablePicture *src -> StorablePicture *dst
+ *    for 4:4:4 Independent mode
+ ************************************************************************
+ */
+void copy_dec_picture_JV( StorablePicture *dst, StorablePicture *src )
+{
+  dst->top_poc              = src->top_poc;
+  dst->bottom_poc           = src->bottom_poc;
+  dst->frame_poc            = src->frame_poc;
+  dst->qp                   = src->qp;
+  dst->slice_qp_delta       = src->slice_qp_delta;
+  dst->chroma_qp_offset[0]  = src->chroma_qp_offset[0];
+  dst->chroma_qp_offset[1]  = src->chroma_qp_offset[1];
+
+  dst->poc                  = src->poc;
+
+  dst->slice_type           = src->slice_type;
+  dst->used_for_reference   = src->used_for_reference;
+  dst->idr_flag             = src->idr_flag;
+  dst->no_output_of_prior_pics_flag = src->no_output_of_prior_pics_flag;
+  dst->long_term_reference_flag = src->long_term_reference_flag;
+  dst->adaptive_ref_pic_buffering_flag = src->adaptive_ref_pic_buffering_flag;
+
+  dst->dec_ref_pic_marking_buffer = src->dec_ref_pic_marking_buffer;
+
+  dst->MbaffFrameFlag       = src->MbaffFrameFlag;
+  dst->PicWidthInMbs        = src->PicWidthInMbs;
+  dst->pic_num              = src->pic_num;
+  dst->frame_num            = src->frame_num;
+  dst->recovery_frame       = src->recovery_frame;
+  dst->coded_frame          = src->coded_frame;
+
+  dst->chroma_format_idc    = src->chroma_format_idc;
+
+  dst->frame_mbs_only_flag  = src->frame_mbs_only_flag;
+  dst->frame_cropping_flag  = src->frame_cropping_flag;
+
+  dst->frame_cropping_rect_left_offset   = src->frame_cropping_rect_left_offset;
+  dst->frame_cropping_rect_right_offset  = src->frame_cropping_rect_right_offset;
+  dst->frame_cropping_rect_top_offset    = src->frame_cropping_rect_top_offset;
+  dst->frame_cropping_rect_bottom_offset = src->frame_cropping_rect_bottom_offset;
+
+#ifdef ENABLE_OUTPUT_TONEMAPPING
+  // store the necessary tone mapping sei into StorablePicture structure
+  dst->seiHasTone_mapping = src->seiHasTone_mapping;
+
+  dst->seiHasTone_mapping    = src->seiHasTone_mapping;
+  dst->tone_mapping_model_id = src->tone_mapping_model_id;
+  dst->tonemapped_bit_depth  = src->tonemapped_bit_depth;
+  if( src->tone_mapping_lut )
+  {
+    dst->tone_mapping_lut      = malloc(sizeof(int)*(1<<seiToneMapping.coded_data_bit_depth));
+    if (NULL == dst->tone_mapping_lut)
+    {
+      no_mem_exit("copy_dec_picture_JV: tone_mapping_lut");
+    }
+    memcpy(dst->tone_mapping_lut, src->tone_mapping_lut, sizeof(imgpel)*(1<<seiToneMapping.coded_data_bit_depth));
+  }
+#endif
 }

@@ -26,19 +26,24 @@
 #endif
 
 #define GET_METIME      1       //!< Enables or disables ME computation time
-#define DUMP_DPB        0       //!< Dump dbp for debug purposes
+#define DUMP_DPB        0       //!< Dump DPB for debug purposes
 typedef unsigned char byte;     //!< byte type definition
+
 #define IMGTYPE         1       //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
 
 #define RC_MAX_TEMPORAL_LEVELS   5
 
 //#define BEST_NZ_COEFF 1   // yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
 
-//FREXT Profile IDC definitions
+//AVC Profile IDC definitions
+#define BASELINE        66       //!< YUV 4:2:0/8  "Baseline"
+#define MAIN            77       //!< YUV 4:2:0/8  "Main"
+#define EXTENDED        88       //!< YUV 4:2:0/8  "Extended"
 #define FREXT_HP        100      //!< YUV 4:2:0/8 "High"
 #define FREXT_Hi10P     110      //!< YUV 4:2:0/10 "High 10"
 #define FREXT_Hi422     122      //!< YUV 4:2:2/10 "High 4:2:2"
-#define FREXT_Hi444     144      //!< YUV 4:4:4/12 "High 4:4:4"
+#define FREXT_Hi444     244      //!< YUV 4:4:4/14 "High 4:4:4"
+#define FREXT_CAVLC444   44      //!< YUV 4:4:4/14 "CAVLC 4:4:4"
 
 #define ZEROSNR 1
 
@@ -189,14 +194,16 @@ typedef unsigned char byte;     //!< byte type definition
 
 #define Q_BITS          15
 #define DQ_BITS         6
-#define DQ_ROUND        (1<<(DQ_BITS-1))
 
 #define Q_BITS_8        16
 #define DQ_BITS_8       6
-#define DQ_ROUND_8      (1<<(DQ_BITS_8-1))
 
 // Context Adaptive Lagrange Multiplier (CALM)
 #define CALM_MF_FACTOR_THRESHOLD 512.0
+
+#define MAX_PLANE       3
+#define IS_INDEPENDENT(INP) (INP->separate_colour_plane_flag)
+#define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
 
 #endif
 

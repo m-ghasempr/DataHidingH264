@@ -36,7 +36,8 @@
 #define FREXT_HP        100      //!< YUV 4:2:0/8 "High"
 #define FREXT_Hi10P     110      //!< YUV 4:2:0/10 "High 10"
 #define FREXT_Hi422     122      //!< YUV 4:2:2/10 "High 4:2:2"
-#define FREXT_Hi444     144      //!< YUV 4:4:4/12 "High 4:4:4"
+#define FREXT_Hi444     244      //!< YUV 4:4:4/14 "High 4:4:4"
+#define FREXT_CAVLC444   44      //!< YUV 4:4:4/14 "CAVLC 4:4:4"
 
 #define YUV400 0
 #define YUV420 1
@@ -162,6 +163,10 @@
 
 // enable tone map the output if tone mapping SEI present
 #define ENABLE_OUTPUT_TONEMAPPING
+
+#define MAX_PLANE   3
+#define IS_INDEPENDENT(IMG) ((IMG)->separate_colour_plane_flag)
+#define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
 
 #endif
 

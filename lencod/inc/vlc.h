@@ -18,7 +18,6 @@ int se_v (char *tracestring, int value, Bitstream *bitstream);
 int ue_v (char *tracestring, int value, Bitstream *bitstream);
 int u_v  (int n, char *tracestring, int value, Bitstream *bitstream);
 
-
 void levrun_linfo_c2x2(int level,int run,int *len,int *info);
 void levrun_linfo_inter(int level,int run,int *len,int *info);
 

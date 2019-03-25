@@ -36,6 +36,7 @@
 #include "rc_quadratic.h"
 #include "macroblock.h"
 #include "symbol.h"
+#include "context_ini.h"
 
 // Local declarations
 static Slice *malloc_slice();
@@ -198,7 +199,7 @@ int terminate_slice(int lastslice)
     store_contexts();
   }
 
-  if (img->type != I_SLICE || img->type != SI_SLICE)
+  if (img->type != I_SLICE && img->type != SI_SLICE)
     free_ref_pic_list_reordering_buffer (currSlice);
   return 0;
 }
@@ -219,6 +220,11 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
   int NumberOfCodedMBs = 0;
   int CurrentMbAddr;
   double FrameRDCost = DBL_MAX, FieldRDCost = DBL_MAX;
+
+  if( IS_INDEPENDENT(input) )
+  {
+    change_plane_JV( img->colour_plane_id );
+  }
 
   img->cod_counter = 0;
 
@@ -294,7 +300,6 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
 
       start_macroblock (CurrentMbAddr, FALSE);
       encode_one_macroblock ();
-
       write_one_macroblock (1);
 
       terminate_macroblock (&end_of_slice, &recode_macroblock);
@@ -318,6 +323,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       {
         //!Go back to the previous MB to recode it
         img->current_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
+        img->NumberofCodedMacroBlocks--;
         if(img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
                                         // which means it's impossible to encode picture using current slice bits restriction
         {
@@ -539,6 +545,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
           //Go back to the beginning of the macroblock pair to recode it
           img->current_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
           img->current_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
+          img->NumberofCodedMacroBlocks -= 2;
           if(img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
             // which means it's impossible to encode picture using current slice bits restriction
           {
@@ -551,6 +558,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       {
         //!Go back to the previous MB to recode it
         img->current_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
+        img->NumberofCodedMacroBlocks--;
         if(img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
                                         // which means it's impossible to encode picture using current slice bits restriction
         {
@@ -605,7 +613,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
  */
 static void init_slice (int start_mb_addr)
 {
-  int i;
+  int i,j;
   Picture *currPic = img->currentPicture;
   DataPartition *dataPart;
   Bitstream *currStream;
@@ -786,7 +794,7 @@ static void init_slice (int start_mb_addr)
     {
       if (input->GenerateMultiplePPS && input->RDPictureDecision)
       {
-        if (enc_picture==enc_frame_picture2)
+        if (enc_picture == enc_frame_picture[1])
           estimate_weighting_factor_P_slice (0);
         else
           estimate_weighting_factor_P_slice (1);
@@ -802,7 +810,16 @@ static void init_slice (int start_mb_addr)
   set_ref_pic_num();
 
   if (img->type == B_SLICE)
-    compute_colocated(Co_located, listX);
+  {
+    if( IS_INDEPENDENT(input) )
+    {
+      compute_colocated_JV(Co_located, listX);
+    }
+    else
+    {
+      compute_colocated(Co_located, listX);
+    }
+  }
 
   if (img->type != I_SLICE && input->SearchMode == EPZS)
     EPZSSliceInit(EPZSCo_located, listX);
@@ -863,6 +880,26 @@ static void init_slice (int start_mb_addr)
     writeMB_transform_size = writeMB_transform_size_CABAC;
   }
 
+  // assign luma common reference picture pointers to be used for ME/sub-pel interpolation
+  if( IS_INDEPENDENT(input) )
+  {           
+    for(i=0; i<6; i++)
+      for(j=0; j<listXsize[i]; j++)
+      {
+        if( listX[i][j] )
+          listX[i][j]->curr_imgY_sub = listX[i][j]->p_imgY_sub[img->colour_plane_id];
+      }
+  }
+  else
+  {
+    for(i=0; i<6; i++)
+      for(j=0; j<listXsize[i]; j++)
+      {
+        if( listX[i][j] )
+          listX[i][j]->curr_imgY_sub = listX[i][j]->imgY_sub;
+      }
+  }
+
 }
 
 
@@ -879,22 +916,23 @@ static Slice *malloc_slice()
   int i;
   DataPartition *dataPart;
   Slice *slice;
+  int cr_size = IS_INDEPENDENT( input ) ? 0 : 512;
 
 //  const int buffer_size = (img->size * 4); // AH 190202: There can be data expansion with
                                                           // low QP values. So, we make sure that buffer
                                                           // does not overflow. 4 is probably safe multiplier.
   int buffer_size;
-
   switch (input->slice_mode)
   {
   case 2:
-    buffer_size = 2 * input->slice_argument;
+    //buffer_size = imax(2 * input->slice_argument, 500 + (128 + 256 * img->bitdepth_luma + 512 * img->bitdepth_chroma));
+    buffer_size = imax(2 * input->slice_argument, 764);
     break;
   case 1:
-    buffer_size = 500 + input->slice_argument * (128 + 256 * img->bitdepth_luma + 512 * img->bitdepth_chroma);;
+    buffer_size = 500 + input->slice_argument * (128 + 256 * img->bitdepth_luma + cr_size * img->bitdepth_chroma);
     break;
   default:
-    buffer_size = 500 + img->FrameSizeInMbs * (128 + 256 * img->bitdepth_luma + 512 * img->bitdepth_chroma);
+    buffer_size = 500 + img->FrameSizeInMbs * (128 + 256 * img->bitdepth_luma + cr_size * img->bitdepth_chroma);
     break;
   }
 
@@ -923,8 +961,6 @@ static Slice *malloc_slice()
   else
     assignSE2partition[1] =  assignSE2partition_NoDP;
 
-
-
   slice->num_mb = 0;          // no coded MBs so far
 
   if ((slice->partArr = (DataPartition *) calloc(slice->max_part_nr, sizeof(DataPartition))) == NULL) no_mem_exit ("malloc_slice: partArr");
@@ -935,6 +971,7 @@ static Slice *malloc_slice()
     if ((dataPart->bitstream->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte))) == NULL) no_mem_exit ("malloc_slice: StreamBuffer");
     // Initialize storage of bitstream parameters
   }
+
   return slice;
 }
 
@@ -981,10 +1018,12 @@ static void free_slice(Slice *slice)
       dataPart = &(slice->partArr[i]);
       if (dataPart != NULL)
       {
-        if (dataPart->bitstream->streamBuffer != NULL)
-          free(dataPart->bitstream->streamBuffer);
-        if (dataPart->bitstream != NULL)
-          free(dataPart->bitstream);
+         if (dataPart->bitstream != NULL)
+         {
+           if (dataPart->bitstream->streamBuffer != NULL)
+             free(dataPart->bitstream->streamBuffer);       
+           free(dataPart->bitstream);
+         }
       }
     }
     if (slice->partArr != NULL)
@@ -1059,16 +1098,16 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
   int tmp_value, diff;
 
   int abs_poc_dist;
-  int maxPicNum, MaxFrameNum = 1 << (log2_max_frame_num_minus4 + 4);
+  int maxPicNum;
 
   if (img->structure==FRAME)
   {
-    maxPicNum  = MaxFrameNum;
+    maxPicNum  = max_frame_num;
     currPicNum = img->frame_num;
   }
   else
   {
-    maxPicNum  = 2 * MaxFrameNum;
+    maxPicNum  = 2 * max_frame_num;
     currPicNum = 2 * img->frame_num + 1;
   }
 
@@ -1324,8 +1363,20 @@ void SetLagrangianMultipliers()
     {
       for (qp = -img->bitdepth_luma_qp_scale; qp < 52; qp++)
       {
-        img->lambda_md[j][qp] = QP2QUANT[imax(0,qp - SHIFT_QP)];
+        qp_temp = (double)qp + img->bitdepth_luma_qp_scale - SHIFT_QP;
 
+        if (input->UseExplicitLambdaParams == 1) // consideration of explicit lambda weights.
+        {
+          img->lambda_md[j][qp] = sqrt(input->LambdaWeight[j] * pow (2, qp_temp/3.0));
+        }
+        else if (input->UseExplicitLambdaParams == 2) // consideration of explicit lambda
+        {
+          img->lambda_md[j][qp] = sqrt(input->FixedLambda[j]);
+        }
+        else
+        { 
+          img->lambda_md[j][qp] = QP2QUANT[imax(0,qp - SHIFT_QP)];
+        }
         for (k = F_PEL; k <= Q_PEL; k++)
         {
           img->lambda_me[j][qp][k]  = img->lambda_md[j][qp];

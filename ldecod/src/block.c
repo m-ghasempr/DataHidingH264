@@ -859,17 +859,19 @@ void itrans(struct img_par *img, //!< image parameters
 void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps)
 {
   int i;
+  int n_ScalingList;
 
   if(!pps->pic_scaling_matrix_present_flag && !sps->seq_scaling_matrix_present_flag)
   {
-    for(i=0; i<8; i++)
+    for(i=0; i<12; i++)
       qmatrix[i] = (i<6) ? quant_org:quant8_org;
   }
   else
   {
+    n_ScalingList = (sps->chroma_format_idc != YUV444) ? 8 : 12;
     if(sps->seq_scaling_matrix_present_flag) // check sps first
     {
-      for(i=0; i<8; i++)
+      for(i=0; i<n_ScalingList; i++)
       {
         if(i<6)
         {
@@ -890,17 +892,27 @@ void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* s
         }
         else
         {
-          if(!sps->seq_scaling_list_present_flag[i] || sps->UseDefaultScalingMatrix8x8Flag[i-6]) // fall-back rule A
-            qmatrix[i] = (i==6) ? quant8_intra_default:quant8_inter_default;
+          if(!sps->seq_scaling_list_present_flag[i-6]) // fall-back rule A
+          {
+            if((i==6) || (i==7))
+              qmatrix[i] = (i==6) ? quant8_intra_default:quant8_inter_default;
+            else
+              qmatrix[i] = qmatrix[i-2];
+          }
           else
-            qmatrix[i] = sps->ScalingList8x8[i-6];
+          {
+            if(sps->UseDefaultScalingMatrix8x8Flag[i-6])
+              qmatrix[i] = (i==6 || i==8 || i==10) ? quant8_intra_default:quant8_inter_default;
+            else
+              qmatrix[i] = sps->ScalingList8x8[i-6];
+          }
         }
       }
     }
 
     if(pps->pic_scaling_matrix_present_flag) // then check pps
     {
-      for(i=0; i<8; i++)
+      for(i=0; i<n_ScalingList; i++)
       {
         if(i<6)
         {
@@ -926,13 +938,21 @@ void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* s
         {
           if(!pps->pic_scaling_list_present_flag[i]) // fall-back rule B
           {
-            if(!sps->seq_scaling_matrix_present_flag)
-              qmatrix[i] = (i==6) ? quant8_intra_default:quant8_inter_default;
+            if((i==6) || (i==7))
+            {
+              if(!sps->seq_scaling_matrix_present_flag)
+                qmatrix[i] = (i==6) ? quant8_intra_default:quant8_inter_default;
+            }
+            else  
+              qmatrix[i] = qmatrix[i-2];
           }
-          else if(pps->UseDefaultScalingMatrix8x8Flag[i-6])
-            qmatrix[i] = (i==6) ? quant8_intra_default:quant8_inter_default;
           else
-            qmatrix[i] = pps->ScalingList8x8[i-6];
+          {
+            if(pps->UseDefaultScalingMatrix8x8Flag[i-6])
+              qmatrix[i] = (i==6 || i==8 || i==10) ? quant8_intra_default:quant8_inter_default;
+            else
+              qmatrix[i] = pps->ScalingList8x8[i-6];
+          }
         }
       }
     }
@@ -1468,7 +1488,7 @@ void iTransform(struct img_par *img, Macroblock *currMB, int need_4x4_transform,
     }
   }
 
-  if (dec_picture->chroma_format_idc != YUV400)
+  if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
   {
     imgpel **curUV;
     int b4, b8;

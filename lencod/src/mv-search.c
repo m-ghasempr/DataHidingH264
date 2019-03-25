@@ -1394,18 +1394,14 @@ PartitionMotionSearch (int    blocktype,
   {
     for (ref=0; ref < listXsize[list+list_offset]; ref++)
     {
-       m_cost = &motion_cost[blocktype][list][ref][block8x8];
+      m_cost = &motion_cost[blocktype][list][ref][block8x8];
       //----- set search range ---
-#ifdef _FULL_SEARCH_RANGE_
       if      (input->full_search == 2)
         search_range = input->search_range;
       else if (input->full_search == 1)
         search_range = input->search_range /  (imin(ref,1)+1);
       else
         search_range = input->search_range / ((imin(ref,1)+1) * imin(2,blocktype));
-#else
-      search_range = input->search_range / ((imin(ref,1)+1) * imin(2,blocktype));
-#endif
 
       //----- set arrays -----
       ref_array = enc_picture->ref_idx[list];

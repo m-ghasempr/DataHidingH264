@@ -5,11 +5,17 @@
  *     This is the H.264/AVC encoder reference software. For detailed documentation
  *     see the comments in each file.
  *
+ *     The JM software web site is located at:
+ *     http://iphome.hhi.de/suehring/tml
+ *
+ *     For bug reporting and known issues see:
+ *     https://ipbt.hhi.de
+ *
  *  \author
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 12.2 (FRExt)
+ *     JM 12.3 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -61,11 +67,12 @@
 #include "me_umhexsmp.h"
 
 #include "ratectl.h"
-#include "rc_quadratic.h"
 #include "explicit_gop.h"
+#include "context_ini.h"
+
 
 #define JM      "12 (FRExt)"
-#define VERSION "12.2"
+#define VERSION "12.3"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;
@@ -87,7 +94,9 @@ int    FirstFrameIn2ndIGOP=0;
 int    cabac_encoding = 0;
 int    frame_statistic_start;
 extern ColocatedParams *Co_located;
+extern ColocatedParams *Co_located_JV[MAX_PLANE];  //!< Co_located to be used during 4:4:4 independent mode encoding
 extern double *mb16x16_cost_frame;
+extern int FrameNumberInFile;
 static char DistortionType[3][20] = {"SAD", "SSE", "Hadamard SAD"};
 
 void Init_Motion_Search_Module (void);
@@ -119,6 +128,59 @@ void init_stats (void)
   snr->msse_v = 0.0;
   snr->frame_ctr = 0;
 }
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Initialize encoding parameters.
+ ***********************************************************************
+ */
+void init_frame_params()
+{
+  int base_mul;
+
+  if (input->idr_period)
+  {
+    if (( img->frm_number - img->lastIDRnumber ) % input->idr_period == 0 )
+      img->nal_reference_idc = NALU_PRIORITY_HIGHEST;
+    else
+      img->nal_reference_idc = (input->DisposableP) ? (img->frm_number + 1)% 2 : NALU_PRIORITY_LOW;
+  }
+  else
+    img->nal_reference_idc = (img->frm_number && input->DisposableP) ? (img->frm_number + 1)% 2 : NALU_PRIORITY_LOW;
+
+  //much of this can go in init_frame() or init_field()?
+  //poc for this frame or field
+  if (input->idr_period)
+    base_mul = ( img->frm_number - img->lastIDRnumber ) % input->idr_period;
+  else 
+    base_mul = ( img->frm_number - img->lastIDRnumber );
+
+  if ((img->frm_number - img->lastIDRnumber) <= input->intra_delay)
+  {    
+    base_mul = -base_mul;
+  }
+  else
+  {
+    base_mul -= ( base_mul ? input->intra_delay :  0);    
+  }
+  img->toppoc = base_mul * (2 * (input->jumpd + 1));
+  if ((input->PicInterlace==FRAME_CODING) && (input->MbInterlace==FRAME_CODING))
+    img->bottompoc = img->toppoc;     //progressive
+  else
+    img->bottompoc = img->toppoc + 1;   //hard coded
+
+  img->framepoc = imin (img->toppoc, img->bottompoc);
+
+  //the following is sent in the slice header
+  img->delta_pic_order_cnt[0] = 0;
+
+  if ((input->BRefPictures == 1) && (img->frm_number))
+  {
+    img->delta_pic_order_cnt[0] = +2 * input->successive_Bframe;
+  }  
+}
+
 /*!
  ***********************************************************************
  * \brief
@@ -133,7 +195,7 @@ void init_stats (void)
  */
 int main(int argc,char **argv)
 {
-  int M,N,n,np,nb;           //Rate control
+  int nplane;
   int primary_disp = 0;
   giRDOpt_B8OnlyFlag = 0;
 
@@ -146,7 +208,6 @@ int main(int argc,char **argv)
   Configure (argc, argv);
 
   Init_QMatrix();
-
   Init_QOffsetMatrix();
 
   AllocNalPayloadBuffer();
@@ -156,46 +217,21 @@ int main(int argc,char **argv)
   SetLevelIndices();
 
   init_img();
-  frame_pic_1= malloc_picture();
 
-  if (input->RDPictureDecision)
-  {
-    frame_pic_2 = malloc_picture();
-    frame_pic_3 = malloc_picture();
-  }
-
-  if (input->si_frame_indicator)
-  {
-    si_frame_indicator=0; //indicates whether the frame is SP or SI
-    number_sp2_frames=0;
-
-    frame_pic_si = malloc_picture();//picture buffer for the encoded SI picture
-    //allocation of lrec and lrec_uv for SI picture
-    get_mem2Dint (&lrec, img->height, img->width);
-    get_mem3Dint (&lrec_uv, 2, img->height, img->width);
-  }
-
-  if (input->PicInterlace != FRAME_CODING)
-  {
-    top_pic = malloc_picture();
-    bottom_pic = malloc_picture();
-  }
   init_rdopt ();
 #ifdef _LEAKYBUCKET_
   Bit_Buffer = malloc((input->no_frames * (input->successive_Bframe + 1) + 1) * sizeof(long));
 #endif
 
+  // Prepare hierarchical coding structures. 
+  // Code could be extended in the future to allow structure adaptation.
   if (input->HierarchicalCoding)
   {
     init_gop_structure();
     if (input->successive_Bframe && input->HierarchicalCoding == 3)
-    {
       interpret_gop_structure();
-    }
     else
-    {
       create_hierarchy();
-    }
   }
 
   dpb.init_done = 0;
@@ -203,14 +239,12 @@ int main(int argc,char **argv)
   init_out_buffer();
   init_stats();
 
-  enc_picture = enc_frame_picture = enc_top_picture = enc_bottom_picture = NULL;
+  enc_picture = NULL;
 
   init_global_buffers();
 
   create_context_memory ();
-
   Init_Motion_Search_Module ();
-
   information_init();
 
   //Rate control
@@ -240,146 +274,52 @@ int main(int argc,char **argv)
   stats->bit_ctr_parametersets += stats->bit_ctr_parametersets_n;
   start_frame_no_in_this_IGOP = 0;
 
-  if ( input->ChromaMCBuffer )
-    chroma_mc_setup();
-
   for (img->number=0; img->number < input->no_frames; img->number++)
   {
-    //img->nal_reference_idc = 1;
-    if (input->intra_period)
-      img->nal_reference_idc = ((IMG_NUMBER % input->intra_period) && input->DisposableP) ? (img->number + 1)% 2 : 1;
-    else
-      img->nal_reference_idc = (img->number && input->DisposableP) ? (img->number + 1)% 2 : 1;
-
-    //much of this can go in init_frame() or init_field()?
-    //poc for this frame or field
-    img->toppoc = (input->intra_period && input->idr_enable ? IMG_NUMBER % input->intra_period : IMG_NUMBER) * (2*(input->jumpd+1));
-
-    if ((input->PicInterlace==FRAME_CODING) && (input->MbInterlace==FRAME_CODING))
-      img->bottompoc = img->toppoc;     //progressive
-    else
-      img->bottompoc = img->toppoc+1;   //hard coded
-
-    img->framepoc = imin (img->toppoc, img->bottompoc);
-
-    //frame_num for this frame
-    if ((input->BRefPictures != 1 &&  input->HierarchicalCoding == 0) || input->successive_Bframe == 0 || img-> number < 2)// ||  input->HierarchicalCoding == 0)
-    {
-      if (input->intra_period && input->idr_enable)
-      {
-        img->frame_num =  ((IMG_NUMBER - primary_disp) % input->intra_period ) % (1 << (log2_max_frame_num_minus4 + 4));
-        if (IMG_NUMBER % input->intra_period == 0)
-        {
-          img->frame_num = 0;
-          primary_disp   = 0;
-        }
-      }
-      else
-      img->frame_num = (IMG_NUMBER - primary_disp) % (1 << (log2_max_frame_num_minus4 + 4));
-
-    }
-    else
-    {
-      //img->frame_num ++;
-      if (input->intra_period && input->idr_enable)
-      {
-        if ((img->number % input->intra_period) == 0)
-        {
-          img->frame_num=0;
-          primary_disp   = 0;
-        }
-      }
-      img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
-    }
-
-    //the following is sent in the slice header
-    img->delta_pic_order_cnt[0]=0;
-
-    if (input->BRefPictures == 1)
-    {
-      if (img->number)
-      {
-        img->delta_pic_order_cnt[0]=+2 * input->successive_Bframe;
-      }
-    }
-
+    img->frm_number = img->number;    
+    FrameNumberInFile = CalculateFrameNumber();
     SetImgType();
+    init_frame_params();
 
-    if (input->ResendSPS == 1 && img->type == I_SLICE && img->number != 0)
+    if (img->last_ref_idc)
+    {
+      img->frame_num++;                 //increment frame_num once for B-frames
+      img->frame_num %= max_frame_num;
+    }
+
+    if (input->idr_period && ( img->frm_number - img->lastIDRnumber ) % input->idr_period == 0)
+    {
+      img->frame_num = 0;
+      primary_disp   = 0;          
+    }
+
+    if (input->ResendSPS == 1 && img->type == I_SLICE && img->frm_number != 0)
     {
       stats->bit_slice = rewrite_paramsets();
       stats->bit_ctr_parametersets += stats->bit_ctr_parametersets_n;
     }
 
-
 #ifdef _ADAPT_LAST_GROUP_
     if (input->successive_Bframe && input->last_frame && IMG_NUMBER+1 == input->no_frames)
     {
-      int bi = (int)((float)(input->jumpd+1)/(input->successive_Bframe+1.0)+0.499999);
+      int bi = (int)((float)(input->jumpd+1)/(input->successive_Bframe + 1.0) + 0.499999);
 
-      input->successive_Bframe = ((input->last_frame - (img->number - 1)*(input->jumpd + 1)) / bi) - 1;
+      input->successive_Bframe = ((input->last_frame - (img->frm_number - 1)*(input->jumpd + 1)) / bi) - 1;
 
       //about to code the last ref frame, adjust delta poc
       img->delta_pic_order_cnt[0]= -2*(initial_Bframes - input->successive_Bframe);
-      img->toppoc += img->delta_pic_order_cnt[0];
+      img->toppoc    += img->delta_pic_order_cnt[0];
       img->bottompoc += img->delta_pic_order_cnt[0];
-      img->framepoc = imin (img->toppoc, img->bottompoc);
+      img->framepoc   = imin (img->toppoc, img->bottompoc);
     }
 #endif
 
-     //Rate control
-    if (img->type == I_SLICE && ((input->RCUpdateMode != RC_MODE_1 && input->RCUpdateMode != RC_MODE_3) || (!img->number) ) )
-    {
-      if (input->RCEnable)
-      {
-        if (input->intra_period == 0)
-        {
-          n = input->no_frames + (input->no_frames - 1) * input->successive_Bframe;
+    //Rate control
+    if (input->RCEnable)
+      init_GOP_rc();
 
-          /* number of P frames */
-          np = input->no_frames-1;
-
-          /* number of B frames */
-          nb = (input->no_frames - 1) * input->successive_Bframe;
-        }
-        else if ( input->RCUpdateMode != RC_MODE_1 && input->RCUpdateMode != RC_MODE_3 )
-        {
-          N = input->intra_period*(input->successive_Bframe+1);
-          M = input->successive_Bframe+1;
-          n = (img->number == 0) ? N - ( M - 1) : N;
-
-          /* last GOP may contain less frames */
-          if ((img->number / input->intra_period) >= (input->no_frames / input->intra_period))
-          {
-            if (img->number != 0)
-              n = (input->no_frames - img->number) + (input->no_frames - img->number - 1) * input->successive_Bframe + input->successive_Bframe;
-            else
-              n = input->no_frames  + (input->no_frames - 1) * input->successive_Bframe;
-          }
-
-          /* number of P frames */
-          if (img->number == 0)
-            np = (n + 2 * (M - 1)) / M - 1; /* first GOP */
-          else
-            np = (n + (M - 1)) / M - 1;
-
-          /* number of B frames */
-          nb = n - np - 1;
-        }
-        else // applies RC to I and B slices
-        {
-          np = input->no_frames - 1; // includes I and P slices/frames except the very first IDR I_SLICE
-          nb = (input->no_frames - 1) * input->successive_Bframe;
-        }
-        rc_init_GOP(quadratic_RC, np, nb);
-      }
-    }
-
-    // which layer the image belonged to?
-    if ( IMG_NUMBER % (input->NumFramesInELSubSeq+1) == 0 )
-      img->layer = 0;
-    else
-      img->layer = 1;
+    // which layer does the image belong to?
+    img->layer = (IMG_NUMBER % (input->NumFramesInELSubSeq + 1)) ? 0 : 1;
 
     // redundant frame initialization and allocation
     if (input->redundant_pic_flag)
@@ -389,6 +329,8 @@ int main(int argc,char **argv)
     }
 
     encode_one_frame(); // encode one I- or P-frame
+
+    img->last_ref_idc = img->nal_reference_idc ? 1 : 0;
 
     // if key frame is encoded, encode one redundant frame
     if (input->redundant_pic_flag && key_frame)
@@ -405,12 +347,21 @@ int main(int argc,char **argv)
     if (img->nal_reference_idc == 0)
     {
       primary_disp ++;
-      img->frame_num -= 1;
-      img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
+      //img->frame_num -= 1;
+      //img->frame_num %= max_frame_num;
     }
-    encode_enhancement_layer();
 
-    process_2nd_IGOP();
+    if (img->currentPicture->idr_flag)
+    {
+      img->idr_gop_number = 0;
+      //start_frame_no_in_this_IGOP = img->frm_number;
+      //start_tr_in_this_IGOP = img->toppoc;
+      // start_tr_in_this_IGOP = (img->frm_number - 1 ) * (input->jumpd + 1) +1;
+    }
+    else
+      img->idr_gop_number ++;
+
+    encode_enhancement_layer();    
   }
   // terminate sequence
   terminate_sequence();
@@ -442,32 +393,22 @@ int main(int argc,char **argv)
   report();
 
 #ifdef _LEAKYBUCKET_
+  if (Bit_Buffer)
   free(Bit_Buffer);
 #endif
-  free_picture (frame_pic_1);
-
-  if (input->RDPictureDecision)
-  {
-    free_picture (frame_pic_2);
-    free_picture (frame_pic_3);
-  }
-
-  // Deallocation of SI picture related memory
-  if (input->si_frame_indicator)
-  {
-    free_picture (frame_pic_si);
-    //deallocation of lrec and lrec_uv for SI frames
-    free_mem2Dint (lrec);
-    free_mem3Dint (lrec_uv,2);
-  }
-
-  if (top_pic)
-    free_picture (top_pic);
-  if (bottom_pic)
-    free_picture (bottom_pic);
 
   free_dpb();
-  free_colocated(Co_located);
+  if( IS_INDEPENDENT(input) )
+  {
+    for( nplane=0; nplane<MAX_PLANE; nplane++ )
+    {
+      free_colocated(Co_located_JV[nplane]);
+    }
+  }
+  else
+  {
+    free_colocated(Co_located);
+  }
   uninit_out_buffer();
 
   free_global_buffers();
@@ -477,6 +418,7 @@ int main(int argc,char **argv)
   free_context_memory ();
   FreeNalPayloadBuffer();
   FreeParameterSets();
+
   return 0;
 }
 /*!
@@ -488,7 +430,8 @@ int main(int argc,char **argv)
  */
 void report_stats_on_error(void)
 {
-  input->no_frames = img->number;
+  int nplane;
+  input->no_frames = img->frm_number;
   terminate_sequence();
 
   flush_dpb();
@@ -521,14 +464,18 @@ void report_stats_on_error(void)
   // report everything
   report();
 
-  free_picture (frame_pic_1);
-  if (top_pic)
-    free_picture (top_pic);
-  if (bottom_pic)
-    free_picture (bottom_pic);
-
   free_dpb();
-  free_colocated(Co_located);
+  if( IS_INDEPENDENT(input) )
+  {
+    for( nplane=0; nplane<MAX_PLANE; nplane++ )
+    {
+      free_colocated(Co_located_JV[nplane]);
+    }
+  }
+  else
+  {
+    free_colocated(Co_located);
+  }
   uninit_out_buffer();
 
   free_global_buffers();
@@ -628,6 +575,7 @@ void init_img()
   static int mb_width_cr[4] = {0,8, 8,16};
   static int mb_height_cr[4]= {0,8,16,16};
 
+  // Color format
   img->yuv_format = input->yuv_format;
 
   //pel bitdepth init
@@ -635,8 +583,6 @@ void init_img()
   img->bitdepth_scale[0]      = 1 << (img->bitdepth_luma - 8);
   img->bitdepth_lambda_scale  = 2 * (img->bitdepth_luma - 8);
   img->bitdepth_luma_qp_scale = 3 *  img->bitdepth_lambda_scale;
-  
-
   img->dc_pred_value_luma   = 1<<(img->bitdepth_luma - 1);
   img->max_imgpel_value = (1<<img->bitdepth_luma) - 1;
   img->mb_size[0][0] = img->mb_size[0][1] = MB_BLOCK_SIZE;
@@ -690,9 +636,23 @@ void init_img()
 
   img->buf_cycle = input->num_ref_frames;
 
+
+  img->base_dist = input->jumpd;  
+
+  // Intra/IDR related parameters
+  img->lastIntraNumber = 0;
+  img->lastINTRA = 0;
+  img->lastIDR   = 0;
+  img->lastIDRnumber = 0;
+  img->last_ref_idc = 0;
+  img->idr_refresh = 0;
+  img->idr_gop_number = 0;
+  img->rewind_frame = 0;
+
   img->DeblockCall = 0;
   img->framerate = (float) input->FrameRate;   // The basic frame rate (of the original sequence)
 
+  // Allocate proper memory space for different parameters (i.e. MVs, coefficients, etc)
   get_mem_mv (&(img->pred_mv));
   get_mem_mv (&(img->all_mv));
 
@@ -793,8 +753,19 @@ void init_img()
 
   img->PicHeightInMapUnits = ( active_sps->frame_mbs_only_flag ? img->FrameHeightInMbs : img->FrameHeightInMbs/2 );
 
-  if ((img->mb_data = (Macroblock *) calloc(img->FrameSizeInMbs, sizeof(Macroblock))) == NULL)
-    no_mem_exit("init_img: img->mb_data");
+  if( IS_INDEPENDENT(input) )
+  {
+    for( i=0; i<MAX_PLANE; i++ ){
+      if ((img->mb_data_JV[i] = (Macroblock *) calloc(img->FrameSizeInMbs,sizeof(Macroblock))) == NULL)
+        no_mem_exit("init_img: img->mb_data_JV");
+    }
+    img->mb_data = NULL;
+  }
+  else
+  {
+    if ((img->mb_data = (Macroblock *) calloc(img->FrameSizeInMbs, sizeof(Macroblock))) == NULL)
+      no_mem_exit("init_img: img->mb_data");
+  }
 
   if (input->UseConstrainedIntraPred)
   {
@@ -858,7 +829,24 @@ void init_img()
     input->LFAlphaC0Offset = 0;
     input->LFBetaOffset = 0;
   }
+
+  if( input->separate_colour_plane_flag )
+  {
+    img->ChromaArrayType = 0;
+  }
+  else
+  {
+    img->ChromaArrayType = input->yuv_format;
+  }
+
+  if (input->RDPictureDecision)
+  {
+    img->frm_iter = 3;
+  }
+  else
+    img->frm_iter = 1;
 }
+
 
 /*!
  ***********************************************************************
@@ -1065,7 +1053,7 @@ void report_frame_statistic()
   fprintf(p_stat_frm, "  %d/%d  |", input->PicInterlace, input->MbInterlace);
 
 
-  if (img->number == 0 && img->frame_num == 0)
+  if (img->frm_number == 0 && img->frame_num == 0)
   {
     bitcounter = (int) stats->bit_ctr_I;
   }
@@ -1304,19 +1292,19 @@ void report()
 
     fprintf(stdout,  " Profile/Level IDC                 : (%d,%d)\n", input->ProfileIDC, input->LevelIDC);
 
-  if (input->SearchMode == UM_HEX)
-    fprintf(stdout,  " Motion Estimation Scheme          : HEX\n");
-  else if (input->SearchMode == UM_HEX_SIMPLE)
-    fprintf(stdout,  " Motion Estimation Scheme          : SHEX\n");
-   else if (input->SearchMode == EPZS)
-   {
-     fprintf(stdout,  " Motion Estimation Scheme          : EPZS\n");
-     EPZSOutputStats(stdout, 0);
-   }
-  else if (input->SearchMode == FAST_FULL_SEARCH)
-    fprintf(stdout,  " Motion Estimation Scheme          : Fast Full Search\n");
-  else
-    fprintf(stdout,  " Motion Estimation Scheme          : Full Search\n");
+    if (input->SearchMode == UM_HEX)
+      fprintf(stdout,  " Motion Estimation Scheme          : HEX\n");
+    else if (input->SearchMode == UM_HEX_SIMPLE)
+      fprintf(stdout,  " Motion Estimation Scheme          : SHEX\n");
+    else if (input->SearchMode == EPZS)
+    {
+      fprintf(stdout,  " Motion Estimation Scheme          : EPZS\n");
+      EPZSOutputStats(stdout, 0);
+    }
+    else if (input->SearchMode == FAST_FULL_SEARCH)
+      fprintf(stdout,  " Motion Estimation Scheme          : Fast Full Search\n");
+    else
+      fprintf(stdout,  " Motion Estimation Scheme          : Full Search\n");
 
 
 
@@ -1452,15 +1440,15 @@ void report()
   {
     fprintf(p_stat," ME Metric for Refinement Level %1d : %s\n", i, DistortionType[input->MEErrorMetric[i]]);
   }
-  fprintf(p_stat," Mode Decision Metric              : %s\n", DistortionType[input->ModeDecisionMetric]);
+  fprintf(p_stat," Mode Decision Metric             : %s\n", DistortionType[input->ModeDecisionMetric]);
 
   switch ( input->ChromaMEEnable )
   {
   case 1:
-    fprintf(p_stat," Motion Estimation for components  : YCbCr\n");
+    fprintf(p_stat," Motion Estimation for components : YCbCr\n");
     break;
   default:
-    fprintf(p_stat," Motion Estimation for components  : Y\n");
+    fprintf(p_stat," Motion Estimation for components : Y\n");
     break;
   }
 
@@ -1878,9 +1866,9 @@ void information_init(void)
       printf("-------------------------------------------------------------------------------\n");
       break;
     case 2:
-      printf("---------------------------------------------------------------------------------------------\n");
-      printf("  Frame  Bit/pic WP QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("---------------------------------------------------------------------------------------------\n");
+      printf("------------------------------------------------------------------------------------------------\n");
+      printf("  Frame  Bit/pic WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("------------------------------------------------------------------------------------------------\n");
       break;
     case 0:
     default:
@@ -1899,9 +1887,20 @@ void information_init(void)
 int init_orig_buffers(void)
 {
   int memory_size = 0;
+  int nplane;
 
   // allocate memory for reference frame buffers: imgY_org_frm, imgUV_org_frm
-  memory_size += get_mem2Dpel(&imgY_org_frm, img->height, img->width);
+  if( IS_INDEPENDENT(input) )
+  {
+    for( nplane=0; nplane<MAX_PLANE; nplane++ )
+    {
+      memory_size += get_mem2Dpel(&imgY_org_frm_JV[nplane], img->height, img->width);
+    }
+  }
+  else
+  {
+    memory_size += get_mem2Dpel(&imgY_org_frm, img->height, img->width);
+  }
 
   if (img->yuv_format != YUV400)
     memory_size += get_mem3Dpel(&imgUV_org_frm, 2, img->height_cr, img->width_cr);
@@ -1954,6 +1953,45 @@ int init_global_buffers(void)
       no_mem_exit("init_global_buffers: last_P_no");
 #endif
 
+  if ((enc_frame_picture = (StorablePicture**)malloc(6 * sizeof(StorablePicture*))) == NULL)
+    no_mem_exit("init_global_buffers: *enc_frame_picture");
+
+  for (j = 0; j < 6; j++)
+    enc_frame_picture[j] = NULL;
+
+  if ((enc_field_picture = (StorablePicture**)malloc(2 * sizeof(StorablePicture*))) == NULL)
+    no_mem_exit("init_global_buffers: *enc_field_picture");
+
+  for (j = 0; j < 2; j++)
+    enc_field_picture[j] = NULL;
+
+  if ((frame_pic = (Picture**)malloc(img->frm_iter * sizeof(Picture*))) == NULL)
+    no_mem_exit("init_global_buffers: *frame_pic");
+  
+  for (j = 0; j < img->frm_iter; j++)
+    frame_pic[j] = malloc_picture();
+
+  if (input->si_frame_indicator || input->sp_periodicity)
+  {
+    si_frame_indicator=0; //indicates whether the frame is SP or SI
+    number_sp2_frames=0;
+
+    frame_pic_si = malloc_picture();//picture buffer for the encoded SI picture
+    //allocation of lrec and lrec_uv for SI picture
+    get_mem2Dint (&lrec, img->height, img->width);
+    get_mem3Dint (&lrec_uv, 2, img->height, img->width);
+  }
+
+  // Allocate memory for field picture coding
+  if (input->PicInterlace != FRAME_CODING)
+  { 
+    if ((field_pic = (Picture**)malloc(2 * sizeof(Picture*))) == NULL)
+      no_mem_exit("init_global_buffers: *field_pic");
+
+    for (j = 0; j < 2; j++)
+      field_pic[j] = malloc_picture();
+  }
+  
   memory_size += init_orig_buffers();
 
   memory_size += get_mem2Dint(&PicPos, img->FrameSizeInMbs + 1, 2);
@@ -2050,9 +2088,19 @@ int init_global_buffers(void)
   }
 
   memory_size += get_mem2Dint (&imgY_sub_tmp, img->height_padded, img->width_padded);
-  img_padded_size_x = (img->width + 2 * IMG_PAD_SIZE);
-  img_cr_padded_size_x = (img->width_cr + 2 * img_pad_size_uv_x);
 
+  if ( input->ChromaMCBuffer )
+    chroma_mc_setup();
+
+  img_padded_size_x      = (img->width + 2 * IMG_PAD_SIZE);
+  img_padded_size_x2     = (img_padded_size_x << 1);
+  img_padded_size_x4     = (img_padded_size_x << 2);
+  img_padded_size_x_m8   = (img_padded_size_x - 8);
+  img_padded_size_x_m8x8 = (img_padded_size_x - BLOCK_SIZE8x8);
+  img_padded_size_x_m4x4 = (img_padded_size_x - BLOCK_SIZE);
+  img_cr_padded_size_x   = (img->width_cr + 2 * img_pad_size_uv_x);
+  img_cr_padded_size_x2  = (img_cr_padded_size_x << 1);
+  img_cr_padded_size_x4  = (img_cr_padded_size_x << 2);
   return memory_size;
 }
 
@@ -2065,7 +2113,18 @@ int init_global_buffers(void)
  */
 void free_orig_planes(void)
 {
-  free_mem2Dpel(imgY_org_frm);      // free ref frame buffers
+  if( IS_INDEPENDENT(input) )
+  {
+    int nplane;
+    for( nplane=0; nplane<MAX_PLANE; nplane++ )
+    {
+      free_mem2Dpel(imgY_org_frm_JV[nplane]);      // free ref frame buffers
+    }
+  }
+  else
+  {
+    free_mem2Dpel(imgY_org_frm);      // free ref frame buffers
+  }
 
   if (img->yuv_format != YUV400)
     free_mem3Dpel(imgUV_org_frm, 2);
@@ -2110,6 +2169,39 @@ void free_global_buffers(void)
   free (last_P_no_fld);
 #endif
 
+  if (enc_frame_picture)
+    free (enc_frame_picture);
+  if (frame_pic)
+  {
+    for (j = 0; j < img->frm_iter; j++)
+    {
+      if (frame_pic[j])
+        free_picture (frame_pic[j]);
+    }
+    free (frame_pic);
+  }
+
+  if (enc_field_picture)
+    free (enc_field_picture);
+  if (field_pic)
+  {
+    for (j = 0; j < 2; j++)
+    {
+      if (field_pic[j])
+        free_picture (field_pic[j]);
+    }
+    free (field_pic);
+  }
+
+  // Deallocation of SI picture related memory
+  if (input->si_frame_indicator || input->sp_periodicity)
+  {
+    free_picture (frame_pic_si);
+    //deallocation of lrec and lrec_uv for SI frames
+    free_mem2Dint (lrec);
+    free_mem3Dint (lrec_uv,2);
+  }
+
   free_orig_planes();
   // free lookup memory which helps avoid divides with PicWidthInMbs
   free_mem2Dint(PicPos);
@@ -2140,7 +2232,16 @@ void free_global_buffers(void)
   // free intra pred mode buffer for blocks
   free_mem2D((byte**)img->ipredmode);
   free_mem2D((byte**)img->ipredmode8x8);
-  free(img->mb_data);
+  if( IS_INDEPENDENT(input) )
+  {
+    for( i=0; i<MAX_PLANE; i++ ){
+      free(img->mb_data_JV[i]);
+    }
+  }
+  else
+  {
+    free(img->mb_data);
+  }
 
   free_mem2D((byte**)rddata_top_frame_mb.ipredmode);
 
@@ -2433,18 +2534,18 @@ void combine_field(void)
 
   for (i = 0; i < (img->height >> 1); i++)
   {
-    memcpy(imgY_com[i*2], enc_top_picture->imgY[i], img->width*sizeof(imgpel));     // top field
-    memcpy(imgY_com[i*2 + 1], enc_bottom_picture->imgY[i], img->width*sizeof(imgpel)); // bottom field
+    memcpy(imgY_com[i*2],     enc_field_picture[0]->imgY[i], img->width*sizeof(imgpel));     // top field
+    memcpy(imgY_com[i*2 + 1], enc_field_picture[1]->imgY[i], img->width*sizeof(imgpel)); // bottom field
   }
 
   if (img->yuv_format != YUV400)
   {
     for (i = 0; i < (img->height_cr >> 1); i++)
     {
-      memcpy(imgUV_com[0][i*2],     enc_top_picture->imgUV[0][i],    img->width_cr*sizeof(imgpel));
-      memcpy(imgUV_com[0][i*2 + 1], enc_bottom_picture->imgUV[0][i], img->width_cr*sizeof(imgpel));
-      memcpy(imgUV_com[1][i*2],     enc_top_picture->imgUV[1][i],    img->width_cr*sizeof(imgpel));
-      memcpy(imgUV_com[1][i*2 + 1], enc_bottom_picture->imgUV[1][i], img->width_cr*sizeof(imgpel));
+      memcpy(imgUV_com[0][i*2],     enc_field_picture[0]->imgUV[0][i], img->width_cr*sizeof(imgpel));
+      memcpy(imgUV_com[0][i*2 + 1], enc_field_picture[1]->imgUV[0][i], img->width_cr*sizeof(imgpel));
+      memcpy(imgUV_com[1][i*2],     enc_field_picture[0]->imgUV[1][i], img->width_cr*sizeof(imgpel));
+      memcpy(imgUV_com[1][i*2 + 1], enc_field_picture[1]->imgUV[1][i], img->width_cr*sizeof(imgpel));
     }
   }
 }
@@ -2471,53 +2572,33 @@ int decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bi
 /*!
  ************************************************************************
  * \brief
- *    Do some initialization work for encoding the 2nd IGOP
- ************************************************************************
- */
-void process_2nd_IGOP(void)
-{
-  Boolean FirstIGOPFinished = FALSE;
-  if ( img->number == input->no_frames-1 )
-    FirstIGOPFinished = TRUE;
-  if (input->NumFrameIn2ndIGOP == 0) return;
-  if (!FirstIGOPFinished || In2ndIGOP) return;
-  In2ndIGOP = TRUE;
-
-//  img->number = -1;
-  start_frame_no_in_this_IGOP = input->no_frames;
-  start_tr_in_this_IGOP = (input->no_frames-1)*(input->jumpd+1) +1;
-  input->no_frames = input->no_frames + input->NumFrameIn2ndIGOP;
-
-/*  reset_buffers();
-
-  frm->picbuf_short[0]->used=0;
-  frm->picbuf_short[0]->picID=-1;
-  frm->picbuf_short[0]->lt_picID=-1;
-  frm->short_used = 0; */
-}
-
-
-/*!
- ************************************************************************
- * \brief
  *    Set the image type for I,P and SP pictures (not B!)
  ************************************************************************
  */
 void SetImgType(void)
 {
-  int intra_refresh = input->intra_period == 0 ? (IMG_NUMBER == 0) : ((IMG_NUMBER%input->intra_period) == 0);
+  int intra_refresh = (input->intra_period == 0) ? (img->frm_number == 0) : (( ( img->frm_number - img->lastIntraNumber) % input->intra_period ) == 0);
+  int idr_refresh   = (input->idr_period == 0  ) ? (img->frm_number == 0) : (( ( img->frm_number - img->lastIDRnumber  ) % input->idr_period   ) == 0);
 
-  if (intra_refresh)
+  if (intra_refresh || idr_refresh)
   {
     img->type = I_SLICE;        // set image type for first image to I-frame
   }
   else
   {
-    img->type = input->sp_periodicity && ((IMG_NUMBER % input->sp_periodicity) == 0) ? SP_SLICE : ((input->BRefPictures == 2) ? B_SLICE : P_SLICE);
+    img->type = (input->sp_periodicity && ((IMG_NUMBER % input->sp_periodicity) == 0))
+      ? SP_SLICE 
+      : ((input->BRefPictures == 2) ? B_SLICE : P_SLICE);
   }
 }
 
-
+/*!
+ ************************************************************************
+ * \brief
+ *    Sets indices to appropriate level constraints, depending on 
+ *    current level_idc
+ ************************************************************************
+ */
 void SetLevelIndices(void)
 {
   switch(active_sps->level_idc)
@@ -2529,7 +2610,7 @@ void SetLevelIndices(void)
     img->LevelIndex=0;
     break;
   case 11:
-    if ((active_sps->profile_idc < FREXT_HP) && (active_sps->constrained_set3_flag == 0))
+    if (!IS_FREXT_PROFILE(active_sps->profile_idc) && (active_sps->constrained_set3_flag == 0))
       img->LevelIndex=2;
     else
       img->LevelIndex=1;
@@ -2565,7 +2646,7 @@ void SetLevelIndices(void)
     img->LevelIndex=12;
     break;
   case 42:
-    if (active_sps->profile_idc <= 88)
+    if (!IS_FREXT_PROFILE(active_sps->profile_idc))
       img->LevelIndex=13;
     else
       img->LevelIndex=14;
@@ -2622,8 +2703,8 @@ void Init_redundant_frame()
   key_frame = 0;
   redundant_coding = 0;
   img->redundant_pic_cnt = 0;
-  frameNuminGOP = img->number % input->PrimaryGOPLength;
-  if (img->number == 0)
+  frameNuminGOP = img->frm_number % input->PrimaryGOPLength;
+  if (img->frm_number == 0)
   {
     frameNuminGOP = -1;
   }
@@ -2752,8 +2833,7 @@ void chroma_mc_setup(void)
     chroma_shift_y = 2;
     chroma_shift_x = 2;
   }
-  shift_cr_y = chroma_shift_y - 2;
-  shift_cr_x = chroma_shift_x - 1;
-
+  shift_cr_y  = chroma_shift_y - 2;
+  shift_cr_x  = chroma_shift_x - 2;
 }
 

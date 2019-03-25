@@ -1,7 +1,23 @@
-JM Reference Software Manual
+JM Reference Software README
 ============================
 
-please send comments and additions to suehring@hhi.de
+The latest version of this software can be obtained from:
+
+  http://iphome.hhi.de/suehring/tml
+
+For reporting bugs please use the JM bug tracking system located at:
+
+  https://ipbt.hhi.de
+
+
+Please send comments and additions to suehring@hhi.de and alexis.tourapis@dolby.com
+
+======================================================================================
+NOTE: This file contains only a quick overview.
+
+      More detailed information can be found the "JM Reference Software Manual" in the
+      doc/ subdirectory of this package.
+======================================================================================
 
 1. Compilation
 2. Command line parameters
@@ -16,7 +32,7 @@ please send comments and additions to suehring@hhi.de
 1.1 Windows
 -----------
   
-  Workspaces for MS Visual C++ 6.0/2003/2005 are provided with the nams 
+  Workspaces for MS Visual C++ 6.0/2003/2005 are provided with the names 
 
     jm.dsw      - MS Visual C++ 6.0
     jm_vc7.sln  - MS Visual C++ 2003

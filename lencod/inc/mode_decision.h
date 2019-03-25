@@ -46,8 +46,8 @@ extern short  bi_pred_me;
 extern short  best_mode;
 extern short  best8x8mode          [4]; // [block]
 extern char   best8x8pdir [MAXMODE][4]; // [mode][block]
-extern char   best8x8fwref[MAXMODE][4]; // [mode][block]
-extern char   best8x8bwref[MAXMODE][4]; // [mode][block]
+extern char   best8x8l0ref[MAXMODE][4]; // [mode][block]
+extern char   best8x8l1ref[MAXMODE][4]; // [mode][block]
 extern imgpel pred[16][16];
 
 extern void   set_stored_macroblock_parameters (void);
@@ -67,7 +67,7 @@ extern int    GetBestTransformP8x8(void);
 extern int    I16Offset (int, int);
 extern int    CheckReliabilityOfRef (int, int, int, int);
 extern int    Mode_Decision_for_Intra4x4Macroblock (double, int*);
-extern int    RDCost_for_macroblocks (double, int, double*, double*, int);
+extern int    RDCost_for_macroblocks (double, int, double*, double*, double*, int);
 extern double RDCost_for_8x8blocks (int*, int64*, double, int, int, short, short, short);
 extern double *mb16x16_cost_frame;
 
@@ -80,7 +80,7 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bs
 void list_prediction_cost(int list, int block, int mode, RD_PARAMS enc_mb, int bmcost[5], char best_ref[2]);
 void determine_prediction_list(int, int [5], char [2], char *, int *, short *);
 void compute_mode_RD_cost(int mode, Macroblock *currMB, RD_PARAMS enc_mb,
-                               double *min_rdcost, double *min_rate,
+                               double *min_rdcost, double *min_dcost, double *min_rate,
                                int i16mode, short bslice, short *inter_skip);
 extern void update_lambda_costs(RD_PARAMS *enc_mb, int lambda_mf[3]);
 

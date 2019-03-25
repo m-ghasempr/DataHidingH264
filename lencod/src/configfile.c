@@ -388,8 +388,10 @@ void ParseContent (char *buf, int bufsize)
   {
     if (0 > (MapIdx = ParameterNameToMapIndex (items[i])))
     {
-      snprintf (errortext, ET_SIZE, " Parsing error in config file: Parameter Name '%s' not recognized.", items[i]);
-      error (errortext, 300);
+      //snprintf (errortext, ET_SIZE, " Parsing error in config file: Parameter Name '%s' not recognized.", items[i]);
+      //error (errortext, 300);
+      printf ("\n\tParsing error in config file: Parameter Name '%s' not recognized.", items[i]);
+      continue;
     }
     if (strcasecmp ("=", items[i+1]))
     {
@@ -800,13 +802,27 @@ static void PatchInp (void)
     }
   }
 
-  // set proper log2_max_frame_num_minus4.
-  storedBplus1 = (input->BRefPictures ) ? input->successive_Bframe + 1: 1;
+  if (input->idr_period && input->intra_delay && input->idr_period <= input->intra_delay)
+  {
+    snprintf(errortext, ET_SIZE, " IntraDelay cannot be larger than or equal to IDRPeriod.");
+    error (errortext, 500);
+  }
 
+  if (input->idr_period && input->intra_delay && input->EnableIDRGOP == 0)
+  {
+    snprintf(errortext, ET_SIZE, " IntraDelay can only be used with only 1 IDR or with EnableIDRGOP=1.");
+    error (errortext, 500);
+  }
+
+  storedBplus1 = (input->BRefPictures ) ? input->successive_Bframe + 1: 1;
+  
   if (input->Log2MaxFNumMinus4 == -1)
-    log2_max_frame_num_minus4 = iClip3(0,12, (int) (CeilLog2(input->no_frames * storedBplus1) - 4));
-  else
+  {    
+    log2_max_frame_num_minus4 = iClip3(0,12, (int) (CeilLog2(input->no_frames * storedBplus1) - 4));    
+  }
+  else  
     log2_max_frame_num_minus4 = input->Log2MaxFNumMinus4;
+  max_frame_num = 1 << (log2_max_frame_num_minus4 + 4);
 
   if (log2_max_frame_num_minus4 == 0 && input->num_ref_frames == 16)
   {
@@ -819,6 +835,7 @@ static void PatchInp (void)
     log2_max_pic_order_cnt_lsb_minus4 = iClip3(0,12, (int) (CeilLog2( 2*input->no_frames * (input->jumpd + 1)) - 4));
   else
     log2_max_pic_order_cnt_lsb_minus4 = input->Log2MaxPOCLsbMinus4;
+  max_pic_order_cnt_lsb = 1 << (log2_max_pic_order_cnt_lsb_minus4 + 4);
 
   if (((1<<(log2_max_pic_order_cnt_lsb_minus4 + 3)) < input->jumpd * 4) && input->Log2MaxPOCLsbMinus4 != -1)
     error("log2_max_pic_order_cnt_lsb_minus4 might not be sufficient for encoding. Increase value.",400);
@@ -982,7 +999,7 @@ static void PatchInp (void)
   }*/
 
   // check RDoptimization mode and profile. FMD does not support Frex Profiles.
-  if (input->rdopt==2 && input->ProfileIDC>=FREXT_HP)
+  if (input->rdopt==2 && ( input->ProfileIDC>=FREXT_HP || input->ProfileIDC==FREXT_CAVLC444 ))
   {
     snprintf(errortext, ET_SIZE, "Fast Mode Decision methods does not support FREX Profiles");
     error (errortext, 500);
@@ -1076,7 +1093,7 @@ static void PatchInp (void)
     }
   }
 
-  if ((input->successive_Bframe)&&(input->BRefPictures)&&(input->idr_enable)&&(input->intra_period)&&(input->pic_order_cnt_type!=0))
+  if ((input->successive_Bframe)&&(input->BRefPictures)&&(input->idr_period)&&(input->pic_order_cnt_type!=0))
   {
     error("Stored B pictures combined with IDR pictures only supported in Picture Order Count type 0\n",-1000);
   }
@@ -1091,23 +1108,23 @@ static void PatchInp (void)
     error (errortext, 500);
   }
 
-  if(input->Transform8x8Mode && (input->ProfileIDC<FREXT_HP || input->ProfileIDC>FREXT_Hi444))
+  if(input->Transform8x8Mode && ( input->ProfileIDC<FREXT_HP && input->ProfileIDC!=FREXT_CAVLC444 ))
   {
     snprintf(errortext, ET_SIZE, "\nTransform8x8Mode may be used only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
     error (errortext, 500);
   }
-  if(input->ScalingMatrixPresentFlag && (input->ProfileIDC<FREXT_HP || input->ProfileIDC>FREXT_Hi444))
+  if(input->ScalingMatrixPresentFlag && ( input->ProfileIDC<FREXT_HP && input->ProfileIDC!=FREXT_CAVLC444 ))
   {
     snprintf(errortext, ET_SIZE, "\nScalingMatrixPresentFlag may be used only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
     error (errortext, 500);
   }
 
-  if(input->yuv_format==YUV422 && input->ProfileIDC < FREXT_Hi422)
+  if(input->yuv_format==YUV422 && ( input->ProfileIDC < FREXT_Hi422 && input->ProfileIDC!=FREXT_CAVLC444 ))
   {
     snprintf(errortext, ET_SIZE, "\nFRExt Profile(YUV Format) Error!\nYUV422 can be used only with ProfileIDC %d or %d\n",FREXT_Hi422, FREXT_Hi444);
     error (errortext, 500);
   }
-  if(input->yuv_format==YUV444 && input->ProfileIDC < FREXT_Hi444)
+  if(input->yuv_format==YUV444 && ( input->ProfileIDC < FREXT_Hi444 && input->ProfileIDC!=FREXT_CAVLC444 ))
   {
     snprintf(errortext, ET_SIZE, "\nFRExt Profile(YUV Format) Error!\nYUV444 can be used only with ProfileIDC %d.\n",FREXT_Hi444);
     error (errortext, 500);
@@ -1191,10 +1208,7 @@ void PatchInputNoFrames(void)
   // If the frames are grouped into two layers, "FramesToBeEncoded" in the config file
   // will give the number of frames which are in the base layer. Here we let input->no_frames
   // be the total frame numbers.
-  input->no_frames = 1+ (input->no_frames-1) * (input->NumFramesInELSubSeq+1);
-  if ( input->NumFrameIn2ndIGOP )
-    input->NumFrameIn2ndIGOP = 1+(input->NumFrameIn2ndIGOP-1) * (input->NumFramesInELSubSeq+1);
-  FirstFrameIn2ndIGOP = input->no_frames;
+  input->no_frames = 1 + (input->no_frames - 1) * (input->NumFramesInELSubSeq + 1);
 }
 
 static void ProfileCheck(void)
@@ -1205,7 +1219,8 @@ static void ProfileCheck(void)
      (input->ProfileIDC != FREXT_HP    ) &&
      (input->ProfileIDC != FREXT_Hi10P ) &&
      (input->ProfileIDC != FREXT_Hi422 ) &&
-     (input->ProfileIDC != FREXT_Hi444 ))
+     (input->ProfileIDC != FREXT_Hi444 ) &&
+     (input->ProfileIDC != FREXT_CAVLC444 ))
   {
     snprintf(errortext, ET_SIZE, "Profile must be baseline(66)/main(77)/extended(88) or FRExt (%d to %d).", FREXT_HP,FREXT_Hi444);
     error (errortext, 500);
@@ -1304,16 +1319,16 @@ static void ProfileCheck(void)
     }
   }
 
-	//FRExt
-  if (input->IntraProfile && (input->ProfileIDC<FREXT_HP || input->ProfileIDC>FREXT_Hi444))
+  //FRExt
+  if (input->IntraProfile && ( input->ProfileIDC<FREXT_HP && input->ProfileIDC!=FREXT_CAVLC444 ))
   {
     snprintf(errortext, ET_SIZE, "\nAllIntraProfile is allowed only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
     error (errortext, 500);
   }
 
-  if (input->IntraProfile && !input->idr_enable) 
+  if (input->IntraProfile && !input->idr_period) 
   {
-    snprintf(errortext, ET_SIZE, "\nAllIntraProfile requires IDRIntraEnable equal 1.");
+    snprintf(errortext, ET_SIZE, "\nAllIntraProfile requires IDRPeriod >= 1.");
     error (errortext, 500);
   }
 
@@ -1326,13 +1341,42 @@ static void ProfileCheck(void)
   if (input->IntraProfile && input->num_ref_frames) 
   {
     fprintf( stderr, "\nWarning: Setting NumberReferenceFrames to 0 in IntraProfile.\n\n");
-	  input->num_ref_frames = 0;
+      input->num_ref_frames = 0;
   }
 
   if (input->IntraProfile == 0 && input->num_ref_frames == 0) 
   {
     snprintf(errortext, ET_SIZE, "\nProfiles other than IntraProfile require NumberReferenceFrames > 0.");
     error (errortext, 500);
+  }
+
+  if ( input->separate_colour_plane_flag )
+  {
+    if( ( input->ProfileIDC != FREXT_Hi444 ) && ( input->ProfileIDC != FREXT_CAVLC444 ) )
+    {
+      snprintf(errortext, ET_SIZE, "\nseparate_colour_plane_flag is allowed in FREXT_CAVLC444/FREXT_Hi444.");
+      error (errortext, 500);
+    }
+
+    if ( input->ChromaMEEnable )
+    {
+      snprintf(errortext, ET_SIZE, "\nChromaMEEnable is not allowed in Frext4:4:4Independent_mode.");
+      error (errortext, 500);
+    }
+  }
+
+  if ( input->ProfileIDC == FREXT_CAVLC444 )
+  {
+    if ( input->symbol_mode != UVLC )
+    {
+      snprintf(errortext, ET_SIZE, "\nUVLC is not allowed in FREXT_CAVLC444.");
+      error (errortext, 500);
+    }
+    if ( !input->IntraProfile )
+    {
+      snprintf(errortext, ET_SIZE, "\nFREXT_CAVLC444 must be IntraProfile.");
+      error (errortext, 500);
+    }
   }
 }
 
@@ -1350,8 +1394,6 @@ unsigned getMaxFs (unsigned int levelIdc)
     error ("getMaxFs: Unknown LevelIdc", 500);
 
   // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
-  if ( (levelIdc == 11) && (active_sps->profile_idc < FREXT_HP) && (active_sps->constrained_set3_flag == 1) )
-    levelIdc = 9;
 
   ret = MaxFs[levelIdc];
 

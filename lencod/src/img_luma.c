@@ -52,6 +52,27 @@ void getSubImagesLuma( StorablePicture *s )
 
   imgpel *wBufDst, *wBufSrc;
 
+  if( IS_INDEPENDENT(input) )
+  {
+    switch( s->colour_plane_id ){
+    default:
+    case    0:
+      imgY = s->imgY;
+      break;
+    case    1:
+      imgY = s->imgUV[0];
+      break;
+    case    2:
+      imgY = s->imgUV[1];
+      break;
+	}
+ 	s->curr_imgY_sub = s->p_imgY_sub[s->colour_plane_id];
+  }
+  else
+  {
+    s->curr_imgY_sub = s->imgY_sub;
+  }
+
   //  0  1  2  3
   //  4  5  6  7
   //  8  9 10 11
@@ -65,7 +86,7 @@ void getSubImagesLuma( StorablePicture *s )
   {
     jj = iClip3(0, size_y_minus1, j);
     jpad = j + IMG_PAD_SIZE;
-    wBufDst = &( s->imgY_sub[0][0][jpad][IMG_PAD_SIZE] );
+    wBufDst = &( s->curr_imgY_sub[0][0][jpad][IMG_PAD_SIZE] ); // 4:4:4 independent mode
     wBufSrc = imgY[jj];
     // left IMG_PAD_SIZE
     for (i = -IMG_PAD_SIZE; i < 0; i++)
@@ -126,6 +147,7 @@ void getSubImagesLuma( StorablePicture *s )
   getDiagSubImageBiLinear( s, 3, 3, 0, 2, 2, 0,  1, 0, 0, 1 );
 }
 
+
 /*!
  ************************************************************************
  * \brief
@@ -160,8 +182,8 @@ void getHorSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, 
 
   for (jpad = 0; jpad < ypadded_size; jpad++)
   {
-    wBufSrc = s->imgY_sub[src_y][src_x][jpad];
-    wBufDst = s->imgY_sub[dst_y][dst_x][jpad];
+    wBufSrc = s->curr_imgY_sub[src_y][src_x][jpad];	// 4:4:4 independent mode
+    wBufDst = s->curr_imgY_sub[dst_y][dst_x][jpad]; // 4:4:4 independent mode
     iBufDst = imgY_sub_tmp[jpad];
 
     // left padded area
@@ -200,6 +222,7 @@ void getHorSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, 
   }
 }
 
+
 /*!
  ************************************************************************
  * \brief
@@ -235,8 +258,8 @@ void getVerSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, 
   int tap1 = ONE_FOURTH_TAP[0][1];
   int tap2 = ONE_FOURTH_TAP[0][2];
 
-  wxBufSrc = s->imgY_sub[src_y][src_x];
-  wxBufDst = s->imgY_sub[dst_y][dst_x];
+  wxBufSrc = s->curr_imgY_sub[src_y][src_x]; // 4:4:4 independent mode
+  wxBufDst = s->curr_imgY_sub[dst_y][dst_x]; // 4:4:4 independent mode
 
   if ( !use_stored_int ) { // causes code expansion but is better since we avoid too many
     // branches within the j loop
@@ -365,6 +388,7 @@ void getVerSubImageSixTap( StorablePicture *s, int dst_y, int dst_x, int src_y, 
   }
 }
 
+
 /*!
  ************************************************************************
  * \brief
@@ -401,9 +425,9 @@ void getHorSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y
 
   for (jpad = 0; jpad < ypadded_size; jpad++)
   {
-    wBufSrcL = s->imgY_sub[src_y_l][src_x_l][jpad];
-    wBufSrcR = s->imgY_sub[src_y_r][src_x_r][jpad];
-    wBufDst = s->imgY_sub[dst_y][dst_x][jpad];
+    wBufSrcL = s->curr_imgY_sub[src_y_l][src_x_l][jpad]; // 4:4:4 independent mode
+    wBufSrcR = s->curr_imgY_sub[src_y_r][src_x_r][jpad]; // 4:4:4 independent mode
+    wBufDst = s->curr_imgY_sub[dst_y][dst_x][jpad];      // 4:4:4 independent mode
 
     // left padded area + center
     for (ipad = 0; ipad < xpadded_size_left; ipad++)
@@ -419,6 +443,7 @@ void getHorSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y
     }
   }
 }
+
 
 /*!
  ************************************************************************
@@ -457,9 +482,9 @@ void getVerSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y
   // top
   for (jpad = 0; jpad < ypadded_size_top; jpad++)
   {
-    wBufSrcL = s->imgY_sub[src_y_l][src_x_l][jpad];
-    wBufDst  = s->imgY_sub[dst_y][dst_x][jpad];
-    wBufSrcR = s->imgY_sub[src_y_r][src_x_r][jpad + offset];
+    wBufSrcL = s->curr_imgY_sub[src_y_l][src_x_l][jpad];          // 4:4:4 independent mode
+    wBufDst  = s->curr_imgY_sub[dst_y][dst_x][jpad];              // 4:4:4 independent mode
+    wBufSrcR = s->curr_imgY_sub[src_y_r][src_x_r][jpad + offset]; // 4:4:4 independent mode
 
     for (ipad = 0; ipad < xpadded_size; ipad++)
     {
@@ -470,9 +495,9 @@ void getVerSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y
   // bottom
   for (jpad = ypadded_size_top; jpad < ypadded_size; jpad++)
   {
-    wBufSrcL = s->imgY_sub[src_y_l][src_x_l][jpad];
-    wBufDst  = s->imgY_sub[dst_y  ][dst_x  ][jpad];
-    wBufSrcR = s->imgY_sub[src_y_r][src_x_r][maxy];
+    wBufSrcL = s->curr_imgY_sub[src_y_l][src_x_l][jpad];          // 4:4:4 independent mode
+    wBufDst  = s->curr_imgY_sub[dst_y  ][dst_x  ][jpad];          // 4:4:4 independent mode
+    wBufSrcR = s->curr_imgY_sub[src_y_r][src_x_r][maxy];          // 4:4:4 independent mode
 
     for (ipad = 0; ipad < xpadded_size; ipad++)
     {
@@ -481,6 +506,7 @@ void getVerSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_y
     }
   }
 }
+
 
 /*!
  ************************************************************************
@@ -527,9 +553,9 @@ void getDiagSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_
 
   for (jpad = 0; jpad < ypadded_size_top; jpad++)
   {
-    wBufSrcL = s->imgY_sub[src_y_l][src_x_l][jpad + offset_y_l];
-    wBufSrcR = s->imgY_sub[src_y_r][src_x_r][jpad + offset_y_r];
-    wBufDst = s->imgY_sub[dst_y][dst_x][jpad];
+    wBufSrcL = s->curr_imgY_sub[src_y_l][src_x_l][jpad + offset_y_l]; // 4:4:4 independent mode
+    wBufSrcR = s->curr_imgY_sub[src_y_r][src_x_r][jpad + offset_y_r]; // 4:4:4 independent mode
+    wBufDst = s->curr_imgY_sub[dst_y][dst_x][jpad];                   // 4:4:4 independent mode
 
     for (ipad = 0; ipad < xpadded_size; ipad++)
     {
@@ -540,9 +566,9 @@ void getDiagSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_
   }
   for (jpad = ypadded_size_top; jpad < ypadded_size; jpad++)
   {
-    wBufSrcL = s->imgY_sub[src_y_l][src_x_l][imin (maxy, jpad + offset_y_l)];
-    wBufSrcR = s->imgY_sub[src_y_r][src_x_r][imin (maxy, jpad + offset_y_r)];
-    wBufDst = s->imgY_sub[dst_y][dst_x][jpad];
+    wBufSrcL = s->curr_imgY_sub[src_y_l][src_x_l][imin (maxy, jpad + offset_y_l)]; // 4:4:4 independent mode
+    wBufSrcR = s->curr_imgY_sub[src_y_r][src_x_r][imin (maxy, jpad + offset_y_r)]; // 4:4:4 independent mode
+    wBufDst = s->curr_imgY_sub[dst_y][dst_x][jpad];                                // 4:4:4 independent mode
 
     for (ipad = 0; ipad < xpadded_size; ipad++)
     {
@@ -552,3 +578,4 @@ void getDiagSubImageBiLinear( StorablePicture *s, int dst_y, int dst_x, int src_
     }
   }
 }
+

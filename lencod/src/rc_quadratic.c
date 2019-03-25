@@ -60,6 +60,7 @@ void rc_alloc( rc_quadratic **prc )
   lprc->UpperBound2 = INT_MAX;
   lprc->Wp = 0.0;
   lprc->Wb = 0.0;
+  lprc->AveWb = 0.0;
   lprc->PAveFrameQP   = input->qp0;
   lprc->m_Qc          = lprc->PAveFrameQP;
   lprc->FieldQPBuffer = lprc->PAveFrameQP;
@@ -69,6 +70,8 @@ void rc_alloc( rc_quadratic **prc )
 
   lprc->RC_MAX_QUANT = input->RCMaxQP;
   lprc->RC_MIN_QUANT = input->RCMinQP; //-img->bitdepth_luma_qp_scale;//clipping
+
+  lprc->AveWb = 0.0;
 
   lprc->BUPFMAD = (double*) calloc ((rcBufSize), sizeof (double));
   if (NULL==lprc->BUPFMAD)
@@ -262,32 +265,31 @@ void rc_init_seq(rc_quadratic *prc)
   prc->MBPerRow = img->PicWidthInMbs;
 
   /*adaptive field/frame coding*/
-  generic_RC->FieldControl=0;
-
-  /*compute the initial QP*/
-  bpp = 1.0*prc->bit_rate /(prc->frame_rate*img->size);
-
-  if (img->width == 176)
-  {
-    L1 = 0.1;
-    L2 = 0.3;
-    L3 = 0.6;
-  }
-  else if (img->width == 352)
-  {
-    L1 = 0.2;
-    L2 = 0.6;
-    L3 = 1.2;
-  }
-  else
-  {
-    L1 = 0.6;
-    L2 = 1.4;
-    L3 = 2.4;
-  }
+  generic_RC->FieldControl=0;  
 
   if (input->SeinitialQP==0)
   {
+    /*compute the initial QP*/
+    bpp = 1.0*prc->bit_rate /(prc->frame_rate*img->size);
+
+    if (img->width == 176)
+    {
+      L1 = 0.1;
+      L2 = 0.3;
+      L3 = 0.6;
+    }
+    else if (img->width == 352)
+    {
+      L1 = 0.2;
+      L2 = 0.6;
+      L3 = 1.2;
+    }
+    else
+    {
+      L1 = 0.6;
+      L2 = 1.4;
+      L3 = 2.4;
+    }
     if (bpp<= L1)
       qp = 35;
     else if(bpp<=L2)
@@ -411,7 +413,7 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
 
   if(generic_RC->RemainingBits<0)
     Overum=TRUE;
-  OverBits=-generic_RC->RemainingBits;
+  OverBits=-(int)(generic_RC->RemainingBits);
 
   /*initialize the lower bound and the upper bound for the target bits of each frame, HRD consideration*/
   prc->LowerBound  = (int)(generic_RC->RemainingBits + prc->bit_rate / prc->frame_rate);
@@ -1671,6 +1673,8 @@ int updateQPRC2(rc_quadratic *prc, int topfield)
       else if(img->type == B_SLICE)
       {
         int prevQP = imax(prc->PrevLastQP, prc->CurrLastQP);
+        // for more than one consecutive B frames the below call will overwrite the old anchor frame QP with the current value
+        // it should be called once in the B-frame sequence....this should be modified for the BU < frame as well
         if((input->PicInterlace==ADAPTIVE_CODING)||(input->MbInterlace))
           updateQPInterlace( prc );
 
@@ -1870,6 +1874,8 @@ int updateQPRC3(rc_quadratic *prc, int topfield)
     {
       if (img->number == 0)
       {
+        if((input->PicInterlace == ADAPTIVE_CODING) || (input->MbInterlace))
+          updateQPInterlace( prc );
         prc->m_Qc = prc->MyInitialQp;
         return prc->m_Qc;
       }
@@ -1883,6 +1889,8 @@ int updateQPRC3(rc_quadratic *prc, int topfield)
       }
       else
       {
+        if( ( (img->type == B_SLICE && img->b_frame_to_code == 1) || img->type == I_SLICE) && ((input->PicInterlace == ADAPTIVE_CODING) || (input->MbInterlace)) )
+          updateQPInterlace( prc );
         /*adaptive field/frame coding*/
         if( img->type == P_SLICE && ( input->PicInterlace == ADAPTIVE_CODING || input->MbInterlace ) && generic_RC->FieldControl == 0 )
           updateQPInterlaceBU( prc );
@@ -1928,7 +1936,7 @@ int updateQPRC3(rc_quadratic *prc, int topfield)
           else {
             m_Bits = prc->Target-m_Hp;
             m_Bits = imax(m_Bits, (int)(prc->bit_rate/(MINVALUE*prc->frame_rate)));
-          }
+          }          
           updateModelQPFrame( prc, m_Bits );
 
           prc->m_Qc = iClip3(prc->RC_MIN_QUANT, prc->RC_MAX_QUANT, prc->m_Qc); // clipping
@@ -1966,6 +1974,8 @@ int updateQPRC3(rc_quadratic *prc, int topfield)
     /*top field of I frame*/
     if (img->number == 0)
     {
+      if((input->PicInterlace == ADAPTIVE_CODING) || (input->MbInterlace))
+        updateQPInterlace( prc );
       prc->m_Qc = prc->MyInitialQp;
       return prc->m_Qc;
     }
@@ -1978,6 +1988,8 @@ int updateQPRC3(rc_quadratic *prc, int topfield)
       }
       else
       {
+        if( ( (img->type == B_SLICE && img->b_frame_to_code == 1) || img->type == I_SLICE) && ((input->PicInterlace == ADAPTIVE_CODING) || (input->MbInterlace)) )
+          updateQPInterlace( prc );
         prc->m_X1=prc->Pm_X1;
         prc->m_X2=prc->Pm_X2;
         prc->MADPictureC1=prc->PMADPictureC1;

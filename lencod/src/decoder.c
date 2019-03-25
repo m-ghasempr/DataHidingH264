@@ -103,7 +103,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
       {
         block_x = img->block_x+bx;
         block_y = img->block_y+by;
-        if (img->type == B_SLICE && enc_picture != enc_frame_picture)
+        if (img->type == B_SLICE && enc_picture != enc_frame_picture[0])
           ref_inx = (IMG_NUMBER-b8ref-2)%img->num_ref_frames;
 
         Get_Reference_Block (decs->decref[decoder][ref_inx],
@@ -114,7 +114,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
         for (j=0; j<4; j++)
         for (i=0; i<4; i++)
         {
-          decs->decY[decoder][block_y*4+j][block_x*4+i] = resY_tmp[by*4+j][bx*4+i] + decs->RefBlock[j][i];
+          decs->decY[decoder][block_y*4+j][block_x*4+i] = iClip3 (0, img->max_imgpel_value, resY_tmp[by*4+j][bx*4+i] + decs->RefBlock[j][i]);
         }
       }
     }
@@ -492,7 +492,8 @@ void Error_Concealment(imgpel **inY, byte **s_map, imgpel ***refY)
   for (mb_y=0; mb_y < mb_h; mb_y++)
   for (mb_x=0; mb_x < mb_w; mb_x++)
   {
-    if (s_map[mb_y][mb_x])   Conceal_Error(inY, mb_y, mb_x, refY, s_map);
+    if (s_map[mb_y][mb_x])   
+      Conceal_Error(inY, mb_y, mb_x, refY, s_map);
   }
 }
 

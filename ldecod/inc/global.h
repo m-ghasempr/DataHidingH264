@@ -39,9 +39,9 @@
 
 typedef unsigned char  byte;                     //!<  8 bit unsigned
 #if (IMGTYPE == 1)
-  typedef unsigned short imgpel;                  //!<  Pixel type definition (16 bit for FRExt)
+  typedef unsigned short imgpel;                 //!<  Pixel type definition (16 bit for FRExt)
 #else
-  typedef unsigned char  imgpel;                //!<  Pixel type definition (8 bit without FRExt)
+  typedef unsigned char  imgpel;                 //!<  Pixel type definition (8 bit without FRExt)
 #endif
 
 pic_parameter_set_rbsp_t *active_pps;
@@ -70,10 +70,12 @@ int  InvLevelScale4x4Luma_Inter[6][4][4];
 int  InvLevelScale4x4Chroma_Inter[2][6][4][4];
 
 int  InvLevelScale8x8Luma_Intra[6][8][8];
+int  InvLevelScale8x8Chroma_Intra[2][6][8][8];
 
 int  InvLevelScale8x8Luma_Inter[6][8][8];
+int  InvLevelScale8x8Chroma_Inter[2][6][8][8];
 
-int  *qmatrix[8];
+int  *qmatrix[12];
 
 #define ET_SIZE 300      //!< size of error text buffer
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
@@ -218,7 +220,7 @@ typedef struct
 {
   unsigned short state;         // index into state-table CP
   unsigned char  MPS;           // Least Probable Symbol 0/1 CP
-  unsigned char dummy;			// for alignment
+  unsigned char dummy;          // for alignment
 } BiContextType;
 
 typedef BiContextType *BiContextTypePtr;
@@ -476,6 +478,10 @@ typedef struct img_par
   // B pictures
   Slice       *currentSlice;                   //!< pointer to current Slice data struct
   Macroblock          *mb_data;                //!< array containing all MBs of a whole frame
+  Macroblock    *mb_data_JV[MAX_PLANE];        //!< mb_data to be used for 4:4:4 independent mode
+  int colour_plane_id;                         //!< colour_plane_id of the current coded slice
+  int ChromaArrayType;
+
   int subblock_x;
   int subblock_y;
   int is_intra_block;
@@ -621,6 +627,8 @@ typedef struct img_par
   int recovery_frame_cnt;
   int recovery_frame_num;
   int recovery_poc;
+
+  int  separate_colour_plane_flag;
 
 } ImageParameters;
 
@@ -806,6 +814,10 @@ unsigned CeilLog2_sf( unsigned uiVal);
 void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps);
 void CalculateQuantParam(void);
 void CalculateQuant8Param(void);
+
+// For 4:4:4 independent mode
+void change_plane_JV( int nplane );
+void make_frame_picture_JV();
 
 #endif
 

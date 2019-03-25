@@ -484,12 +484,9 @@ typedef struct
   float distortion_v;
 } Picture;
 
-Picture *top_pic;
-Picture *bottom_pic;
-Picture *frame_pic;
-Picture *frame_pic_1;
-Picture *frame_pic_2;
-Picture *frame_pic_3;
+Picture *p_frame_pic;
+Picture **frame_pic;
+Picture **field_pic;
 Picture *frame_pic_si;
 
 #ifdef _LEAKYBUCKET_
@@ -504,6 +501,9 @@ int    **imgY_sub_tmp;       //!< Y picture temporary component (Quarter pel)
 int **PicPos;
 unsigned int log2_max_frame_num_minus4;
 unsigned int log2_max_pic_order_cnt_lsb_minus4;
+unsigned int max_frame_num;
+unsigned int max_pic_order_cnt_lsb;
+
 
 time_t  me_tot_time,me_time;
 pic_parameter_set_rbsp_t *active_pps;
@@ -538,6 +538,7 @@ imgpel   **imgY_org_frm;
 imgpel  ***imgUV_org_frm;
 
 imgpel   **imgY_com;               //!< Encoded luma images
+imgpel   **imgY_org_frm_JV[MAX_PLANE];  //!< imgY_org_frm to be used during 4:4:4 independent mode encoding
 imgpel  ***imgUV_com;              //!< Encoded croma images
 
 char    ***direct_ref_idx;           //!< direct mode reference index buffer
@@ -597,6 +598,64 @@ typedef struct
 } SNRParameters;
 
 #define FILE_NAME_SIZE 200
+
+// VUI Parameters
+typedef struct
+{
+  int aspect_ratio_info_present_flag;
+  int aspect_ratio_idc;
+  int sar_width;
+  int sar_height;
+  int overscan_info_present_flag;
+  int overscan_appropriate_flag;
+  int video_signal_type_present_flag;
+  int video_format;
+  int video_full_range_flag;
+  int colour_description_present_flag;
+  int colour_primaries;
+  int transfer_characteristics; 
+  int matrix_coefficients;
+  int chroma_location_info_present_flag;
+  int chroma_sample_loc_type_top_field;
+  int chroma_sample_loc_type_bottom_field;
+  int timing_info_present_flag;
+  int num_units_in_tick;
+  int time_scale;
+  int fixed_frame_rate_flag;
+  int nal_hrd_parameters_present_flag;
+  int nal_cpb_cnt_minus1;
+  int nal_bit_rate_scale;
+  int nal_cpb_size_scale;
+  int nal_bit_rate_value_minus1;
+  int nal_cpb_size_value_minus1;
+  int nal_vbr_cbr_flag;
+  int nal_initial_cpb_removal_delay_length_minus1;
+  int nal_cpb_removal_delay_length_minus1;
+  int nal_dpb_output_delay_length_minus1;
+  int nal_time_offset_length;
+  int vcl_hrd_parameters_present_flag;
+  int vcl_cpb_cnt_minus1;
+  int vcl_bit_rate_scale;
+  int vcl_cpb_size_scale;
+  int vcl_bit_rate_value_minus1;
+  int vcl_cpb_size_value_minus1;
+  int vcl_vbr_cbr_flag;
+  int vcl_initial_cpb_removal_delay_length_minus1;
+  int vcl_cpb_removal_delay_length_minus1;
+  int vcl_dpb_output_delay_length_minus1;
+  int vcl_time_offset_length;
+  int low_delay_hrd_flag;
+  int pic_struct_present_flag;
+  int bitstream_restriction_flag;
+  int motion_vectors_over_pic_boundaries_flag;
+  int max_bytes_per_pic_denom;
+  int max_bits_per_mb_denom;
+  int log2_max_mv_length_vertical;
+  int log2_max_mv_length_horizontal;
+  int num_reorder_frames;
+  int max_dec_frame_buffering;
+} VUIParameters;
+
                              //! all input parameters
 typedef struct
 {
@@ -638,71 +697,20 @@ typedef struct
   char ReconFile[FILE_NAME_SIZE];    //!< Reconstructed Pictures
   char TraceFile[FILE_NAME_SIZE];    //!< Trace Outputs
   char QmatrixFile[FILE_NAME_SIZE];  //!< Q matrix cfg file
-  int intra_period;                  //!< Random Access period though intra
-  int EnableOpenGOP;                 //!< support for open gops.
+  int  EnableOpenGOP;                 //!< support for open gops.
+  int  EnableIDRGOP;                  //!< support for open gops.
 
-  int idr_enable;                    //!< Encode intra slices as IDR
+  int idr_period;                    //!< IDR picture period
+  int intra_period;                  //!< intra picture period
+  int intra_delay;                   //!< IDR picture delay
+  int adaptive_idr_period;
+  int adaptive_intra_period;         //!< reinitialize start of intra period
+
   int start_frame;                   //!< Encode sequence starting from Frame start_frame
 
   int GenerateMultiplePPS;
-  int Generate_SEIVUI;
+  int GenerateSEIMessage;
   char SEIMessageText[500];
-  int VUISupport;
-
-  // VUI parameters
-  int VUI_aspect_ratio_info_present_flag;
-  int   VUI_aspect_ratio_idc;
-  int     VUI_sar_width;
-  int     VUI_sar_height;
-  int VUI_overscan_info_present_flag;
-  int   VUI_overscan_appropriate_flag;
-  int VUI_video_signal_type_present_flag;
-  int   VUI_video_format;
-  int     VUI_video_full_range_flag;
-  int     VUI_colour_description_present_flag;
-  int       VUI_colour_primaries;
-  int       VUI_transfer_characteristics; 
-  int       VUI_matrix_coefficients;
-  int VUI_chroma_location_info_present_flag;
-  int   VUI_chroma_sample_loc_type_top_field;
-  int   VUI_chroma_sample_loc_type_bottom_field;
-  int VUI_timing_info_present_flag;
-  int   VUI_num_units_in_tick;
-  int   VUI_time_scale;
-  int   VUI_fixed_frame_rate_flag;
-  int VUI_nal_hrd_parameters_present_flag;
-  int   VUI_nal_cpb_cnt_minus1;
-  int   VUI_nal_bit_rate_scale;
-  int   VUI_nal_cpb_size_scale;
-  int     VUI_nal_bit_rate_value_minus1;
-  int     VUI_nal_cpb_size_value_minus1;
-  int     VUI_nal_vbr_cbr_flag;
-  int   VUI_nal_initial_cpb_removal_delay_length_minus1;
-  int   VUI_nal_cpb_removal_delay_length_minus1;
-  int   VUI_nal_dpb_output_delay_length_minus1;
-  int   VUI_nal_time_offset_length;
-  int VUI_vcl_hrd_parameters_present_flag;
-  int   VUI_vcl_cpb_cnt_minus1;
-  int   VUI_vcl_bit_rate_scale;
-  int   VUI_vcl_cpb_size_scale;
-  int     VUI_vcl_bit_rate_value_minus1;
-  int     VUI_vcl_cpb_size_value_minus1;
-  int     VUI_vcl_vbr_cbr_flag;
-  int   VUI_vcl_initial_cpb_removal_delay_length_minus1;
-  int   VUI_vcl_cpb_removal_delay_length_minus1;
-  int   VUI_vcl_dpb_output_delay_length_minus1;
-  int   VUI_vcl_time_offset_length;
-  int   VUI_low_delay_hrd_flag;
-  int VUI_pic_struct_present_flag;
-  int VUI_bitstream_restriction_flag;
-  int   VUI_motion_vectors_over_pic_boundaries_flag;
-  int   VUI_max_bytes_per_pic_denom;
-  int   VUI_max_bits_per_mb_denom;
-  int   VUI_log2_max_mv_length_vertical;
-  int   VUI_log2_max_mv_length_horizontal;
-  int   VUI_num_reorder_frames;
-  int   VUI_max_dec_frame_buffering;
-  // end of VUI parameters
 
   int ResendSPS;
   int ResendPPS;
@@ -820,7 +828,6 @@ typedef struct
   int NoOfDecoders;
   int RestrictRef;
   int NumFramesInELSubSeq;
-  int NumFrameIn2ndIGOP;
 
   int RandomIntraMBRefresh;     //!< Number of pseudo-random intra-MBs per picture
 
@@ -872,7 +879,7 @@ typedef struct
   int RCMaxQP;
 
   int ScalingMatrixPresentFlag;
-  int ScalingListPresentFlag[8];
+  int ScalingListPresentFlag[12];
 
   // Search Algorithm
   SearchType SearchMode;
@@ -901,6 +908,7 @@ typedef struct
   int  OffsetMatrixPresentFlag;                  //!< Enable Explicit Quantization Offset Matrices
 
   int AdaptiveRounding;                          //!< Adaptive Rounding parameter based on JVT-N011
+  int AdaptRoundingFixed;                        //!< Global rounding for all qps
   int AdaptRndPeriod;                            //!< Set period for adaptive rounding of JVT-N011 in MBs
   int AdaptRndChroma;
   int AdaptRndWFactor[2][5];                     //!< Weighting factors for luma component based on reference indicator and slice type
@@ -926,18 +934,29 @@ typedef struct
   int ToneMappingSEIPresentFlag;
   char ToneMappingFile[FILE_NAME_SIZE];    //!< ToneMapping SEI message cfg file
 
+  int separate_colour_plane_flag;
+  int EnableVUISupport;
+  // VUI parameters
+  VUIParameters VUI;
+  // end of VUI parameters
+
 } InputParameters;
 
 //! ImageParameters
 typedef struct
 {
-  int number;                  //!< current image number to be encoded
+  int number;                  //!< current image number to be encoded (in first layer)  
+  int frm_number;
+  int cur_frm_number;          //!< current image number to be encoded (in all layers)
+  int idr_gop_number;          //!< current idr image number to be encoded
+  int rewind_frame;                  //!< current image number to be encoded
   int pn;                      //!< picture number
   int LevelIndex;              //!< mapped level idc
   int current_mb_nr;
   int current_slice_nr;
   int type;
   int structure;               //!< picture structure
+  int base_dist;
   int num_ref_frames;          //!< number of reference frames to be used
   int max_num_references;      //!< maximum number of reference pictures that may occur
   int qp;                      //!< quant for the current frame
@@ -1001,7 +1020,7 @@ typedef struct
   int ****fadjust8x8Cr;        //!< Transform coefficients for 4x4 chroma within 8x8 inter blocks.
 
 
-  Picture       *currentPicture; //!< The coded picture currently in the works (typically frame_pic, top_pic, or bottom_pic)
+  Picture       *currentPicture; //!< The coded picture currently in the works (typically p_frame_pic, field_pic[0], or field_pic[1])
   Slice         *currentSlice;                                //!< pointer to current Slice data struct
   Macroblock    *mb_data;                                   //!< array containing all MBs of a whole frame
 
@@ -1074,6 +1093,7 @@ typedef struct
   // for poc mode 1.
   int          delta_pic_order_cnt[2];
 
+  int          frm_iter;   // frame variations to create (useful for multiple coding passes)
 
   unsigned int field_picture;
     signed int toppoc;      //!< poc for this frame or field
@@ -1163,6 +1183,17 @@ typedef struct
   int AverageFrameQP;
   int SumFrameQP;
   int GopLevels;
+
+  int ChromaArrayType;
+  Macroblock    *mb_data_JV[MAX_PLANE];  //!< mb_data to be used during 4:4:4 independent mode encoding
+  int colour_plane_id;    //!< colour_plane_id of the current coded slice (valid only when separate_colour_plane_flag is 1)
+
+  int lastIDR;
+  int lastIDRnumber;
+  int lastIntraNumber;
+  int lastINTRA;
+  int last_ref_idc;
+  int idr_refresh;
 } ImageParameters;
 
 #define NUM_PIC_TYPE 5
@@ -1264,14 +1295,10 @@ typedef struct
 typedef struct
 {
   int cost8x8;
-  int rec_resG_8x8[16][16];
-  int resTrans_R_8x8[16][16];
-  int resTrans_B_8x8[16][16];
-  int mprRGB_8x8[3][16][16];
   short part8x8mode[4];
   char  part8x8pdir[4];
-  char  part8x8fwref[4];
-  char  part8x8bwref[4];
+  char  part8x8l0ref[4];
+  char  part8x8l1ref[4];
   imgpel rec_mbY8x8[16][16];
   imgpel mpr8x8[16][16];
   int lrec[16][16]; // transform and quantized coefficients will be stored here for SP frames
@@ -1307,7 +1334,6 @@ FILE *p_log;                     //!< SNR file
 FILE *p_trace;                   //!< Trace file
 int  p_in;                       //!< original YUV file handle
 int  p_dec;                      //!< decoded image file handle
-
 
 /***********************************************************************
  * P r o t o t y p e s   f o r    T M L
@@ -1454,7 +1480,6 @@ void UpdatePixelMap(void);
 void  ClearFastFullIntegerSearch    (void);
 void  ResetFastFullIntegerSearch    (void);
 
-void process_2nd_IGOP(void);
 void SetImgType(void);
 
 // Tian Dong: for IGOPs
@@ -1462,6 +1487,10 @@ extern Boolean In2ndIGOP;
 extern int start_frame_no_in_this_IGOP;
 extern int start_tr_in_this_IGOP;
 extern int FirstFrameIn2ndIGOP;
+extern int FrameNumberInFile;
+
+int CalculateFrameNumber(void);
+
 #define IMG_NUMBER (img->number - start_frame_no_in_this_IGOP)
 
 void AllocNalPayloadBuffer(void);
@@ -1482,8 +1511,6 @@ void (*encode_one_macroblock) (void);
 
 void set_chroma_qp(Macroblock *currMB);
 
-
-#include "context_ini.h"
 
 void store_coding_state_cs_cm(void);
 void reset_coding_state_cs_cm(void);
@@ -1530,9 +1557,16 @@ int img_pad_size_uv_y;
 unsigned char chroma_mask_mv_y;
 unsigned char chroma_mask_mv_x;
 int chroma_shift_y, chroma_shift_x;
-int shift_cr_x, shift_cr_y;
+int shift_cr_x, shift_cr_x2, shift_cr_y;
 int img_padded_size_x;
+int img_padded_size_x2;
+int img_padded_size_x4;
+int img_padded_size_x_m8;
+int img_padded_size_x_m8x8;
+int img_padded_size_x_m4x4;
 int img_cr_padded_size_x;
+int img_cr_padded_size_x2;
+int img_cr_padded_size_x4;
 
 // struct with pointers to the sub-images
 typedef struct {
@@ -1542,6 +1576,10 @@ typedef struct {
 
 int start_me_refinement_hp; // if set then recheck the center position when doing half-pel motion refinement
 int start_me_refinement_qp; // if set then recheck the center position when doing quarter-pel motion refinement
+
+// For 4:4:4 independent mode
+void change_plane_JV( int nplane );
+void make_frame_picture_JV();
 
 #endif
 

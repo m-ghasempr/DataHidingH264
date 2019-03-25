@@ -1,7 +1,6 @@
 
 /*!
  *****************************************************************************
- *
  * \file rtp.c
  *
  * \brief
@@ -434,7 +433,6 @@ int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void
 
 /*!
  *****************************************************************************
- * \isAggregationPacket
  * \brief
  *    Determine if current packet is normal packet or compound packet (aggregation
  *    packet)
@@ -462,7 +460,6 @@ Boolean isAggregationPacket()
 #endif
 /*!
  *****************************************************************************
- * \PrepareAggregationSEIMessage
  * \brief
  *    Prepare the aggregation sei message.
  *
@@ -639,21 +636,22 @@ void begin_sub_sequence_rtp()
 void end_sub_sequence_rtp()
 {
   // end of the base layer:
-  if ( img->number == input->no_frames-1 )
+  if ( img->number == input->no_frames - 1 )
   {
-//    printf("end of encoding the base layer subseq\n");
+    //    printf("end of encoding the base layer subseq\n");
     CloseSubseqInfo(0);
-//    updateSubSequenceBox(0);
+    //    updateSubSequenceBox(0);
   }
+
   // end of the enhanced layer:
   if ( ((IMG_NUMBER%(input->NumFramesInELSubSeq+1)==0) && (input->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
     ((IMG_NUMBER%(input->NumFramesInELSubSeq+1)==input->NumFramesInELSubSeq) && (input->successive_Bframe==0))   // there are no B frames
     )
   {
-//    printf("end of encoding the enhanced layer subseq\n");
+    //    printf("end of encoding the enhanced layer subseq\n");
     CloseSubseqInfo(1);
-//    add_dependent_subseq(1);
-//    updateSubSequenceBox(1);
+    //    add_dependent_subseq(1);
+    //    updateSubSequenceBox(1);
   }
 }
 

@@ -358,6 +358,9 @@
 		<File
 			RelativePath="bin\decoder.cfg">
 		</File>
+		<File
+			RelativePath=".\VTune\ldecod.vpj">
+		</File>
 	</Files>
 	<Globals>
 	</Globals>

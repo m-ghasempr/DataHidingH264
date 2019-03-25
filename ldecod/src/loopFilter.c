@@ -192,10 +192,13 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
         {
           if (filterNon8x8LumaEdgesFlag[edge])
             EdgeLoopLuma( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge << 2, p->size_x, p) ;
-          if( (imgUV != NULL) && (edge_cr >= 0))
+          if( !IS_INDEPENDENT(img) )
           {
-            EdgeLoopChroma( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge_cr, p->size_x_cr, 0, p) ;
-            EdgeLoopChroma( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge_cr, p->size_x_cr, 1, p) ;
+            if( (imgUV != NULL) && (edge_cr >= 0))
+            {
+              EdgeLoopChroma( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge_cr, p->size_x_cr, 0, p) ;
+              EdgeLoopChroma( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge_cr, p->size_x_cr, 1, p) ;
+            }
           }
         }
 
@@ -207,10 +210,13 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
           {
             if (filterNon8x8LumaEdgesFlag[edge])
               EdgeLoopLuma( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 16, p->size_x, p) ;
-            if( (imgUV != NULL) && (edge_cr >= 0))
+            if( !IS_INDEPENDENT(img) )
             {
-              EdgeLoopChroma( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, MB_BLOCK_SIZE, p->size_x_cr, 0, p) ;
-              EdgeLoopChroma( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, MB_BLOCK_SIZE, p->size_x_cr, 1, p) ;
+              if( (imgUV != NULL) && (edge_cr >= 0))
+              {
+                EdgeLoopChroma( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, MB_BLOCK_SIZE, p->size_x_cr, 0, p) ;
+                EdgeLoopChroma( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, MB_BLOCK_SIZE, p->size_x_cr, 1, p) ;
+              }
             }
           }
           img->DeblockCall = 1;
@@ -594,9 +600,9 @@ void EdgeLoopLumaNormal(imgpel** Img, byte Strength[16], struct img_par *img, in
 
               if (ap)
               {
-                SrcPtrP[-incP*2] = (imgpel) ((((L3 + L2) <<1) + L2 + L1 + RL0 + 4) >> 3);
-                SrcPtrP[-incP]   = (imgpel) (( L2 + L1 + L0 + R0 + 2) >> 2);
-                SrcPtrP[0]       = (imgpel) (( R1 + ((L1 + RL0) << 1) +  L2 + 4) >> 3);
+                SrcPtrP[-incP * 2] = (imgpel) ((((L3 + L2) <<1) + L2 + L1 + RL0 + 4) >> 3);
+                SrcPtrP[-incP    ] = (imgpel) (( L2 + L1 + L0 + R0 + 2) >> 2);
+                SrcPtrP[    0    ] = (imgpel) (( R1 + ((L1 + RL0) << 1) +  L2 + 4) >> 3);
               }
               else
               {
@@ -724,26 +730,26 @@ void EdgeLoopLumaMBAff(imgpel** Img, byte Strength[16],struct img_par *img, int 
 
               if (ap)
               {
-                SrcPtrP[-incP*2] = (imgpel) ((((L3 + L2) << 1) + L2 + L1 + RL0 + 4) >> 3);
-                SrcPtrP[-incP]   = (imgpel) (( L2 + L1 + L0 + R0 + 2) >> 2);
-                SrcPtrP[0]       = (imgpel) (( R1 + ((L1 + RL0) << 1) +  L2 + 4) >> 3);
+                SrcPtrP[-incP * 2] = (imgpel) ((((L3 + L2) << 1) + L2 + L1 + RL0 + 4) >> 3);
+                SrcPtrP[-incP    ] = (imgpel) (( L2 + L1 + L0 + R0 + 2) >> 2);
+                SrcPtrP[    0    ] = (imgpel) (( R1 + ((L1 + RL0) << 1) +  L2 + 4) >> 3);
               }
               else
               {
                 SrcPtrP[ -incP * 2 ] = L2;
                 SrcPtrP[ -incP     ] = L1;
-                SrcPtrP[ 0         ] = (imgpel) (((L1 << 1) + L0 + R1 + 2) >> 2) ;
+                SrcPtrP[     0     ] = (imgpel) (((L1 << 1) + L0 + R1 + 2) >> 2) ;
               }
 
               if (aq)
               {
-                SrcPtrQ[ 0        ] = (imgpel) (( L1 + ((R1 + RL0) << 1) +  R2 + 4) >> 3);
+                SrcPtrQ[    0     ] = (imgpel) (( L1 + ((R1 + RL0) << 1) +  R2 + 4) >> 3);
                 SrcPtrQ[ incQ     ] = (imgpel) (( R2 + R0 + R1 + L0 + 2) >> 2);
                 SrcPtrQ[ incQ * 2 ] = (imgpel) ((((R3 + R2) << 1) + R2 + R1 + RL0 + 4) >> 3);
               }
               else
               {
-                SrcPtrQ[ 0        ] = (imgpel) (((R1 << 1) + R0 + L1 + 2) >> 2);
+                SrcPtrQ[    0     ] = (imgpel) (((R1 << 1) + R0 + L1 + 2) >> 2);
                 SrcPtrQ[ incQ     ] = R1;
                 SrcPtrQ[ incQ * 2 ] = R2;
               }

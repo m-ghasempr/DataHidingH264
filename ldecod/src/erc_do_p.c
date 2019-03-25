@@ -349,6 +349,8 @@ static int concealByTrial(frame *recfr, imgpel *predMB,
 
   numMBPerLine = (int) (picSizeX>>4);
 
+  img->current_mb_nr = currMBNum;
+
   comp = 0;
   regionSize = 16;
 
@@ -566,7 +568,7 @@ static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpe
   int b8, b4;
   int yuv = dec_picture->chroma_format_idc - 1;
 
-  int ref_frame = imax (mv[2], 0); // !!KS: quick fix, we sometimes seem to get negative ref_pic here, so restrict to zero an above
+  int ref_frame = imax (mv[2], 0); // !!KS: quick fix, we sometimes seem to get negative ref_pic here, so restrict to zero and above
 
   /* Update coordinates of the current concealed macroblock */
   img->mb_x = x/MB_BLOCK_SIZE;

@@ -76,6 +76,11 @@ typedef struct storable_picture
 
   short ****   mv;            //!< motion vector       [list][subblock_y][subblock_x][component]
 
+  char  ***   ref_idx_JV[MAX_PLANE];       //!< ref_idx to be used for 4:4:4 independent mode decoding
+  int64 ***   ref_pic_id_JV[MAX_PLANE];    //!< ref_pic_id to be used for 4:4:4 independent mode decoding
+  int64 ***   ref_id_JV[MAX_PLANE];        //!< ref_id to be used for 4:4:4 independent mode decoding
+  short ****  mv_JV[MAX_PLANE];            //!< mv to be used for 4:4:4 independent mode decoding
+
   byte **     moving_block;
   byte **     field_frame;         //!< indicates if co_located is field or frame.
 
@@ -223,6 +228,10 @@ void             fill_frame_num_gap(ImageParameters *img);
 ColocatedParams* alloc_colocated(int size_x, int size_y,int mb_adaptive_frame_field_flag);
 void free_colocated(ColocatedParams* p);
 void compute_colocated(ColocatedParams* p, StorablePicture **listX[6]);
+
+// For 4:4:4 independent mode
+void compute_colocated_JV(ColocatedParams* p, StorablePicture **listX[6]);
+void copy_storable_param_JV( int nplane, StorablePicture *d, StorablePicture *s );
 
 #endif
 

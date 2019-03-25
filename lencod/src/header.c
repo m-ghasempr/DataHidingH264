@@ -75,6 +75,9 @@ int SliceHeader()
 
   len += ue_v("SH: pic_parameter_set_id" , active_pps->pic_parameter_set_id ,bitstream);
 
+  if( active_sps->separate_colour_plane_flag == 1 )
+    len += u_v( 2, "SH: colour_plane_id", img->colour_plane_id, bitstream );
+
   len += u_v (log2_max_frame_num_minus4 + 4,"SH: frame_num", img->frame_num, bitstream);
 
   if (!active_sps->frame_mbs_only_flag)
@@ -403,15 +406,13 @@ static int pred_weight_table(Bitstream *bitstream)
   {
     if ( (wp_weight[0][i][0] != 1<<luma_log_weight_denom) || (wp_offset[0][i][0] != 0) )
     {
-      len += u_1 ("SH: luma_weight_flag_l0", 1, bitstream);
-
+      len += u_1  ("SH: luma_weight_flag_l0", 1, bitstream);
       len += se_v ("SH: luma_weight_l0", wp_weight[0][i][0], bitstream);
-
       len += se_v ("SH: luma_offset_l0", wp_offset[0][i][0], bitstream);
     }
     else
     {
-        len += u_1 ("SH: luma_weight_flag_l0", 0, bitstream);
+      len += u_1  ("SH: luma_weight_flag_l0", 0, bitstream);
     }
 
     if (active_sps->chroma_format_idc!=0)
@@ -423,7 +424,6 @@ static int pred_weight_table(Bitstream *bitstream)
         for (j=1; j<3; j++)
         {
           len += se_v ("chroma_weight_l0", wp_weight[0][i][j] ,bitstream);
-
           len += se_v ("chroma_offset_l0", wp_offset[0][i][j] ,bitstream);
         }
       }
@@ -440,15 +440,13 @@ static int pred_weight_table(Bitstream *bitstream)
     {
       if ( (wp_weight[1][i][0] != 1<<luma_log_weight_denom) || (wp_offset[1][i][0] != 0) )
       {
-        len += u_1 ("SH: luma_weight_flag_l1", 1, bitstream);
-
+        len += u_1  ("SH: luma_weight_flag_l1", 1, bitstream);
         len += se_v ("SH: luma_weight_l1", wp_weight[1][i][0], bitstream);
-
         len += se_v ("SH: luma_offset_l1", wp_offset[1][i][0], bitstream);
       }
       else
       {
-        len += u_1 ("SH: luma_weight_flag_l1", 0, bitstream);
+        len += u_1  ("SH: luma_weight_flag_l1", 0, bitstream);
       }
 
       if (active_sps->chroma_format_idc!=0)

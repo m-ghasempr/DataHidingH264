@@ -46,6 +46,7 @@ const byte ZZ_SCAN8[64] =
 
 extern int UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
 extern ColocatedParams *Co_located;
+extern ColocatedParams *Co_located_JV[MAX_PLANE];  //!< Co_located to be used during 4:4:4 independent mode decoding
 
 extern int quant_intra_default[16];
 extern int quant_inter_default[16];
@@ -88,6 +89,7 @@ void Scaling_List(int *scalingList, int sizeOfScalingList, Boolean *UseDefaultSc
 int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
 {
   unsigned i;
+  unsigned n_ScalingList;
   int reserved_zero;
   Bitstream *s = p->bitstream;
 
@@ -103,10 +105,11 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   if ((sps->profile_idc!=66 ) &&
       (sps->profile_idc!=77 ) &&
       (sps->profile_idc!=88 ) &&
-      (sps->profile_idc!=100 ) &&
-      (sps->profile_idc!=110 ) &&
-      (sps->profile_idc!=122 ) &&
-      (sps->profile_idc!=144 ))
+      (sps->profile_idc!=FREXT_HP    ) &&
+      (sps->profile_idc!=FREXT_Hi10P ) &&
+      (sps->profile_idc!=FREXT_Hi422 ) &&
+      (sps->profile_idc!=FREXT_Hi444 ) &&
+      (sps->profile_idc!=FREXT_CAVLC444 ))
   {
     return UsedBits;
   }
@@ -127,22 +130,19 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   sps->bit_depth_luma_minus8   = 0;
   sps->bit_depth_chroma_minus8 = 0;
   img->lossless_qpprime_flag   = 0;
+  sps->separate_colour_plane_flag = 0;
 
   if((sps->profile_idc==FREXT_HP   ) ||
      (sps->profile_idc==FREXT_Hi10P) ||
      (sps->profile_idc==FREXT_Hi422) ||
-     (sps->profile_idc==FREXT_Hi444))
+     (sps->profile_idc==FREXT_Hi444) ||
+     (sps->profile_idc==FREXT_CAVLC444))
   {
     sps->chroma_format_idc                      = ue_v ("SPS: chroma_format_idc"                       , s);
 
-    // Residue Color Transform
-    if(sps->chroma_format_idc == 3)
+    if(sps->chroma_format_idc == YUV444)
     {
-      i                                         = u_1  ("SPS: residue_transform_flag"                  , s);
-      if (i==1)
-      {
-        error ("[Deprecated High444 Profile] residue_transform_flag = 1 is no longer supported", 1000);
-      }
+      sps->separate_colour_plane_flag           = u_1  ("SPS: separate_colour_plane_flag"              , s);
     }
 
     sps->bit_depth_luma_minus8                  = ue_v ("SPS: bit_depth_luma_minus8"                   , s);
@@ -153,7 +153,8 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
 
     if(sps->seq_scaling_matrix_present_flag)
     {
-      for(i=0; i<8; i++)
+      n_ScalingList = (sps->chroma_format_idc != YUV444) ? 8 : 12;
+      for(i=0; i<n_ScalingList; i++)
       {
         sps->seq_scaling_list_present_flag[i]   = u_1  (   "SPS: seq_scaling_list_present_flag"         , s);
         if(sps->seq_scaling_list_present_flag[i])
@@ -325,6 +326,8 @@ int ReadHRDParameters(DataPartition *p, hrd_parameters_t *hrd)
 int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
 {
   unsigned i;
+  unsigned n_ScalingList;
+  int chroma_format_idc;
   int NumberBitsPerSliceGroupId;
   Bitstream *s = p->bitstream;
 
@@ -411,7 +414,9 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
 
     if(pps->pic_scaling_matrix_present_flag)
     {
-      for(i=0; i<(6+((unsigned)pps->transform_8x8_mode_flag<<1)); i++)
+      chroma_format_idc = SeqParSet[pps->seq_parameter_set_id].chroma_format_idc;
+      n_ScalingList = 6 + ((chroma_format_idc != YUV444) ? 2 : 6) * pps->transform_8x8_mode_flag;
+      for(i=0; i<n_ScalingList; i++)
       {
         pps->pic_scaling_list_present_flag[i]= u_1  ("PPS: pic_scaling_list_present_flag"          , s);
 
@@ -515,6 +520,15 @@ void ProcessSPS (NALU_t *nalu)
     // SPSConsistencyCheck (pps);
     MakeSPSavailable (sps->seq_parameter_set_id, sps);
     img->profile_idc = sps->profile_idc; //ADD-VG
+    img->separate_colour_plane_flag = sps->separate_colour_plane_flag;
+    if( img->separate_colour_plane_flag )
+    {
+      img->ChromaArrayType = 0;
+    }
+    else
+    {
+      img->ChromaArrayType = sps->chroma_format_idc;
+    }
   }
 
   FreePartition (dp, 1);
@@ -558,6 +572,7 @@ void ProcessPPS (NALU_t *nalu)
 
 void activate_sps (seq_parameter_set_rbsp_t *sps)
 {
+  int nplane;
   if (active_sps != sps)
   {
     if (dec_picture)
@@ -617,11 +632,26 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
     }
     init_dpb();
 
-    if (NULL!=Co_located)
+    if( IS_INDEPENDENT(img) )
     {
-      free_colocated(Co_located);
+      for( nplane=0; nplane<MAX_PLANE; nplane++ )
+      {
+        if( NULL != Co_located_JV[nplane] )
+        {
+          free_colocated(Co_located_JV[nplane]);        
+        }
+        Co_located_JV[nplane] = alloc_colocated (img->width, img->height,sps->mb_adaptive_frame_field_flag);      
+      }
     }
-    Co_located = alloc_colocated (img->width, img->height,sps->mb_adaptive_frame_field_flag);
+    else
+    {
+      if (NULL!=Co_located)
+      {
+        free_colocated(Co_located);
+      }
+      Co_located = alloc_colocated (img->width, img->height,sps->mb_adaptive_frame_field_flag);
+    }
+
     ercInit(img->width, img->height, 1);
   }
 }

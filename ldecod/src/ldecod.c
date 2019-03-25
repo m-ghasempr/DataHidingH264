@@ -5,11 +5,17 @@
  *     This is the H.264/AVC decoder reference software. For detailed documentation
  *     see the comments in each file.
  *
+ *     The JM software web site is located at:
+ *     http://iphome.hhi.de/suehring/tml
+ *
+ *     For bug reporting and known issues see:
+ *     https://ipbt.hhi.de
+ *
  *  \author
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 12.2 (FRExt)
+ *     JM 12.3 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -69,7 +75,7 @@
 #include "erc_api.h"
 
 #define JM          "12 (FRExt)"
-#define VERSION     "12.2"
+#define VERSION     "12.3"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -79,6 +85,7 @@
 extern objectBuffer_t *erc_object_list;
 extern ercVariables_t *erc_errorVar;
 extern ColocatedParams *Co_located;
+extern ColocatedParams *Co_located_JV[MAX_PLANE];  //!< Co_located to be used during 4:4:4 independent mode decoding
 
 // I have started to move the inp and img structures into global variables.
 // They are declared in the following lines.  Since inp is defined in conio.h
@@ -285,7 +292,7 @@ void Configure(int ac, char *av[])
   {
     fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
     fprintf(stdout,"--------------------------------------------------------------------------\n");
-    fprintf(stdout,"  Frame       POC   Pic#   QP   SnrY    SnrU    SnrV   Y:U:V  Time(ms)\n");
+    fprintf(stdout,"  Frame           POC   Pic#   QP   SnrY    SnrU    SnrV   Y:U:V  Time(ms)\n");
     fprintf(stdout,"--------------------------------------------------------------------------\n");
   }
 
@@ -300,12 +307,12 @@ void Configure(int ac, char *av[])
 int main(int argc, char **argv)
 {
   int i;
+  int nplane;
 
   // allocate memory for the structures
   if ((input =  (struct inp_par *)calloc(1, sizeof(struct inp_par)))==NULL) no_mem_exit("main: input");
   if ((snr   =  (struct snr_par *)calloc(1, sizeof(struct snr_par)))==NULL) no_mem_exit("main: snr");
   if ((img   =  (struct img_par *)calloc(1, sizeof(struct img_par)))==NULL) no_mem_exit("main: img");
-
 
   Configure (argc, argv);
 
@@ -384,12 +391,23 @@ int main(int argc, char **argv)
 
   free_dpb();
   uninit_out_buffer();
-  free_colocated(Co_located);
+  if( IS_INDEPENDENT(img) )
+  {
+    for( nplane=0; nplane<MAX_PLANE; nplane++ )
+    {
+      free_colocated(Co_located_JV[nplane]);   
+    }
+  }
+  else
+  {
+    free_colocated(Co_located);
+  }
   free (input);
   free (snr);
   free (img);
 
   //while( !kbhit() );
+
   return 0;
 }
 
@@ -921,6 +939,20 @@ int init_global_buffers()
   // allocate memory in structure img
   if(((img->mb_data) = (Macroblock *) calloc(img->FrameSizeInMbs, sizeof(Macroblock))) == NULL)
     no_mem_exit("init_global_buffers: img->mb_data");
+  if( IS_INDEPENDENT(img) )
+  {
+    for( i=0; i<MAX_PLANE; i++ )
+    {
+      if(((img->mb_data_JV[i]) = (Macroblock *) calloc(img->FrameSizeInMbs, sizeof(Macroblock))) == NULL)
+        no_mem_exit("init_global_buffers: img->mb_data");
+    }
+    img->mb_data = NULL;
+  }
+  else
+  {
+    if(((img->mb_data) = (Macroblock *) calloc(img->FrameSizeInMbs, sizeof(Macroblock))) == NULL)
+      no_mem_exit("init_global_buffers: img->mb_data");
+  }
 
   if(((img->intra_block) = (int*)calloc(img->FrameSizeInMbs, sizeof(int))) == NULL)
     no_mem_exit("init_global_buffers: img->intra_block");

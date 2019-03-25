@@ -17,11 +17,9 @@
 #include "mbuffer.h"
 
 extern StorablePicture *enc_picture;
-extern StorablePicture *enc_frame_picture;
-extern StorablePicture *enc_frame_picture2;
-extern StorablePicture *enc_frame_picture3;
-extern StorablePicture *enc_top_picture;
-extern StorablePicture *enc_bottom_picture;
+extern StorablePicture **enc_frame_picture;
+extern StorablePicture **enc_field_picture;
+extern StorablePicture *enc_frame_picture_JV[MAX_PLANE];  //!< enc_frame to be used during 4:4:4 independent mode encoding
 
 int encode_one_frame (void);
 void report_frame_statistic(void);
@@ -29,6 +27,9 @@ Boolean dummy_slice_too_big(int bits_slice);
 void copy_rdopt_data (int field_type);       // For MB level field/frame coding tools
 
 void UnifiedOneForthPix (StorablePicture *s);
+// For 4:4:4 independent mode
+void UnifiedOneForthPix_JV (int nplane, StorablePicture *s);
+
 
 #endif
 

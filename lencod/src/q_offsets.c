@@ -16,10 +16,10 @@
 
 extern char *GetConfigFileContent (char *Filename, int error_type);
 
-#define MAX_ITEMS_TO_PARSE  1000
+#define MAX_ITEMS_TO_PARSE  2000
 
 int offset4x4_check[6] = { 0, 0, 0, 0, 0, 0 };
-int offset8x8_check[2] = { 0, 0 };
+int offset8x8_check[6] = { 0, 0, 0, 0, 0, 0 };
 
 static const char OffsetType4x4[15][24] = {
   "INTRA4X4_LUMA_INTRA",
@@ -39,26 +39,41 @@ static const char OffsetType4x4[15][24] = {
   "INTER4X4_CHROMAV_INTERB"
 };
 
-static const char OffsetType8x8[5][24] = {
+static const char OffsetType8x8[15][24] = {
   "INTRA8X8_LUMA_INTRA",
   "INTRA8X8_LUMA_INTERP",
   "INTRA8X8_LUMA_INTERB",
   "INTER8X8_LUMA_INTERP",
-  "INTER8X8_LUMA_INTERB"
+  "INTER8X8_LUMA_INTERB",
+  "INTRA8X8_CHROMAU_INTRA",
+  "INTRA8X8_CHROMAU_INTERP",
+  "INTRA8X8_CHROMAU_INTERB",
+  "INTER8X8_CHROMAU_INTERP",
+  "INTER8X8_CHROMAU_INTERB",
+  "INTRA8X8_CHROMAV_INTRA",
+  "INTRA8X8_CHROMAV_INTERP",
+  "INTRA8X8_CHROMAV_INTERB",
+  "INTER8X8_CHROMAV_INTERP",
+  "INTER8X8_CHROMAV_INTERB"
 };
 
 
 int ****LevelOffset4x4Luma;
 int *****LevelOffset4x4Chroma;
 int ****LevelOffset8x8Luma;
+int *****LevelOffset8x8Chroma;
+
+// global pointers for level offset matrices
+int ****ptLevelOffset4x4Luma;
+int ****ptLevelOffset8x8Luma;
 
 int AdaptRndWeight;
 int AdaptRndCrWeight;
 
 short **OffsetList4x4input;
 short **OffsetList8x8input;
-short **OffsetList4x4;
-short **OffsetList8x8;
+short ***OffsetList4x4;
+short ***OffsetList8x8;
 
 void InitOffsetParam ();
 
@@ -104,6 +119,17 @@ static const short Offset8_intra_default_intra[64] = {
   682, 682, 682, 682, 682, 682, 682, 682
 };
 
+static const short Offset8_intra_default_chroma[64] = {
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682,
+  682, 682, 682, 682, 682, 682, 682, 682
+};
+
 static const short Offset8_intra_default_inter[64] = {
   342, 342, 342, 342, 342, 342, 342, 342,
   342, 342, 342, 342, 342, 342, 342, 342,
@@ -130,41 +156,60 @@ static const short Offset8_inter_default[64] = {
  ***********************************************************************
  * \brief
  *    Allocate Q matrix arrays
- ***********************************************************************
+***********************************************************************
  */
 void allocate_QOffsets ()
 {
-  int max_qp_per_luma = (3 + 6*(input->BitDepthLuma) - MIN_QP)/6 + 1;
-  int max_qp_per_cr = (3 + 6*(input->BitDepthChroma) - MIN_QP)/6 + 1;
-  int max_qp_per = imax(max_qp_per_luma,max_qp_per_cr);
-  get_mem4Dint(&LevelOffset4x4Luma,      2, max_qp_per, 4, 4);
-  get_mem5Dint(&LevelOffset4x4Chroma, 2, 2, max_qp_per, 4, 4);
-  get_mem4Dint(&LevelOffset8x8Luma,      2, max_qp_per, 8, 8);
+  int max_bitdepth = imax(input->BitDepthLuma, input->BitDepthChroma);
+  int max_qp = (3 + 6*(max_bitdepth) - MIN_QP);
+
+  get_mem4Dint(&LevelOffset4x4Luma,      2, max_qp + 1, 4, 4);
+  get_mem5Dint(&LevelOffset4x4Chroma, 2, 2, max_qp + 1, 4, 4);
+  get_mem4Dint(&LevelOffset8x8Luma,      2, max_qp + 1, 8, 8);
+  get_mem5Dint(&LevelOffset8x8Chroma, 2, 2, max_qp + 1, 8, 8);
+
+  if (input->AdaptRoundingFixed)
+  {
+    get_mem3Dshort(&OffsetList4x4, 1, 15, 16);
+    get_mem3Dshort(&OffsetList8x8, 1, 15, 64);    
+  }
+  else
+  {
+    get_mem3Dshort(&OffsetList4x4, max_qp + 1, 15, 16);
+    get_mem3Dshort(&OffsetList8x8, max_qp + 1, 15, 64);    
+  }
 
   get_mem2Dshort(&OffsetList4x4input, 15, 16);
-  get_mem2Dshort(&OffsetList8x8input,  5, 64);
-  get_mem2Dshort(&OffsetList4x4, 15, 16);
-  get_mem2Dshort(&OffsetList8x8,  5, 64);
-
+  get_mem2Dshort(&OffsetList8x8input, 15, 64);
 }
 
 /*!
  ***********************************************************************
  * \brief
  *    Free Q matrix arrays
- ***********************************************************************
+************************************************************************
  */
 void free_QOffsets ()
 {
-  int max_qp_per_luma = (3 + 6*(input->BitDepthLuma) - MIN_QP)/6 + 1;
-  int max_qp_per_cr = (3 + 6*(input->BitDepthChroma) - MIN_QP)/6 + 1;
-  int max_qp_per = imax(max_qp_per_luma,max_qp_per_cr);
-  free_mem4Dint(LevelOffset4x4Luma,      2, max_qp_per);
-  free_mem5Dint(LevelOffset4x4Chroma, 2, 2, max_qp_per);
-  free_mem4Dint(LevelOffset8x8Luma,      2, max_qp_per);
+  int max_bitdepth = imax(input->BitDepthLuma, input->BitDepthChroma);
+  int max_qp = (3 + 6*(max_bitdepth) - MIN_QP);
 
-  free_mem2Dshort(OffsetList8x8);
-  free_mem2Dshort(OffsetList4x4);
+  free_mem4Dint(LevelOffset4x4Luma,      2, max_qp + 1);
+  free_mem5Dint(LevelOffset4x4Chroma, 2, 2, max_qp + 1);
+  free_mem4Dint(LevelOffset8x8Luma,      2, max_qp + 1);
+  free_mem5Dint(LevelOffset8x8Chroma, 2, 2, max_qp + 1);
+
+  if (input->AdaptRoundingFixed)
+  {
+    free_mem3Dshort(OffsetList8x8, 1);
+    free_mem3Dshort(OffsetList4x4, 1);    
+  }
+  else
+  {
+    free_mem3Dshort(OffsetList8x8, max_qp + 1);
+    free_mem3Dshort(OffsetList4x4, max_qp + 1);    
+  }
+
   free_mem2Dshort(OffsetList8x8input);
   free_mem2Dshort(OffsetList4x4input);
 }
@@ -199,7 +244,7 @@ int CheckOffsetParameterName (char *s, int *type)
 
   i = 0;
   *type = 1;
-  while ((OffsetType8x8[i] != NULL) && (i < 5))
+  while ((OffsetType8x8[i] != NULL) && (i < 15))
   {
     if (0 == strcmp (OffsetType8x8[i], s))
       return i;
@@ -390,29 +435,50 @@ void Init_QOffsetMatrix ()
  */
 void InitOffsetParam ()
 {
-  int k;
+  int i, k;
+  int max_qp_luma = (4 + 6*(input->BitDepthLuma) - MIN_QP);
+  int max_qp_cr   = (4 + 6*(input->BitDepthChroma) - MIN_QP);
 
-  if (input->OffsetMatrixPresentFlag)
+  for (i = 0; i < (input->AdaptRoundingFixed ? 1 : imax(max_qp_luma, max_qp_cr)); i++)
   {
-    memcpy(&(OffsetList4x4[0][0]),&(OffsetList4x4input[0][0]), 15 * 16 * sizeof(short));
-    memcpy(&(OffsetList8x8[0][0]),&(OffsetList8x8input[0][0]),  5 * 64 * sizeof(short));
-  }
-  else
-  {
-    memcpy(&(OffsetList4x4[0][0]),&(Offset_intra_default_intra[0]), 16 * sizeof(short));
-    for (k = 1; k < 3; k++)
-      memcpy(&(OffsetList4x4[k][0]),&(Offset_intra_default_chroma[0]),  16 * sizeof(short));
-    for (k = 3; k < 9; k++)
-      memcpy(&(OffsetList4x4[k][0]),&(Offset_intra_default_inter[0]),  16 * sizeof(short));
-    for (k = 9; k < 15; k++)
-      memcpy(&(OffsetList4x4[k][0]),&(Offset_inter_default[0]),  16 * sizeof(short));
+    if (input->OffsetMatrixPresentFlag)
+    {
+      memcpy(&(OffsetList4x4[i][0][0]),&(OffsetList4x4input[0][0]), 15 * 16 * sizeof(short));
+      memcpy(&(OffsetList8x8[i][0][0]),&(OffsetList8x8input[0][0]), 15 * 64 * sizeof(short));
+    }
+    else
+    {
+      // 0 (INTRA4X4_LUMA_INTRA)
+      memcpy(&(OffsetList4x4[i][0][0]),&(Offset_intra_default_intra[0]), 16 * sizeof(short));
+      for (k = 1; k < 3; k++) // 1,2 (INTRA4X4_CHROMA_INTRA)
+        memcpy(&(OffsetList4x4[i][k][0]),&(Offset_intra_default_chroma[0]),  16 * sizeof(short));
+      for (k = 3; k < 9; k++) // 3,4,5,6,7,8 (INTRA4X4_LUMA/CHROMA_INTERP/INTERB)
+        memcpy(&(OffsetList4x4[i][k][0]),&(Offset_intra_default_inter[0]),  16 * sizeof(short));
+      for (k = 9; k < 15; k++) // 9,10,11,12,13,14 (INTER4X4)
+        memcpy(&(OffsetList4x4[i][k][0]),&(Offset_inter_default[0]),  16 * sizeof(short));
 
-    memcpy(&(OffsetList8x8[0][0]),&(Offset8_intra_default_intra[0]), 64 * sizeof(short));
-    memcpy(&(OffsetList8x8[1][0]),&(Offset8_intra_default_inter[0]), 64 * sizeof(short));
-    memcpy(&(OffsetList8x8[2][0]),&(Offset8_intra_default_inter[0]), 64 * sizeof(short));
-    memcpy(&(OffsetList8x8[3][0]),&(Offset8_inter_default[0]), 64 * sizeof(short));
-    memcpy(&(OffsetList8x8[4][0]),&(Offset8_inter_default[0]), 64 * sizeof(short));
-  }
+      // 0 (INTRA8X8_LUMA_INTRA)
+      memcpy(&(OffsetList8x8[i][0][0]),&(Offset8_intra_default_intra[0]), 64 * sizeof(short));
+      for (k = 1; k < 3; k++)  // 1,2 (INTRA8X8_LUMA_INTERP/INTERB)
+        memcpy(&(OffsetList8x8[i][k][0]),&(Offset8_intra_default_inter[0]),  64 * sizeof(short));
+      for (k = 3; k < 5; k++)  // 3,4 (INTER8X8_LUMA_INTERP/INTERB)
+        memcpy(&(OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
+
+      // 5 (INTRA8X8_CHROMAU_INTRA)
+      memcpy(&(OffsetList8x8[i][5][0]),&(Offset8_intra_default_chroma[0]), 64 * sizeof(short));
+      for (k = 6; k < 8; k++)  // 6,7 (INTRA8X8_CHROMAU_INTERP/INTERB)
+        memcpy(&(OffsetList8x8[i][k][0]),&(Offset8_intra_default_inter[0]),  64 * sizeof(short));
+      for (k = 8; k < 10; k++)  // 8,9 (INTER8X8_CHROMAU_INTERP/INTERB)
+        memcpy(&(OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
+
+      // 10 (INTRA8X8_CHROMAV_INTRA)
+      memcpy(&(OffsetList8x8[i][10][0]),&(Offset8_intra_default_chroma[0]), 64 * sizeof(short));
+      for (k = 11; k < 13; k++)  // 11,12 (INTRA8X8_CHROMAV_INTERP/INTERB)
+        memcpy(&(OffsetList8x8[i][k][0]),&(Offset8_intra_default_inter[0]),  64 * sizeof(short));
+      for (k = 13; k < 15; k++)  // 8,9 (INTER8X8_CHROMAV_INTERP/INTERB)
+        memcpy(&(OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
+    }
+  }  
 }
 
 
@@ -430,18 +496,21 @@ void InitOffsetParam ()
  */
 void CalculateOffsetParam ()
 {
-  int i, j, k, temp;
-  int qp_per;
+  int i, j, k, l, temp;
+  int qp_per, qp;
   int img_type = (img->type == SI_SLICE ? I_SLICE : (img->type == SP_SLICE ? P_SLICE : img->type));
 
-  int max_qp_per_luma = qp_per_matrix[(51 + img->bitdepth_luma_qp_scale - MIN_QP)] + 1;
-  int max_qp_per_cr   = qp_per_matrix[(51 + img->bitdepth_chroma_qp_scale - MIN_QP)] + 1;
+  int max_qp_scale = imax(img->bitdepth_luma_qp_scale, img->bitdepth_chroma_qp_scale);
+  int max_qp = 51 + max_qp_scale - MIN_QP;
 
-  AdaptRndWeight = input->AdaptRndWFactor[img->nal_reference_idc!=0][img_type];
-  AdaptRndCrWeight = input->AdaptRndCrWFactor[img->nal_reference_idc!=0][img_type];
-  for (k = 0; k < imax(max_qp_per_luma,max_qp_per_cr); k++)
+  AdaptRndWeight = input->AdaptRndWFactor[img->nal_reference_idc != 0][img_type];
+  AdaptRndCrWeight = input->AdaptRndCrWFactor[img->nal_reference_idc != 0][img_type];
+
+  for (qp = 0; qp < max_qp + 1; qp++)
   {
+    k = qp_per_matrix [qp];
     qp_per = Q_BITS + k - OffsetBits;
+    l = input->AdaptRoundingFixed ? 0 : qp;
     for (j = 0; j < 4; j++)
     {
       for (i = 0; i < 4; i++)
@@ -449,96 +518,151 @@ void CalculateOffsetParam ()
         temp = (j << 2) + i;
         if (img_type == I_SLICE)
         {
-          LevelOffset4x4Luma[1][k][j][i] =
-            (int) OffsetList4x4[0][temp] << qp_per;
-          LevelOffset4x4Chroma[0][1][k][j][i] =
-            (int) OffsetList4x4[1][temp] << qp_per;
-          LevelOffset4x4Chroma[1][1][k][j][i] =
-            (int) OffsetList4x4[2][temp] << qp_per;
+          LevelOffset4x4Luma[1][qp][j][i]     = (int) OffsetList4x4[l][0][temp] << qp_per;
+          LevelOffset4x4Chroma[0][1][qp][j][i] = (int) OffsetList4x4[l][1][temp] << qp_per;
+          LevelOffset4x4Chroma[1][1][qp][j][i] = (int) OffsetList4x4[l][2][temp] << qp_per;
         }
         else if (img_type == B_SLICE)
         {
-          LevelOffset4x4Luma[1][k][j][i] =
-            (int) OffsetList4x4[6][temp] << qp_per;
-          LevelOffset4x4Chroma[0][1][k][j][i] =
-            (int) OffsetList4x4[7][temp] << qp_per;
-          LevelOffset4x4Chroma[1][1][k][j][i] =
-            (int) OffsetList4x4[8][temp] << qp_per;
+          LevelOffset4x4Luma[1][qp][j][i]     = (int) OffsetList4x4[l][6][temp] << qp_per;
+          LevelOffset4x4Chroma[0][1][qp][j][i] = (int) OffsetList4x4[l][7][temp] << qp_per;
+          LevelOffset4x4Chroma[1][1][qp][j][i] = (int) OffsetList4x4[l][8][temp] << qp_per;
         }
         else
         {
-          LevelOffset4x4Luma[1][k][j][i] =
-            (int) OffsetList4x4[3][temp] << qp_per;
-          LevelOffset4x4Chroma[0][1][k][j][i] =
-            (int) OffsetList4x4[4][temp] << qp_per;
-          LevelOffset4x4Chroma[1][1][k][j][i] =
-            (int) OffsetList4x4[5][temp] << qp_per;
+          LevelOffset4x4Luma[1][qp][j][i]     = (int) OffsetList4x4[l][3][temp] << qp_per;
+          LevelOffset4x4Chroma[0][1][qp][j][i] = (int) OffsetList4x4[l][4][temp] << qp_per;
+          LevelOffset4x4Chroma[1][1][qp][j][i] = (int) OffsetList4x4[l][5][temp] << qp_per;
         }
 
         if (img_type == B_SLICE)
         {
-          LevelOffset4x4Luma[0][k][j][i] =
-            (int) OffsetList4x4[12][temp] << qp_per;
-          LevelOffset4x4Chroma[0][0][k][j][i] =
-            (int) OffsetList4x4[13][temp] << qp_per;
-          LevelOffset4x4Chroma[1][0][k][j][i] =
-            (int) OffsetList4x4[14][temp] << qp_per;
+          LevelOffset4x4Luma[0][qp][j][i]     = (int) OffsetList4x4[l][12][temp] << qp_per;
+          LevelOffset4x4Chroma[0][0][qp][j][i] = (int) OffsetList4x4[l][13][temp] << qp_per;
+          LevelOffset4x4Chroma[1][0][qp][j][i] = (int) OffsetList4x4[l][14][temp] << qp_per;
         }
         else
         {
-          LevelOffset4x4Luma[0][k][j][i] =
-            (int) OffsetList4x4[9][temp] << qp_per;
-          LevelOffset4x4Chroma[0][0][k][j][i] =
-            (int) OffsetList4x4[10][temp] << qp_per;
-          LevelOffset4x4Chroma[1][0][k][j][i] =
-            (int) OffsetList4x4[11][temp] << qp_per;
+          LevelOffset4x4Luma[0][qp][j][i]     = (int) OffsetList4x4[l][9][temp] << qp_per;
+          LevelOffset4x4Chroma[0][0][qp][j][i] = (int) OffsetList4x4[l][10][temp] << qp_per;
+          LevelOffset4x4Chroma[1][0][qp][j][i] = (int) OffsetList4x4[l][11][temp] << qp_per;
         }
       }
     }
   }
+
+  // setting for 4x4 luma quantization offset
+  if( IS_INDEPENDENT(input) )
+  {
+    if( img->colour_plane_id == 0 )
+    {
+      ptLevelOffset4x4Luma   = LevelOffset4x4Luma;
+    }
+    else if( img->colour_plane_id == 1 )
+    {
+      ptLevelOffset4x4Luma   = LevelOffset4x4Chroma[0];
+    }
+    else if( img->colour_plane_id == 2 )
+    {
+      ptLevelOffset4x4Luma   = LevelOffset4x4Chroma[1];
+    }
+  }
+  else
+  {
+    ptLevelOffset4x4Luma = LevelOffset4x4Luma;
+  }
+
 }
 
- /*!
+/*!
  ************************************************************************
  * \brief
  *    Calculate the quantisation offset parameters
  *
  ************************************************************************
- */
+*/
 void CalculateOffset8Param ()
 {
   int i, j, k, temp;
-  int q_bits;
+  int q_bits, qp;
 
-  int max_qp_per_luma = qp_per_matrix[(51 + img->bitdepth_luma_qp_scale - MIN_QP)] + 1;
-  int max_qp_per_cr   = qp_per_matrix[(51 + img->bitdepth_chroma_qp_scale - MIN_QP)] + 1;
+  int max_qp_scale = imax(img->bitdepth_luma_qp_scale, img->bitdepth_chroma_qp_scale);
+  int max_qp = 51 + max_qp_scale - MIN_QP;
 
-  for (k = 0; k < imax(max_qp_per_luma,max_qp_per_cr); k++)
+  for (qp = 0; qp < max_qp + 1; qp++)
   {
-    q_bits = Q_BITS_8 + k - OffsetBits;
+    q_bits = Q_BITS_8 + qp_per_matrix[qp] - OffsetBits;
+    k = input->AdaptRoundingFixed ? 0 : qp;
     for (j = 0; j < 8; j++)
     {
       for (i = 0; i < 8; i++)
       {
         temp = (j << 3) + i;
+        // INTRA8X8
         if (img->type == I_SLICE)
-          LevelOffset8x8Luma[1][k][j][i] =
-          (int) OffsetList8x8[0][temp] << q_bits;
+          LevelOffset8x8Luma[1][qp][j][i] = (int) OffsetList8x8[k][0][temp] << q_bits;
         else if (img->type == B_SLICE)
-          LevelOffset8x8Luma[1][k][j][i] =
-          (int) OffsetList8x8[2][temp] << q_bits;
+          LevelOffset8x8Luma[1][qp][j][i] = (int) OffsetList8x8[k][2][temp] << q_bits;
         else
-          LevelOffset8x8Luma[1][k][j][i] =
-          (int) OffsetList8x8[1][temp] << q_bits;
+          LevelOffset8x8Luma[1][qp][j][i] = (int) OffsetList8x8[k][1][temp] << q_bits;
 
+        // INTER8X8
         if (img->type == B_SLICE)
-          LevelOffset8x8Luma[0][k][j][i] =
-          (int) OffsetList8x8[4][temp] << q_bits;
+          LevelOffset8x8Luma[0][qp][j][i] = (int) OffsetList8x8[k][4][temp] << q_bits;
         else
-          LevelOffset8x8Luma[0][k][j][i] =
-          (int) OffsetList8x8[3][temp] << q_bits;
+          LevelOffset8x8Luma[0][qp][j][i] = (int) OffsetList8x8[k][3][temp] << q_bits;
+
+       // INTRA8X8 CHROMAU
+        if (img->type == I_SLICE)
+          LevelOffset8x8Chroma[0][1][qp][j][i] = (int) OffsetList8x8[k][5][temp] << q_bits;
+        else if (img->type == B_SLICE)
+          LevelOffset8x8Chroma[0][1][qp][j][i] = (int) OffsetList8x8[k][7][temp] << q_bits;
+        else
+          LevelOffset8x8Chroma[0][1][qp][j][i] = (int) OffsetList8x8[k][6][temp] << q_bits;
+
+        // INTER8X8 CHROMAU
+        if (img->type == B_SLICE)
+          LevelOffset8x8Chroma[0][0][qp][j][i] = (int) OffsetList8x8[k][9][temp] << q_bits;
+        else
+          LevelOffset8x8Chroma[0][0][qp][j][i] = (int) OffsetList8x8[k][8][temp] << q_bits;
+
+       // INTRA8X8 CHROMAV
+        if (img->type == I_SLICE)
+          LevelOffset8x8Chroma[1][1][qp][j][i] = (int) OffsetList8x8[k][10][temp] << q_bits;
+        else if (img->type == B_SLICE)
+          LevelOffset8x8Chroma[1][1][qp][j][i] = (int) OffsetList8x8[k][12][temp] << q_bits;
+        else
+          LevelOffset8x8Chroma[1][1][qp][j][i] = (int) OffsetList8x8[k][11][temp] << q_bits;
+
+        // INTER8X8 CHROMAV
+        if (img->type == B_SLICE)
+          LevelOffset8x8Chroma[1][0][qp][j][i] = (int) OffsetList8x8[k][14][temp] << q_bits;
+        else
+          LevelOffset8x8Chroma[1][0][qp][j][i] = (int) OffsetList8x8[k][13][temp] << q_bits;
+
       }
     }
+  }
+
+  // setting for 8x8 luma quantization offset
+  if( IS_INDEPENDENT(input) )
+  {
+    if( img->colour_plane_id == 0 )
+    {
+      ptLevelOffset8x8Luma   = LevelOffset8x8Luma;
+    }
+    else if( img->colour_plane_id == 1 )
+    {
+      ptLevelOffset8x8Luma   = LevelOffset8x8Chroma[0];
+    }
+    else if( img->colour_plane_id == 2 )
+    {
+      ptLevelOffset8x8Luma   = LevelOffset8x8Chroma[1];
+    }
+  }
+  else
+  {
+    ptLevelOffset8x8Luma = LevelOffset8x8Luma;
   }
 }
 

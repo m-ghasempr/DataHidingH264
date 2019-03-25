@@ -135,6 +135,8 @@ static const unsigned char subblk_offset_y[3][8][4] =
    {8, 8,12,12} }
 };
 
+extern ColocatedParams *Co_located;
+extern ColocatedParams *Co_located_JV[MAX_PLANE];  //!< Co_located to be used during 4:4:4 independent mode encoding
 
  /*!
  ************************************************************************
@@ -213,64 +215,64 @@ void proceed2nextMacroblock(void)
   if (bitCount[BITS_TOTAL_MB] > img->max_bitCount)
     printf("Warning!!! Number of bits (%d) of macroblock_layer() data seems to exceed defined limit (%d).\n", bitCount[BITS_TOTAL_MB],img->max_bitCount);
 
-  // Update the statistics
-  stats->bit_use_mb_type[img->type]      += bitCount[BITS_MB_MODE];
-  stats->bit_use_coeffY[img->type]       += bitCount[BITS_COEFF_Y_MB] ;
-  stats->tmp_bit_use_cbp[img->type]      += bitCount[BITS_CBP_MB];
-  stats->bit_use_coeffC[img->type]       += bitCount[BITS_COEFF_UV_MB];
-  stats->bit_use_delta_quant[img->type]  += bitCount[BITS_DELTA_QUANT_MB];
+    // Update the statistics
+    stats->bit_use_mb_type[img->type]      += bitCount[BITS_MB_MODE];
+    stats->bit_use_coeffY[img->type]       += bitCount[BITS_COEFF_Y_MB] ;
+    stats->tmp_bit_use_cbp[img->type]      += bitCount[BITS_CBP_MB];
+    stats->bit_use_coeffC[img->type]       += bitCount[BITS_COEFF_UV_MB];
+    stats->bit_use_delta_quant[img->type]  += bitCount[BITS_DELTA_QUANT_MB];
 
-  if (IS_INTRA(currMB))
-  {
-    ++stats->intra_chroma_mode[currMB->c_ipred_mode];
-
-    if ((currMB->cbp&15) != 0)
+    if (IS_INTRA(currMB))
     {
-      if (currMB->luma_transform_size_8x8_flag)
-        ++stats->mode_use_transform_8x8[img->type][currMB->mb_type];
-      else
-        ++stats->mode_use_transform_4x4[img->type][currMB->mb_type];
+      ++stats->intra_chroma_mode[currMB->c_ipred_mode];
+
+      if ((currMB->cbp&15) != 0)
+      {
+        if (currMB->luma_transform_size_8x8_flag)
+          ++stats->mode_use_transform_8x8[img->type][currMB->mb_type];
+        else
+          ++stats->mode_use_transform_4x4[img->type][currMB->mb_type];
+      }
     }
-  }
 
-   ++stats->mode_use[img->type][currMB->mb_type];
-   stats->bit_use_mode[img->type][currMB->mb_type]+= bitCount[BITS_INTER_MB];
+     ++stats->mode_use[img->type][currMB->mb_type];
+     stats->bit_use_mode[img->type][currMB->mb_type]+= bitCount[BITS_INTER_MB];
 
-   if (img->type != I_SLICE)
-   {
-     if (currMB->mb_type == P8x8)
+     if (img->type != I_SLICE)
      {
-       for(i=0;i<4;i++)
+       if (currMB->mb_type == P8x8)
        {
-         if (currMB->b8mode[i] > 0)
-           ++stats->mode_use[img->type][currMB->b8mode[i]];
-         else
-           ++stats->b8_mode_0_use[img->type][currMB->luma_transform_size_8x8_flag];
-
-         if (currMB->b8mode[i]==4)
+         for(i=0;i<4;i++)
          {
-           if ((currMB->luma_transform_size_8x8_flag && (currMB->cbp&15) != 0) || input->Transform8x8Mode == 2)
-             ++stats->mode_use_transform_8x8[img->type][4];
+           if (currMB->b8mode[i] > 0)
+             ++stats->mode_use[img->type][currMB->b8mode[i]];
            else
-             ++stats->mode_use_transform_4x4[img->type][4];
+             ++stats->b8_mode_0_use[img->type][currMB->luma_transform_size_8x8_flag];
+
+           if (currMB->b8mode[i]==4)
+           {
+             if ((currMB->luma_transform_size_8x8_flag && (currMB->cbp&15) != 0) || input->Transform8x8Mode == 2)
+               ++stats->mode_use_transform_8x8[img->type][4];
+             else
+               ++stats->mode_use_transform_4x4[img->type][4];
+           }
          }
        }
+       else if (currMB->mb_type >= 0 && currMB->mb_type <=3 && ((currMB->cbp&15) != 0))
+       {
+         if (currMB->luma_transform_size_8x8_flag)
+           ++stats->mode_use_transform_8x8[img->type][currMB->mb_type];
+         else
+           ++stats->mode_use_transform_4x4[img->type][currMB->mb_type];
+       }
      }
-     else if (currMB->mb_type >= 0 && currMB->mb_type <=3 && ((currMB->cbp&15) != 0))
-     {
-       if (currMB->luma_transform_size_8x8_flag)
-         ++stats->mode_use_transform_8x8[img->type][currMB->mb_type];
-       else
-         ++stats->mode_use_transform_4x4[img->type][currMB->mb_type];
-     }
-   }
 
-  // Statistics
-  if ((img->type == P_SLICE)||(img->type==SP_SLICE) )
-  {
-    ++stats->quant0;
-    stats->quant1 += currMB->qp;      // to find average quant for inter frames
-  }
+    // Statistics
+    if ((img->type == P_SLICE)||(img->type==SP_SLICE) )
+    {
+      ++stats->quant0;
+      stats->quant1 += currMB->qp;      // to find average quant for inter frames
+    }
 }
 
 /*!
@@ -966,7 +968,14 @@ void OneComponentLumaPrediction4x4 ( imgpel*   mpred,          //!< array of pre
   width_pad  = list[ref]->size_x_pad;
   height_pad = list[ref]->size_y_pad;
 
-  ref_line = UMVLine4X (list[ref]->imgY_sub, pic_pix_y + mv[1], pic_pix_x + mv[0]);
+  if( IS_INDEPENDENT(input) )
+  {
+    ref_line = UMVLine4X (list[ref]->p_imgY_sub[img->colour_plane_id], pic_pix_y + mv[1], pic_pix_x + mv[0]);
+  }
+  else
+  {
+    ref_line = UMVLine4X (list[ref]->imgY_sub, pic_pix_y + mv[1], pic_pix_x + mv[0]);
+  }
   
   for (j = 0; j < BLOCK_SIZE; j++) 
   {
@@ -1319,20 +1328,20 @@ int LumaResidualCoding8x8 ( int   *cbp,        //!< Output: cbp (updated accordi
  *    Set mode parameters and reference frames for an 8x8 block
  ************************************************************************
  */
-void SetModesAndRefframe (int b8, short* p_dir, int* l0_mode, int* l1_mode, short* fw_ref, short* bw_ref)
+void SetModesAndRefframe (int b8, short* p_dir, int* l0_mode, int* l1_mode, short* l0_ref, short* l1_ref)
 {
   Macroblock* currMB = &img->mb_data[img->current_mb_nr];
   int         j      = 2*(b8>>1);
   int         i      = 2*(b8 & 0x01);
 
-  *l0_mode = *l1_mode = *fw_ref = *bw_ref = -1;
+  *l0_mode = *l1_mode = *l0_ref = *l1_ref = -1;
 
   *p_dir  = currMB->b8pdir[b8];
 
   if (img->type!=B_SLICE)
   {
-    *fw_ref = enc_picture->ref_idx[LIST_0][img->block_y+j][img->block_x+i];
-    *bw_ref = 0;
+    *l0_ref = enc_picture->ref_idx[LIST_0][img->block_y+j][img->block_x+i];
+    *l1_ref = 0;
     *l0_mode  = currMB->b8mode[b8];
     *l1_mode  = 0;
   }
@@ -1340,29 +1349,29 @@ void SetModesAndRefframe (int b8, short* p_dir, int* l0_mode, int* l1_mode, shor
   {
     if (currMB->b8pdir[b8]==-1)
     {
-      *fw_ref   = -1;
-      *bw_ref   = -1;
+      *l0_ref   = -1;
+      *l1_ref   = -1;
       *l0_mode  =  0;
       *l1_mode  =  0;
     }
     else if (currMB->b8pdir[b8]==0)
     {
-      *fw_ref   = enc_picture->ref_idx[LIST_0][img->block_y+j][img->block_x+i];
-      *bw_ref   = 0;
+      *l0_ref   = enc_picture->ref_idx[LIST_0][img->block_y+j][img->block_x+i];
+      *l1_ref   = 0;
       *l0_mode  = currMB->b8mode[b8];
       *l1_mode  = 0;
     }
     else if (currMB->b8pdir[b8]==1)
     {
-      *fw_ref   = 0;
-      *bw_ref   = enc_picture->ref_idx[LIST_1][img->block_y+j][img->block_x+i];
+      *l0_ref   = 0;
+      *l1_ref   = enc_picture->ref_idx[LIST_1][img->block_y+j][img->block_x+i];
       *l0_mode  = 0;
       *l1_mode  = currMB->b8mode[b8];
     }
     else
     {
-      *fw_ref   = enc_picture->ref_idx[LIST_0][img->block_y+j][img->block_x+i];
-      *bw_ref   = enc_picture->ref_idx[LIST_1][img->block_y+j][img->block_x+i];
+      *l0_ref   = enc_picture->ref_idx[LIST_0][img->block_y+j][img->block_x+i];
+      *l1_ref   = enc_picture->ref_idx[LIST_1][img->block_y+j][img->block_x+i];
       *l0_mode  = currMB->b8mode[b8];
       *l1_mode  = currMB->b8mode[b8];
     }
@@ -1390,11 +1399,11 @@ void LumaResidualCoding (void)
 
   for (block8x8=0; block8x8<4; block8x8++)
   {
-    short bw_ref;
-    SetModesAndRefframe (block8x8, &p_dir, &l0_mode, &l1_mode, &refframe, &bw_ref);
+    short l1_ref;
+    SetModesAndRefframe (block8x8, &p_dir, &l0_mode, &l1_mode, &refframe, &l1_ref);
     
     sum_cnt_nonz += LumaResidualCoding8x8 (&(currMB->cbp), &(currMB->cbp_blk), block8x8,
-                                           p_dir, l0_mode, l1_mode, refframe, bw_ref);
+                                           p_dir, l0_mode, l1_mode, refframe, l1_ref);
   }
 
   if (sum_cnt_nonz <= _LUMA_MB_COEFF_COST_ &&
@@ -1433,7 +1442,7 @@ int TransformDecision (int block_check, int *cost)
   int    block_y, block_x, pic_pix_y, pic_pix_x, i, j, k;
   int    mb_y, mb_x, block8x8;
   int    l0_mode, l1_mode;
-  short  p_dir, fw_ref, bw_ref;
+  short  p_dir, l0_ref, l1_ref;
   int    num_blks;
   int    cost8x8=0, cost4x4=0;
   int    *diff_ptr;
@@ -1451,7 +1460,7 @@ int TransformDecision (int block_check, int *cost)
 
   for (; block8x8<num_blks; block8x8++)
   {
-    SetModesAndRefframe (block8x8, &p_dir, &l0_mode, &l1_mode, &fw_ref, &bw_ref);
+    SetModesAndRefframe (block8x8, &p_dir, &l0_mode, &l1_mode, &l0_ref, &l1_ref);
 
     mb_y = (block8x8 >> 1) << 3;
     mb_x = (block8x8 & 0x01) << 3;
@@ -1466,7 +1475,7 @@ int TransformDecision (int block_check, int *cost)
         pic_pix_x = img->opix_x + block_x;
 
         //===== prediction of 4x4 block =====
-        LumaPrediction4x4 (block_x, block_y, p_dir, l0_mode, l1_mode, fw_ref, bw_ref);
+        LumaPrediction4x4 (block_x, block_y, p_dir, l0_mode, l1_mode, l0_ref, l1_ref);
 
         //===== get displaced frame difference ======
         diff_ptr=&diff64[k];
@@ -1602,7 +1611,6 @@ void OneComponentChromaPrediction4x4_retrieve (imgpel*        mpred,      //!< a
 
   width_pad_cr  = list[ref]->size_x_cr_pad;
   height_pad_cr = list[ref]->size_y_cr_pad;
-
 
   for (j=block_c_y; j < block_c_y + BLOCK_SIZE; j++)
   {
@@ -1790,7 +1798,7 @@ void ChromaResidualCoding (int* cr_cbp)
   };
   int   uv, block8, block_y, block_x, j, i;
   int   l0_mode, l1_mode;
-  short p_dir, refframe, bw_ref;
+  short p_dir, refframe, l1_ref;
   int   skipped = (img->mb_data[img->current_mb_nr].mb_type == 0 && (img->type == P_SLICE || img->type == SP_SLICE));
   int   yuv = img->yuv_format - 1; //ADD-VG-15052004
 
@@ -1807,9 +1815,9 @@ void ChromaResidualCoding (int* cr_cbp)
     for (block_x=0; block_x < img->mb_cr_size_x; block_x+=4)
     {
       block8 = block8x8_idx[yuv][block_y>>2][block_x>>2];
-      SetModesAndRefframe (block8, &p_dir, &l0_mode, &l1_mode, &refframe, &bw_ref);
+      SetModesAndRefframe (block8, &p_dir, &l0_mode, &l1_mode, &refframe, &l1_ref);
 
-      ChromaPrediction4x4 (uv, block_x, block_y, p_dir, l0_mode, l1_mode, refframe, bw_ref);
+      ChromaPrediction4x4 (uv, block_x, block_y, p_dir, l0_mode, l1_mode, refframe, l1_ref);
     }
 
     // ==== set chroma residue to zero for skip Mode in SP frames
@@ -2617,6 +2625,8 @@ int writeMBLayer (int rdopt, int *coeff_rate)
   if (currMB->mb_type == IPCM)
   {
     int jj, uv;
+
+    dataPart = &(currSlice->partArr[partMap[SE_LUM_DC_INTRA]]);
     if (input->symbol_mode == CABAC)
     {
       int len;
@@ -2659,7 +2669,7 @@ int writeMBLayer (int rdopt, int *coeff_rate)
         writeSE_Fix(&se, dataPart);
       }
     }
-    if (img->yuv_format != YUV400)
+    if ((img->yuv_format != YUV400) && !IS_INDEPENDENT(input))
     {
       for (uv = 0; uv < 2; uv ++)
       {
@@ -2685,11 +2695,11 @@ int writeMBLayer (int rdopt, int *coeff_rate)
     return no_bits;
   }
 
+  dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+
   //===== BITS FOR 8x8 SUB-PARTITION MODES =====
   if (IS_P8x8 (currMB))
   {
-    dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
-
     for (i=0; i<4; i++)
     {
       se.value1  = B8Mode2Value (currMB->b8mode[i], currMB->b8pdir[i]);
@@ -2730,7 +2740,7 @@ int writeMBLayer (int rdopt, int *coeff_rate)
  //===== BITS FOR INTRA PREDICTION MODES ====
   no_bits += writeIntraModes();
   //===== BITS FOR CHROMA INTRA PREDICTION MODE ====
-  if (currMB->IntraChromaPredModeFlag && img->yuv_format != YUV400)
+  if (currMB->IntraChromaPredModeFlag && ((img->yuv_format != YUV400) && !IS_INDEPENDENT(input)))
     no_bits += writeChromaIntraPredMode();
   else if(!rdopt) //GB CHROMA !!!!!
     currMB->c_ipred_mode = DC_PRED_8; //setting c_ipred_mode to default is not the right place here
@@ -2747,7 +2757,7 @@ int writeMBLayer (int rdopt, int *coeff_rate)
   if ((currMB->mb_type!=0) || (img->type==B_SLICE && (currMB->cbp!=0)))
   {
     *coeff_rate = writeCBPandLumaCoeff ();
-    if (img->yuv_format != YUV400)
+    if ((img->yuv_format != YUV400) && !IS_INDEPENDENT(input))
       *coeff_rate  += writeChromaCoeff ();
 
     no_bits  += *coeff_rate;
@@ -4288,4 +4298,48 @@ int find_sad_16x16(int *intra_mode)
 
   return best_intra_sad2;
 
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Change color plane for 4:4:4 Independent Mode
+ *
+ * \par Input:
+ *    plane number
+ ************************************************************************/
+void change_plane_JV( int nplane )
+{
+    img->colour_plane_id = nplane;
+    img->mb_data = img->mb_data_JV[nplane];
+    enc_picture = enc_frame_picture_JV[nplane];
+    imgY_org = imgY_org_frm_JV[nplane];
+    Co_located = Co_located_JV[nplane];
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Make one frame picture from 4:4:4 plane
+ ************************************************************************/
+void make_frame_picture_JV()
+{
+    int uv, line;
+    int nsize;
+    int nplane;
+    enc_frame_picture[0] = enc_frame_picture_JV[0];
+
+    for( nplane=0; nplane<MAX_PLANE; nplane++ )
+    {
+      copy_storable_param_JV( nplane, enc_frame_picture[0], enc_frame_picture_JV[nplane] );
+    }
+
+    for( uv=0; uv<2; uv++ ){
+      for( line=0; line<img->height; line++ )
+      {
+        nsize = sizeof(imgpel) * img->width;
+        memcpy( enc_frame_picture[0]->imgUV[uv][line], enc_frame_picture_JV[uv+1]->imgY[line], nsize );
+      }
+      free_storable_picture(enc_frame_picture_JV[uv+1]);
+    }
 }

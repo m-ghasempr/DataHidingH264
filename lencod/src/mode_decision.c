@@ -225,7 +225,7 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bs
 
     enc_mb->lambda_me[F_PEL] = img->lambda_me[5][img->qp][F_PEL];
     enc_mb->lambda_me[H_PEL] = img->lambda_me[5][img->qp][H_PEL];
-    enc_mb->lambda_me[Q_PEL] = img->lambda_mf[5][img->qp][Q_PEL];
+    enc_mb->lambda_me[Q_PEL] = img->lambda_me[5][img->qp][Q_PEL];
 
     enc_mb->lambda_mf[F_PEL] = img->lambda_mf[5][img->qp][F_PEL];
     enc_mb->lambda_mf[H_PEL] = img->lambda_mf[5][img->qp][H_PEL];
@@ -468,6 +468,7 @@ void compute_mode_RD_cost(int mode,
                           Macroblock *currMB,
                           RD_PARAMS enc_mb,
                           double *min_rdcost,
+                          double *min_dcost,
                           double *min_rate,
                           int i16mode,
                           short bslice,
@@ -490,7 +491,7 @@ void compute_mode_RD_cost(int mode,
   {
     while(1)
     {
-      if (RDCost_for_macroblocks (enc_mb.lambda_md, mode, min_rdcost, min_rate, i16mode))
+      if (RDCost_for_macroblocks (enc_mb.lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode))
       {
         //Rate control
         if (input->RCEnable)
@@ -549,11 +550,10 @@ void compute_mode_RD_cost(int mode,
 
     // Encode with no coefficients. Currently only for direct. This could be extended to all other modes as in example.
     //if (mode < P8x8 && (*inter_skip == 0) && enc_mb.valid[mode] && currMB->cbp && (currMB->cbp&15) != 15 && !input->nobskip)
-    if ( bslice && mode == 0 && (*inter_skip == 0) && enc_mb.valid[mode]
-    && currMB->cbp && (currMB->cbp&15) != 15 && !input->nobskip)
+    if ( bslice && mode == 0 && (*inter_skip == 0) && enc_mb.valid[mode] && currMB->cbp && (currMB->cbp&15) != 15 && !input->nobskip)
     {
       img->NoResidueDirect = 1;
-      if (RDCost_for_macroblocks (enc_mb.lambda_md, mode, min_rdcost, min_rate, i16mode))
+      if (RDCost_for_macroblocks (enc_mb.lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode))
       {
         //Rate control
         if (input->RCEnable)
@@ -779,8 +779,8 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
         min_rdcost                  = rdcost;
         dataTr->part8x8mode [block] = mode;
         dataTr->part8x8pdir [block] = best_pdir;
-        dataTr->part8x8fwref[block] = best_ref[LIST_0];
-        dataTr->part8x8bwref[block] = best_ref[LIST_1];
+        dataTr->part8x8l0ref[block] = best_ref[LIST_0];
+        dataTr->part8x8l1ref[block] = best_ref[LIST_1];
 
         img->mb_data[img->current_mb_nr].b8mode[block] = mode;
 
@@ -875,7 +875,7 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
     }
     curr_cbp_blk  = 0;
     best_cnt_nonz = LumaResidualCoding8x8 (&dummy, &curr_cbp_blk, block, pdir,
-      (pdir==0||pdir==2?mode:0), (pdir==1||pdir==2?mode:0), dataTr->part8x8fwref[block], dataTr->part8x8bwref[block]);
+      (pdir==0||pdir==2?mode:0), (pdir==1||pdir==2?mode:0), dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block]);
 
     cbp_blk8x8   &= (~(0x33 << (((block>>1)<<3)+((block%2)<<1)))); // delete bits for block
     cbp_blk8x8   |= curr_cbp_blk;
@@ -912,7 +912,7 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
       j0   = 8*(block >> 1);
       i0   = 8*(block & 0x01);
       for (j=j0; j<j0 + 2 * BLOCK_SIZE; j++)
-        {
+      {
         memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x], dataTr->rec_mbY8x8[j], 2 * BLOCK_SIZE * sizeof(imgpel));
         if(img->type==SP_SLICE &&(!si_frame_indicator))
           memcpy(&lrec[img->pix_y + j][img->pix_x], dataTr->lrec[j],2*BLOCK_SIZE*sizeof(imgpel)); // reset the coefficients for SP slice
@@ -922,10 +922,10 @@ void submacroblock_mode_decision(RD_PARAMS enc_mb,
   else
   {
     //======= save motion data for 8x8 partition for transform size 8x8 ========
-    StoreNewMotionVectorsBlock8x8(0, block, dataTr->part8x8mode[block], dataTr->part8x8fwref[block], dataTr->part8x8bwref[block], dataTr->part8x8pdir[block], bslice);
+    StoreNewMotionVectorsBlock8x8(0, block, dataTr->part8x8mode[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8pdir[block], bslice);
   }
   //===== set motion vectors and reference frames (prediction) =====
-  SetRefAndMotionVectors (block, dataTr->part8x8mode[block], dataTr->part8x8pdir[block], dataTr->part8x8fwref[block], dataTr->part8x8bwref[block]);
+  SetRefAndMotionVectors (block, dataTr->part8x8mode[block], dataTr->part8x8pdir[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block]);
 
   //===== set the coding state after current block =====
   //if (transform8x8 == 0 || block < 3)

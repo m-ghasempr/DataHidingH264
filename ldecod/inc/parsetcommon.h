@@ -112,11 +112,11 @@ typedef struct
   Boolean   transform_8x8_mode_flag;                          // u(1)
 
   Boolean   pic_scaling_matrix_present_flag;                  // u(1)
-  int       pic_scaling_list_present_flag[8];                 // u(1)
+  int       pic_scaling_list_present_flag[12];                 // u(1)
   int       ScalingList4x4[6][16];                            // se(v)
-  int       ScalingList8x8[2][64];                            // se(v)
+  int       ScalingList8x8[6][64];                            // se(v)
   Boolean   UseDefaultScalingMatrix4x4Flag[6];
-  Boolean   UseDefaultScalingMatrix8x8Flag[2];
+  Boolean   UseDefaultScalingMatrix8x8Flag[6];
 
   // if( pic_order_cnt_type < 2 )  in the sequence parameter set
   Boolean      pic_order_present_flag;                           // u(1)
@@ -164,11 +164,11 @@ typedef struct
   unsigned  int chroma_format_idc;                                // ue(v)
 
   Boolean  seq_scaling_matrix_present_flag;                   // u(1)
-  int      seq_scaling_list_present_flag[8];                  // u(1)
+  int      seq_scaling_list_present_flag[12];                 // u(1)
   int      ScalingList4x4[6][16];                             // se(v)
-  int      ScalingList8x8[2][64];                             // se(v)
+  int      ScalingList8x8[6][64];                             // se(v)
   Boolean  UseDefaultScalingMatrix4x4Flag[6];
-  Boolean  UseDefaultScalingMatrix8x8Flag[2];
+  Boolean  UseDefaultScalingMatrix8x8Flag[6];
 
   unsigned int bit_depth_luma_minus8;                            // ue(v)
   unsigned int bit_depth_chroma_minus8;                          // ue(v)
@@ -199,6 +199,7 @@ typedef struct
     unsigned int frame_cropping_rect_bottom_offset;              // ue(v)
   Boolean   vui_parameters_present_flag;                      // u(1)
     vui_seq_parameters_t vui_seq_parameters;                  // vui_seq_parameters_t
+    unsigned  separate_colour_plane_flag;                       // u(1)
 } seq_parameter_set_rbsp_t;
 
 

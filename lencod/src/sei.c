@@ -837,7 +837,7 @@ void InitSubseqInfo(int currLayer)
 /*!
  ************************************************************************
  *  \brief
- *      update subseqence info
+ *      update subsequence info
  ************************************************************************
  */
 void UpdateSubseqInfo(int currLayer)
@@ -850,15 +850,15 @@ void UpdateSubseqInfo(int currLayer)
 
   if ( currLayer == 0 )
   {
-    if ( img->number == input->no_frames-1 )
+    if ( img->number == input->no_frames - 1 )
       seiSubseqInfo[currLayer].last_picture_flag = 1;
     else
       seiSubseqInfo[currLayer].last_picture_flag = 0;
   }
   if ( currLayer == 1 )
   {
-    if ( ((IMG_NUMBER%(input->NumFramesInELSubSeq+1)==0) && (input->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
-      ((IMG_NUMBER%(input->NumFramesInELSubSeq+1)==input->NumFramesInELSubSeq) && (input->successive_Bframe==0))  // there are no B frames
+    if ( ((IMG_NUMBER%(input->NumFramesInELSubSeq + 1) == 0) && (input->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
+      ((IMG_NUMBER%(input->NumFramesInELSubSeq + 1) == input->NumFramesInELSubSeq) && (input->successive_Bframe==0))  // there are no B frames
       )
       seiSubseqInfo[currLayer].last_picture_flag = 1;
     else

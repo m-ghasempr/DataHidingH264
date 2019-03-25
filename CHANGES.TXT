@@ -1,3 +1,20 @@
+Changes in Version JM 12.3 (since JM 12.2)
+------------------------------------------
+Professional Profiles:
+- encoder/decoder: 4:4:4 independent mode (SSe)
+
+- encoder/decoder: add top level Makefile (LW)
+- encoder: initialize lprc->AveWb (AL)
+- encoder: restrict pel values in simulated decoder (CS)
+- encoder: closed IDR GOP support (AT)
+- encoder: delayed IDR GOP support (AT)
+- encoder: rate control extension for adaptive rounding (AT)
+- encoder: chroma ME bug fix (AT)
+- encoder: RC bug fixes (AL)
+- encoder: top/bottom field slice type decoder output consideration (AT)
+- encoder: adjustments to frame_num consideration (AL/AT)
+- encoder: removal of secondGOP concept (AT)
+
 Changes in Version JM 12.2 (since JM 12.1)
 ------------------------------------------
 
@@ -1238,6 +1255,7 @@ SN      Satoshi Nakagawa        nakagawa@okilab.net
 SR      Shankar Regunathan      shanre@microsoft.com
 SeS     Sergey A. Sablin        sergey@elecard.net.ru
 SSu     Shijun Sun              ssun@sharplabs.com
+SSe     Shun-ichi Sekiguchi     Sekiguchi.Shunichi@eb.MitsubishiElectric.co.jp
 SW      Stephan Wenger          stewe@stewe.org
 SWi     Steffen Wittmann        Steffen.Wittmann@eu.panasonic.com
 SY      Steve Yao               steveyao@sandvideo.com

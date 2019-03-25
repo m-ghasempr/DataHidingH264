@@ -206,6 +206,10 @@ const byte COEFF_COST8x8[2][64] =
    9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9}
 };
 
+// global pointers for 8x8 quantization parameters
+extern int ****ptLevelScale8x8Luma;
+extern int ****ptInvLevelScale8x8Luma;
+extern int ****ptLevelOffset8x8Luma;
 
 /*!
  *************************************************************************************
@@ -1279,12 +1283,14 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
   Boolean lossless_qpprime = (Boolean) ((img->qp_scaled)==0 && img->lossless_qpprime_flag==1);
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN8x8 : SNGL_SCAN8x8;
 
-  qp_per    = qp_per_matrix[(img->qp_scaled - MIN_QP)];
-  qp_rem    = qp_rem_matrix[(img->qp_scaled - MIN_QP)];
-  q_bits    = Q_BITS_8+qp_per;
-  levelscale    = LevelScale8x8Luma[intra][qp_rem];
-  leveloffset   = LevelOffset8x8Luma[intra][qp_per];
-  invlevelscale = InvLevelScale8x8Luma[intra][qp_rem];
+  qp_per    = qp_per_matrix[img->qp_scaled];
+  qp_rem    = qp_rem_matrix[img->qp_scaled];
+  q_bits    = Q_BITS_8 + qp_per;
+
+  // select scaling parameters
+  levelscale    = ptLevelScale8x8Luma[intra][qp_rem];
+  invlevelscale = ptInvLevelScale8x8Luma[intra][qp_rem];
+  leveloffset   = ptLevelOffset8x8Luma[intra][img->qp_scaled];
 
   // horizontal transform
   if (!lossless_qpprime)
@@ -1395,6 +1401,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
           img->cofAC[b8][MCcoeff][0][scan_poss[MCcoeff]] = isignab(level,img->m7[j][i]);
           img->cofAC[b8][MCcoeff][1][scan_poss[MCcoeff]] = runs[MCcoeff];
           ++scan_poss[MCcoeff];
+          ++scan_pos;
           runs[MCcoeff]=-1;
         }
         else
@@ -1453,6 +1460,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
           img->cofAC[b8][MCcoeff][0][scan_poss[MCcoeff]] = isignab(level,img->m7[j][i]);
           img->cofAC[b8][MCcoeff][1][scan_poss[MCcoeff]] = runs[MCcoeff];
           ++scan_poss[MCcoeff];
+          ++scan_pos;
           runs[MCcoeff]=-1;
         }
         else

@@ -64,7 +64,7 @@ void create_context_memory ()
   int i, j, k;
   int num_mb    = img->FrameSizeInMbs; // number of macroblocks for frame
 
-  num_mb_per_slice  = (input->slice_mode==1 ? input->slice_argument : num_mb);
+  num_mb_per_slice  = (input->slice_mode == 1 ? input->slice_argument : num_mb);
   number_of_slices  = (num_mb + num_mb_per_slice - 1) / num_mb_per_slice;
 
   if ((initialized  = (int***) malloc (3 * sizeof(int**))) == NULL)

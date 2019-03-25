@@ -375,18 +375,19 @@ int computeSAD(imgpel* src_pic,
   }
   if ( ChromaMEEnable ) {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_c2 = blocksize_x >> shift_cr_x;
-    int blocksize_y_c = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_c2;
+    int blocksize_x_cr = blocksize_x >> shift_cr_x;
+    int blocksize_y_cr = blocksize_y >> shift_cr_y;
+    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
-
+    
     for (k=0; k < 2; k++)
     {
       src_line = src_pic + (256 << k);
       ref_line = get_crline[ref_access_method] ( ref_pic_sub.crcb[k], cand_y, cand_x);
-      for (y=0; y<blocksize_y_c; y++)
+
+      for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_c2; x4++)
+        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
         {
           mcost += byte_abs[ *src_line++ - *ref_line++ ];
           mcost += byte_abs[ *src_line++ - *ref_line++ ];
@@ -438,18 +439,18 @@ int computeSADWP(imgpel* src_pic,
   }
   if ( ChromaMEEnable ) {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_c2 = blocksize_x >> shift_cr_x;
-    int blocksize_y_c = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_c2;
+    int blocksize_x_cr = blocksize_x >> shift_cr_x;
+    int blocksize_y_cr = blocksize_y >> shift_cr_y;
+    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
 
     for (k=0; k < 2; k++)
     {
       src_line = src_pic + (256 << k);
       ref_line = get_crline[ref_access_method] ( ref_pic_sub.crcb[k], cand_y, cand_x);
-      for (y=0; y<blocksize_y_c; y++)
+      for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_c2; x4++)
+        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
         {
           weighted_pel = iClip1( img->max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
           mcost += byte_abs[ *src_line++ -  weighted_pel ];
@@ -507,9 +508,9 @@ int computeBiPredSAD1(imgpel* src_pic,
 
   if ( ChromaMEEnable ) {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_c2 = blocksize_x >> shift_cr_x;
-    int blocksize_y_c  = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_c2;
+    int blocksize_x_cr = blocksize_x >> shift_cr_x;
+    int blocksize_y_cr = blocksize_y >> shift_cr_y;
+    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
 
     for (k=0; k<2; k++)
@@ -518,9 +519,9 @@ int computeBiPredSAD1(imgpel* src_pic,
       ref2_line = get_crline[bipred2_access_method] ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
       ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
 
-      for (y=0; y<blocksize_y_c; y++)
+      for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_c2; x4++)
+        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
         {
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
           mcost += byte_abs[bi_diff];
@@ -597,9 +598,9 @@ int computeBiPredSAD2(imgpel* src_pic,
 
   if ( ChromaMEEnable ) {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_c2 = blocksize_x >> shift_cr_x;
-    int blocksize_y_c = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_c2;
+    int blocksize_x_cr = blocksize_x >> shift_cr_x;
+    int blocksize_y_cr = blocksize_y >> shift_cr_y;
+    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
 
     for (k=0; k<2; k++)
@@ -608,9 +609,9 @@ int computeBiPredSAD2(imgpel* src_pic,
       ref2_line = get_crline[bipred2_access_method] ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
       ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
 
-      for (y=0; y<blocksize_y_c; y++)
+      for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_c2; x4++)
+        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
         {
           pixel1 = weight1_cr[k] * (*ref1_line++);
           pixel2 = weight2_cr[k] * (*ref2_line++);
@@ -648,12 +649,11 @@ int computeSATD(imgpel* src_pic,
 {
   int mcost = 0;
   int y, x, y4, *d;
-  int pad_size_x, src_size_x, src_size_mul;
+  int src_size_x, src_size_mul;
   imgpel *src_tmp = src_pic;
 
   if ( !test8x8transform )
   { // 4x4 TRANSFORM
-    pad_size_x = img_padded_size_x - BLOCK_SIZE;
     src_size_x = blocksize_x - BLOCK_SIZE;
     src_size_mul = blocksize_x * BLOCK_SIZE;
     for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE_SP))
@@ -670,7 +670,7 @@ int computeSATD(imgpel* src_pic,
           *d++ = *src_line++ - *ref_line++ ;
           *d++ = *src_line++ - *ref_line++ ;
 
-          ref_line += pad_size_x;
+          ref_line += img_padded_size_x_m4x4;
           src_line += src_size_x;
         }
         if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
@@ -680,7 +680,6 @@ int computeSATD(imgpel* src_pic,
   }
   else
   { // 8x8 TRANSFORM
-    pad_size_x = img_padded_size_x - BLOCK_SIZE8x8;
     src_size_x = (blocksize_x - BLOCK_SIZE8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE8x8;
     for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE8x8_SP) )
@@ -701,7 +700,7 @@ int computeSATD(imgpel* src_pic,
           *d++ = *src_line++ - *ref_line++ ;
           *d++ = *src_line++ - *ref_line++ ;
 
-          ref_line += pad_size_x;
+          ref_line += img_padded_size_x_m8x8;
           src_line += src_size_x;
         }
         if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
@@ -728,12 +727,11 @@ int computeSATDWP(imgpel* src_pic,
   int mcost = 0;
   int y, x, y4, *d;
   int weighted_pel;
-  int pad_size_x, src_size_x, src_size_mul;
+  int src_size_x, src_size_mul;
   imgpel *src_tmp = src_pic;
 
   if ( !test8x8transform )
   { // 4x4 TRANSFORM
-    pad_size_x = img_padded_size_x - BLOCK_SIZE;
     src_size_x = (blocksize_x - BLOCK_SIZE);
     src_size_mul = blocksize_x * BLOCK_SIZE;
     for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE_SP))
@@ -754,7 +752,7 @@ int computeSATDWP(imgpel* src_pic,
           weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
           *d++ = *src_line++ - weighted_pel;
 
-          ref_line += pad_size_x;
+          ref_line += img_padded_size_x_m4x4;
           src_line += src_size_x;
         }
         if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
@@ -764,7 +762,6 @@ int computeSATDWP(imgpel* src_pic,
   }
   else
   { // 8x8 TRANSFORM
-    pad_size_x = img_padded_size_x - BLOCK_SIZE8x8;
     src_size_x = (blocksize_x - BLOCK_SIZE8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE8x8;
     for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE8x8_SP) )
@@ -793,7 +790,7 @@ int computeSATDWP(imgpel* src_pic,
           weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
           *d++ = *src_line++ - weighted_pel;
 
-          ref_line += pad_size_x;
+          ref_line += img_padded_size_x_m8x8;
           src_line += src_size_x;
         }
         if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
@@ -819,12 +816,11 @@ int computeBiPredSATD1(imgpel* src_pic,
 {
   int mcost = 0;
   int y, x, y4, *d;
-  int pad_size_x, src_size_x, src_size_mul;
+  int src_size_x, src_size_mul;
   imgpel *src_tmp = src_pic;
 
   if ( !test8x8transform )
   { // 4x4 TRANSFORM
-    pad_size_x = img_padded_size_x - BLOCK_SIZE;
     src_size_x = (blocksize_x - BLOCK_SIZE);
     src_size_mul = blocksize_x * BLOCK_SIZE;
     for (y=0; y<(blocksize_y<<2); y += (BLOCK_SIZE_SP))
@@ -842,8 +838,8 @@ int computeBiPredSATD1(imgpel* src_pic,
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
 
-          ref1_line += pad_size_x;
-          ref2_line += pad_size_x;
+          ref1_line += img_padded_size_x_m4x4;
+          ref2_line += img_padded_size_x_m4x4;
           src_line  += src_size_x;
         }
         if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
@@ -853,7 +849,6 @@ int computeBiPredSATD1(imgpel* src_pic,
   }
   else
   { // 8x8 TRANSFORM
-    pad_size_x = img_padded_size_x - BLOCK_SIZE8x8;
     src_size_x = (blocksize_x - BLOCK_SIZE8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE8x8;
     for (y=0; y<blocksize_y; y += BLOCK_SIZE8x8 )
@@ -877,8 +872,8 @@ int computeBiPredSATD1(imgpel* src_pic,
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
 
-          ref1_line += pad_size_x;
-          ref2_line += pad_size_x;
+          ref1_line += img_padded_size_x_m8x8;
+          ref2_line += img_padded_size_x_m8x8;
           src_line += src_size_x;
         }
         if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
@@ -907,12 +902,11 @@ int computeBiPredSATD2(imgpel* src_pic,
   int weighted_pel, pixel1, pixel2;
   int denom = luma_log_weight_denom + 1;
   int lround = 2 * wp_luma_round;
-  int pad_size_x, src_size_x, src_size_mul;
+  int src_size_x, src_size_mul;
   imgpel *src_tmp = src_pic;
 
   if ( !test8x8transform )
   { // 4x4 TRANSFORM
-    pad_size_x = img_padded_size_x - BLOCK_SIZE;
     src_size_x = (blocksize_x - BLOCK_SIZE);
     src_size_mul = blocksize_x * BLOCK_SIZE;
     for (y=0; y<(blocksize_y<<2); y += BLOCK_SIZE_SP)
@@ -946,8 +940,8 @@ int computeBiPredSATD2(imgpel* src_pic,
           weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
 
-          ref1_line += pad_size_x;
-          ref2_line += pad_size_x;
+          ref1_line += img_padded_size_x_m4x4;
+          ref2_line += img_padded_size_x_m4x4;
           src_line  += src_size_x;
         }
         if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
@@ -957,7 +951,6 @@ int computeBiPredSATD2(imgpel* src_pic,
   }
   else
   { // 8x8 TRANSFORM
-    pad_size_x = img_padded_size_x - BLOCK_SIZE8x8;
     src_size_x = (blocksize_x - BLOCK_SIZE8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE8x8;
     for (y=0; y<blocksize_y; y += BLOCK_SIZE8x8 )
@@ -1013,8 +1006,8 @@ int computeBiPredSATD2(imgpel* src_pic,
           weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line) - weighted_pel;
 
-          ref1_line += pad_size_x;
-          ref2_line += pad_size_x;
+          ref1_line += img_padded_size_x_m8x8;
+          ref2_line += img_padded_size_x_m8x8;
           src_line  += src_size_x;
         }
         if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
@@ -1061,18 +1054,18 @@ int computeSSE(imgpel* src_pic,
 
   if ( ChromaMEEnable ) {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_c2 = blocksize_x >> shift_cr_x;
-    int blocksize_y_c = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_c2;
+    int blocksize_x_cr = blocksize_x >> shift_cr_x;
+    int blocksize_y_cr = blocksize_y >> shift_cr_y;
+    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
 
     for (k=0; k<2; k++)
     {
       src_line = src_pic + (256 << k);
       ref_line = get_crline[ref_access_method] ( ref_pic_sub.crcb[k], cand_y, cand_x);
-      for (y=0; y<blocksize_y_c; y++)
+      for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_c2; x4++)
+        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
         {
           mcost += byte_sse[ *src_line++ - *ref_line++ ];
           mcost += byte_sse[ *src_line++ - *ref_line++ ];
@@ -1129,19 +1122,19 @@ int computeSSEWP(imgpel* src_pic,
   if ( ChromaMEEnable ) {
     // calculate chroma conribution to motion compensation error
     // These could be made global to reduce computations
-    int blocksize_x_c2 = blocksize_x >> shift_cr_x;
-    int blocksize_y_c = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_c2;
+    int blocksize_x_cr = blocksize_x >> shift_cr_x;
+    int blocksize_y_cr = blocksize_y >> shift_cr_y;
+    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
 
     for (k=0; k<2; k++)
     {
       src_line = src_pic + (256 << k);
       ref_line = get_crline[ref_access_method] ( ref_pic_sub.crcb[k], cand_y, cand_x);
-      for (y=0; y<blocksize_y_c; y++)
+      for (y=0; y<blocksize_y_cr; y++)
       {
 
-        for (x4 = 0; x4 < blocksize_x_c2; x4++)
+        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
         {
           weighted_pel = iClip1( img->max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
           mcost += byte_sse[ *src_line++ - weighted_pel ];
@@ -1201,9 +1194,9 @@ int computeBiPredSSE1(imgpel* src_pic,
 
   if ( ChromaMEEnable ) {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_c2 = blocksize_x >> shift_cr_x;
-    int blocksize_y_c = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_c2;
+    int blocksize_x_cr = blocksize_x >> shift_cr_x;
+    int blocksize_y_cr = blocksize_y >> shift_cr_y;
+    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
 
     for (k=0; k<2; k++)
@@ -1212,9 +1205,9 @@ int computeBiPredSSE1(imgpel* src_pic,
       ref2_line = get_crline[bipred2_access_method] ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
       ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
 
-      for (y=0; y<blocksize_y_c; y++)
+      for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_c2; x4++)
+        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
         {
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
           mcost += byte_sse[bi_diff];
@@ -1291,9 +1284,9 @@ int computeBiPredSSE2(imgpel* src_pic,
 
   if ( ChromaMEEnable ) {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_c2 = blocksize_x >> shift_cr_x;
-    int blocksize_y_c = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_c2;
+    int blocksize_x_cr = blocksize_x >> shift_cr_x;
+    int blocksize_y_cr = blocksize_y >> shift_cr_y;
+    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
     int k;
 
     for (k=0; k<2; k++)
@@ -1302,9 +1295,9 @@ int computeBiPredSSE2(imgpel* src_pic,
       ref2_line = get_crline[bipred2_access_method] ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
       ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
 
-      for (y=0; y<blocksize_y_c; y++)
+      for (y=0; y<blocksize_y_cr; y++)
       {
-        for (x4 = 0; x4 < blocksize_x_c2; x4++)
+        for (x4 = 0; x4 < blocksize_x_cr; x4+=2)
         {
           pixel1 = weight1_cr[k] * (*ref1_line++);
           pixel2 = weight2_cr[k] * (*ref2_line++);

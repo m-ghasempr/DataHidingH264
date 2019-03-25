@@ -361,7 +361,7 @@ void SetupFastFullPelSearch (short ref, int list)  // <--  reference frame param
   ref_access_method = FAST_ACCESS;
 
   //===== Use weighted Reference for ME ====
-  ref_pic_sub.luma = ref_picture->imgY_sub;
+  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
 
   if (apply_weights)
   {
@@ -513,7 +513,8 @@ void SetupFastFullPelSearch (short ref, int list)  // <--  reference frame param
 
   ref_picture     = listX[list+list_offset][ref];
   ref_access_method = FAST_ACCESS;
-  ref_pic_sub.luma = ref_picture->imgY_sub;
+
+  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
 
   max_width     = ref_picture->size_x - 17;
   max_height    = ref_picture->size_y - 17;

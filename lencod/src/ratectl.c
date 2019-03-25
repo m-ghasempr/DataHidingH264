@@ -25,6 +25,7 @@
 #include "global.h"
 #include "ratectl.h"
 
+
 /*!
  *************************************************************************************
  * \brief
@@ -254,4 +255,96 @@ void generic_free(rc_generic **prc)
     free ((*prc));
     (*prc) = NULL;
   }
+}
+
+/*!
+ *************************************************************************************
+ * \brief
+ *    Initialize GOP Level Rate Control parameters
+ *
+ *************************************************************************************
+ */
+void init_GOP_rc()
+{
+  int M,N,n,np,nb;           //Rate control
+  {
+    if (img->type == I_SLICE && ((input->RCUpdateMode != RC_MODE_1 && input->RCUpdateMode != RC_MODE_3) || !(img->number) ) )
+    {
+      if (input->intra_period == 0)
+      {
+        n = input->no_frames + (input->no_frames - 1) * input->successive_Bframe;
+
+        /* number of P frames */
+        np = input->no_frames-1;
+
+        /* number of B frames */
+        nb = (input->no_frames - 1) * input->successive_Bframe;
+      }
+      else if ( input->RCUpdateMode != RC_MODE_1 && input->RCUpdateMode != RC_MODE_3 )
+      {
+        N = input->intra_period*(input->successive_Bframe+1);
+        M = input->successive_Bframe+1;
+        n = (img->number == 0) ? N - ( M - 1) : N;
+
+        /* last GOP may contain less frames */
+        if ((img->number / input->intra_period) >= (input->no_frames / input->intra_period))
+        {
+          if (img->number != 0)
+            n = (input->no_frames - img->number) + (input->no_frames - img->number - 1) * input->successive_Bframe + input->successive_Bframe;
+          else
+            n = input->no_frames  + (input->no_frames - 1) * input->successive_Bframe;
+        }
+
+        /* number of P frames */
+        if (img->number == 0)
+          np = (n + 2 * (M - 1)) / M - 1; /* first GOP */
+        else
+          np = (n + (M - 1)) / M - 1;
+
+        /* number of B frames */
+        nb = n - np - 1;
+      }
+      else // applies RC to I and B slices
+      {
+        np = input->no_frames - 1; // includes I and P slices/frames except the very first IDR I_SLICE
+        nb = (input->no_frames - 1) * input->successive_Bframe;
+      }
+      rc_init_GOP(quadratic_RC, np, nb);
+    }
+  }
+}
+
+/*!
+ *************************************************************************************
+ * \brief
+ *    Initialize Frame Level Rate Control parameters
+ *
+ *************************************************************************************
+ */
+void init_frame_rc(int FrameNumberInFile)
+{
+  /*update the number of MBs in the basic unit for MB adaptive
+  f/f coding*/
+  if( (input->MbInterlace) && (input->basicunit < img->FrameSizeInMbs) && (img->type == P_SLICE || (input->RCUpdateMode == RC_MODE_1 && img->number) ) )
+    img->BasicUnit = input->basicunit << 1;
+  else
+    img->BasicUnit = input->basicunit;
+
+  if ( input->RDPictureDecision )
+  {
+    // store rate allocation quadratic...
+    copy_rc_jvt( quadratic_RC_init, quadratic_RC );
+    // ...and generic model
+    copy_rc_generic( generic_RC_init, generic_RC );
+  }
+
+  rc_init_pict(quadratic_RC, 1,0,1, 1.0F);   
+
+  img->qp  = updateQP(quadratic_RC, 0);
+
+  //pic_type = img->type;
+  //QP =0;
+
+  if( active_sps->frame_mbs_only_flag)
+    generic_RC->TopFieldFlag=0;
 }

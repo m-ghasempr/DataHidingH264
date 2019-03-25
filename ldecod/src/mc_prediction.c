@@ -176,7 +176,25 @@ void get_block_luma(int ref_frame, StorablePicture **list, int x_pos, int y_pos,
     return;
   }
 
-  cur_imgY = curr_ref->imgY;
+  if( IS_INDEPENDENT(img) )
+  {
+    switch( img->colour_plane_id )
+    {
+    case    0:
+      cur_imgY = curr_ref->imgY;
+      break;
+    case    1:
+      cur_imgY = curr_ref->imgUV[0];
+      break;
+    case    2:
+      cur_imgY = curr_ref->imgUV[1];
+      break;
+    }
+  }
+  else
+  {
+    cur_imgY = curr_ref->imgY;
+  }
 
   x_pos = x_pos >> 2;
   y_pos = y_pos >> 2;
@@ -1087,7 +1105,7 @@ void perform_mc(StorablePicture *dec_picture, struct img_par *img, Macroblock *c
       mc_prediction(img, LumaComp, block_size_y, block_size_x, joff, ioff, tmp_block_l0);
     }
 
-    if (dec_picture->chroma_format_idc != YUV400)
+    if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
     {
       imgpel **curUV;
       int uv;
@@ -1163,7 +1181,7 @@ void perform_mc(StorablePicture *dec_picture, struct img_par *img, Macroblock *c
       bi_prediction(img, LumaComp, block_size_y, block_size_x, joff, ioff, tmp_block_l0, tmp_block_l1);
     }
 
-    if (dec_picture->chroma_format_idc != YUV400)
+    if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
     {
       imgpel **curUV;
       int uv;

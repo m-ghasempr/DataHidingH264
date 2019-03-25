@@ -1543,7 +1543,8 @@ EPZSPelBlockMotionSearch (imgpel * cur_pic,  // <--  original pixel values for t
   EPZSStructure *searchPatternF = searchPattern;
   EPZSBlkCount ++;
 
-  ref_pic_sub.luma = ref_picture->imgY_sub;
+  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
+
   img_width  = ref_picture->size_x;
   img_height = ref_picture->size_y;
   width_pad  = ref_picture->size_x_pad;
@@ -2017,8 +2018,9 @@ EPZSBiPredBlockMotionSearch (imgpel * cur_pic,   // <--  original pixel values f
   pic_pix_x = (pic_pix_x << (2 - mv_rescale));
   pic_pix_y = (pic_pix_y << (2 - mv_rescale));
 
-  ref_pic1_sub.luma = ref_picture1->imgY_sub;
-  ref_pic2_sub.luma = ref_picture2->imgY_sub;
+  ref_pic1_sub.luma = ref_picture1->curr_imgY_sub;
+  ref_pic2_sub.luma = ref_picture2->curr_imgY_sub;
+
   img_width  = ref_picture1->size_x;
   img_height = ref_picture1->size_y;
   width_pad  = ref_picture1->size_x_pad;
@@ -2417,7 +2419,7 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
   int dist_method = H_PEL + 3 * apply_weights;
   int lambda_factor = lambda[H_PEL];
 
-  ref_pic_sub.luma = ref_picture->imgY_sub;
+  ref_pic_sub.luma = ref_picture->curr_imgY_sub;
   width_pad  = ref_picture->size_x_pad;
   height_pad = ref_picture->size_y_pad;
 
@@ -2765,8 +2767,8 @@ EPZSSubPelBlockSearchBiPred (imgpel*   orig_pic,  // <--  original pixel values 
   int start_pos = 5, end_pos = max_pos2;
   int lambda_factor = lambda[H_PEL];
 
-  ref_pic1_sub.luma = ref_picture1->imgY_sub;
-  ref_pic2_sub.luma = ref_picture2->imgY_sub;
+  ref_pic1_sub.luma = ref_picture1->curr_imgY_sub;
+  ref_pic2_sub.luma = ref_picture2->curr_imgY_sub;
   img_width     = ref_picture1->size_x;
   img_height    = ref_picture1->size_y;
   width_pad    = ref_picture1->size_x_pad;

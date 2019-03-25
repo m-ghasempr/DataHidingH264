@@ -18,6 +18,8 @@
 #ifndef _RATE_CTL_H_
 #define _RATE_CTL_H_
 
+#include "rc_quadratic.h"
+
 /* generic rate control variables */
 typedef struct {
   // RC flags
@@ -38,7 +40,7 @@ typedef struct {
   int   *MADofMB;
   // buffer and budget
   int64 CurrentBufferFullness; //LIZG 25/10/2002
-  int   RemainingBits;
+  int64 RemainingBits;
   // bit allocations for RC_MODE_3
   int   RCPSliceBits;
   int   RCISliceBits;
@@ -67,6 +69,8 @@ void   handle_qp(Macroblock *currMB, short best_mode);
 void generic_alloc( rc_generic **prc );
 void generic_free( rc_generic **prc );
 void copy_rc_generic( rc_generic *dst, rc_generic *src );
+void init_GOP_rc(void);
+void init_frame_rc(int FrameNumberInFile);
 
 // rate control CURRENT pointers
 rc_generic   *generic_RC;

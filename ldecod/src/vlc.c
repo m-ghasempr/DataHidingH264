@@ -285,7 +285,7 @@ void linfo_cbp_intra(int len,int info,int *cbp, int *dummy)
   int cbp_idx;
 
   linfo_ue(len, info, &cbp_idx, dummy);
-  *cbp = NCBP[active_sps->chroma_format_idc ? 1 : 0][cbp_idx][0];
+  *cbp = NCBP[img->ChromaArrayType ? 1 : 0][cbp_idx][0];
 }
 
 /*!
@@ -302,7 +302,7 @@ void linfo_cbp_inter(int len,int info,int *cbp, int *dummy)
   int cbp_idx;
 
   linfo_ue(len, info, &cbp_idx, dummy);
-  *cbp = NCBP[active_sps->chroma_format_idc ? 1 : 0][cbp_idx][1];
+  *cbp = NCBP[img->ChromaArrayType ? 1 : 0][cbp_idx][1];
 }
 
 /*!
@@ -564,8 +564,8 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
 {
 
   register int inf;
-  long byteoffset = (totbitoffset>>3);       // byte from start of buffer
-  int  bitoffset  = (7-(totbitoffset&0x07)); // bit from start of byte
+  long byteoffset = (totbitoffset >> 3);         // byte from start of buffer
+  int  bitoffset  = (7 - (totbitoffset & 0x07)); // bit from start of byte
   int  bitcounter = 1;
   int  len        = 0;
   byte *cur_byte = &(buffer[byteoffset]);
@@ -1297,10 +1297,10 @@ int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits)
  * \brief
  *  Reads bits from the bitstream buffer (Threshold based)
  *
- * \param buffer
- *    buffer containing VLC-coded data bits
- * \param totbitoffset
- *    bit offset from start of partition
+ * \param curbyte
+ *    current byte position in buffer
+ * \param bitoffset
+ *    bit offset at current position
  * \param bytecount
  *    total bytes in bitstream
  * \param numbits

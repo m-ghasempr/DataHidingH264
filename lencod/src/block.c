@@ -95,6 +95,11 @@ const byte QP_SCALE_CR[52]=
 #define P_K (PredPel[11])
 #define P_L (PredPel[12])
 
+// global pointers for 4x4 quantization parameters
+extern int ****ptLevelScale4x4Luma;
+extern int ****ptInvLevelScale4x4Luma;
+extern int ****ptLevelOffset4x4Luma;
+
 /*!
  ************************************************************************
  * \brief
@@ -569,18 +574,19 @@ int dct_luma_16x16(int new_intra_mode)
   int*  ACRun;
   int **levelscale,**leveloffset;
   int **invlevelscale;
-  Boolean lossless_qpprime = (Boolean) ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
+  int   qp = currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP;
+  Boolean lossless_qpprime = (Boolean) ((qp == 0) && (img->lossless_qpprime_flag == 1));
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
 
   // Note that we could just use currMB->qp here
-  qp_per = qp_per_matrix[(currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)];
-  qp_rem = qp_rem_matrix[(currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)];
+  qp_per = qp_per_matrix[qp];
+  qp_rem = qp_rem_matrix[qp];
   q_bits = Q_BITS + qp_per;
 
   // select scaling parameters
-  levelscale    = LevelScale4x4Luma   [1][qp_rem];
-  invlevelscale = InvLevelScale4x4Luma[1][qp_rem];
-  leveloffset   = LevelOffset4x4Luma  [1][qp_per];
+  levelscale    = ptLevelScale4x4Luma   [1][qp_rem];
+  invlevelscale = ptInvLevelScale4x4Luma[1][qp_rem];
+  leveloffset   = ptLevelOffset4x4Luma  [1][qp]; // note that we could always use "qp" here. will change it in the next commit
 
   for (j=0;j<16;j++)
   {
@@ -951,7 +957,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   int level,scan_pos = 0,run = -1;
   int nonzero = FALSE;
   int qp_per, qp_rem, q_bits;
-
+  
   int   pos_x   = block_x >> BLOCK_SHIFT;
   int   pos_y   = block_y >> BLOCK_SHIFT;
   int   b8      = 2*(pos_y >> 1) + (pos_x >> 1);
@@ -961,21 +967,22 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   int   pix_y, pix_x;
 
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-  Boolean lossless_qpprime = (Boolean) ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
+  int   qp = currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP;
+  Boolean lossless_qpprime = (Boolean) (qp == 0 && img->lossless_qpprime_flag==1);
 
   int **levelscale,**leveloffset;
   int **invlevelscale;
 
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
 
-  qp_per    = qp_per_matrix[(currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)];
-  qp_rem    = qp_rem_matrix[(currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)];
-  q_bits    = Q_BITS+qp_per;
+  qp_per = qp_per_matrix[qp];
+  qp_rem = qp_rem_matrix[qp];
+  q_bits = Q_BITS + qp_per;
 
-  levelscale    = LevelScale4x4Luma[intra][qp_rem];
-  leveloffset   = LevelOffset4x4Luma[intra][qp_per];
-  invlevelscale = InvLevelScale4x4Luma[intra][qp_rem];
-
+  // select scaling parameters
+  levelscale    = ptLevelScale4x4Luma[intra][qp_rem];
+  invlevelscale = ptInvLevelScale4x4Luma[intra][qp_rem];
+  leveloffset   = ptLevelOffset4x4Luma[intra][qp];
 
   if (!lossless_qpprime)
   {
@@ -1195,11 +1202,13 @@ int dct_chroma(int uv,int cr_cbp)
   int ***invlevelscale;
   short pix_c_x, pix_c_y;
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
+  int cur_qp = currMB->qpc[uv] + img->bitdepth_chroma_qp_scale;
+  int cur_qp_dc = currMB->qpc[uv] + 3 + img->bitdepth_chroma_qp_scale;
 
   Boolean lossless_qpprime = (Boolean) ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
 
-  qp_per = qp_per_matrix[(currMB->qpc[uv] + img->bitdepth_chroma_qp_scale)];
-  qp_rem = qp_rem_matrix[(currMB->qpc[uv] + img->bitdepth_chroma_qp_scale)];
+  qp_per = qp_per_matrix[cur_qp];
+  qp_rem = qp_rem_matrix[cur_qp];
   q_bits = Q_BITS+qp_per;
 
   levelscale    = LevelScale4x4Chroma[uv][intra];
@@ -1209,10 +1218,10 @@ int dct_chroma(int uv,int cr_cbp)
   if (img->yuv_format == YUV422)
   {
     //for YUV422 only
-    qp_per_dc = qp_per_matrix[(currMB->qpc[uv] + 3 + img->bitdepth_chroma_qp_scale)];
-    qp_rem_dc = qp_rem_matrix[(currMB->qpc[uv] + 3 + img->bitdepth_chroma_qp_scale)];
+    qp_per_dc = qp_per_matrix[cur_qp_dc];
+    qp_rem_dc = qp_rem_matrix[cur_qp_dc];
 
-    q_bits_422 = Q_BITS+qp_per_dc;
+    q_bits_422 = Q_BITS + qp_per_dc;
   }
 
 
@@ -1276,7 +1285,7 @@ int dct_chroma(int uv,int cr_cbp)
         run++;
         ilev=0;
 
-        level =(iabs(m1[coeff_ctr]) * levelscale[qp_rem][0][0] + (leveloffset[qp_per][0][0]<<1)) >> (q_bits+1);
+        level =(iabs(m1[coeff_ctr]) * levelscale[qp_rem][0][0] + (leveloffset[cur_qp][0][0]<<1)) >> (q_bits+1);
 
         if (input->symbol_mode == UVLC && img->qp < 4)
         {
@@ -1408,7 +1417,7 @@ int dct_chroma(int uv,int cr_cbp)
         m4[i][j]=m3[i][j];
       }
       else
-        level =(iabs(m4[i][j]) * levelscale[qp_rem_dc][0][0] + (leveloffset[qp_per_dc][0][0]*2)) >> (q_bits_422+1);
+        level =(iabs(m4[i][j]) * levelscale[qp_rem_dc][0][0] + (leveloffset[cur_qp_dc][0][0]*2)) >> (q_bits_422+1);
 
       if (level != 0)
       {
@@ -1518,7 +1527,7 @@ int dct_chroma(int uv,int cr_cbp)
       if(lossless_qpprime)
         level = iabs(m4[i][j]);
       else
-        level =(iabs(m4[i][j]) * levelscale[qp_rem][0][0] + (leveloffset[qp_per][0][0]*2)) >> (q_bits+1);
+        level =(iabs(m4[i][j]) * levelscale[qp_rem][0][0] + (leveloffset[cur_qp][0][0]*2)) >> (q_bits+1);
 
       if (level != 0)
       {
@@ -1606,7 +1615,7 @@ int dct_chroma(int uv,int cr_cbp)
           ++run;
           ilev=0;
 
-          level=(iabs(img->m7[n2+j][n1+i])*levelscale[qp_rem][j][i]+leveloffset[qp_per][j][i])>>q_bits;
+          level=(iabs(img->m7[n2+j][n1+i])*levelscale[qp_rem][j][i]+leveloffset[cur_qp][j][i])>>q_bits;
 
           if (img->AdaptiveRounding)
           {
@@ -2033,8 +2042,8 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
     for (j=0; j < 2; j++)
     {
       j1=3-j;
-      img->m7[j][i] =iClip3(0,img->max_imgpel_value,(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS);
-      img->m7[j1][i]=iClip3(0,img->max_imgpel_value,(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS);
+      img->m7[j][i] =iClip3(0,img->max_imgpel_value,rshift_rnd_sf(m6[j]+m6[j1], DQ_BITS));
+      img->m7[j1][i]=iClip3(0,img->max_imgpel_value,rshift_rnd_sf(m6[j]-m6[j1], DQ_BITS));
     }
   }
 
@@ -2424,8 +2433,8 @@ int dct_chroma_sp(int uv,int cr_cbp)
         for (j=0; j < 2; j++)
         {
           j2=3-j;
-          img->m7[n2+j][n1+i] =iClip3(0,img->max_imgpel_value_uv,(m6[j]+m6[j2]+DQ_ROUND)>>DQ_BITS);
-          img->m7[n2+j2][n1+i]=iClip3(0,img->max_imgpel_value_uv,(m6[j]-m6[j2]+DQ_ROUND)>>DQ_BITS);
+          img->m7[n2+j][n1+i] =iClip3(0,img->max_imgpel_value_uv,rshift_rnd_sf(m6[j]+m6[j2], DQ_BITS));
+          img->m7[n2+j2][n1+i]=iClip3(0,img->max_imgpel_value_uv,rshift_rnd_sf(m6[j]-m6[j2], DQ_BITS));
         }
       }
     }
@@ -2554,8 +2563,8 @@ void copyblock_sp(int block_x,int block_y)
     for (j=0;j<2;j++)
     {
       j1=3-j;
-      img->m7[j][i] =iClip3(0,img->max_imgpel_value,(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS);
-      img->m7[j1][i]=iClip3(0,img->max_imgpel_value,(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS);
+      img->m7[j][i] =iClip3(0,img->max_imgpel_value,rshift_rnd_sf(m6[j]+m6[j1], DQ_BITS));
+      img->m7[j1][i]=iClip3(0,img->max_imgpel_value,rshift_rnd_sf(m6[j]-m6[j1], DQ_BITS));
     }
   }
 
@@ -2797,8 +2806,8 @@ int dct_luma_sp2(int block_x,int block_y,int *coeff_cost)
     for (j=0; j < 2; j++)
     {
       j1=3-j;
-      img->m7[j][i] =iClip3(0,255,(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS);
-      img->m7[j1][i]=iClip3(0,255,(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS);
+      img->m7[j][i] =iClip3(0,255,rshift_rnd_sf(m6[j]+m6[j1], DQ_BITS));
+      img->m7[j1][i]=iClip3(0,255,rshift_rnd_sf(m6[j]-m6[j1], DQ_BITS));
     }
   }
 
@@ -3061,8 +3070,8 @@ int dct_chroma_sp2(int uv,int cr_cbp)
         for (j=0; j < 2; j++)
         {
           j2=3-j;
-          img->m7[n1+i][n2+j] =iClip3(0,255,(m6[j]+m6[j2]+DQ_ROUND)>>DQ_BITS);
-          img->m7[n1+i][n2+j2]=iClip3(0,255,(m6[j]-m6[j2]+DQ_ROUND)>>DQ_BITS);
+          img->m7[n1+i][n2+j] =iClip3(0,255,rshift_rnd_sf(m6[j]+m6[j2], DQ_BITS));
+          img->m7[n1+i][n2+j2]=iClip3(0,255,rshift_rnd_sf(m6[j]-m6[j2], DQ_BITS));
         }
       }
     }

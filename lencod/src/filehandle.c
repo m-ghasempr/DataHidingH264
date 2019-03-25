@@ -105,7 +105,7 @@ int start_sequence()
      len = write_PPS(len, i);
   }
 
-  if (input->Generate_SEIVUI)
+  if (input->GenerateSEIMessage)
   {
     nalu = NULL;
     nalu = GenerateSEImessage_NALU();
@@ -146,7 +146,7 @@ int rewrite_paramsets()
      len = write_PPS(len, i);
   }
 
-  if (input->Generate_SEIVUI)
+  if (input->GenerateSEIMessage)
   {
     nalu = NULL;
     nalu = GenerateSEImessage_NALU();

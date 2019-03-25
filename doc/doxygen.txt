@@ -5,7 +5,7 @@ Doxygen can be downloaded from http://www.doxygen.org
 
  Note: for generating graphs you will also need "dot" which is part of 
        the ATT Graphviz tools available at
-       http://www.research.att.com/sw/tools/graphviz
+       http://www.graphviz.org/
 
 
 For generation of the TML reference software documentation run

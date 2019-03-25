@@ -1024,7 +1024,7 @@ void writeCBP_CABAC(SyntaxElement *se, DataPartition *dp)
     writeCBP_BIT_CABAC (b8, cbp&(1<<b8), cbp, currMB, curr_cbp_idx, eep_dp);
   }
 
-  if (img->yuv_format != YUV400)
+  if ((img->yuv_format != YUV400) && !IS_INDEPENDENT(input))
   {
     // coding of chroma part
     b = 0;

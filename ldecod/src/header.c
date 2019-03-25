@@ -99,6 +99,11 @@ int FirstPartOfSliceHeader()
 
   currSlice->pic_parameter_set_id = ue_v ("SH: pic_parameter_set_id", currStream);
 
+  if( img->separate_colour_plane_flag )
+  {
+    img->colour_plane_id = u_v (2, "SH: colour_plane_id", currStream);
+  }
+
   return UsedBits;
 }
 
@@ -618,8 +623,8 @@ void decode_poc(struct img_par *img)
     else if (img->bottom_field_flag==0)
     {  //top field
       img->ThisPOC= img->toppoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
-      }
-      else
+    }
+    else
     {  //bottom field
       img->ThisPOC= img->bottompoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
     }

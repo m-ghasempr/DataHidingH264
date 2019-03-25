@@ -677,6 +677,7 @@ void direct_output(StorablePicture *p, int p_out)
     // so output it directly
     flush_direct_output(p_out);
     write_picture (p, p_out, FRAME);
+    calculate_frame_no(p);
     if (-1!=p_ref && !input->silent)
       find_snr(snr, p, p_ref);
     free_storable_picture(p);
@@ -705,6 +706,7 @@ void direct_output(StorablePicture *p, int p_out)
     dpb_combine_field_yuv(out_buffer);
     write_picture (out_buffer->frame, p_out, FRAME);
 
+    calculate_frame_no(p);
     if (-1!=p_ref && !input->silent)
       find_snr(snr, out_buffer->frame, p_ref);
     free_storable_picture(out_buffer->frame);

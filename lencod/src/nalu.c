@@ -53,10 +53,10 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
   assert (nal_unit_type > 0 && nal_unit_type <= 10);
   assert (rbsp_size < MAXRBSPSIZE);
   
-  nalu->startcodeprefix_len = UseAnnexbLongStartcode?4:3;
-  nalu->nal_unit_type       = (NaluType) nal_unit_type;
-  nalu->nal_reference_idc   = (NalRefIdc) nal_reference_idc;
+  nalu->startcodeprefix_len = UseAnnexbLongStartcode ? 4 : 3;
   nalu->forbidden_bit       = 0;  
+  nalu->nal_reference_idc   = (NalRefIdc) nal_reference_idc;
+  nalu->nal_unit_type       = (NaluType) nal_unit_type;    
   nalu->buf[0]              =
     nalu->forbidden_bit << 7      |
     nalu->nal_reference_idc << 5  |

@@ -43,7 +43,8 @@ void encode_one_macroblock_highfast ()
   int         rerun, block, index, mode, i, j, k, ctr16x16;
   char        best_pdir;
   RD_PARAMS   enc_mb;
-  double      min_rdcost, max_rdcost=1e30;
+  double      min_rdcost = 1e30, max_rdcost = 1e30;
+  double      min_dcost = 1e30;
   char        best_ref[2] = {0, -1};
   int         bmcost[5] = {INT_MAX};
   int         cost=0;
@@ -108,7 +109,7 @@ void encode_one_macroblock_highfast ()
           best_mode = 0;
           currMB->c_ipred_mode=DC_PRED_8;
           min_rdcost = max_rdcost;
-          compute_mode_RD_cost(0, currMB, enc_mb, &min_rdcost, &min_rate, i16mode, bslice, &inter_skip);
+          compute_mode_RD_cost(0, currMB, enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip);
         }
       }
 
@@ -172,20 +173,20 @@ void encode_one_macroblock_highfast ()
             //----- set reference frame and direction parameters -----
             if (mode==3)
             {
-              best8x8fwref [3][block  ] = best8x8fwref [3][  block+2] = best_ref[LIST_0];
+              best8x8l0ref [3][block  ] = best8x8l0ref [3][  block+2] = best_ref[LIST_0];
               best8x8pdir  [3][block  ] = best8x8pdir  [3][  block+2] = best_pdir;
-              best8x8bwref [3][block  ] = best8x8bwref [3][  block+2] = best_ref[LIST_1];
+              best8x8l1ref [3][block  ] = best8x8l1ref [3][  block+2] = best_ref[LIST_1];
             }
             else if (mode==2)
             {
-              best8x8fwref [2][2*block] = best8x8fwref [2][2*block+1] = best_ref[LIST_0];
+              best8x8l0ref [2][2*block] = best8x8l0ref [2][2*block+1] = best_ref[LIST_0];
               best8x8pdir  [2][2*block] = best8x8pdir  [2][2*block+1] = best_pdir;
-              best8x8bwref [2][2*block] = best8x8bwref [2][2*block+1] = best_ref[LIST_1];
+              best8x8l1ref [2][2*block] = best8x8l1ref [2][2*block+1] = best_ref[LIST_1];
             }
             else
             {
-              memset(&best8x8fwref [1][0], best_ref[LIST_0], 4 * sizeof(char));
-              memset(&best8x8bwref [1][0], best_ref[LIST_1], 4 * sizeof(char));
+              memset(&best8x8l0ref [1][0], best_ref[LIST_0], 4 * sizeof(char));
+              memset(&best8x8l1ref [1][0], best_ref[LIST_1], 4 * sizeof(char));
               best8x8pdir  [1][0] = best8x8pdir  [1][1] = best8x8pdir  [1][2] = best8x8pdir  [1][3] = best_pdir;
             }
 
@@ -222,7 +223,7 @@ void encode_one_macroblock_highfast ()
               }
 
               currMB->c_ipred_mode=DC_PRED_8;
-              compute_mode_RD_cost(mode, currMB, enc_mb, &min_rdcost, &min_rate, i16mode, bslice, &inter_skip);
+              compute_mode_RD_cost(mode, currMB, enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip);
 
               if ((input->BiPredMotionEstimation) && (bslice) && ctr16x16 == 2
                 && img->bi_pred_me[mode] < 2 && mode == 1 && best8x8pdir[1][0] == 2)
@@ -289,8 +290,8 @@ void encode_one_macroblock_highfast ()
               &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1);
             best8x8mode       [block] = tr8x8.part8x8mode [block];
             best8x8pdir [P8x8][block] = tr8x8.part8x8pdir [block];
-            best8x8fwref[P8x8][block] = tr8x8.part8x8fwref[block];
-            best8x8bwref[P8x8][block] = tr8x8.part8x8bwref[block];
+            best8x8l0ref[P8x8][block] = tr8x8.part8x8l0ref[block];
+            best8x8l1ref[P8x8][block] = tr8x8.part8x8l1ref[block];
           }
 
           // following params could be added in RD_8x8DATA structure
@@ -318,8 +319,8 @@ void encode_one_macroblock_highfast ()
 
             best8x8mode       [block] = tr4x4.part8x8mode [block];
             best8x8pdir [P8x8][block] = tr4x4.part8x8pdir [block];
-            best8x8fwref[P8x8][block] = tr4x4.part8x8fwref[block];
-            best8x8bwref[P8x8][block] = tr4x4.part8x8bwref[block];
+            best8x8l0ref[P8x8][block] = tr4x4.part8x8l0ref[block];
+            best8x8l1ref[P8x8][block] = tr4x4.part8x8l1ref[block];
           }
           //--- re-set coding state (as it was before 8x8 block coding) ---
           // reset_coding_state (cs_mb);
@@ -371,7 +372,7 @@ void encode_one_macroblock_highfast ()
         if (input->BiPredMotionEstimation)
           img->bi_pred_me[1] =0;
 
-        if (img->yuv_format != YUV400 && max_index != 5)
+        if (((img->yuv_format != YUV400) && !IS_INDEPENDENT(input)) && max_index != 5)
         {
           // precompute all new chroma intra prediction modes
           IntraChromaPrediction(&mb_available_up, &mb_available_left, &mb_available_up_left);
@@ -411,17 +412,15 @@ void encode_one_macroblock_highfast ()
 
             if (img->yuv_format != YUV400)
             {
-              {
-                i16mode = 0;
-                // RDcost of mode 1 in P-slice and mode 0, 1 in B-slice are already available
-                if(((bslice && mode == 0) || (!islice && mode == 1)))
-                  continue;
-              }
+              i16mode = 0;
+              // RDcost of mode 1 in P-slice and mode 0, 1 in B-slice are already available
+              if(((bslice && mode == 0) || (!islice && mode == 1)))
+                continue;
             }
             //--- for INTER16x16 check all prediction directions ---
             if (mode==1 && bslice)
             {
-              best8x8pdir[1][0] = best8x8pdir[1][1] = best8x8pdir[1][2] = best8x8pdir[1][3] = ctr16x16;
+              best8x8pdir[1][0] = best8x8pdir[1][1] = best8x8pdir[1][2] = best8x8pdir[1][3] = (char) ctr16x16;
 
               if ( (bslice) && (input->BiPredMotionEstimation)
                 && (ctr16x16 == 2 && img->bi_pred_me[mode] < 2 && mode == 1))
@@ -437,6 +436,7 @@ void encode_one_macroblock_highfast ()
               && best_mode <=3 && currMB->cbp == 0)
               continue;
 
+            // check if weights are in valid range for biprediction.
             if (bslice && active_pps->weighted_bipred_idc == 1 && mode < P8x8)
             {
               int cur_blk, cur_comp;
@@ -449,8 +449,8 @@ void encode_one_macroblock_highfast ()
                   for (cur_comp = 0; cur_comp < (active_sps->chroma_format_idc == YUV400 ? 1 : 3) ; cur_comp ++)
                   {
                     weight_sum =
-                      wbp_weight[0][(int) best8x8fwref[mode][cur_blk]][(int) best8x8bwref[mode][cur_blk]][cur_comp] +
-                      wbp_weight[1][(int) best8x8fwref[mode][cur_blk]][(int) best8x8bwref[mode][cur_blk]][cur_comp];
+                      wbp_weight[0][(int) best8x8l0ref[mode][cur_blk]][(int) best8x8l1ref[mode][cur_blk]][cur_comp] +
+                      wbp_weight[1][(int) best8x8l0ref[mode][cur_blk]][(int) best8x8l1ref[mode][cur_blk]][cur_comp];
 
                     if (weight_sum < -128 ||  weight_sum > 127)
                     {
@@ -466,29 +466,29 @@ void encode_one_macroblock_highfast ()
               {
                 if ((input->BiPredMotionEstimation) && ctr16x16 == 2
                   && img->bi_pred_me[mode] < 2 && mode == 1)
-                  img->bi_pred_me[mode] = img->bi_pred_me[mode] + 1;
+                  img->bi_pred_me[mode] = (short) (img->bi_pred_me[mode] + 1); 
                 continue;
               }
             }
 
             if (enc_mb.valid[mode])
-              compute_mode_RD_cost(mode, currMB, enc_mb, &min_rdcost, &min_rate, i16mode, bslice, &inter_skip);
+              compute_mode_RD_cost(mode, currMB, enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip);
 
             if ((input->BiPredMotionEstimation) && (bslice) && ctr16x16 == 2
               && img->bi_pred_me[mode] < 2 && mode == 1 && best8x8pdir[1][0] == 2)
-              img->bi_pred_me[mode] = img->bi_pred_me[mode] + 1;
+              img->bi_pred_me[mode] = (short) (img->bi_pred_me[mode] + 1); 
           }// for (ctr16x16=0, index=0; index<max_index; index++)
         }// for (currMB->c_ipred_mode=DC_PRED_8; currMB->c_ipred_mode<=max_chroma_pred_mode; currMB->c_ipred_mode++)
 
         // Selective Intra Coding
-        if(img->type!=I_SLICE && input->SelectiveIntraEnable && input->ProfileIDC < FREXT_HP)
+        if(img->type!=I_SLICE && input->SelectiveIntraEnable && !IS_FREXT_PROFILE(input->ProfileIDC))
         {
           fast_mode_intra_decision(&intra_skip, min_rate);
 
           if(!intra_skip)
           {
             // precompute all new chroma intra prediction modes
-            if (img->yuv_format != YUV400)
+            if ((img->yuv_format != YUV400) && !IS_INDEPENDENT(input))
             {
               // precompute all new chroma intra prediction modes
               IntraChromaPrediction(&mb_available_up, &mb_available_left, &mb_available_up_left);
@@ -542,7 +542,7 @@ void encode_one_macroblock_highfast ()
                 }
 
                 if (enc_mb.valid[mode])
-                  compute_mode_RD_cost(mode, currMB, enc_mb, &min_rdcost, &min_rate, i16mode, bslice, &inter_skip);
+                  compute_mode_RD_cost(mode, currMB, enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip);
               } // for (index = 5; index < max_index; index++)
             }
           }
@@ -561,6 +561,7 @@ void encode_one_macroblock_highfast ()
 
   //=====  S E T   F I N A L   M A C R O B L O C K   P A R A M E T E R S ======
   //---------------------------------------------------------------------------
+
   if (((cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM) ))
     currMB->prev_cbp = 1;
   else if ((cbp==0 && !input->RCEnable) || (best_mode==IPCM))
@@ -572,7 +573,6 @@ void encode_one_macroblock_highfast ()
     currMB->prev_cbp = 0;
   }
   set_stored_macroblock_parameters ();
-
 
   // Rate control
   if(input->RCEnable)
