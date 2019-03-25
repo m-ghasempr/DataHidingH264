@@ -522,6 +522,13 @@ static void PatchInp ()
     error (errortext, 400);
   }
 
+  if (input->PicInterlace>0 || input->MbInterlace>0)
+  {
+    if (input->directInferenceFlag==0)
+      printf("DirectInferenceFlag set to 1 due to interlace coding.\n");
+    input->directInferenceFlag=1;
+  }
+
   // Cabac/UVLC consistency check
   if (input->symbol_mode != UVLC && input->symbol_mode != CABAC)
   {

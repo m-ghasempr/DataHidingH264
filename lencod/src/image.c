@@ -212,14 +212,16 @@ void code_a_picture(Picture *pic)
     enc_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
   }
 
-//  if (img->MbaffFrameFlag)
-  if (img->structure==FRAME)
-    for (j=2;j<6;j++)
-      for (i=0;i<listXsize[j];i++)
-      {
-//        dec_picture->ref_pic_num[j][i]=min (listX[j][i]->top_poc,listX[j][i]->bottom_poc) * 2 ;// + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
-        enc_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
-      }
+  if (!active_sps->frame_mbs_only_flag)
+  {
+    if (img->structure==FRAME)
+      for (j=2;j<6;j++)
+        for (i=0;i<listXsize[j];i++)
+        {
+          //        dec_picture->ref_pic_num[j][i]=min (listX[j][i]->top_poc,listX[j][i]->bottom_poc) * 2 ;// + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
+          enc_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
+        }
+  }
 
   RandomIntraNewPicture ();     //! Allocates forced INTRA MBs (even for fields!)
   FmoStartPicture ();           //! picture level initialization of FMO
@@ -1381,9 +1383,9 @@ static void estimate_weighting_factor ()
             }
             else if (input->WeightedBiprediction == 2)
             { // implicit mode
-                pt = (listX[LIST_0][i]->poc - listX[LIST_1][j]->poc);
-                p0 = (listX[LIST_0][i]->poc - enc_picture->poc);
-
+              pt = (listX[LIST_1][j]->poc - listX[LIST_0][i]->poc);
+              p0 = (enc_picture->poc - listX[LIST_0][i]->poc);
+              
               if (pt == 0)
               {
                 wbp_weight[1][i][j][comp] =  32 ;
@@ -1626,7 +1628,7 @@ static void find_snr ()
   //     Luma.
   impix = img->height * img->width;
   
-  if (img->structure!=FRAME)
+  if (img->fld_flag != 0)
   {
       
     diff_y = 0;
@@ -1654,6 +1656,11 @@ static void find_snr ()
   { 
     imgY_org  = imgY_org_frm;
     imgUV_org = imgUV_org_frm;
+
+    if(input->PicInterlace==ADAPTIVE_CODING)
+    {
+      enc_picture = enc_frame_picture;
+    }  
 
     diff_y = 0;
     for (i = 0; i < img->width; ++i)
@@ -2300,16 +2307,19 @@ static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, Sou
   if (fread (sf->yf, 1, bytes_y, p_in) != bytes_y)
   {
     printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF?, exiting", bytes_y);
+    report_stats_on_error();
     exit (-1);
   }
   if (fread (sf->uf, 1, bytes_uv, p_in) != bytes_uv)
   {
     printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF?, exiting", bytes_uv);
+    report_stats_on_error();
     exit (-1);
   }
   if (fread (sf->vf, 1, bytes_uv, p_in) != bytes_uv)
   {
     printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF?, exiting", bytes_uv);
+    report_stats_on_error();
     exit (-1);
   }
 

@@ -56,6 +56,7 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_d
 void writeFieldModeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp); //GB
 void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter, EncodingEnvironmentPtr eep_dp);
 void cabac_new_slice();
+void CheckAvailabilityOfNeighborsCABAC();
 
 #endif  // CABAC_H
 

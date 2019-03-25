@@ -498,13 +498,13 @@ typedef struct img_par
   unsigned int pic_order_cnt_lsb;
            int delta_pic_order_cnt_bottom;
   // for poc mode 1.
-           int delta_pic_order_cnt[2];
+           int delta_pic_order_cnt[3];
 
   // ////////////////////////
   // for POC mode 0:
-    signed int PicOrderCntMsb;
+    signed int PrevPicOrderCntMsb;
   unsigned int PrevPicOrderCntLsb;
-    signed int CurrPicOrderCntMsb;
+    signed int PicOrderCntMsb;
   // for POC mode 1:
   unsigned int AbsFrameNum;
     signed int ExpectedPicOrderCnt, PicOrderCntCycleCnt, FrameNumInPicOrderCntCycle;

@@ -387,23 +387,23 @@ void find_snr(
 
   // Collecting SNR statistics
   if (diff_y != 0)
-    snr->snr_y=(float)(10*log10(65025*(float)(img->width)*(img->height)/(float)diff_y));        // luma snr for current frame
+    snr->snr_y=(float)(10*log10(65025*(float)(p->size_x)*(p->size_y)/(float)diff_y));        // luma snr for current frame
   else
     snr->snr_y=0;
   if (diff_u != 0)
-    snr->snr_u=(float)(10*log10(65025*(float)(img->width)*(img->height)/(float)(4*diff_u)));    //  chroma snr for current frame
+    snr->snr_u=(float)(10*log10(65025*(float)(p->size_x)*(p->size_y)/(float)(4*diff_u)));    //  chroma snr for current frame
   else
     snr->snr_u=0;
   if (diff_v != 0)
-    snr->snr_v=(float)(10*log10(65025*(float)(img->width)*(img->height)/(float)(4*diff_v)));    //  chroma snr for current frame
+    snr->snr_v=(float)(10*log10(65025*(float)(p->size_x)*(p->size_y)/(float)(4*diff_v)));    //  chroma snr for current frame
   else
     snr->snr_v=0;
 
   if (img->number == 0) // first
   {
-    snr->snr_y1=(float)(10*log10(65025*(float)(img->width)*(img->height)/(float)diff_y));       // keep luma snr for first frame
-    snr->snr_u1=(float)(10*log10(65025*(float)(img->width)*(img->height)/(float)(4*diff_u)));   // keep chroma snr for first frame
-    snr->snr_v1=(float)(10*log10(65025*(float)(img->width)*(img->height)/(float)(4*diff_v)));   // keep chroma snr for first frame
+    snr->snr_y1=(float)(10*log10(65025*(float)(p->size_x)*(p->size_y)/(float)diff_y));       // keep luma snr for first frame
+    snr->snr_u1=(float)(10*log10(65025*(float)(p->size_x)*(p->size_y)/(float)(4*diff_u)));   // keep chroma snr for first frame
+    snr->snr_v1=(float)(10*log10(65025*(float)(p->size_x)*(p->size_y)/(float)(4*diff_v)));   // keep chroma snr for first frame
     snr->snr_ya=snr->snr_y1;
     snr->snr_ua=snr->snr_u1;
     snr->snr_va=snr->snr_v1;

@@ -91,7 +91,7 @@ int SliceHeader()
   // POC200301
   if (img->pic_order_cnt_type == 0)
   {
-    if (!active_sps->frame_mbs_only_flag)
+    if (active_sps->frame_mbs_only_flag)
     {
       img->pic_order_cnt_lsb = (img->toppoc & ~((((unsigned int)(-1)) << (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4))) );
     }

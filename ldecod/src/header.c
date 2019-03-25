@@ -553,19 +553,22 @@ void decoding_poc(struct img_par *img)
   case 0: // POC MODE 0
     // 1st
     if(img->idr_flag)
-      img->PicOrderCntMsb = 0;
+    {
+      img->PrevPicOrderCntMsb = 0;
+      img->PrevPicOrderCntLsb = 0;
+    }
     else
     {
       if (img->last_has_mmco_5) 
       {
         if (img->last_pic_bottom_field)
         {
-          img->PicOrderCntMsb     = 0;
+          img->PrevPicOrderCntMsb = 0;
           img->PrevPicOrderCntLsb = 0;
         }
         else
         {
-          img->PicOrderCntMsb     = 0;
+          img->PrevPicOrderCntMsb = 0;
           img->PrevPicOrderCntLsb = img->toppoc;
         }
       }
@@ -573,20 +576,25 @@ void decoding_poc(struct img_par *img)
     // Calculate the MSBs of current picture
     if( img->pic_order_cnt_lsb  <  img->PrevPicOrderCntLsb  &&  
       ( img->PrevPicOrderCntLsb - img->pic_order_cnt_lsb )  >=  ( MaxPicOrderCntLsb / 2 ) )
-      img->CurrPicOrderCntMsb = img->PicOrderCntMsb + MaxPicOrderCntLsb;
+      img->PicOrderCntMsb = img->PrevPicOrderCntMsb + MaxPicOrderCntLsb;
     else if ( img->pic_order_cnt_lsb  >  img->PrevPicOrderCntLsb  &&
       ( img->pic_order_cnt_lsb - img->PrevPicOrderCntLsb )  >  ( MaxPicOrderCntLsb / 2 ) )
-      img->CurrPicOrderCntMsb = img->PicOrderCntMsb - MaxPicOrderCntLsb;
+      img->PicOrderCntMsb = img->PrevPicOrderCntMsb - MaxPicOrderCntLsb;
     else
-      img->CurrPicOrderCntMsb = img->PicOrderCntMsb;
+      img->PicOrderCntMsb = img->PrevPicOrderCntMsb;
     
     // 2nd
 
-    img->toppoc = img->CurrPicOrderCntMsb + img->pic_order_cnt_lsb;
-    if( img->bottom_field_flag ) 
-      img->bottompoc = img->CurrPicOrderCntMsb + img->pic_order_cnt_lsb;
-    else
+    if ((!img->field_pic_flag)||(!img->bottom_field_flag ))
+    {
+      img->toppoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
+    }
+
+    if (!img->field_pic_flag)
       img->bottompoc = img->toppoc + img->delta_pic_order_cnt_bottom;
+    else
+      if( img->bottom_field_flag ) 
+        img->bottompoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
 
     // last: some post-processing. 
     if ( img->toppoc <= img->bottompoc )
@@ -594,7 +602,6 @@ void decoding_poc(struct img_par *img)
     else
       img->ThisPOC = img->framepoc = img->bottompoc;
     break;
-
 
   case 1: // POC MODE 1
     // 1st
@@ -723,7 +730,7 @@ void post_poc(struct img_par *img)
     if( !img->disposable_flag )
     {
       img->PrevPicOrderCntLsb = img->pic_order_cnt_lsb;
-      img->PicOrderCntMsb = img->CurrPicOrderCntMsb;
+      img->PrevPicOrderCntMsb = img->PicOrderCntMsb;
     }
     break;
 

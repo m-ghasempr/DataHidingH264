@@ -1,3 +1,23 @@
+Changes for Version JM7.5c to JM 7.5b
+-------------------------------------
+- encoder: add DirectInference parameter (AT)
+- encoder: generate interlaced representation, only if interlaced encoding mode (AT/KS)
+- encoder: fix picture aff psnr calculation (AT)
+- encoder: weighted prediction fix (AT)
+- decoder: small direct mode fix (AT)
+- encoder/decoder: reference index fix in generation of field representation (AS)
+- encoder/decoder: fix CurrPicNum for field calculation (KS)
+- encoder: fix CABAC contexts for cbp and skip flag / mb aff (VG/KS)
+- encoder: fix invalid usage of 8x8 temporal direct mode (KS)
+- decoder: fix field psnr calculation (KS)
+- encoder: don't try to output reconstructed sequence, if no file specified (AT)
+- encoder: clean exit if input file reading fails (AT)
+- encoder: initialize POC before initializing parameter sets (KS)
+- encoder: fix POC mode 1 (KS)
+- decoder: rename POC mode 1 variables to match text (KS)
+- encoder/decoder: fix bottom field access in is_short_term_reference()
+                   and is_long_term_reference() (ML)
+
 Changes for Version JM7.5b to JM 7.5a
 -------------------------------------
 Bug fixes
@@ -693,6 +713,7 @@ SM      Siwei Ma                swma@jdl.ac.cn
 AF      Arild Fuldseth          arild.fuldseth@tandberg.no
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AJ      Anthony Joch            anthony@ubvideo.com
+AS      Albert Simpson          ASimpson@amphion.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
 BH      Barry Haskell           bhaskell@apple.com
 CG      Cristina Gomila         GomilaC@tce.com
@@ -724,6 +745,7 @@ LW      Limin Wang              liwang@gi.com
 LWi     Lowell Winger           lwinger@videolocus.com
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
+ML      Maxim Lobasso           lobasso@hotmail.com
 MN      Mike Nilsson            mike.nilsson@bt.com
 MW      Mathias Wien            wien@ient.rwth-aachen.de
 PL      Peter List              Peter.List@t-systems.de
@@ -743,6 +765,7 @@ TSt     Thomas Stockhammer      stockhammer@lnt.ei.tum.de
 TW      Thomas Wiegand          wiegand@hhi.de
 TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 TWa     Toby Walker             tobyw@usrl.sony.com
+VG      Valeri George           valeri.george@hhi.fraunhofer.de
 VV      Viktor Varsa            viktor.varsa@nokia.com
 WYK     Ye-Kui Wang             wyk@ieee.org
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp

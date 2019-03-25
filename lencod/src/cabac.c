@@ -59,6 +59,32 @@ void cabac_new_slice()
 /*!
  ************************************************************************
  * \brief
+ *    Check for available neighbouring blocks
+ *    and set pointers in current macroblock
+ ************************************************************************
+ */
+void CheckAvailabilityOfNeighborsCABAC()
+{
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  PixelPos up, left;
+	
+  getNeighbour(img->current_mb_nr, -1,  0, 1, &left);
+  getNeighbour(img->current_mb_nr,  0, -1, 1, &up);
+  
+  if (up.available)
+    currMB->mb_available_up = &img->mb_data[up.mb_addr];
+  else
+    currMB->mb_available_up = NULL;
+  
+  if (left.available)
+    currMB->mb_available_left = &img->mb_data[left.mb_addr];
+  else
+    currMB->mb_available_left = NULL;
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    Allocation of contexts models for the motion info
  *    used for arithmetic encoding
  ************************************************************************
@@ -882,7 +908,7 @@ void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter
       if((currMB->mb_available_up)->mb_type==IPCM)
         b=0;
       else
-        b = ((currMB->mb_available_up->cbp & (1<<(b8+2))) == 0 ? 1 : 0);
+				b = (( ((currMB->mb_available_up)->cbp & (1<<(2+mb_x/2))) == 0) ? 1 : 0);   //VG-ADD
     }
     
   }
@@ -898,7 +924,7 @@ void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter
         if(img->mb_data[block_a.mb_addr].mb_type==IPCM)
           a=0;
         else
-          a = ( (img->mb_data[block_a.mb_addr].cbp  & (1<<(b8+1))) == 0 ? 1 : 0);
+					a = (( (img->mb_data[block_a.mb_addr].cbp & (1<<(2*(block_a.y/2)+1))) == 0) ? 1 : 0); //VG-ADD
       }
       
     }

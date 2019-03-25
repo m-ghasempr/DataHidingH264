@@ -2432,7 +2432,7 @@ void Get_Direct_Motion_Vectors ()
 {
 
   int  block_x, block_y, pic_block_x, pic_block_y, opic_block_x, opic_block_y;
-  int  TRb, TRp, TRd;
+  int  TRb, TRp;
   int  ******all_mvs = img->all_mv;
   int  mv_scale;
 
@@ -2667,8 +2667,7 @@ void Get_Direct_Motion_Vectors ()
         // next P is skip or inter mode
         else 
         {
-
-          int mapped_idx=-1;
+          int mapped_idx=INVALIDINDEX;
           int prescale,iref; 
 
           if ((enc_picture->ref_pic_num[LIST_0+list_offset][ref_idx]==listX[LIST_1+list_offset][0]->ref_pic_num[refList][ref_idx])&&(ref_idx>=0))
@@ -2686,12 +2685,12 @@ void Get_Direct_Motion_Vectors ()
               }
               else //! invalid index. Default to zero even though this case should not happen
               {                        
-                mapped_idx=-1;
+                mapped_idx=INVALIDINDEX;
               }
             }
           }
 
-          if (mapped_idx >=0)
+          if (mapped_idx !=INVALIDINDEX)
           {
             
             if (!img->MbaffFrameFlag || !img->mb_data[img->current_mb_nr].mb_field)
@@ -2701,9 +2700,9 @@ void Get_Direct_Motion_Vectors ()
             else
             {
               if (img->current_mb_nr%2 == 0)
-                TRb = Clip3( -128, 127, enc_picture->poc - listX[LIST_0+list_offset][mapped_idx]->poc );
+                TRb = Clip3( -128, 127, enc_picture->top_poc - listX[LIST_0+list_offset][mapped_idx]->poc );
               else
-                TRb = Clip3( -128, 127, enc_picture->poc + 1 - listX[LIST_0+list_offset][mapped_idx]->poc );
+                TRb = Clip3( -128, 127, enc_picture->bottom_poc - listX[LIST_0+list_offset][mapped_idx]->poc );
             }
             
             TRp = Clip3( -128, 127, listX[LIST_1+list_offset ][0]->poc - listX[LIST_0+list_offset][mapped_idx]->poc);
@@ -2713,7 +2712,6 @@ void Get_Direct_Motion_Vectors ()
               prescale = ( 16384 + abs( TRp / 2 ) ) / TRp;
               mv_scale = Clip3( -1024, 1023, ( TRb * prescale + 32 ) >> 6 ) ;
             }
-            TRd    = TRb      - TRp;
             
             if (TRp==0)
             {

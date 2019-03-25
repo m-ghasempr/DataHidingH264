@@ -614,7 +614,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
   {
     if (direct_pdir[img->block_x+i0][img->block_y+j0]<0) // mode not allowed
     {
-      *cnt_nonz = (1<<30);
+      return (1e30);
     }
     else
     {

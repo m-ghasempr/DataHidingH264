@@ -52,6 +52,7 @@ Mapping Map[] = {
     {"NumberBFrames",            &configinput.successive_Bframe,       0},
     {"QPBPicture",               &configinput.qpB,                     0},
     {"DirectModeType",           &configinput.direct_type,             0},
+    {"DirectInferenceFlag",      &configinput.directInferenceFlag,     0},
     {"SPPicturePeriodicity",     &configinput.sp_periodicity,          0},
     {"QPSPPicture",              &configinput.qpsp,                    0},
     {"QPSP2Picture",             &configinput.qpsp_pred,               0},

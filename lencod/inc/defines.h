@@ -82,6 +82,8 @@ typedef unsigned char byte;    //!< byte type definition
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
 
+#define INVALIDINDEX  (-135792468)
+
 #define Clip1(a)            ((a)>255?255:((a)<0?0:(a)))
 #define Clip3(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
 
@@ -90,7 +92,7 @@ typedef unsigned char byte;    //!< byte type definition
 #define I16MB   10
 #define IBLOCK  11
 #define SI4MB   12
-#define MAXMODE 13
+#define MAXMODE 15
 #define IPCM    14
 
 

@@ -429,6 +429,9 @@ void start_macroblock(int mb_addr, int mb_field)
   // If MB is next to a slice boundary, mark neighboring blocks unavailable for prediction
   CheckAvailabilityOfNeighbors();
 
+	if (input->symbol_mode == CABAC)
+		CheckAvailabilityOfNeighborsCABAC();
+	
   // Reset vectors before doing motion search in motion_search().
 
   for (l=0; l<2; l++)
@@ -1908,6 +1911,9 @@ int writeMBHeader (int rdopt)  // GB CHROMA !!!!!!!!
   int             no_bits   = 0;
   int             skip      = currMB->mb_type ? 0:((img->type == B_SLICE) ? !currMB->cbp:1);
   int             mb_type;
+  int							prevMbSkipped = 0;
+	int							mb_field_tmp;
+  Macroblock			*topMB = NULL;
   
   int             WriteFrameFieldMBInHeader = 0;
 
@@ -1916,6 +1922,8 @@ int writeMBHeader (int rdopt)  // GB CHROMA !!!!!!!!
     if (0==(mb_nr%2))
     {
       WriteFrameFieldMBInHeader = 1; // top field
+
+      prevMbSkipped = 0;
     }
     else
     {
@@ -1923,6 +1931,12 @@ int writeMBHeader (int rdopt)  // GB CHROMA !!!!!!!!
       {
         WriteFrameFieldMBInHeader = 1; // bottom, if top was skipped
       }
+
+      topMB= &img->mb_data[img->current_mb_nr-1];
+      if(!(img->type == B_SLICE))
+        prevMbSkipped = (topMB->mb_type == 0);
+      else 
+        prevMbSkipped = (topMB->mb_type == 0 && topMB->cbp == 0);
     }
   }
   currMB->IntraChromaPredModeFlag = IS_INTRA(currMB);
@@ -1986,6 +2000,15 @@ int writeMBHeader (int rdopt)  // GB CHROMA !!!!!!!!
     }
     else if (input->symbol_mode == CABAC)//GB
     {
+
+			if (img->MbaffFrameFlag && (img->current_mb_nr%2 == 0||prevMbSkipped))
+			{
+				mb_field_tmp = currMB->mb_field;
+				currMB->mb_field = field_flag_inference();
+				CheckAvailabilityOfNeighborsCABAC();
+				currMB->mb_field = mb_field_tmp;
+			}
+			
       // write mb_skip_flag
       mb_type         = MBType2Value (currMB);
       currSE->value1  = mb_type;
@@ -2002,6 +2025,8 @@ int writeMBHeader (int rdopt)  // GB CHROMA !!!!!!!!
       currSE++;
       currMB->currSEnr++;
 
+			CheckAvailabilityOfNeighborsCABAC();
+			
       // write mb_aff
       if(img->MbaffFrameFlag && !skip) // check for copy mode, Krit
       {

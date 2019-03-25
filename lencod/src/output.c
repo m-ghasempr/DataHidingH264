@@ -38,22 +38,25 @@ void write_picture(StorablePicture *p, FILE *p_out)
 {
   int i,j;
 
-  for(i=0;i<p->size_y;i++)
-    for(j=0;j<p->size_x;j++)
-    {
-      fputc(p->imgY[i][j],p_out);
-    }
-  for(i=0;i<p->size_y_cr;i++)
-    for(j=0;j<p->size_x_cr;j++)
-    {
-      fputc(p->imgUV[0][i][j],p_out);
-    }
-  for(i=0;i<p->size_y_cr;i++)
-    for(j=0;j<p->size_x_cr;j++)
-    {
-      fputc(p->imgUV[1][i][j],p_out);
-    }
-  fflush(p_out);
+  if (p_out)
+  {
+    for(i=0;i<p->size_y;i++)
+      for(j=0;j<p->size_x;j++)
+      {
+        fputc(p->imgY[i][j],p_out);
+      }
+    for(i=0;i<p->size_y_cr;i++)
+      for(j=0;j<p->size_x_cr;j++)
+      {
+        fputc(p->imgUV[0][i][j],p_out);
+      }
+    for(i=0;i<p->size_y_cr;i++)
+      for(j=0;j<p->size_x_cr;j++)
+      {
+        fputc(p->imgUV[1][i][j],p_out);
+      }
+      fflush(p_out);
+  }
 }
 
 /*!

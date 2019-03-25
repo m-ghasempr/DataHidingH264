@@ -240,7 +240,7 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
 
   // a couple of flags, simple
   sps->mb_adaptive_frame_field_flag = (FRAME_CODING != input->MbInterlace);
-  sps->direct_8x8_inference_flag = TRUE;
+  sps->direct_8x8_inference_flag = input->directInferenceFlag;
 
   // Sequence VUI not implemented, signalled as not present
   sps->vui_parameters_present_flag = FALSE;

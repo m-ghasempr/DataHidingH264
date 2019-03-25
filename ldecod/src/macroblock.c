@@ -3702,8 +3702,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               bw_ref_idx >>=1;
             }
 
-            alpha_fw = img->wbp_weight[0][fw_ref_idx][bw_ref_idx][0];
-            alpha_bw = img->wbp_weight[1][fw_ref_idx][bw_ref_idx][0];
+            alpha_fw = img->wbp_weight[0][fw_refframe][bw_refframe][0];
+            alpha_bw = img->wbp_weight[1][fw_refframe][bw_refframe][0];
             
             for(ii=0;ii<BLOCK_SIZE;ii++)
               for(jj=0;jj<BLOCK_SIZE;jj++)  

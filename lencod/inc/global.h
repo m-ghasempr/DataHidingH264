@@ -583,6 +583,7 @@ typedef struct
   int successive_Bframe;        //!< number of B frames that will be used
   int qpB;                      //!< QP of B frames
   int direct_type;              //!< Direct Mode type to be used (1: Temporal, 0: Spatial)
+  int directInferenceFlag;      //!< Direct Inference Flag
 
   // SP Pictures
   int sp_periodicity;           //!< The periodicity of SP-pictures
@@ -1047,6 +1048,8 @@ void  write_one_macroblock(int eos_bit);
 void  proceed2nextMacroblock();
 
 void free_slice_list(Picture *currPic);
+
+void report_stats_on_error();
 
 #if TRACE
 void  trace2out(SyntaxElement *se);

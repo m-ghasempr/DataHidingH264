@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 7.5b
+ *     JM 7.5c
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -63,7 +63,7 @@
 #include "ratectl.h"
 
 #define JM      "7"
-#define VERSION "7.5b"
+#define VERSION "7.5c"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -107,6 +107,8 @@ int main(int argc,char **argv)
   Configure (argc, argv);
 
   AllocNalPayloadBuffer();
+
+  init_poc();
   GenerateParameterSets();
 
   init_img();
@@ -151,7 +153,6 @@ int main(int argc,char **argv)
 #endif
 
   PatchInputNoFrames();
-  init_poc();
 
   // Write sequence header (with parameter sets)
   stat->bit_slice = start_sequence();
@@ -164,6 +165,7 @@ int main(int argc,char **argv)
     //much of this can go in init_frame() or init_field()?
     //poc for this frame or field
     img->toppoc = IMG_NUMBER*img->offset_for_ref_frame[0];
+    
     if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
       img->bottompoc = img->toppoc;     //progressive
     else 
@@ -336,6 +338,51 @@ int main(int argc,char **argv)
   return 0;                         //encode JM73_FME version
 }
 
+void report_stats_on_error()
+{
+  input->no_frames=img->number-1;
+  terminate_sequence();
+  
+  flush_dpb();
+  
+  fclose(p_in);
+  if (p_dec)
+    fclose(p_dec);
+  if (p_trace)
+    fclose(p_trace);
+  
+  //Clear_Motion_Search_Module ();
+  
+  RandomIntraUninit();
+  FmoUninit();
+  
+  // free structure for rd-opt. mode decision
+  clear_rdopt ();
+  
+#ifdef _LEAKYBUCKET_
+  calc_buffer();
+#endif
+  
+  // report everything
+  report();
+  
+  free_picture (frame_pic);
+  if (top_pic)
+    free_picture (top_pic);
+  if (bottom_pic)
+    free_picture (bottom_pic);
+  
+  free_dpb();
+  uninit_out_buffer();
+  
+  free_global_buffers();
+  
+  // free image mem
+  free_img ();
+  free_context_memory ();
+  FreeNalPayloadBuffer();
+  FreeParameterSets();
+}
 
 /*!
  ***********************************************************************
@@ -1358,7 +1405,6 @@ void free_global_buffers()
   // free multiple ref frame buffers
   // number of reference frames increased by one for next P-frame
 
-#if (!OLDWEIGHT)
   if (input->WeightedPrediction || input->WeightedBiprediction)
   {
     free_mem3Dint(wp_weight,6);
@@ -1366,7 +1412,7 @@ void free_global_buffers()
     free_mem2Dint(weight);
     free_mem4Dint(wbp_weight,6,MAX_REFERENCE_PICTURES);
   }
-#endif
+
 /*
   if (input->WeightedPrediction || input->WeightedBiprediction)
     free(mref_frm_w);
