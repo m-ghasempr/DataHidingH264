@@ -31,7 +31,7 @@
 #endif
 
 #define JM                  "17 (FRExt)"
-#define VERSION             "17.0"
+#define VERSION             "17.1"
 #define EXT_VERSION         "(FRExt)"
 
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
@@ -44,7 +44,6 @@
 #define ENABLE_OUTPUT_TONEMAPPING 1    //!< enable tone map the output if tone mapping SEI present
 #define JCOST_CALC_SCALEUP        1    //!< 1: J = (D<<LAMBDA_ACCURACY_BITS)+Lambda*R; 0: J = D + ((Lambda*R+Rounding)>>LAMBDA_ACCURACY_BITS)
 #define DISABLE_ERC               1    //!< Disable any error concealment processes
-#define DISABLE_REF_ID            0
 #define JM_PARALLEL_DEBLOCK       0    //!< Enables Parallel Deblocking
 
 #define MVC_EXTENSION_ENABLE      1    //!< enable support for the Multiview High Profile
@@ -55,7 +54,6 @@
 #define BASE_VIEW_IDX             0
 #define FREEPTR(ptr) { if(ptr) {free(ptr); (ptr)=NULL;} }
 #endif
-
 
 #include "typedefs.h"
 
@@ -83,7 +81,6 @@ typedef enum {
   FREXT_Hi422    = 122,      //!< YUV 4:2:2/10 "High 4:2:2"
   FREXT_Hi444    = 244,      //!< YUV 4:4:4/14 "High 4:4:4"
   MVC_HIGH       = 118,      //!< YUV 4:2:0/8  "Multiview High"
-  MULTIVIEW_FIELDHIGH = 119, //!< YUV 4:2:0/8  "Multiview Field High"
   STEREO_HIGH    = 128       //!< YUV 4:2:0/8  "Stereo High"
 } ProfileIDC;
 

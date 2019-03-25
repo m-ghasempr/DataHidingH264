@@ -20,7 +20,7 @@
 # include <string.h>
 # include <assert.h>
 
-#if (_MSC_VER >= 1400) || defined(__INTEL_COMPILER) || (__GNUC__  >= 5) // Check OPENMP compatibility
+#ifdef _OPENMP  // Check OPENMP compatibility
 # define OPENMP
 # define NUM_THREADS 8
 #endif

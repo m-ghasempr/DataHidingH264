@@ -51,10 +51,9 @@ extern void CleanUpPPS(VideoParameters *p_Vid);
 extern void activate_sps (VideoParameters *p_Vid, seq_parameter_set_rbsp_t *sps);
 extern void activate_pps (VideoParameters *p_Vid, pic_parameter_set_rbsp_t *pps);
 
-#if (!MVC_EXTENSION_ENABLE)
-extern void UseParameterSet (Slice *currSlice, int PicParsetId);
-#else
-extern void UseParameterSet (Slice *currSlice, int PicParsetId, int isBaseView);
+extern void UseParameterSet (Slice *currSlice);
+
+#if (MVC_EXTENSION_ENABLE)
 extern void SubsetSPSConsistencyCheck (subset_seq_parameter_set_rbsp_t *subset_sps);
 extern void ProcessSubsetSPS (VideoParameters *p_Vid, NALU_t *nalu);
 

@@ -313,7 +313,7 @@ int get_colocated_info_8x8(Macroblock *currMB, StorablePicture *list1, int i, in
     Slice *currSlice = currMB->p_Slice;
     VideoParameters *p_Vid = currMB->p_Vid;
     if( (currSlice->mb_aff_frame_flag) ||
-      (!p_Vid->active_sps->frame_mbs_only_flag && !currSlice->structure && list1->iCodingType == FIELD_CODING))
+      (!p_Vid->active_sps->frame_mbs_only_flag && ((!currSlice->structure && list1->iCodingType == FIELD_CODING)||(currSlice->structure!=list1->structure && list1->coded_frame))))
     {
       int jj = RSD(j);
       int ii = RSD(i);
@@ -321,20 +321,29 @@ int get_colocated_info_8x8(Macroblock *currMB, StorablePicture *list1, int i, in
       int moving;
       PicMotionParams *fs = &list1->mv_info[jj][ii];
 
-      if( (currSlice->mb_aff_frame_flag && ((!currMB->mb_field && list1->motion.mb_field[currMB->mbAddrX]) ||
-        (!currMB->mb_field && list1->iCodingType == FIELD_CODING))) 
-        || (!currSlice->mb_aff_frame_flag))
+      if(currSlice->field_pic_flag && currSlice->structure!=list1->structure && list1->coded_frame)
       {
-        if (iabs(currSlice->dec_picture->poc - list1->bottom_field->poc)> iabs(currSlice->dec_picture->poc -list1->top_field->poc) )
+         if(currSlice->structure == TOP_FIELD)
+           fs = list1->top_field->mv_info[jj] + ii;
+         else
+           fs = list1->bottom_field->mv_info[jj] + ii;
+      }
+      else
+      {
+        if( (currSlice->mb_aff_frame_flag && ((!currMB->mb_field && list1->motion.mb_field[currMB->mbAddrX]) ||
+          (!currMB->mb_field && list1->iCodingType == FIELD_CODING))) 
+          || (!currSlice->mb_aff_frame_flag))
         {
-          fs = list1->top_field->mv_info[jdiv] + ii;
-        }
-        else
-        {
-          fs = list1->bottom_field->mv_info[jdiv] + ii;
+          if (iabs(currSlice->dec_picture->poc - list1->bottom_field->poc)> iabs(currSlice->dec_picture->poc -list1->top_field->poc) )
+          {
+            fs = list1->top_field->mv_info[jdiv] + ii;
+          }
+          else
+          {
+            fs = list1->bottom_field->mv_info[jdiv] + ii;
+          }
         }
       }
-
       moving = !((((fs->ref_idx[LIST_0] == 0)
         &&  (iabs(fs->mv[LIST_0].mv_x)>>1 == 0)
         &&  (iabs(fs->mv[LIST_0].mv_y)>>1 == 0)))

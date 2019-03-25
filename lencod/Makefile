@@ -17,6 +17,8 @@ M32?= 0
 OPT?= 3
 ### Static Compilation
 STC?= 0
+### OPENMP support : 1=yes, 0=no
+OPENMP?= 1
 
 DEPEND= dependencies
 
@@ -45,6 +47,10 @@ FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE
 
 ifeq ($(M32),1)
 FLAGS+=-m32
+endif
+
+ifeq ($(OPENMP),1)
+FLAGS+=-fopenmp
 endif
 
 
@@ -79,8 +85,8 @@ endif
 ifeq ($(STC),1)
 	@echo 'Compiling with -static support...'
 endif
-ifeq ($(MMX),1)
-	@echo 'Compiling with MMX support...'
+ifeq ($(OPENMP),1)
+	@echo 'Compiling with -fopenmp support...'
 endif
 
 clean:

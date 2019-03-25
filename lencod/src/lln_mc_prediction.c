@@ -1090,7 +1090,6 @@ void perform_mc(Macroblock* currMB, int decoder, ColorPlane pl, StorablePicture 
     StorablePicture **list = currSlice->listX[currMB->list_offset + pred_dir];
     
     vec1_x = i4 * mv_mul + mv_array[j][i].mv_x;
-    //vec1_y = (currMB->block_y_aff + j) * mv_mul + mv_array[j4][i4][1];
     vec1_y = j4 * mv_mul + mv_array[j][i].mv_y;
 
 	get_block_luma (currMB, decoder, pl, dec_picture, list[ref_idx], vec1_x, vec1_y, block_size_x, block_size_y, tmp_block_l0); 

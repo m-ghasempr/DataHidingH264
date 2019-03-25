@@ -17,6 +17,9 @@ M32?= 0
 OPT?= 3
 ### Static Compilation
 STC?= 0
+### OPENMP support : 1=yes, 0=no
+OPENMP?= 1
+
 
 DEPEND= dependencies
 
@@ -47,6 +50,9 @@ ifeq ($(M32),1)
 FLAGS+=-m32
 endif
 
+ifeq ($(OPENMP),1)
+  FLAGS+=-fopenmp
+endif
 
 OPT_FLAG = -O$(OPT)
 ifeq ($(DBG),1)
@@ -78,6 +84,9 @@ ifeq ($(DBG),1)
 endif
 ifeq ($(STC),1)
 	@echo 'Compiling with -static support...'
+endif
+ifeq ($(OPENMP),1)
+	@echo 'Compiling with -fopenmp support...'
 endif
 
 clean:

@@ -177,7 +177,7 @@ void set_intrapred_chroma(Macroblock *currMB, int *left_available, int *up_avail
   int      cr_MB_x = p_Vid->mb_cr_size_x;
   int      cr_MB_y = p_Vid->mb_cr_size_y;
 
-  int dc_pred_value_chroma = p_Vid->dc_pred_value_comp[1];
+  imgpel dc_pred_value_chroma = p_Vid->dc_pred_value_comp[1];
 
   int *mb_size = p_Vid->mb_size[IS_CHROMA];
 
@@ -271,7 +271,7 @@ void set_intrapred_chroma_mbaff(Macroblock *currMB, ColorPlane pl, int *left_ava
   int      cr_MB_x = p_Vid->mb_cr_size_x;
   int      cr_MB_y = p_Vid->mb_cr_size_y;
 
-  int dc_pred_value_chroma = p_Vid->dc_pred_value_comp[1];
+  imgpel dc_pred_value_chroma = p_Vid->dc_pred_value_comp[1];
 
   int *mb_size = p_Vid->mb_size[IS_CHROMA];
 

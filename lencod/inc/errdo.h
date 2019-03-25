@@ -18,15 +18,9 @@
 
 typedef enum
 {
-  RMPC = 0,
-  EXTENDED_RMPC = 1,
-  LLN = 2,
-  FAST_LLN = 3,
-  ROPE = 4,
-  EXTENDED_ROPE = 5,
-  LTI = 6,
-  ERMPC_NN = 7,   //extended RMPC with using nearest neighbor if fractional MV happens
-  ERMPC_FAST = 8   //extended RMPC with using fast termination
+  LLN = 0,
+  ROPE = 1,
+  RMPC = 2,
 } DE_Type;
 
 struct distortion_estimation

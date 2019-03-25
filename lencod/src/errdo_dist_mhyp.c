@@ -20,7 +20,6 @@
  *************************************************************************************
  */
 
-//Zhifeng 090612
 //For distortion estimation
 #include "global.h"
 #include "mbuffer.h"
@@ -39,7 +38,6 @@ static void decode_one_mb           (Macroblock* currMB, StorablePicture *enc, i
 extern void UpdateDecoders          (VideoParameters *p_Vid, InputParameters *p_Inp, StorablePicture *enc_pic);
 extern void DeblockFrame(VideoParameters *p_Vid, imgpel **, imgpel ***);
 
-//Zhifeng 090611
 /*!
  *************************************************************************************
  * \brief
@@ -64,7 +62,7 @@ distblk errdo_distortion_estimation_multihyp(Macroblock *currMB, int block, int 
   //Refer to the function reset_adaptive_rounding(), 
   //maxplane = (p_Vid->yuv_format == YUV400)?  1 : 3; for p_Vid->ARCofAdj4x4 
   //maxplane = (p_Vid->yuv_format == YUV400)?  1 : (p_Vid->P444_joined ? 3 : 1); for p_Vid->ARCofAdj8x8
-  if (mode >=4 && mode <= 7)	//to be called by rdcost_for_8x8blocks()
+  if (mode >= 4 && mode <= 7)	//to be called by rdcost_for_8x8blocks()
   {
     //===== get residue =====
     // We need the reconstructed prediction residue for the simulated decoders.
@@ -82,16 +80,11 @@ distblk errdo_distortion_estimation_multihyp(Macroblock *currMB, int block, int 
     distortion /= p_Inp->NoOfDecoders;
     */
 
-    for (k=0; k<p_Inp->NoOfDecoders ;k++)
+    for (k = 0; k < p_Inp->NoOfDecoders; k++)
     {
       decode_one_b8block (currMB, p_Vid->enc_picture, k, block, mode, pdir);
       ddistortion += compute_SSE8x8(&p_Vid->pCurImg[currMB->opix_y + pay], &p_Vid->enc_picture->de_mem->p_dec_img[0][k][currMB->opix_y + pay], currMB->pix_x + pax, currMB->pix_x + pax);
 
-      if(p_Inp->de == FAST_LLN)
-      {
-        temp_dist = min_rdcost * (k+1);
-      }
-      else
       {
         temp_dist = min_rdcost * p_Inp->NoOfDecoders;
       }
@@ -101,8 +94,8 @@ distblk errdo_distortion_estimation_multihyp(Macroblock *currMB, int block, int 
         return DISTBLK_MAX;
       }
     }
-    distortion = (distblk) ((ddistortion) / p_Inp->NoOfDecoders + 0.5);
 
+    distortion = (distblk) (ddistortion / p_Inp->NoOfDecoders);
   }
   else if (mode != P8x8)	//to be called by RDCost_for_macroblocks()
   {
@@ -112,22 +105,24 @@ distblk errdo_distortion_estimation_multihyp(Macroblock *currMB, int block, int 
       decode_one_mb (currMB, p_Vid->enc_picture, k);
       ddistortion += compute_SSE16x16(&p_Vid->pImgOrg[0][currMB->opix_y], &p_Vid->enc_picture->de_mem->p_dec_img[0][k][currMB->pix_y], currMB->pix_x, currMB->pix_x);
 
-      //Use integeter calculation
-      if(p_Inp->de == FAST_LLN)
+      //Use integer calculation
+      if (min_rdcost < DISTBLK_MAX)
       {
-        temp_dist = min_rdcost * (k+1);
+        {
+          temp_dist = min_rdcost * p_Inp->NoOfDecoders;
+        }
       }
       else
-      {
-        temp_dist = min_rdcost * p_Inp->NoOfDecoders;
-      }
+        temp_dist = DISTBLK_MAX;
+
       if (ddistortion > temp_dist)
       {
         //distortion = (distblk) ((ddistortion) / (k+1) + 0.5);
         return DISTBLK_MAX;
       }
     }
-    distortion = (distblk) ((ddistortion) / p_Inp->NoOfDecoders + 0.5);
+
+    distortion = (distblk) (ddistortion / p_Inp->NoOfDecoders);
 
     if ((p_Vid->yuv_format != YUV400) && (active_sps->chroma_format_idc != YUV444))
     {
@@ -143,21 +138,22 @@ distblk errdo_distortion_estimation_multihyp(Macroblock *currMB, int block, int 
       ddistortion += compute_SSE16x16(&p_Vid->pImgOrg[0][currMB->opix_y], &p_Vid->enc_picture->de_mem->p_dec_img[0][k][currMB->pix_y], currMB->pix_x, currMB->pix_x);
 
       //Use integeter calculation
-      if(p_Inp->de == FAST_LLN)
+      if (min_rdcost < DISTBLK_MAX)
       {
-        temp_dist = min_rdcost * (k+1);
+        {
+          temp_dist = min_rdcost * p_Inp->NoOfDecoders;
+        }
       }
       else
-      {
-        temp_dist = min_rdcost * p_Inp->NoOfDecoders;
-      }
+        temp_dist = DISTBLK_MAX;
+
       if (ddistortion > temp_dist)
       {
         //distortion = (distblk) ((ddistortion) / (k+1) + 0.5);
         return DISTBLK_MAX;
       }
     }
-    distortion = (distblk) ((ddistortion) / p_Inp->NoOfDecoders + 0.5);
+    distortion = (distblk) (ddistortion / p_Inp->NoOfDecoders);
 
     if ((p_Vid->yuv_format != YUV400) && (active_sps->chroma_format_idc != YUV444))
     {

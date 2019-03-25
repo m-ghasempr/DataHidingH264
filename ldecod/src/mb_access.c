@@ -93,8 +93,9 @@ void CheckAvailabilityOfNeighbors(Macroblock *currMB)
  */
 void get_mb_block_pos_normal (int mb_addr, short *x, short *y)
 {
-  *x = (short) PicPos[ mb_addr ].x;
-  *y = (short) PicPos[ mb_addr ].y;
+  BlockPos *pPos = &PicPos[ mb_addr ];
+  *x = (short) pPos->x;
+  *y = (short) pPos->y;
 }
 
 /*!
@@ -106,8 +107,9 @@ void get_mb_block_pos_normal (int mb_addr, short *x, short *y)
  */
 void get_mb_block_pos_mbaff (int mb_addr, short *x, short *y)
 {
-  *x = (short)  PicPos[mb_addr>>1].x;
-  *y = (short) ((PicPos[mb_addr>>1].y << 1) + (mb_addr & 0x01));
+  BlockPos *pPos = &PicPos[ mb_addr >> 1 ];
+  *x = (short)  pPos->x;
+  *y = (short) ((pPos->y << 1) + (mb_addr & 0x01));
 }
 
 /*!

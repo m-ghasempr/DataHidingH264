@@ -417,7 +417,13 @@ void free_pictures(VideoParameters *p_Vid, int dummy)
 }
 
 #if (MVC_EXTENSION_ENABLE)
-void write_el_field_vlc_nalu(VideoParameters *p_Vid)
+/*!
+ ************************************************************************
+ * \brief
+ *    Write EL NALUs for field coded pictures
+ ************************************************************************
+ */
+void write_el_field_vcl_nalu(VideoParameters *p_Vid)
 {
   int temp1_nal_reference_idc;
   int temp1_non_idr_flag[2];
@@ -432,6 +438,7 @@ void write_el_field_vlc_nalu(VideoParameters *p_Vid)
     int temp_view_id = p_Vid->view_id;
 
     p_Vid->view_id = 0;
+    p_Vid->structure = TOP_FIELD;
     write_non_vcl_nalu_mvc(p_Vid);
 
     //backup view_id 1
@@ -470,6 +477,7 @@ void write_el_field_vlc_nalu(VideoParameters *p_Vid)
     p_Vid->anchor_pic_flag[1] = temp1_anchor_pic_flag[1];
     p_Vid->inter_view_flag[0] = temp1_inter_view_flag[0];
     p_Vid->inter_view_flag[1] = temp1_inter_view_flag[1];
+    write_non_vcl_nalu_mvc( p_Vid );
     writeout_picture (p_Vid, p_Vid->field_pic2[0], 0);	//top
 
     //restore view_id 0
@@ -483,6 +491,8 @@ void write_el_field_vlc_nalu(VideoParameters *p_Vid)
     p_Vid->anchor_pic_flag[1] = p_Vid->temp0_anchor_pic_flag[1];
     p_Vid->inter_view_flag[0] = p_Vid->temp0_inter_view_flag[0];
     p_Vid->inter_view_flag[1] = p_Vid->temp0_inter_view_flag[1];
+    p_Vid->structure = BOTTOM_FIELD;
+    write_non_vcl_nalu_mvc( p_Vid );
     writeout_picture (p_Vid, p_Vid->field_pic1[1], 1);	//bot
 
     //restore view_id 1
@@ -496,6 +506,7 @@ void write_el_field_vlc_nalu(VideoParameters *p_Vid)
     p_Vid->anchor_pic_flag[1] = temp1_anchor_pic_flag[1];
     p_Vid->inter_view_flag[0] = temp1_inter_view_flag[0];
     p_Vid->inter_view_flag[1] = temp1_inter_view_flag[1];
+    write_non_vcl_nalu_mvc( p_Vid );
     writeout_picture (p_Vid, p_Vid->field_pic2[1], 1);	//bot
   }
   else	// store the first view nal unit
@@ -513,29 +524,41 @@ void write_el_field_vlc_nalu(VideoParameters *p_Vid)
   }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Write coded frame (one frame picture or two field pictures)
+ ************************************************************************
+ */
 void write_frame_picture(VideoParameters *p_Vid)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
+
   if (p_Vid->fld_flag)            // field mode (use field when fld_flag=1 only)
   {
     field_mode_buffer (p_Vid);
 
-    if(p_Vid->p_Inp->num_of_views==1)
+    if(p_Inp->num_of_views==1)
     {
+      p_Vid->structure = TOP_FIELD;
       write_non_vcl_nalu(p_Vid);
       writeout_picture  (p_Vid, p_Vid->field_pic1[0], 0);
+      p_Vid->structure = BOTTOM_FIELD;
+      write_non_vcl_nalu_bot_fld(p_Vid);
       writeout_picture  (p_Vid, p_Vid->field_pic1[1], 1);
     }
     else
     {
-      write_el_field_vlc_nalu(p_Vid);
+      write_el_field_vcl_nalu(p_Vid);
     }
   }
   else                          //frame mode
   {
     frame_mode_buffer (p_Vid);
+    p_Vid->structure = FRAME;
 
 #if (MVC_EXTENSION_ENABLE)
-    if ( p_Vid->p_Inp->num_of_views == 2 )
+    if ( p_Inp->num_of_views == 2 )
     {
       write_non_vcl_nalu_mvc(p_Vid);
     }
@@ -555,11 +578,15 @@ void write_frame_picture(VideoParameters *p_Vid)
 #else
 void write_frame_picture(VideoParameters *p_Vid)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
   if (p_Vid->fld_flag)            // field mode (use field when fld_flag=1 only)
   {
+    p_Vid->structure = TOP_FIELD;
     field_mode_buffer (p_Vid);
     write_non_vcl_nalu(p_Vid);
     writeout_picture  (p_Vid, p_Vid->field_pic[0]);
+    p_Vid->structure = BOTTOM_FIELD;
+    write_non_vcl_nalu_bot_fld(p_Vid);
     writeout_picture  (p_Vid, p_Vid->field_pic[1]);
   }
   else                          //frame mode
@@ -659,22 +686,23 @@ static int read_input_data(VideoParameters *p_Vid)
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
   int file_read = 0;
+
 #if (MVC_EXTENSION_ENABLE)
-  if(p_Inp->num_of_views==2 && p_Vid->view_id==1)
-  {
-      file_read = read_one_frame (p_Vid, &p_Inp->input_file2, p_Vid->frm_no_in_file, p_Inp->infile_header, &p_Inp->source, &p_Inp->output, p_Vid->imgData0.frm_data);
-    if ( !file_read )
+    if(p_Inp->num_of_views==2 && p_Vid->view_id == 1)
     {
-      // end of file or stream found: trigger error handling
+      file_read = read_one_frame (p_Vid, &p_Inp->input_file2, p_Vid->frm_no_in_file, p_Inp->infile_header, &p_Inp->source, &p_Inp->output, p_Vid->imgData0.frm_data);
+      if ( !file_read )
+      {
+        // end of file or stream found: trigger error handling
         get_number_of_frames (p_Inp, &p_Inp->input_file2);
-      fprintf(stdout, "\nIncorrect FramesToBeEncoded: actual number is %6d frames!\n", p_Inp->no_frames );
-      return 0;
-    }
+        fprintf(stdout, "\nIncorrect FramesToBeEncoded: actual number is %6d frames!\n", p_Inp->no_frames );
+        return 0;
+      }
       pad_borders (p_Inp->output, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, p_Vid->imgData0.frm_data);
-  }
-  else
+    }
+    else
 #endif
-  {
+    {
       file_read = read_one_frame (p_Vid, &p_Inp->input_file1, p_Vid->frm_no_in_file, p_Inp->infile_header, &p_Inp->source, &p_Inp->output, p_Vid->imgData0.frm_data);
       if ( !file_read )
       {
@@ -921,7 +949,7 @@ void store_coded_picture(DecodedPictureBuffer *p_Dpb)
           free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[2]);
         }
       }
-      free_storable_picture(p_Vid, p_Vid->enc_field_picture[1]);      
+      free_storable_picture(p_Vid, p_Vid->enc_field_picture[1]);
     }
   }
   else
@@ -953,11 +981,12 @@ void update_bitcounter_stats(VideoParameters *p_Vid)
 #if (MVC_EXTENSION_ENABLE)
   if ( p_Vid->p_Inp->num_of_views == 2 )
   {
-    p_Vid->p_Stats->bit_ctr_parametersets_v[p_Vid->view_id] += p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id];
     if ( p_Vid->fld_flag )
     {
       if ( p_Vid->view_id == 1 )
       {
+        p_Vid->p_Stats->bit_ctr_parametersets_v[0] += p_Vid->p_Stats->bit_ctr_parametersets_n_v[0];
+        p_Vid->p_Stats->bit_ctr_parametersets_v[1] += p_Vid->p_Stats->bit_ctr_parametersets_n_v[1];
         p_Vid->p_Stats->bit_ctr_n_v[0] = p_Vid->p_Stats->bit_ctr_v[0];
         p_Vid->p_Stats->bit_ctr_n_v[1] = p_Vid->p_Stats->bit_ctr_v[1];
         p_Vid->p_Stats->bit_ctr_parametersets_n_v[0] = 0;
@@ -968,6 +997,7 @@ void update_bitcounter_stats(VideoParameters *p_Vid)
     }
     else // this seems to be enough and the check above seems redundant...check later...
     {
+      p_Vid->p_Stats->bit_ctr_parametersets_v[p_Vid->view_id] += p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id];
       p_Vid->p_Stats->bit_ctr_n_v[p_Vid->view_id] = p_Vid->p_Stats->bit_ctr_v[p_Vid->view_id];
       p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] = 0;
       p_Vid->p_Stats->bit_ctr_filler_data_n_v[p_Vid->view_id] = p_Vid->p_Stats->bit_ctr_filler_data_v[p_Vid->view_id];
@@ -1209,6 +1239,19 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
     }
   }
 #endif
+
+  //Need slice data for deblocking in UpdateDecoders
+  if (p_Inp->PicInterlace == FRAME_CODING)
+  {
+    if ((p_Inp->rdopt == 3) && (p_Inp->de == LLN) && (p_Vid->nal_reference_idc != 0))
+    {
+      UpdateDecoders (p_Vid, p_Inp, p_Vid->enc_picture);      // simulate packet losses and move decoded image to reference buffers
+    }
+
+    if (p_Inp->RestrictRef)
+      UpdatePixelMap (p_Vid, p_Inp);
+  }
+
   free_slice_data(p_Vid);
 
   //Rate control
@@ -1220,18 +1263,9 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
 
     if ( p_Inp->RCUpdateMode <= MAX_RC_MODE )
       p_Vid->rc_update_pict_frame_ptr(p_Vid, p_Inp, p_Vid->p_rc_quad, p_Vid->p_rc_gen, bits);
+
   }
 
-  if (p_Inp->PicInterlace == FRAME_CODING)
-  {
-    if ((p_Inp->rdopt == 3) && (p_Inp->de == LLN || p_Inp->de == FAST_LLN) && (p_Vid->nal_reference_idc != 0))
-    {
-      UpdateDecoders (p_Vid, p_Inp, p_Vid->enc_picture);      // simulate packet losses and move decoded image to reference buffers
-    }
-
-    if (p_Inp->RestrictRef)
-      UpdatePixelMap (p_Vid, p_Inp);
-  }
   compute_distortion(p_Vid, &p_Vid->imgData);
 
   // redundant pictures: save reconstruction to calculate SNR and replace reference picture
@@ -2932,6 +2966,61 @@ void write_non_vcl_nalu( VideoParameters *p_Vid )
     }
   }
   // Access Unit Delimiter NALU
+  else if ( p_Inp->SendAUD && p_Vid->curr_frm_idx != 0 )
+  {
+    p_Vid->p_Stats->bit_ctr_parametersets_n += Write_AUD_NALU(p_Vid);
+  }
+
+  UpdateSubseqInfo (p_Vid, p_Inp, p_Vid->layer);        // Tian Dong (Sept 2002)
+  UpdateSceneInformation (p_Vid->p_SEI, FALSE, 0, 0, -1); // JVT-D099, scene information SEI, nothing included by default
+
+  //! Commented out by StW, needs fixing in SEI.h to keep the trace file clean
+  //  PrepareAggregationSEIMessage (p_Vid);
+
+  // write tone mapping SEI message
+  if (p_Inp->ToneMappingSEIPresentFlag)
+  {
+    UpdateToneMapping(p_Vid->p_SEI);
+  }
+  PrepareAggregationSEIMessage(p_Vid);
+  
+  p_Vid->p_Stats->bit_ctr_parametersets_n += Write_SEI_NALU(p_Vid, 0);
+
+  // update seq NVB counter
+  p_Vid->p_Stats->bit_ctr_parametersets   += p_Vid->p_Stats->bit_ctr_parametersets_n;
+}
+
+/*!
+*************************************************************************************
+* Brief
+*     AUD, SPS, PPS, and SEI messages for the bottom field picture
+*************************************************************************************
+*/
+void write_non_vcl_nalu_bot_fld( VideoParameters *p_Vid )
+{
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  int init_param_set_bits = p_Vid->p_Stats->bit_ctr_parametersets_n;
+
+  // SPS + PPS + AUD
+  if (p_Inp->ResendSPS == 1 && p_Vid->type == I_SLICE)
+  {
+    p_Vid->p_Stats->bit_slice = rewrite_paramsets(p_Vid);
+  }
+  // PPS + AUD
+  else if ( p_Inp->ResendPPS )
+  {
+    // Access Unit Delimiter NALU
+    if ( p_Inp->SendAUD )
+    {
+      p_Vid->p_Stats->bit_ctr_parametersets_n = Write_AUD_NALU(p_Vid);
+      p_Vid->p_Stats->bit_ctr_parametersets_n += write_PPS(p_Vid, 0, 0);
+    }
+    else
+    {
+      p_Vid->p_Stats->bit_ctr_parametersets_n = write_PPS(p_Vid, 0, 0);
+    }
+  }
+  // Access Unit Delimiter NALU
   else if ( p_Inp->SendAUD )
   {
     p_Vid->p_Stats->bit_ctr_parametersets_n += Write_AUD_NALU(p_Vid);
@@ -2954,7 +3043,7 @@ void write_non_vcl_nalu( VideoParameters *p_Vid )
   p_Vid->p_Stats->bit_ctr_parametersets_n += Write_SEI_NALU(p_Vid, 0);
 
   // update seq NVB counter
-  p_Vid->p_Stats->bit_ctr_parametersets   += p_Vid->p_Stats->bit_ctr_parametersets_n;
+  p_Vid->p_Stats->bit_ctr_parametersets   += (p_Vid->p_Stats->bit_ctr_parametersets_n - init_param_set_bits);
 }
 
 #if (MVC_EXTENSION_ENABLE)
@@ -2967,51 +3056,53 @@ void write_non_vcl_nalu( VideoParameters *p_Vid )
 void write_non_vcl_nalu_mvc( VideoParameters *p_Vid )
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
-  int prev_paramsets_bits = 0;
+  int bits;
 
   if ( p_Vid->view_id )
   {
-    if ( p_Inp->SendAUD )
+    if ( p_Inp->SendAUD == 2 )
     {
-      prev_paramsets_bits = p_Vid->p_Stats->bit_ctr_parametersets_n;
-      p_Vid->p_Stats->bit_ctr_parametersets_n += Write_AUD_NALU(p_Vid);
+      p_Vid->p_Stats->bit_ctr_parametersets_n += bits = Write_AUD_NALU(p_Vid);
+      p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
     }
   }
   else // view_id == 0
   {
     // SPS + PPS + AUD
-    if (p_Inp->ResendSPS == 3 && is_gop_first_unit(p_Vid, p_Inp) && p_Vid->number)
+    if (p_Inp->ResendSPS == 3 && is_gop_first_unit(p_Vid, p_Inp) && p_Vid->number && p_Vid->structure != BOTTOM_FIELD)
     {
       p_Vid->p_Stats->bit_slice = rewrite_paramsets(p_Vid);
     }
-    else if (p_Inp->ResendSPS == 2 && get_idr_flag(p_Vid) && p_Vid->number)
+    else if (p_Inp->ResendSPS == 2 && get_idr_flag(p_Vid) && p_Vid->number && p_Vid->structure != BOTTOM_FIELD)
     {
       p_Vid->p_Stats->bit_slice = rewrite_paramsets(p_Vid);
     }
-    else if (p_Inp->ResendSPS == 1 && p_Vid->type == I_SLICE && p_Vid->curr_frm_idx != 0 && !p_Vid->view_id)
+    else if (p_Inp->ResendSPS == 1 && p_Vid->type == I_SLICE && p_Vid->curr_frm_idx != 0 && p_Vid->structure != BOTTOM_FIELD)
     {
       p_Vid->p_Stats->bit_slice = rewrite_paramsets(p_Vid);
     }
     // PPS + AUD
     else if ( p_Inp->ResendPPS && p_Vid->curr_frm_idx != 0 )
     {
-      prev_paramsets_bits = p_Vid->p_Stats->bit_ctr_parametersets_n;
       // Access Unit Delimiter NALU
       if ( p_Inp->SendAUD )
       {
-        p_Vid->p_Stats->bit_ctr_parametersets_n = Write_AUD_NALU(p_Vid);
-        p_Vid->p_Stats->bit_ctr_parametersets_n += write_PPS(p_Vid, 0, 0);
+        p_Vid->p_Stats->bit_ctr_parametersets_n = bits = Write_AUD_NALU(p_Vid);
+        p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
+        p_Vid->p_Stats->bit_ctr_parametersets_n += bits = write_PPS(p_Vid, 0, 0);
+        p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
       }
       else
       {
-        p_Vid->p_Stats->bit_ctr_parametersets_n = write_PPS(p_Vid, 0, 0);
+        p_Vid->p_Stats->bit_ctr_parametersets_n = bits = write_PPS(p_Vid, 0, 0);
+        p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
       }
     }
     // Access Unit Delimiter NALU
-    else if ( p_Inp->SendAUD )
+    else if ( p_Inp->SendAUD && (p_Vid->curr_frm_idx != 0 || p_Vid->structure == BOTTOM_FIELD) )
     {
-      prev_paramsets_bits = p_Vid->p_Stats->bit_ctr_parametersets_n;
-      p_Vid->p_Stats->bit_ctr_parametersets_n += Write_AUD_NALU(p_Vid);
+      p_Vid->p_Stats->bit_ctr_parametersets_n += bits = Write_AUD_NALU(p_Vid);
+      p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
     }
   }
 
@@ -3029,12 +3120,14 @@ void write_non_vcl_nalu_mvc( VideoParameters *p_Vid )
 
   PrepareAggregationSEIMessage(p_Vid);
   
-  p_Vid->p_Stats->bit_ctr_parametersets_n += Write_SEI_NALU(p_Vid, 0);
+  p_Vid->p_Stats->bit_ctr_parametersets_n += bits = Write_SEI_NALU(p_Vid, 0);
+  p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
+
 
   // update seq NVB counter
-  p_Vid->p_Stats->bit_ctr_parametersets   += p_Vid->p_Stats->bit_ctr_parametersets_n;
-  p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += (p_Vid->p_Stats->bit_ctr_parametersets_n - prev_paramsets_bits);
+  p_Vid->p_Stats->bit_ctr_parametersets += p_Vid->p_Stats->bit_ctr_parametersets_n;
 }
 #endif
+
 
 

@@ -489,11 +489,35 @@
 				>
 			</File>
 			<File
+				RelativePath=".\ldecod\src\intra16x16_pred_mbaff.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\src\intra16x16_pred_normal.c"
+				>
+			</File>
+			<File
 				RelativePath=".\ldecod\src\intra4x4_pred.c"
 				>
 			</File>
 			<File
+				RelativePath=".\ldecod\src\intra4x4_pred_mbaff.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\src\intra4x4_pred_normal.c"
+				>
+			</File>
+			<File
 				RelativePath=".\ldecod\src\intra8x8_pred.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\src\intra8x8_pred_mbaff.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\src\intra8x8_pred_normal.c"
 				>
 			</File>
 			<File
@@ -514,6 +538,14 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\src\leaky_bucket.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\src\loop_filter_mbaff.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\src\loop_filter_normal.c"
 				>
 			</File>
 			<File
@@ -767,6 +799,10 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\leaky_bucket.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\loop_filter.h"
 				>
 			</File>
 			<File

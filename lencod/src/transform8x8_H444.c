@@ -280,7 +280,9 @@ int mode_decision_for_I8x8_blocks_JM_High444 (Macroblock *currMB, int b8, int la
 
       if(currSlice->P444_joined) 
       {
+        get_intrapred_8x8(currMB, PLANE_U, ipmode, left_available, up_available);
         generate_pred_error_8x8(&p_Vid->pImgOrg[1][pic_opix_y], currSlice->mpr_8x8[1][ipmode], &currSlice->mb_pred[1][block_y], &currSlice->mb_ores[1][block_y], pic_opix_x, block_x);
+        get_intrapred_8x8(currMB, PLANE_V, ipmode, left_available, up_available);
         generate_pred_error_8x8(&p_Vid->pImgOrg[2][pic_opix_y], currSlice->mpr_8x8[2][ipmode], &currSlice->mb_pred[2][block_y], &currSlice->mb_ores[2][block_y], pic_opix_x, block_x);
       }
 

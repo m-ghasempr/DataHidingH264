@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 17.0 (FRExt)
+ *     JM 17.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -114,27 +114,27 @@ void init_dstats (DistortionParams *p_Dist)
 /*!
  ***********************************************************************
  * \brief
- *    Allocate the Image structure
+ *    Allocate the Video Parameters structure
  * \par  Output:
- *    Image Parameters VideoParameters *p_Vid
+ *    Video Parameters VideoParameters *p_Vid
  ***********************************************************************
  */
-static void alloc_img( VideoParameters **p_Vid)
+static void alloc_video_params( VideoParameters **p_Vid)
 {
   if ((*p_Vid = (VideoParameters *) calloc(1, sizeof(VideoParameters)))==NULL) 
-    no_mem_exit("alloc_img: p_Vid");
+    no_mem_exit("alloc_video_params: p_Vid");
   if ((((*p_Vid)->p_Dist)  = (DistortionParams *) calloc(1, sizeof(DistortionParams)))==NULL) 
-    no_mem_exit("alloc_img: p_Dist");
+    no_mem_exit("alloc_video_params: p_Dist");
   if ((((*p_Vid)->p_Stats) = (StatParameters *) calloc(1, sizeof(StatParameters)))==NULL) 
-    no_mem_exit("alloc_img: p_Stats");
+    no_mem_exit("alloc_video_params: p_Stats");
   if (((*p_Vid)->p_Dpb     = (DecodedPictureBuffer *) calloc(1, sizeof(DecodedPictureBuffer)))==NULL) 
-    no_mem_exit("alloc_img: p_Dpb");
+    no_mem_exit("alloc_video_params: p_Dpb");
   if ((((*p_Vid)->p_Quant)  = (QuantParameters *) calloc(1, sizeof(QuantParameters)))==NULL) 
-    no_mem_exit("alloc_img: p_Quant");
+    no_mem_exit("alloc_video_params: p_Quant");
   if ((((*p_Vid)->p_QScale)  = (ScaleParameters *) calloc(1, sizeof(ScaleParameters)))==NULL) 
-    no_mem_exit("alloc_img: p_QScale");
+    no_mem_exit("alloc_video_params: p_QScale");
   if ((((*p_Vid)->p_SEI)  = (SEIParameters *) calloc(1, sizeof(SEIParameters)))==NULL) 
-    no_mem_exit("alloc_img: p_SEI");
+    no_mem_exit("alloc_video_params: p_SEI");
 
 
   (*p_Vid)->p_dec = -1;
@@ -182,7 +182,7 @@ static void alloc_encoder( EncoderParams **p_Enc)
   if ((*p_Enc = (EncoderParams *) calloc(1, sizeof(EncoderParams)))==NULL) 
     no_mem_exit("alloc_encoder: p_Enc");
 
-  alloc_img(&((*p_Enc)->p_Vid));
+  alloc_video_params(&((*p_Enc)->p_Vid));
   alloc_params(&((*p_Enc)->p_Inp));
   (*p_Enc)->p_trace = NULL;
   (*p_Enc)->bufferSize = 0;
@@ -661,6 +661,7 @@ static void encode_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
     if (p_Vid->last_ref_idc == 1)
     {      
       p_Vid->frame_num++;
+
 #if (MVC_EXTENSION_ENABLE)
       if ( p_Inp->num_of_views == 2 )
       {
@@ -1214,6 +1215,8 @@ int init_orig_buffers(VideoParameters *p_Vid, ImageData *imgData)
   imgData->format.auto_crop_right_cr  = (p_Vid->auto_crop_right * mb_width_cr [p_Vid->yuv_format]) / MB_BLOCK_SIZE;
   imgData->frm_stride[0]    = p_Vid->width;
   imgData->frm_stride[1] = imgData->frm_stride[2] = p_Vid->width_cr;
+  imgData->top_stride[0] = imgData->bot_stride[0] = imgData->frm_stride[0] << 1;
+  imgData->top_stride[1] = imgData->top_stride[2] = imgData->bot_stride[1] = imgData->bot_stride[2] = imgData->frm_stride[1] << 1;
 
   if( (p_Inp->separate_colour_plane_flag != 0) )
   {
@@ -1257,7 +1260,6 @@ int init_orig_buffers(VideoParameters *p_Vid, ImageData *imgData)
 
     if (p_Vid->yuv_format != YUV400)
     {
-
       memory_size += 4*(sizeof(imgpel**));
 
       memory_size += init_top_bot_planes(imgData->frm_data[1], p_Vid->height_cr, &(imgData->top_data[1]), &(imgData->bot_data[1]));

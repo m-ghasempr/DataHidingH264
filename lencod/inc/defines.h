@@ -28,7 +28,7 @@
 #endif
 
 #define JM                  "17 (FRExt)"
-#define VERSION             "17.0"
+#define VERSION             "17.1"
 #define EXT_VERSION         "(FRExt)"
 
 #define GET_METIME                1    //!< Enables or disables ME computation time
@@ -44,7 +44,7 @@
 #define JM_INT_DIVIDE             1
 #define JM_MEM_DISTORTION         0
 #define JCOST_CALC_SCALEUP        1    //!< 1: J = (D<<LAMBDA_ACCURACY_BITS)+Lambda*R; 0: J = D + ((Lambda*R+Rounding)>>LAMBDA_ACCURACY_BITS)
-#define INTRA_RDCOSTCALC_EARLY_TERMINATE  1
+#define INTRA_RDCOSTCALC_ET       1    //!< Early termination 
 #define INTRA_RDCOSTCALC_NNZ      1    //1: to recover block's nzn after rdcost calculation;
 #define JCOST_OVERFLOWCHECK       0    //!<1: to check the J cost if it is overflow>
 #define JM_PARALLEL_DEBLOCK       0    //!< Enables Parallel Deblocking
@@ -72,7 +72,6 @@ enum {
   FREXT_Hi422    = 122,      //!< YUV 4:2:2/10 "High 4:2:2"
   FREXT_Hi444    = 244,      //!< YUV 4:4:4/14 "High 4:4:4"
   MULTIVIEW_HIGH = 118,      //!< YUV 4:2:0/8  "Multiview High"
-  MULTIVIEW_FIELDHIGH = 119,  //!< YUV 4:2:0/8  "Multiview Field High"
   STEREO_HIGH    = 128       //!< YUV 4:2:0/8  "Stereo High"
 } ProfileIDC;
 

@@ -1,3 +1,17 @@
+Changes in Version JM 17.1 (since JM 17.0)
+------------------------------------------
+- decoder: fix delta_pic_order_cnt[0] in IDR frames (KS, bug #57)
+- decoder: Direct mode fixes (YHE)
+- encoder/decoder: various cleanups and bug fixes (AT/YHE)
+- encoder/decoder: rewrite of deblocking functions (AT)
+- decoder : rewrite of intra prediction functions (AT)
+- encoder/decoder: MVC bug fixes (PeP/AL)
+- encoder/decoder: Frame Packing SEI Message (AL)
+- decoder: Minor CABAC updates (AT)
+- encoder/decoder: Update work spaces for VS 2008 and XCode with x64 and OPENMP support (KS)
+- encoder/decoder: Update Makefiles for OPENMP support (KS)
+- encoder: avoid crashes by prohibiting incompatible tool combinations (KS/YHE)
+
 Changes in Version JM 17.0 (since JM 16.2)
 ------------------------------------------
 - encoder: TIFF input support (LZL)

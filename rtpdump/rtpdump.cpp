@@ -2,12 +2,10 @@
 // rtpdump.cpp : Defines the entry point for the console application.
 //
 
-#include "StdAfx.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 #include <Winsock2.h>
 #else
 #include <netinet/in.h>
@@ -23,7 +21,6 @@ int main(int argc, char* argv[])
   int i, intime;
   FILE *f;
 
-
   if (argc != 2)
   {
     printf ("Usage: %s <H.264 RTP packet file>\n", argv[0]);
@@ -36,7 +33,7 @@ int main(int argc, char* argv[])
     return -2;
   }
 
-  while (1)
+  for (;;) 
   {
     if (4 != fread (&bufsize, 1, 4, f))
       return 0;

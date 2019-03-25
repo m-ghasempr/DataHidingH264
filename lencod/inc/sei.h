@@ -60,6 +60,28 @@ typedef enum {
   SEI_STEREO_VIDEO_INFO,
   SEI_POST_FILTER_HINTS,
   SEI_TONE_MAPPING,
+  SEI_SCALABILITY_INFO,
+  SEI_SUB_PIC_SCALABLE_LAYER,
+  SEI_NON_REQUIRED_LAYER_REP,
+  SEI_PRIORITY_LAYER_INFO,
+  SEI_LAYERS_NOT_PRESENT,
+  SEI_LAYER_DEPENDENCY_CHANGE,
+  SEI_SCALABLE_NESTING,
+  SEI_BASE_LAYER_TEMPORAL_HRD,
+  SEI_QUALITY_LAYER_INTEGRITY_CHECK,
+  SEI_REDUNDANT_PIC_PROPERTY,
+  SEI_TL0_DEP_REP_INDEX,
+  SEI_TL_SWITCHING_POINT,
+  SEI_PARALLEL_DECODING_INFO,
+  SEI_MVC_SCALABLE_NESTING,
+  SEI_VIEW_SCALABILITY_INFO,
+  SEI_MULTIVIEW_SCENE_INFO,
+  SEI_MULTIVIEW_ACQUISITION_INFO,
+  SEI_NON_REQUIRED_VIEW_COMPONENT,
+  SEI_VIEW_DEPENDENCY_CHANGE,
+  SEI_OPERATION_POINTS_NOT_PRESENT,
+  SEI_BASE_VIEW_TEMPORAL_HRD,
+  SEI_FRAME_PACKING_ARRANGEMENT,
 
   SEI_MAX_ELEMENTS  //!< number of maximum syntax elements
 } SEI_type;
@@ -215,7 +237,7 @@ typedef struct
 } pictiming_information_struct;
 
 
-//! Picture timing Information
+//! Decoded reference picture marking repetition Information
 typedef struct
 {
   Boolean original_idr_flag;
@@ -227,6 +249,33 @@ typedef struct
   Bitstream *data;
   int payloadSize;
 } drpm_repetition_information_struct;
+
+
+//! Frame packing arrangement Information
+typedef struct
+{
+  unsigned int  frame_packing_arrangement_id;
+  Boolean       frame_packing_arrangement_cancel_flag;
+  unsigned char frame_packing_arrangement_type;
+  Boolean       quincunx_sampling_flag;
+  unsigned char content_interpretation_type;
+  Boolean       spatial_flipping_flag;
+  Boolean       frame0_flipped_flag;
+  Boolean       field_views_flag;
+  Boolean       current_frame_is_frame0_flag;
+  Boolean       frame0_self_contained_flag;
+  Boolean       frame1_self_contained_flag;
+  unsigned char frame0_grid_position_x;
+  unsigned char frame0_grid_position_y;
+  unsigned char frame1_grid_position_x;
+  unsigned char frame1_grid_position_y;
+  unsigned char frame_packing_arrangement_reserved_byte;
+  unsigned int  frame_packing_arrangement_repetition_period;
+  Boolean       frame_packing_arrangement_extension_flag;
+
+  Bitstream *data;
+  int payloadSize;
+} frame_packing_arrangement_information_struct;
 
 
 //! Post Filter Hints Information
@@ -294,10 +343,12 @@ struct sei_params {
   user_data_registered_itu_t_t35_information_struct seiUser_data_registered_itu_t_t35;
   Boolean seiHasRecoveryPoint_info;
   recovery_point_information_struct seiRecoveryPoint;
-  Boolean seiHasBuffering_period;
+  Boolean seiHasBufferingPeriod_info;
   bufferingperiod_information_struct seiBufferingPeriod;
   Boolean seiHasPicTiming_info;
   pictiming_information_struct seiPicTiming;
+  Boolean seiHasFramePackingArrangement_info;
+  frame_packing_arrangement_information_struct seiFramePackingArrangement;
 
   Boolean seiHasTone_mapping;
   ToneMappingSEI seiToneMapping;
@@ -331,6 +382,7 @@ extern void AppendTmpbits2Buf    ( Bitstream* dest, Bitstream* source );
 extern void PrepareAggregationSEIMessage(VideoParameters *p_Vid);
 extern void CalculateSparePicture();
 extern Boolean CompressSpareMBMap(VideoParameters *p_Vid, unsigned char **map_sp, Bitstream *bitstream);
+
 extern void InitSubseqInfo(SEIParameters *p_SEI, int currLayer);
 extern void UpdateSubseqInfo  (VideoParameters *p_Vid, InputParameters *p_Inp, int currLayer);
 extern void CloseSubseqInfo   (SEIParameters *p_SEI, int currLayer);
@@ -352,18 +404,25 @@ extern void UpdateRandomAccess(VideoParameters *p_Vid);
 extern void UpdateToneMapping(SEIParameters *p_SEI);
 
 extern void init_sei(SEIParameters *p_SEI);
-extern int Write_SEI_NALU(VideoParameters *p_Vid, int len);
+extern int  Write_SEI_NALU(VideoParameters *p_Vid, int len);
+
 extern void InitBufferingPeriod    (VideoParameters *p_Vid);
 extern void ClearBufferingPeriod   (SEIParameters *p_SEI, seq_parameter_set_rbsp_t *active_sps);
 extern void UpdateBufferingPeriod  (VideoParameters *p_Vid, InputParameters *p_Inp);
+
 extern void ClearPicTiming(SEIParameters *p_SEI);
 extern void UpdatePicTiming(VideoParameters *p_Vid, InputParameters *p_Inp);
+
 extern void ClearDRPMRepetition(SEIParameters *p_SEI);
 extern void UpdateDRPMRepetition(SEIParameters *p_SEI);
 extern void free_drpm_buffer( DecRefPicMarking_t *pDRPM );
+
 extern void UpdatePostFilterHints(SEIParameters *p_SEI);
+
 extern void ComposeSparePictureMessage (SEIParameters *p_SEI, int delta_spare_frame_num, int ref_area_indicator, Bitstream *tmpBitstream);
 
+extern void ClearFramePackingArrangement(SEIParameters *p_SEI);
+extern void UpdateFramePackingArrangement(VideoParameters *p_Vid, InputParameters *p_Inp);
 
 
 // end of temp additions

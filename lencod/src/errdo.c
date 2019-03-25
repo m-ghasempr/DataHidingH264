@@ -76,58 +76,13 @@ int allocate_errdo_mem(VideoParameters *p_Vid, InputParameters *p_Inp)
   //Zhifeng 090630
   switch (p_Inp->de)
   {
-  case RMPC:
-    //allocate memory for rmpc algorithm
-    memory_size += get_mem2Dint(&p_Vid->p_decs->trans_dist_bestY_mb, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Dint(&p_Vid->p_decs->trans_dist_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem2Dint(&p_Vid->p_decs->trans_dist_wo_res, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Dint(&p_Vid->p_decs->trans_dist_wo_res_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-#ifdef RMPC_PAPER
-    memory_size += get_mem2Dint(&p_Vid->p_decs->RCD_bestY_mb, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Dint(&p_Vid->p_decs->RCD_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem2Dint(&p_Vid->p_decs->MVCD_bestY_mb, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Dint(&p_Vid->p_decs->MVCD_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-#endif  //#ifdef EMPC_PAPER
-#ifdef RMPC_ERRDO
-    memory_size += get_mem2D(&p_Vid->p_decs->flag_bestY_mb, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3D(&p_Vid->p_decs->flag_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem2D(&p_Vid->p_decs->flag_wo_res, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3D(&p_Vid->p_decs->flag_wo_res_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-#endif  //#ifdef RMPC_ERRDO
-    break;
-  case ERMPC_NN:
-  case ERMPC_FAST:
-  case EXTENDED_RMPC:
-    //allocate memory for extended rmpc algorithm
-    memory_size += get_mem2Dint(&p_Vid->p_decs->trans_dist_bestY_mb, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Dint(&p_Vid->p_decs->trans_dist_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem2Dint(&p_Vid->p_decs->trans_dist_wo_res, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Dint(&p_Vid->p_decs->trans_dist_wo_res_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem2Dint(&p_Vid->p_decs->trans_err_bestY_mb, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Dint(&p_Vid->p_decs->trans_err_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem2Dint(&p_Vid->p_decs->trans_err_wo_res, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Dint(&p_Vid->p_decs->trans_err_wo_res_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    break;
   case LLN:
-  case FAST_LLN:
     //allocate memory for lln algorithm
-  memory_size += get_mem3Dpel(&p_Vid->p_decs->dec_mb_pred, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem3Dpel(&p_Vid->p_decs->dec_mbY_best, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem4Dpel(&p_Vid->p_decs->dec_mbY_best8x8, 2, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem4Dpel(&p_Vid->p_decs->dec_mb_pred_best8x8, 2, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    break;
-  case ROPE:
-    //Zhifeng 090616
-    //allocate memory for rope algorithm
-    memory_size += get_mem2Dpel(&p_Vid->p_decs->first_moment_bestY_mb, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Dpel(&p_Vid->p_decs->first_moment_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Dpel(&p_Vid->p_decs->first_moment_pred_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem2Dpel(&p_Vid->p_decs->first_moment_pred, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem2Duint16(&p_Vid->p_decs->second_moment_bestY_mb, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Duint16(&p_Vid->p_decs->second_moment_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem3Duint16(&p_Vid->p_decs->second_moment_pred_bestY_b8x8, 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    memory_size += get_mem2Duint16(&p_Vid->p_decs->second_moment_pred, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    break;
+    memory_size += get_mem3Dpel(&p_Vid->p_decs->dec_mb_pred, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+    memory_size += get_mem3Dpel(&p_Vid->p_decs->dec_mbY_best, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+    memory_size += get_mem4Dpel(&p_Vid->p_decs->dec_mbY_best8x8, 2, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+    memory_size += get_mem4Dpel(&p_Vid->p_decs->dec_mb_pred_best8x8, 2, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+    break;  
   default:
     ;
   }
@@ -395,10 +350,12 @@ void errdo_store_best_b8x8(Macroblock *currMB, int transform8x8, int block)
 
   switch (p_Inp->de)
   {
-  default:
+  case LLN:
     errdo_store_best_block_multihyp(p_Inp, p_Vid->p_decs->dec_mbY_best8x8[transform8x8], p_Vid->enc_picture->de_mem->p_dec_img[0], block, currMB->pix_x, currMB->pix_y, BLOCK_SIZE_8x8);
     errdo_store_best_block_multihyp(p_Inp, p_Vid->p_decs->dec_mb_pred_best8x8[transform8x8], p_Vid->p_decs->dec_mb_pred, block, 0, 0, BLOCK_SIZE_8x8); 
     break;
+  default:
+    ;
   }
 }
 
@@ -423,9 +380,11 @@ void errdo_get_best_b8x8(Macroblock *currMB, int transform8x8, int block)
 
   switch (p_Inp->de)
   {
-  default:
+  case LLN:
     errdo_get_best_block_multihyp(currMB, p_Vid->enc_picture->de_mem->p_dec_img[0], p_Vid->p_decs->dec_mbY_best8x8[transform8x8], block, BLOCK_SIZE_8x8);
     break;
+  default:
+    ;
   }
 
 }
@@ -448,9 +407,11 @@ void errdo_store_best_MB(Macroblock *currMB)
 
   switch (p_Inp->de)
   {
-  default:
+  case LLN:
     errdo_store_best_block_multihyp(p_Inp, p_Vid->p_decs->dec_mbY_best, p_Vid->enc_picture->de_mem->p_dec_img[0], 0, currMB->pix_x, currMB->pix_y, MB_BLOCK_SIZE);
     break;
+  default:
+    ;
   }
 }
 
@@ -472,9 +433,11 @@ void errdo_get_best_MB(Macroblock *currMB)
 
   switch (p_Inp->de)
   {
-  default:
+  case LLN:
     errdo_get_best_block_multihyp(currMB, p_Vid->enc_picture->de_mem->p_dec_img[0], p_Vid->p_decs->dec_mbY_best, 0, MB_BLOCK_SIZE);
     break;
+  default:
+    ;
   }
 
 }
@@ -497,7 +460,7 @@ void errdo_get_best_P8x8(Macroblock *currMB, int transform8x8)
 
   switch (p_Inp->de)
   {
-  default:
+  case LLN:
     if (p_Vid->p_decs->rec_type == 0)
     {
       errdo_get_best_block_multihyp(currMB, p_Vid->enc_picture->de_mem->p_dec_img[0], p_Vid->p_decs->dec_mb_pred_best8x8[transform8x8], 0, MB_BLOCK_SIZE);
@@ -506,11 +469,12 @@ void errdo_get_best_P8x8(Macroblock *currMB, int transform8x8)
     {
       errdo_get_best_block_multihyp(currMB, p_Vid->enc_picture->de_mem->p_dec_img[0], p_Vid->p_decs->dec_mbY_best8x8[transform8x8], 0, MB_BLOCK_SIZE);
     }
+    break;
+  default:
+    ;
   }
 }
 
-
-//Zhifeng 090611
 /*!
  *************************************************************************************
  * \brief
@@ -523,9 +487,11 @@ void init_distortion_estimation(VideoParameters *p_Vid, int de_algorithm)
 {
   switch (de_algorithm)
   {
-  default:
+  case LLN:
     p_Vid->estimate_distortion = errdo_distortion_estimation_multihyp;
     break;
+  default:
+    ;
   }
 }
 
@@ -576,77 +542,12 @@ void errdo_alloc_storable_picture(StorablePicture *p, VideoParameters *p_Vid, In
 
   switch (p_Inp->de)
   {
-  case RMPC:  //RMPC support slice data partitioning, so it keeps residual and MV in their respective memory
-    get_mem2Dint(&(s->transmission_dist_Y), size_y, size_x);
-    s->p_transmission_dist[0] = s->transmission_dist_Y;
-    if (p_Vid->yuv_format != YUV400)
-    {
-      get_mem3Dint(&(s->transmission_dist_UV), 2, size_y_cr, size_x_cr);
-      s->p_transmission_dist[1] = s->transmission_dist_UV[0];
-      s->p_transmission_dist[2] = s->transmission_dist_UV[1];
-    }
-#ifdef RMPC_PAPER
-    //allocate memory for the residual concealment difference, which is used in the reference paper to calculate propagation factor in the next frame
-    get_mem2Dint(&(s->res_con_diff_Y), size_y, size_x);
-    s->p_res_con_diff[0] = s->res_con_diff_Y;
-    if (p_Vid->yuv_format != YUV400)
-    {
-      get_mem3Dint(&(s->res_con_diff_UV), 2, size_y_cr, size_x_cr);
-      s->p_res_con_diff[1] = s->res_con_diff_UV[0];
-      s->p_res_con_diff[2] = s->res_con_diff_UV[1];
-    }
-
-    //allocate memory for the MV concealment difference, which is used in the reference paper to calculate propagation factor in the next frame
-    get_mem2Dint(&(s->MV_con_diff_Y), size_y, size_x);
-    s->p_MV_con_diff[0] = s->MV_con_diff_Y;
-    if (p_Vid->yuv_format != YUV400)
-    {
-      get_mem3Dint(&(s->MV_con_diff_UV), 2, size_y_cr, size_x_cr);
-      s->p_MV_con_diff[1] = s->MV_con_diff_UV[0];
-      s->p_MV_con_diff[2] = s->MV_con_diff_UV[1];
-    }
-#endif  //#ifdef RMPC_PAPER
-#ifdef RMPC_ERRDO
-    //allocate memory for the transmission error sign, which is used as an alternative to calculate propagation factor in the next frame
-    get_mem2D(&(s->error_sign_flag_Y), size_y, size_x);
-    s->p_error_sign_flag[0] = s->error_sign_flag_Y;
-    if (p_Vid->yuv_format != YUV400)
-    {
-      get_mem3D(&(s->error_sign_flag_UV), 2, size_y_cr, size_x_cr);
-      s->p_error_sign_flag[1] = s->error_sign_flag_UV[0];
-      s->p_error_sign_flag[2] = s->error_sign_flag_UV[1];
-    }
-#endif  //#ifdef RMPC_ERRDO
-
-    break;
-  case ERMPC_NN:
-  case ERMPC_FAST:
-  case EXTENDED_RMPC: //Extended RMPC further considers interpolation filter, B-slice, and de-blocking filter
-    get_mem2Dint(&(s->transmission_dist_Y), size_y, size_x);
-    s->p_transmission_dist[0] = s->transmission_dist_Y;
-    if (p_Vid->yuv_format != YUV400)
-    {
-      get_mem3Dint(&(s->transmission_dist_UV), 2, size_y_cr, size_x_cr);
-      s->p_transmission_dist[1] = s->transmission_dist_UV[0];
-      s->p_transmission_dist[2] = s->transmission_dist_UV[1];
-    }
-    get_mem2Dint(&(s->transmission_err_Y), size_y, size_x);
-    s->p_transmission_err[0] = s->transmission_err_Y;
-    if (p_Vid->yuv_format != YUV400)
-    {
-      get_mem3Dint(&(s->transmission_err_UV), 2, size_y_cr, size_x_cr);
-      s->p_transmission_err[1] = s->transmission_err_UV[0];
-      s->p_transmission_err[2] = s->transmission_err_UV[1];
-    }
-    break;
-
   case LLN:
-  case FAST_LLN:
     ndec = p_Inp->NoOfDecoders;
     //check the consistent
     if (ndec == 0)
     {
-      printf("ndec can not be zero for LLN and fast LLN algorithms, reset ndec to 30");
+      printf("Number of decoders cannot be zero for LLN and fast LLN algorithms, resetting to 30");
       ndec = 30;
     }
     get_mem3D(&(s->mb_error_map), ndec, size_y/MB_BLOCK_SIZE, size_x/MB_BLOCK_SIZE);
@@ -686,33 +587,6 @@ void errdo_alloc_storable_picture(StorablePicture *p, VideoParameters *p_Vid, In
     }
 
     break;
-  case ROPE:
-    //allocate memory for the first moment
-    get_mem2Dpel(&(s->first_moment_Y), size_y, size_x);
-    s->p_first_moment[0] = s->first_moment_Y;
-
-    if (p_Vid->yuv_format != YUV400)
-    {
-      get_mem3Dpel(&(s->first_moment_UV), 2, size_y_cr, size_x_cr);
-      s->p_first_moment[1] = s->first_moment_UV[0];
-      s->p_first_moment[2] = s->first_moment_UV[1];
-    }
-
-    //allocate memory for the second moment
-    get_mem2Duint16(&(s->second_moment_Y), size_y, size_x);
-    s->p_second_moment[0] = s->second_moment_Y;
-
-    if (p_Vid->yuv_format != YUV400)
-    {
-      get_mem3Duint16(&(s->second_moment_UV), 2, size_y_cr, size_x_cr);
-      s->p_second_moment[1] = s->second_moment_UV[0];
-      s->p_second_moment[2] = s->second_moment_UV[1];
-    }
-    break;
-
-  case LTI:
-    break;
-
   default:
     ;
   }

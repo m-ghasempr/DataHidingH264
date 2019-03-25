@@ -152,7 +152,7 @@ void ComputeExplicitWPParamsLMS(Slice *currSlice,
         cur_offset = (short) (norm_org[0] - ((double) cur_weight * norm_ref[0] / (double) default_weight[0]) + 0.5);
         cur_offset = (short) ((cur_offset + (bit_depth>>1)) >> bit_depth);
         cur_offset = sClip3( -128, 127, cur_offset);
-        cur_offset = cur_offset << bit_depth;
+        cur_offset = (short) (cur_offset << bit_depth);
         weight[clist][n][0] = cur_weight;
         offset[clist][n][0] = cur_offset;
 
@@ -404,8 +404,8 @@ void EstimateWPPSliceAlg1(Slice *currSlice, int select_offset)
               p_Vid->wp_offsets[comp][clist][n][cur_slice] = offset[clist][n][comp];
           }
 #if DEBUG_WP
-          printf ("weight[%d][%d][0] = %d\n", clist, n, weight[clist][n][0]);
-          printf ("offset[%d][%d][0] = %d\n", clist, n, offset[clist][n][0]);
+        for(comp = 0; comp < 3; comp++)
+          printf("slice %d: index %d component %d weight %d offset %d\n", cur_slice, n,comp,currSlice->wp_weight[clist][n][comp],currSlice->wp_offset[clist][n][comp]);
 #endif
         }
       }

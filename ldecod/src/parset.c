@@ -220,6 +220,10 @@ static int InterpretSubsetSPS (VideoParameters *p_Vid, DataPartition *p, int *cu
 
   *curr_seq_set_id = sps->seq_parameter_set_id;
   subset_sps = p_Vid->SubsetSeqParSet + sps->seq_parameter_set_id;
+  if(subset_sps->Valid || subset_sps->num_views_minus1>=0)
+  {
+    reset_subset_sps(subset_sps);
+  }
   memcpy (&subset_sps->sps, sps, sizeof (seq_parameter_set_rbsp_t));
 
   assert (subset_sps != NULL);
@@ -257,6 +261,7 @@ static int InterpretSubsetSPS (VideoParameters *p_Vid, DataPartition *p, int *cu
   if (subset_sps->sps.Valid)
 	  subset_sps->Valid = TRUE;
 
+  FreeSPS (sps);
   return p_Dec->UsedBits;
 
 }
@@ -282,7 +287,7 @@ int ReadVUI(DataPartition *p, seq_parameter_set_rbsp_t *sps)
         sps->vui_seq_parameters.sar_width                  = (unsigned short) u_v  (16, "VUI: sar_width"                     , s);
         sps->vui_seq_parameters.sar_height                 = (unsigned short) u_v  (16, "VUI: sar_height"                    , s);
       }
-  }
+    }
 
     sps->vui_seq_parameters.overscan_info_present_flag     = u_1  ("VUI: overscan_info_present_flag"        , s);
     if (sps->vui_seq_parameters.overscan_info_present_flag)
@@ -885,7 +890,8 @@ void activate_sps (VideoParameters *p_Vid, seq_parameter_set_rbsp_t *sps)
 			{
 				flush_dpb(p_Vid->p_Dpb, -1);
 			}
-			init_dpb(p_Vid, p_Vid->p_Dpb);
+			
+      init_dpb(p_Vid, p_Vid->p_Dpb);
 
 			p_Vid->last_pic_width_in_mbs_minus1 = p_Vid->active_sps->pic_width_in_mbs_minus1;  
 			p_Vid->last_pic_height_in_map_units_minus1 = p_Vid->active_sps->pic_height_in_map_units_minus1;
@@ -933,62 +939,47 @@ void activate_pps(VideoParameters *p_Vid, pic_parameter_set_rbsp_t *pps)
     }
 
     p_Vid->active_pps = pps;
-
-    // Fidelity Range Extensions stuff (part 2)
-    //p_Vid->Transform8x8Mode = pps->transform_8x8_mode_flag;
-
   }
 }
 
-#if (MVC_EXTENSION_ENABLE)
-void UseParameterSet (Slice *currSlice, int PicParsetId, int isBaseView)
-#else
-void UseParameterSet (Slice *currSlice, int PicParsetId)
-#endif
+void UseParameterSet (Slice *currSlice)
 {
   VideoParameters *p_Vid = currSlice->p_Vid;
-#if (MVC_EXTENSION_ENABLE)
-  seq_parameter_set_rbsp_t *sps;
+  int PicParsetId = currSlice->pic_parameter_set_id;  
   pic_parameter_set_rbsp_t *pps = &p_Vid->PicParSet[PicParsetId];
-#else
-  seq_parameter_set_rbsp_t *sps = &p_Vid->SeqParSet[p_Vid->PicParSet[PicParsetId].seq_parameter_set_id];
-  pic_parameter_set_rbsp_t *pps = &p_Vid->PicParSet[PicParsetId];
-#endif
+  seq_parameter_set_rbsp_t *sps = &p_Vid->SeqParSet[pps->seq_parameter_set_id];
   int i;
 
-  if (p_Vid->PicParSet[PicParsetId].Valid != TRUE)
+  if (pps->Valid != TRUE)
     printf ("Trying to use an invalid (uninitialized) Picture Parameter Set with ID %d, expect the unexpected...\n", PicParsetId);
 #if (MVC_EXTENSION_ENABLE)
-  if(isBaseView)
+  if((currSlice->svc_extension_flag == -1))
   {
-    sps = &p_Vid->SeqParSet[p_Vid->PicParSet[PicParsetId].seq_parameter_set_id];
-    if (p_Vid->SeqParSet[p_Vid->PicParSet[PicParsetId].seq_parameter_set_id].Valid != TRUE)
+    if (sps->Valid != TRUE)
       printf ("PicParset %d references an invalid (uninitialized) Sequence Parameter Set with ID %d, expect the unexpected...\n", 
-      PicParsetId, (int) p_Vid->PicParSet[PicParsetId].seq_parameter_set_id);
+      PicParsetId, (int) pps->seq_parameter_set_id);
   }
   else
   {
-    p_Vid->active_subset_sps = p_Vid->SubsetSeqParSet + p_Vid->PicParSet[PicParsetId].seq_parameter_set_id;
+    // Set SPS to the subset SPS parameters
+    p_Vid->active_subset_sps = p_Vid->SubsetSeqParSet + pps->seq_parameter_set_id;
     sps = &(p_Vid->active_subset_sps->sps);
-    if (p_Vid->SubsetSeqParSet[p_Vid->PicParSet[PicParsetId].seq_parameter_set_id].Valid != TRUE)
+    if (p_Vid->SubsetSeqParSet[pps->seq_parameter_set_id].Valid != TRUE)
       printf ("PicParset %d references an invalid (uninitialized) Subset Sequence Parameter Set with ID %d, expect the unexpected...\n", 
-      PicParsetId, (int) p_Vid->PicParSet[PicParsetId].seq_parameter_set_id);		
+      PicParsetId, (int) pps->seq_parameter_set_id);		
   }
 #else
-  if (p_Vid->SeqParSet[p_Vid->PicParSet[PicParsetId].seq_parameter_set_id].Valid != TRUE)
-    printf ("PicParset %d references an invalid (uninitialized) Sequence Parameter Set with ID %d, expect the unexpected...\n", PicParsetId, (int) p_Vid->PicParSet[PicParsetId].seq_parameter_set_id);
-
-  sps =  &p_Vid->SeqParSet[p_Vid->PicParSet[PicParsetId].seq_parameter_set_id];
+  if (sps->Valid != TRUE)
+    printf ("PicParset %d references an invalid (uninitialized) Sequence Parameter Set with ID %d, expect the unexpected...\n", 
+    PicParsetId, (int) pps->seq_parameter_set_id);
 #endif
 
   // In theory, and with a well-designed software, the lines above
   // are everything necessary.  In practice, we need to patch many values
   // in p_Vid-> (but no more in p_Inp-> -- these have been taken care of)
 
-  // Sequence Parameter Set Stuff first
-
-  //  printf ("Using Picture Parameter set %d and associated Sequence Parameter Set %d\n", PicParsetId, p_Vid->PicParSet[PicParsetId].seq_parameter_set_id);
-
+  // Set Sequence Parameter Stuff first
+  //  printf ("Using Picture Parameter set %d and associated Sequence Parameter Set %d\n", PicParsetId, pps->seq_parameter_set_id);
   if ((int) sps->pic_order_cnt_type < 0 || sps->pic_order_cnt_type > 2)  // != 1
   {
     printf ("invalid sps->pic_order_cnt_type = %d\n", (int) sps->pic_order_cnt_type);

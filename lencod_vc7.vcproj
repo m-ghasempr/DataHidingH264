@@ -530,6 +530,12 @@
 				RelativePath=".\lencod\src\lln_mc_prediction.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\loop_filter_mbaff.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\loop_filter_normal.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\loopFilter.c">
 			</File>
 			<File
@@ -910,6 +916,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\lln_mc_prediction.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\loop_filter.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\macroblock.h">

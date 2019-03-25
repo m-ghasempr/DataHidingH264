@@ -1127,7 +1127,7 @@ void init_lists_mvc(Slice *currSlice)
  *
  ************************************************************************
  */
-static void reorder_interview(VideoParameters *p_Vid, Slice *currSlice, StorablePicture **RefPicListX, int num_ref_idx_lX_active_minus1, int picViewIdxLX, int *refIdxLX, int targetViewID, int currPOC, int listidx)
+static void reorder_interview(VideoParameters *p_Vid, Slice *currSlice, StorablePicture **RefPicListX, int num_ref_idx_lX_active_minus1, int *refIdxLX, int targetViewID, int currPOC, int listidx)
 {
   int cIdx, nIdx;
   StorablePicture *picLX;
@@ -1251,7 +1251,7 @@ void reorder_ref_pic_list_mvc(Slice *currSlice, int cur_list, int **anchor_ref, 
 			else
 				targetViewID = non_anchor_ref[curr_VOIdx][picViewIdxLX];
 
-			reorder_interview(p_Vid, currSlice, currSlice->listX[cur_list], num_ref_idx_lX_active_minus1, picViewIdxLX, &refIdxLX, targetViewID, currPOC, listidx);
+			reorder_interview(p_Vid, currSlice, currSlice->listX[cur_list], num_ref_idx_lX_active_minus1, &refIdxLX, targetViewID, currPOC, listidx);
 		}
   }
   // that's a definition

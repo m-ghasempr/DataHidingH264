@@ -258,7 +258,7 @@ void ercStopSegment( int currMBNum, int segment, unsigned int bitPos, ercVariabl
 {
   if ( errorVar && errorVar->concealment )
   {
-    errorVar->segments[ segment ].endMBPos = (short) currMBNum; //! Changed TO 12.11.2001
+    errorVar->segments[ segment ].endMBPos = (short) currMBNum;
     errorVar->currSegment++;
   }
 }

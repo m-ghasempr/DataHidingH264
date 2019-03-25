@@ -564,9 +564,11 @@ static void buildPredRegionYUV(VideoParameters *p_Vid, int *mv, int x, int y, im
 
   int ref_frame = imax (mv[2], 0); // !!KS: quick fix, we sometimes seem to get negative ref_pic here, so restrict to zero and above
   int mb_nr = y/16*(p_Vid->width/16)+x/16; ///currSlice->current_mb_nr;
+  int **tmp_res = NULL;
   
   Macroblock *currMB = &p_Vid->mb_data[mb_nr];   // intialization code deleted, see below, StW  
   currSlice = currMB->p_Slice;
+  tmp_res = currSlice->tmp_res;
 
   // This should be allocated only once. 
   get_mem2Dpel(&tmp_block, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
@@ -598,7 +600,7 @@ static void buildPredRegionYUV(VideoParameters *p_Vid, int *mv, int x, int y, im
       get_block_luma(currSlice->listX[0][ref_frame], vec1_x, vec1_y, BLOCK_SIZE, BLOCK_SIZE,
         tmp_block,
         dec_picture->iLumaStride,dec_picture->size_x_m1,
-        (currMB->mb_field) ? (dec_picture->size_y >> 1) - 1 : dec_picture->size_y_m1,currSlice->tmp_res,
+        (currMB->mb_field) ? (dec_picture->size_y >> 1) - 1 : dec_picture->size_y_m1,tmp_res,
         p_Vid->max_pel_value_comp[PLANE_Y],(imgpel) p_Vid->dc_pred_value_comp[PLANE_Y], currMB);
 
       for(ii=0;ii<BLOCK_SIZE;ii++)
@@ -660,10 +662,11 @@ static void buildPredRegionYUV(VideoParameters *p_Vid, int *mv, int x, int y, im
               if0=f1_x-if1;
               jf0=f1_y-jf1;
 
-              currSlice->mb_pred[uv + 1][jj+joff][ii+ioff]=(if0*jf0*currSlice->listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
+              currSlice->mb_pred[uv + 1][jj+joff][ii+ioff] = (imgpel) 
+                ((if0*jf0*currSlice->listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
                 if1*jf0*currSlice->listX[0][ref_frame]->imgUV[uv][jj0][ii1]+
                 if0*jf1*currSlice->listX[0][ref_frame]->imgUV[uv][jj1][ii0]+
-                if1*jf1*currSlice->listX[0][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
+                if1*jf1*currSlice->listX[0][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3);
             }
           }
         }
@@ -898,11 +901,8 @@ static void buildPredblockRegionYUV(VideoParameters *p_Vid, int *mv,
 
   vec1_x = x*mv_mul + mv[0];
   vec1_y = y*mv_mul + mv[1];
-  get_block_luma(currSlice->listX[list][ref_frame], 
-    vec1_x, vec1_y, BLOCK_SIZE, BLOCK_SIZE,
-tmp_block,
-dec_picture->iLumaStride,dec_picture->size_x_m1,
-    (currMB->mb_field) ? (dec_picture->size_y >> 1) - 1 : dec_picture->size_y_m1,currSlice->tmp_res,
+  get_block_luma(currSlice->listX[list][ref_frame],  vec1_x, vec1_y, BLOCK_SIZE, BLOCK_SIZE, tmp_block,
+    dec_picture->iLumaStride,dec_picture->size_x_m1, (currMB->mb_field) ? (dec_picture->size_y >> 1) - 1 : dec_picture->size_y_m1,currSlice->tmp_res,
     p_Vid->max_pel_value_comp[PLANE_Y],(imgpel) p_Vid->dc_pred_value_comp[PLANE_Y], currMB);
 
   for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
@@ -958,10 +958,10 @@ dec_picture->iLumaStride,dec_picture->size_x_m1,
           if0=f1_x-if1;
           jf0=f1_y-jf1;
 
-          currSlice->mb_pred[uv + 1][jj][ii]=(imgpel) (if0*jf0*currSlice->listX[list][ref_frame]->imgUV[uv][jj0][ii0]+
+          currSlice->mb_pred[uv + 1][jj][ii]=(imgpel) ((if0*jf0*currSlice->listX[list][ref_frame]->imgUV[uv][jj0][ii0]+
             if1*jf0*currSlice->listX[list][ref_frame]->imgUV[uv][jj0][ii1]+
             if0*jf1*currSlice->listX[list][ref_frame]->imgUV[uv][jj1][ii0]+
-            if1*jf1*currSlice->listX[list][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
+            if1*jf1*currSlice->listX[list][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3);
         }
       }
 
@@ -1804,8 +1804,6 @@ void sliding_window_poc_management(DecodedPictureBuffer *p_Dpb, StorablePicture 
     for(i=0;i<p_Dpb->size-1; i++)
       p_Vid->pocs_in_dpb[i] = p_Vid->pocs_in_dpb[i+1];
   }
-
-  //    p_Vid->pocs_in_dpb[p_Dpb->used_size-1] = p->poc;
 }
 
 

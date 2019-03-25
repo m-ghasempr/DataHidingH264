@@ -311,7 +311,7 @@ Mapping Map[] = {
     {"RCMaxQPSPSlice",           &cfgparams.RCMaxQP[SP_SLICE],            0,   (double) MAX_QP,           3,  (double) MIN_QP,  (double) MAX_QP,                 },
     {"RCMinQPSISlice",           &cfgparams.RCMinQP[SI_SLICE],            0,   (double) MIN_QP,           3,  (double) MIN_QP,  (double) MAX_QP,                 },
     {"RCMaxQPSISlice",           &cfgparams.RCMaxQP[SI_SLICE],            0,   (double) MAX_QP,           3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"RCMaxQPChange",            &cfgparams.RCMaxQPChange,                0,   4.0,                       1,  0.0,              10.0,                            },
+    {"RCMaxQPChange",            &cfgparams.RCMaxQPChange,                0,   4.0,                       1,  0.0,              51.0,                            },
 
     // Q_Matrix
     {"QmatrixFile",              &cfgparams.QmatrixFile,                  1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },

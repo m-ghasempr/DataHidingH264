@@ -541,12 +541,12 @@ distblk rdcost_for_4x4_intra_blocks (Macroblock *currMB,
   //===== perform forward transform, Q, IQ, inverse transform, Reconstruction =====
   //select_transform(currMB);
 
-  currMB->ipmode_DPCM = ipmode;
+  currMB->ipmode_DPCM = (short) ipmode;
   *nonzero = currMB->residual_transform_quant_luma_4x4 (currMB, PLANE_Y, block_x, block_y, &dummy, 1);
 
   //===== get distortion (SSD) of 4x4 block =====
   distortion += compute_SSE4x4(&p_Vid->pCurImg[pic_opix_y], &p_Vid->enc_picture->imgY[pic_pix_y], pic_pix_x, pic_pix_x);
-#if INTRA_RDCOSTCALC_EARLY_TERMINATE
+#if INTRA_RDCOSTCALC_ET
   // check if already distortion larger than min_rdcost
   if (distortion >= min_rdcost)
   {
@@ -1114,14 +1114,14 @@ void set_modes_and_refs_for_blocks_p_slice(Macroblock *currMB, short mode)
         k = 2*(j >> 1);
         curref = b8x8info->best[mode][k++].ref[LIST_0];
         motion[block_y][block_x].ref_pic [LIST_0] = currSlice->listX[LIST_0 + currMB->list_offset][curref];
-        motion[block_y][block_x++].ref_idx[LIST_0] = curref;
+        motion[block_y][block_x++].ref_idx[LIST_0] = (char) curref;
         motion[block_y][block_x].ref_pic [LIST_0] = currSlice->listX[LIST_0 + currMB->list_offset][curref];
-        motion[block_y][block_x++].ref_idx[LIST_0] = curref;
+        motion[block_y][block_x++].ref_idx[LIST_0] = (char) curref;
         curref = b8x8info->best[mode][k].ref[LIST_0];
         motion[block_y][block_x].ref_pic [LIST_0] = currSlice->listX[LIST_0 + currMB->list_offset][curref];
-        motion[block_y][block_x++].ref_idx[LIST_0] = curref;
+        motion[block_y][block_x++].ref_idx[LIST_0] = (char) curref;
         motion[block_y][block_x].ref_pic [LIST_0] = currSlice->listX[LIST_0 + currMB->list_offset][curref];
-        motion[block_y][block_x].ref_idx[LIST_0] = curref;
+        motion[block_y][block_x].ref_idx[LIST_0] = (char) curref;
       }
     }
   }
@@ -1904,7 +1904,6 @@ int RDCost_for_macroblocks (Macroblock  *currMB,   // <-- Current Macroblock to 
   // LUMA
   if (p_Inp->rdopt == 3)
   {
-    //Zhifeng 090611
 	  distortion = p_Vid->estimate_distortion(currMB, 0, 16, mode, 0, currMB->min_rdcost);
     //if (errdo_distortion (currMB, mode, &distortion) == 0)
     //  return 0;
@@ -2010,6 +2009,7 @@ int RDCost_for_macroblocks (Macroblock  *currMB,   // <-- Current Macroblock to 
   currMB->min_rdcost = rdcost;
   currMB->min_dcost = distortion;
   currMB->min_rate = weight_cost(lambda, coeff_rate);
+  currMB->min_bits = rate;
 
 #ifdef BEST_NZ_COEFF  
   for (j=0;j<4;j++)
@@ -2915,7 +2915,7 @@ void set_ref_and_motion_vectors_P_slice (Macroblock *currMB, PicMotionParams **m
         block_x = currMB->block_x + i;
         motion[block_y][block_x].ref_pic[LIST_0] = currSlice->listX[LIST_0+currMB->list_offset][fwref];;
         motion[block_y][block_x].mv     [LIST_0] = currSlice->all_mv[LIST_0][fwref][mode][j][i];
-        motion[block_y][block_x].ref_idx[LIST_0] = fwref;
+        motion[block_y][block_x].ref_idx[LIST_0] = (char) fwref;
       }
     }
     return;
@@ -2995,7 +2995,7 @@ static void set_ref_and_motion_vectors_B_slice (Macroblock *currMB, PicMotionPar
               fwref = currSlice->direct_ref_idx[block_y][block_x][LIST_0];              
               motion[block_y][block_x].ref_pic[LIST_0] = currSlice->listX[LIST_0 + currMB->list_offset][fwref];
               motion[block_y][block_x].mv     [LIST_0] = currSlice->all_mv[LIST_0][fwref][mode][j][i];
-              motion[block_y][block_x].ref_idx[LIST_0] = fwref;             
+              motion[block_y][block_x].ref_idx[LIST_0] = (char) fwref;             
             }            
           }
         }
@@ -3010,7 +3010,7 @@ static void set_ref_and_motion_vectors_B_slice (Macroblock *currMB, PicMotionPar
               block_x = currMB->block_x + i;
               motion[block_y][block_x].ref_pic[LIST_0] = currSlice->listX[LIST_0+currMB->list_offset][fwref];
               motion[block_y][block_x].mv     [LIST_0] = currSlice->all_mv[LIST_0][fwref][mode][j][i];
-              motion[block_y][block_x].ref_idx[LIST_0] = fwref;
+              motion[block_y][block_x].ref_idx[LIST_0] = (char) fwref;
             }
           }
         }
@@ -3064,7 +3064,7 @@ static void set_ref_and_motion_vectors_B_slice (Macroblock *currMB, PicMotionPar
                 printf("error\n");
               motion[block_y][block_x].ref_pic [LIST_1] = currSlice->listX[LIST_1+currMB->list_offset][bwref]; 
               motion[block_y][block_x].mv      [LIST_1] = currSlice->all_mv[LIST_1][bwref][mode][j][i];
-              motion[block_y][block_x].ref_idx [LIST_1] = bwref; // currSlice->direct_ref_idx[block_y][block_x][LIST_1];              
+              motion[block_y][block_x].ref_idx [LIST_1] = (char) bwref; // currSlice->direct_ref_idx[block_y][block_x][LIST_1];              
               //motion[block_y][block_x].ref_pic [LIST_1] = currSlice->listX[LIST_1+currMB->list_offset][(short)motion[block_y][block_x].ref_idx [LIST_1]]; 
             }            
           }
@@ -3081,7 +3081,7 @@ static void set_ref_and_motion_vectors_B_slice (Macroblock *currMB, PicMotionPar
 
               motion[block_y][block_x].ref_pic [LIST_1] = currSlice->listX[LIST_1+currMB->list_offset][bwref];
               motion[block_y][block_x].mv      [LIST_1] = currSlice->all_mv[LIST_1][bwref][mode][j][i];
-              motion[block_y][block_x].ref_idx [LIST_1] = bwref;
+              motion[block_y][block_x].ref_idx [LIST_1] = (char) bwref;
             }
           }
         }
@@ -3505,7 +3505,7 @@ int GetBestTransformP8x8(Macroblock *currMB)
       {
         for (i = mb_x; i < 8 + mb_x; i++)
         {
-          index = 2 * ((j - mb_y)> 3) + ((i - mb_x)> 3);
+          index = (short) (2 * ((j - mb_y)> 3) + ((i - mb_x)> 3));
           source_pel = p_Vid->pCurImg[pic_pix_y + j][pic_pix_x + i];
           *(tmp16[index])++ = (short) (source_pel - p_RDO->tr4x4->mpr8x8[j][i]);
           *tmp64++          = (short) (source_pel - p_RDO->tr8x8->mpr8x8[j][i]);

@@ -142,6 +142,7 @@ struct inp_par_enc
   int UseWeightedReferenceME;        //!< Use Weighted Reference for ME.
   int RDPictureDecision;             //!< Perform RD optimal decision between various coded versions of same picture
   int RDPSliceBTest;                 //!< Tests B slice replacement for P.
+  int RDPSliceITest;                 //!< Tests I slice replacement for P.
   int RDPictureMaxPassISlice;        //!< Max # of coding passes for I-slice
   int RDPictureMaxPassPSlice;        //!< Max # of coding passes for P-slice
   int RDPictureMaxPassBSlice;        //!< Max # of coding passes for B-slice

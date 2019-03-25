@@ -37,6 +37,7 @@ extern void    UnifiedOneForthPix_JV ( VideoParameters *p_Vid, int nplane, Stora
 extern void    frame_picture         ( VideoParameters *p_Vid, Picture *frame, ImageData *imgData, int rd_pass);
 extern byte    get_idr_flag          ( VideoParameters *p_Vid );
 extern void    write_non_vcl_nalu    ( VideoParameters *p_Vid);
+extern void    write_non_vcl_nalu_bot_fld( VideoParameters *p_Vid );
 #if (MVC_EXTENSION_ENABLE)
 extern void    write_non_vcl_nalu_mvc( VideoParameters *p_Vid);
 #endif

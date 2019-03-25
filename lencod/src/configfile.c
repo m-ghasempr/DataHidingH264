@@ -102,7 +102,18 @@ void JMHelpExit (void)
     "         See default encoder.cfg file for description of all parameters.\n\n"
 
     "## Supported video file formats\n"
-    "   RAW:  .yuv -> YUV 4:2:0\n\n"
+    "   RAW:  .yuv.,rgb -> 	P444 - Planar, 4:4:4 \n"
+    "                      	P422 - Planar, 4:2:2 \n"
+    "                      	P420 - Planar, 4:2:0  \n"
+    "                      	P400 - Planar, 4:0:0 \n"
+    "                      	I444 - Packed, 4:4:4 \n"
+    "                      	I422 - Packed, 4:2:2 \n"
+    "                      	I420 - Packed, 4:2:0 \n"
+    "                      	IYUV/YV12 - Planar, 4:2:0 \n"
+    "                      	IYU1 - Packed, 4:2:0 (UYYVYY) \n"
+    "                      	IYU2 - Packed, 4:4:4 (UYV) \n"
+    "                      	YUY2 - Packed, 4:2:2 (YUYV) \n"
+    "                      	YUV  - Packed, 4:4:4 (YUV) \n\n"
 
     "## Examples of usage:\n"
     "   lencod\n"
@@ -853,6 +864,12 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     error (errortext, 400);
   }
 
+  if ( p_Inp->WPMCPrecision && ( p_Inp->PicInterlace || p_Inp->MbInterlace ) )
+  {
+    snprintf(errortext, ET_SIZE, "WPMCPrecision does not work for PicInterlace > 0 or MbInterlace > 0.\n");
+    error (errortext, 400);
+  }
+
   if (p_Inp->PicInterlace) 
   {
     if (p_Inp->ReferenceReorder == 2)
@@ -869,7 +886,7 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if (p_Inp->ReferenceReorder && p_Inp->MbInterlace )
   {
-    snprintf(errortext, ET_SIZE, "ReferenceReorder not supported with MBAFF\n");
+    snprintf(errortext, ET_SIZE, "ReferenceReorder is not supported with MBAFF\n");
     error (errortext, 400);
   }
 
@@ -879,10 +896,31 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Inp->ReferenceReorder = 0;
   }
 
+#if (MVC_EXTENSION_ENABLE)
+  if ( (p_Inp->num_of_views > 1) && (p_Inp->ReferenceReorder > 0) )
+  {
+    snprintf(errortext, ET_SIZE, "ReferenceReorder is not supported with more than one view.\n");
+    error (errortext, 400);
+  }
+
+  if ( (p_Inp->num_of_views > 1) && (p_Inp->PocMemoryManagement > 0) )
+  {
+    snprintf(errortext, ET_SIZE, "PocMemoryManagement is not supported with more than one view.\n");
+    error (errortext, 400);
+  }
+#endif
+
+
   if (p_Inp->PocMemoryManagement && p_Inp->MbInterlace )
   {
-    snprintf(errortext, ET_SIZE, "PocMemoryManagement not supported with MBAFF\n");
+    snprintf(errortext, ET_SIZE, "PocMemoryManagement is not supported with MBAFF\n");
     error (errortext, 400);
+  }
+
+  if(p_Inp->MbInterlace && p_Inp->RDPictureDecision && p_Inp->GenerateMultiplePPS)
+  {
+    snprintf(errortext, ET_SIZE, "RDPictureDecision+GenerateMultiplePPS not supported with MBAFF. RDPictureDecision therefore disabled\n");
+    p_Inp->RDPictureDecision = 0;
   }
 
   if ((!p_Inp->rdopt)&&(p_Inp->MbInterlace==2))
@@ -1090,6 +1128,13 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     snprintf(errortext, ET_SIZE, "NumberOfViews must be two if ProfileIDC is set to 118 (Multiview High Profile). Otherwise (for a single view) please select a non-multiview profile such as 100.");
     error (errortext, 500);
   }
+
+//  if (p_Inp->PicInterlace == 2 && p_Inp->MVCInterViewReorder != 0)
+//  {
+//    snprintf(errortext, ET_SIZE, "MVCInterViewReorder not supported with Adaptive Frame Field Coding");
+//    error (errortext, 500);
+//  }
+
   if(p_Inp->MVCInterViewReorder)
   {
     if(p_Inp->ProfileIDC!=MULTIVIEW_HIGH && p_Inp->ProfileIDC!=STEREO_HIGH)

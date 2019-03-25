@@ -907,53 +907,7 @@ int get_mem3DpelWithPadSeparately(imgpel ****array3D, int dim0, int dim1, int di
   return mem_size;
 }
 
-int realloc_mem3DpelFrom5DpelWithPad(imgpel *****array5D, int dim3, int dim4, int iOldPadY, int iOldPadX, 
-                                     imgpel ****array3D, int dim0, int dim1, int dim2, int iNewPadY, int iNewPadX)
-{
-  int i, iSize =0;
-  int iHeight = (dim0*dim1+2*(dim0-1)*iNewPadY) + 2*iNewPadY;
-  int iWidth = dim2 + 2*iNewPadX;
-  imgpel *pNew1DMem, **pNew2DMem;
-  if(!array5D || !*array5D || !**array5D || !***array5D || !****array5D)
-    return iSize;
-  if(((*array3D) = (imgpel***)malloc(dim0*sizeof(imgpel**))) == NULL)
-    return iSize;
-  if((**array3D = (imgpel**)malloc(iHeight * sizeof(imgpel*))) == NULL)
-  {
-    free(*array3D);
-    return iSize;
-  }
-  //copy v;
-  for(i=0; i<dim1; i++)
-    memcpy(array5D[0][0][1][i], array5D[1][0][0][i], dim2);
-  pNew1DMem = (imgpel*)realloc((***array5D)[-iOldPadY]-iOldPadX, iWidth*iHeight*sizeof(imgpel));
-  if(!pNew1DMem)
-  {
-    free(**array3D);
-    free(*array3D);
-    return iSize;
-  }
-  //free;
-  free (&((***array5D)[-iOldPadY]));
-  free(**array5D);
-  free(*array5D);
-  free(array5D);
 
-  //set;
-  pNew2DMem = **array3D;
-  pNew2DMem[0] = pNew1DMem + iNewPadX;
-  for(i = 1 ; i < iHeight; i++)
-  {
-    pNew2DMem[i] = pNew2DMem[i-1] + iWidth;
-  }
-  **array3D = &(pNew2DMem[iNewPadY]);
-
-  for(i = 1; i < dim0; i++)
-    (*array3D)[i] = (*array3D)[i - 1] + (dim1+2*iNewPadY);
-
-  iSize = dim0 * sizeof(imgpel**) + iHeight * sizeof(imgpel*) + iWidth*iHeight*sizeof(imgpel);
-  return iSize;
-}
 /*!
  ************************************************************************
  * \brief

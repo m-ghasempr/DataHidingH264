@@ -49,7 +49,8 @@ static void CloseUser_data_registered_itu_t_t35(SEIParameters *p_SEI);
 static void InitPostFilterHints        (SEIParameters *p_SEI);
 static void ClearPostFilterHints       (SEIParameters *p_SEI);
 static void ClosePostFilterHints       (SEIParameters *p_SEI);
-
+static void InitFramePackingArrangement(VideoParameters *p_Vid);
+static void CloseFramePackingArrangement(SEIParameters *p_SEI);
 
 void init_sei(SEIParameters *p_SEI)
 {
@@ -63,7 +64,7 @@ void init_sei(SEIParameters *p_SEI)
   p_SEI->seiHasRecoveryPoint_info=FALSE;
   p_SEI->seiHasRef_pic_buffer_management_repetition=FALSE;
   p_SEI->seiHasSpare_picture=FALSE;
-  p_SEI->seiHasBuffering_period=FALSE;
+  p_SEI->seiHasBufferingPeriod_info=FALSE;
   p_SEI->seiHasPicTiming_info=FALSE;
   p_SEI->seiHasSceneInformation=FALSE;
   p_SEI->seiHasSubseq_information=FALSE;
@@ -125,6 +126,8 @@ void InitSEIMessages(VideoParameters *p_Vid, InputParameters *p_Inp)
   InitPicTiming(p_SEI);
   // init DRPM Repetition
   InitDRPMRepetition(p_SEI);
+  // init Frame Packing Arrangement
+  InitFramePackingArrangement(p_Vid);
 }
 
 void CloseSEIMessages(VideoParameters *p_Vid, InputParameters *p_Inp)
@@ -147,6 +150,7 @@ void CloseSEIMessages(VideoParameters *p_Vid, InputParameters *p_Inp)
   CloseBufferingPeriod(p_SEI);
   ClosePicTiming(p_SEI);
   CloseDRPMRepetition(p_SEI);
+  CloseFramePackingArrangement(p_SEI);
 
   for (i=0; i<MAX_LAYER_NUMBER; i++)
   {
@@ -181,7 +185,7 @@ Boolean HaveAggregationSEI(VideoParameters *p_Vid)
     return TRUE;
   if (p_SEI->seiHasPostFilterHints_info)
     return TRUE;
-  if (p_SEI->seiHasBuffering_period)
+  if (p_SEI->seiHasBufferingPeriod_info)
     return TRUE;
   if (p_SEI->seiHasPicTiming_info)
     return TRUE;
@@ -2167,13 +2171,13 @@ void ClearBufferingPeriod(SEIParameters *p_SEI, seq_parameter_set_rbsp_t *active
     }
   }
 
-  p_SEI->seiHasBuffering_period = FALSE;
+  p_SEI->seiHasBufferingPeriod_info = FALSE;
 }
 
 void UpdateBufferingPeriod(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   SEIParameters *p_SEI = p_Vid->p_SEI;
-  p_SEI->seiHasBuffering_period = FALSE;
+  p_SEI->seiHasBufferingPeriod_info = FALSE;
 }
 
 static void FinalizeBufferingPeriod(SEIParameters *p_SEI, seq_parameter_set_rbsp_t *active_sps)
@@ -2455,6 +2459,121 @@ static void ClosePicTiming(SEIParameters *p_SEI)
 }
 
 /*
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *  \functions on frame packing arrangement SEI message
+ *  \brief
+ *      Based on pre-published Recommendation
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
+//! Frame packing arrangement Information
+static void InitFramePackingArrangement(VideoParameters *p_Vid)
+{
+  SEIParameters *p_SEI = p_Vid->p_SEI;
+
+  p_SEI->seiFramePackingArrangement.data = malloc( sizeof(Bitstream) );
+  if( p_SEI->seiFramePackingArrangement.data == NULL ) 
+    no_mem_exit("InitFramePackingArrangement: seiFramePackingArrangement.data");
+
+  p_SEI->seiFramePackingArrangement.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  if( p_SEI->seiFramePackingArrangement.data->streamBuffer == NULL ) 
+    no_mem_exit("InitFramePackingArrangement: seiFramePackingArrangement.data->streamBuffer");
+
+  ClearFramePackingArrangement(p_SEI);
+}
+
+void ClearFramePackingArrangement(SEIParameters *p_SEI)
+{
+  memset( p_SEI->seiFramePackingArrangement.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+
+  p_SEI->seiFramePackingArrangement.data->bits_to_go  = 8;
+  p_SEI->seiFramePackingArrangement.data->byte_pos    = 0;
+  p_SEI->seiFramePackingArrangement.data->byte_buf    = 0;
+  p_SEI->seiFramePackingArrangement.payloadSize       = 0;
+
+  p_SEI->seiFramePackingArrangement.frame_packing_arrangement_id = 0;
+  p_SEI->seiFramePackingArrangement.frame_packing_arrangement_cancel_flag = FALSE;
+  p_SEI->seiFramePackingArrangement.frame_packing_arrangement_type = 0;
+  p_SEI->seiFramePackingArrangement.quincunx_sampling_flag = FALSE;
+  p_SEI->seiFramePackingArrangement.content_interpretation_type = 0;
+  p_SEI->seiFramePackingArrangement.spatial_flipping_flag = FALSE;
+  p_SEI->seiFramePackingArrangement.frame0_flipped_flag = FALSE;
+  p_SEI->seiFramePackingArrangement.field_views_flag = FALSE;
+  p_SEI->seiFramePackingArrangement.current_frame_is_frame0_flag = FALSE;
+  p_SEI->seiFramePackingArrangement.frame0_self_contained_flag = FALSE;
+  p_SEI->seiFramePackingArrangement.frame1_self_contained_flag = FALSE;
+  p_SEI->seiFramePackingArrangement.frame0_grid_position_x = 0;
+  p_SEI->seiFramePackingArrangement.frame0_grid_position_y = 0;
+  p_SEI->seiFramePackingArrangement.frame1_grid_position_x = 0;
+  p_SEI->seiFramePackingArrangement.frame1_grid_position_y = 0;
+  p_SEI->seiFramePackingArrangement.frame_packing_arrangement_reserved_byte = 0;
+  p_SEI->seiFramePackingArrangement.frame_packing_arrangement_repetition_period = 0;
+  p_SEI->seiFramePackingArrangement.frame_packing_arrangement_extension_flag = FALSE;
+
+  p_SEI->seiHasFramePackingArrangement_info = FALSE;
+}
+
+void UpdateFramePackingArrangement(VideoParameters *p_Vid, InputParameters *p_Inp)
+{
+  SEIParameters *p_SEI = p_Vid->p_SEI;
+  p_SEI->seiHasFramePackingArrangement_info = FALSE;
+}
+
+static void FinalizeFramePackingArrangement(SEIParameters *p_SEI)
+{
+  Bitstream *bitstream = p_SEI->seiFramePackingArrangement.data;
+
+  ue_v( "SEI: frame_packing_arrangement_id", (int)p_SEI->seiFramePackingArrangement.frame_packing_arrangement_id, bitstream );
+  u_1( "SEI: frame_packing_arrangement_cancel_flag", (int)p_SEI->seiFramePackingArrangement.frame_packing_arrangement_cancel_flag, bitstream );
+  if ( p_SEI->seiFramePackingArrangement.frame_packing_arrangement_cancel_flag == FALSE )
+  {
+    u_v( 7, "SEI: frame_packing_arrangement_type", (int)p_SEI->seiFramePackingArrangement.frame_packing_arrangement_type, bitstream );
+    u_1( "SEI: quincunx_sampling_flag", (int)p_SEI->seiFramePackingArrangement.quincunx_sampling_flag, bitstream );
+    u_v( 6, "SEI: content_interpretation_type", (int)p_SEI->seiFramePackingArrangement.content_interpretation_type, bitstream );
+    u_1( "SEI: spatial_flipping_flag", (int)p_SEI->seiFramePackingArrangement.spatial_flipping_flag, bitstream );
+    u_1( "SEI: frame0_flipped_flag", (int)p_SEI->seiFramePackingArrangement.frame0_flipped_flag, bitstream );
+    u_1( "SEI: field_views_flag", (int)p_SEI->seiFramePackingArrangement.field_views_flag, bitstream );
+    u_1( "SEI: current_frame_is_frame0_flag", (int)p_SEI->seiFramePackingArrangement.current_frame_is_frame0_flag, bitstream );
+    u_1( "SEI: frame0_self_contained_flag", (int)p_SEI->seiFramePackingArrangement.frame0_self_contained_flag, bitstream );
+    u_1( "SEI: frame1_self_contained_flag", (int)p_SEI->seiFramePackingArrangement.frame1_self_contained_flag, bitstream );
+    if ( p_SEI->seiFramePackingArrangement.quincunx_sampling_flag == FALSE && p_SEI->seiFramePackingArrangement.frame_packing_arrangement_type != 5 )
+    {
+      u_v( 4, "SEI: frame0_grid_position_x", (int)p_SEI->seiFramePackingArrangement.frame0_grid_position_x, bitstream );
+      u_v( 4, "SEI: frame0_grid_position_y", (int)p_SEI->seiFramePackingArrangement.frame0_grid_position_y, bitstream );
+      u_v( 4, "SEI: frame1_grid_position_x", (int)p_SEI->seiFramePackingArrangement.frame1_grid_position_x, bitstream );
+      u_v( 4, "SEI: frame1_grid_position_y", (int)p_SEI->seiFramePackingArrangement.frame1_grid_position_y, bitstream );
+    }
+    u_v( 8, "SEI: frame_packing_arrangement_reserved_byte", (int)p_SEI->seiFramePackingArrangement.frame_packing_arrangement_reserved_byte, bitstream );
+    ue_v( "SEI: frame_packing_arrangement_repetition_period", (int)p_SEI->seiFramePackingArrangement.frame_packing_arrangement_repetition_period, bitstream );
+  }
+  u_1( "SEI: frame_packing_arrangement_extension_flag", (int)p_SEI->seiFramePackingArrangement.frame_packing_arrangement_extension_flag, bitstream );
+
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( bitstream->bits_to_go != 8 )
+  {
+    (bitstream->byte_buf) <<= 1;
+    bitstream->byte_buf |= 1;
+    bitstream->bits_to_go--;
+    if ( bitstream->bits_to_go != 0 )
+      (bitstream->byte_buf) <<= (bitstream->bits_to_go);
+    bitstream->bits_to_go = 8;
+    bitstream->streamBuffer[bitstream->byte_pos++]=bitstream->byte_buf;
+    bitstream->byte_buf = 0;
+  }
+  p_SEI->seiFramePackingArrangement.payloadSize = bitstream->byte_pos;
+}
+
+static void CloseFramePackingArrangement(SEIParameters *p_SEI)
+{
+  if (p_SEI->seiFramePackingArrangement.data)
+  {
+    free(p_SEI->seiFramePackingArrangement.data->streamBuffer);
+    free(p_SEI->seiFramePackingArrangement.data);
+  }
+  p_SEI->seiFramePackingArrangement.data = NULL;
+}
+
+/*
  ************************************************************************
  * \brief
  *    Initialize dec_ref_pic_marking Repetition SEI data 
@@ -2684,7 +2803,7 @@ void PrepareAggregationSEIMessage(VideoParameters *p_Vid)
     has_aggregation_sei_message = TRUE;
   }
 
-  if (p_SEI->seiHasBuffering_period)
+  if (p_SEI->seiHasBufferingPeriod_info)
   {
     FinalizeBufferingPeriod(p_SEI, p_Vid->active_sps);
     write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiBufferingPeriod.data->streamBuffer, p_SEI->seiBufferingPeriod.payloadSize, SEI_BUFFERING_PERIOD);
@@ -2712,6 +2831,13 @@ void PrepareAggregationSEIMessage(VideoParameters *p_Vid)
     write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiDRPMRepetition.data->streamBuffer, p_SEI->seiDRPMRepetition.payloadSize, SEI_DEC_REF_PIC_MARKING_REPETITION);
     has_aggregation_sei_message = TRUE;
     ClearDRPMRepetition(p_SEI); // to reset the drpm buffer into NULL
+  }
+
+  if (p_SEI->seiHasFramePackingArrangement_info)
+  {
+    FinalizeFramePackingArrangement(p_SEI);
+    write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiFramePackingArrangement.data->streamBuffer, p_SEI->seiFramePackingArrangement.payloadSize, SEI_FRAME_PACKING_ARRANGEMENT);
+    has_aggregation_sei_message = TRUE;
   }
 
   // after all the sei payload is written

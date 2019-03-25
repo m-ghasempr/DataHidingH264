@@ -11,12 +11,15 @@ SUBDIRS := lencod ldecod rtpdump rtp_loss
 DBG?= 0
 ### enforce 32-bit build : 1=yes, 0=no
 M32?= 0
-### include M32 optimization : 1=yes, 0=no
+### static link : 1=yes, 0=no
 STC?= 0
+### OPENMP support : 1=yes, 0=no
+OPENMP?= 1
 
 export DBG
 export STC 
 export M32
+export OPENMP
 
 .PHONY: default all distclean clean tags depend $(SUBDIRS)
 

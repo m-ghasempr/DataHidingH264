@@ -175,6 +175,16 @@
 		71C905340FE283C10095EA3A /* rd_intra_jm_low.c in Sources */ = {isa = PBXBuildFile; fileRef = 71C905270FE283C10095EA3A /* rd_intra_jm_low.c */; };
 		71C905360FE283C10095EA3A /* transform8x8_H444.c in Sources */ = {isa = PBXBuildFile; fileRef = 71C905290FE283C10095EA3A /* transform8x8_H444.c */; };
 		71C905370FE283E50095EA3A /* annexb.c in Sources */ = {isa = PBXBuildFile; fileRef = 43FA4A460D4EE94B001709F1 /* annexb.c */; };
+		71FBD3DB1198565400A92FBE /* loop_filter_mbaff.c in Sources */ = {isa = PBXBuildFile; fileRef = 71FBD3D91198565400A92FBE /* loop_filter_mbaff.c */; };
+		71FBD3DC1198565400A92FBE /* loop_filter_normal.c in Sources */ = {isa = PBXBuildFile; fileRef = 71FBD3DA1198565400A92FBE /* loop_filter_normal.c */; };
+		71FBD3E61198568800A92FBE /* intra4x4_pred_mbaff.c in Sources */ = {isa = PBXBuildFile; fileRef = 71FBD3DE1198568800A92FBE /* intra4x4_pred_mbaff.c */; };
+		71FBD3E71198568800A92FBE /* intra4x4_pred_normal.c in Sources */ = {isa = PBXBuildFile; fileRef = 71FBD3DF1198568800A92FBE /* intra4x4_pred_normal.c */; };
+		71FBD3E81198568800A92FBE /* intra8x8_pred_mbaff.c in Sources */ = {isa = PBXBuildFile; fileRef = 71FBD3E01198568800A92FBE /* intra8x8_pred_mbaff.c */; };
+		71FBD3E91198568800A92FBE /* intra8x8_pred_normal.c in Sources */ = {isa = PBXBuildFile; fileRef = 71FBD3E11198568800A92FBE /* intra8x8_pred_normal.c */; };
+		71FBD3EA1198568800A92FBE /* intra16x16_pred_mbaff.c in Sources */ = {isa = PBXBuildFile; fileRef = 71FBD3E21198568800A92FBE /* intra16x16_pred_mbaff.c */; };
+		71FBD3EB1198568800A92FBE /* intra16x16_pred_normal.c in Sources */ = {isa = PBXBuildFile; fileRef = 71FBD3E31198568800A92FBE /* intra16x16_pred_normal.c */; };
+		71FBD3EC1198568800A92FBE /* loop_filter_mbaff.c in Sources */ = {isa = PBXBuildFile; fileRef = 71FBD3E41198568800A92FBE /* loop_filter_mbaff.c */; };
+		71FBD3ED1198568800A92FBE /* loop_filter_normal.c in Sources */ = {isa = PBXBuildFile; fileRef = 71FBD3E51198568800A92FBE /* loop_filter_normal.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -546,6 +556,18 @@
 		71C905260FE283C10095EA3A /* rd_intra_jm444.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rd_intra_jm444.c; path = lencod/src/rd_intra_jm444.c; sourceTree = "<group>"; };
 		71C905270FE283C10095EA3A /* rd_intra_jm_low.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rd_intra_jm_low.c; path = lencod/src/rd_intra_jm_low.c; sourceTree = "<group>"; };
 		71C905290FE283C10095EA3A /* transform8x8_H444.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = transform8x8_H444.c; path = lencod/src/transform8x8_H444.c; sourceTree = "<group>"; };
+		71FBD3D81198562500A92FBE /* loop_filter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = loop_filter.h; path = lencod/inc/loop_filter.h; sourceTree = "<group>"; };
+		71FBD3D91198565400A92FBE /* loop_filter_mbaff.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = loop_filter_mbaff.c; path = lencod/src/loop_filter_mbaff.c; sourceTree = "<group>"; };
+		71FBD3DA1198565400A92FBE /* loop_filter_normal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = loop_filter_normal.c; path = lencod/src/loop_filter_normal.c; sourceTree = "<group>"; };
+		71FBD3DD1198566A00A92FBE /* loop_filter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = loop_filter.h; sourceTree = "<group>"; };
+		71FBD3DE1198568800A92FBE /* intra4x4_pred_mbaff.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = intra4x4_pred_mbaff.c; sourceTree = "<group>"; };
+		71FBD3DF1198568800A92FBE /* intra4x4_pred_normal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = intra4x4_pred_normal.c; sourceTree = "<group>"; };
+		71FBD3E01198568800A92FBE /* intra8x8_pred_mbaff.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = intra8x8_pred_mbaff.c; sourceTree = "<group>"; };
+		71FBD3E11198568800A92FBE /* intra8x8_pred_normal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = intra8x8_pred_normal.c; sourceTree = "<group>"; };
+		71FBD3E21198568800A92FBE /* intra16x16_pred_mbaff.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = intra16x16_pred_mbaff.c; sourceTree = "<group>"; };
+		71FBD3E31198568800A92FBE /* intra16x16_pred_normal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = intra16x16_pred_normal.c; sourceTree = "<group>"; };
+		71FBD3E41198568800A92FBE /* loop_filter_mbaff.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = loop_filter_mbaff.c; sourceTree = "<group>"; };
+		71FBD3E51198568800A92FBE /* loop_filter_normal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = loop_filter_normal.c; sourceTree = "<group>"; };
 		8DD76FB20486AB0100D96B5E /* lencod */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = lencod; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -659,6 +681,7 @@
 		43FA4A100D4EE91C001709F1 /* inc */ = {
 			isa = PBXGroup;
 			children = (
+				71FBD3D81198562500A92FBE /* loop_filter.h */,
 				710CC1CC113543C700349D61 /* errdo_dist_mhyp.h */,
 				710CC1CD113543C700349D61 /* intra16x16.h */,
 				710CC1CE113543C700349D61 /* lambda.h */,
@@ -752,6 +775,8 @@
 		43FA4A110D4EE920001709F1 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				71FBD3D91198565400A92FBE /* loop_filter_mbaff.c */,
+				71FBD3DA1198565400A92FBE /* loop_filter_normal.c */,
 				710CC1D1113543E800349D61 /* errdo_dist_mhyp.c */,
 				710CC1D2113543E800349D61 /* image_mp.c */,
 				710CC1D3113543E800349D61 /* intra_chroma.c */,
@@ -937,6 +962,7 @@
 		71C904B60FE283800095EA3A /* inc */ = {
 			isa = PBXGroup;
 			children = (
+				71FBD3DD1198566A00A92FBE /* loop_filter.h */,
 				710CC1C11135439300349D61 /* configfile.h */,
 				710CC1C21135439300349D61 /* h264decoder.h */,
 				710CC1C31135439300349D61 /* mbuffer_mvc.h */,
@@ -982,6 +1008,14 @@
 		71C904D80FE283800095EA3A /* src */ = {
 			isa = PBXGroup;
 			children = (
+				71FBD3DE1198568800A92FBE /* intra4x4_pred_mbaff.c */,
+				71FBD3DF1198568800A92FBE /* intra4x4_pred_normal.c */,
+				71FBD3E01198568800A92FBE /* intra8x8_pred_mbaff.c */,
+				71FBD3E11198568800A92FBE /* intra8x8_pred_normal.c */,
+				71FBD3E21198568800A92FBE /* intra16x16_pred_mbaff.c */,
+				71FBD3E31198568800A92FBE /* intra16x16_pred_normal.c */,
+				71FBD3E41198568800A92FBE /* loop_filter_mbaff.c */,
+				71FBD3E51198568800A92FBE /* loop_filter_normal.c */,
 				710CC1C4113543A600349D61 /* configfile.c */,
 				710CC1C5113543A600349D61 /* decoder_test.c */,
 				710CC1C6113543A600349D61 /* mbuffer_mvc.c */,
@@ -1193,6 +1227,14 @@
 				710CC1C9113543A600349D61 /* decoder_test.c in Sources */,
 				710CC1CA113543A600349D61 /* mbuffer_mvc.c in Sources */,
 				710CC1CB113543A600349D61 /* mc_direct.c in Sources */,
+				71FBD3E61198568800A92FBE /* intra4x4_pred_mbaff.c in Sources */,
+				71FBD3E71198568800A92FBE /* intra4x4_pred_normal.c in Sources */,
+				71FBD3E81198568800A92FBE /* intra8x8_pred_mbaff.c in Sources */,
+				71FBD3E91198568800A92FBE /* intra8x8_pred_normal.c in Sources */,
+				71FBD3EA1198568800A92FBE /* intra16x16_pred_mbaff.c in Sources */,
+				71FBD3EB1198568800A92FBE /* intra16x16_pred_normal.c in Sources */,
+				71FBD3EC1198568800A92FBE /* loop_filter_mbaff.c in Sources */,
+				71FBD3ED1198568800A92FBE /* loop_filter_normal.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1315,6 +1357,8 @@
 				710CC1DE113543E800349D61 /* lln_mc_prediction.c in Sources */,
 				710CC1DF113543E800349D61 /* mode_decision_P8x8.c in Sources */,
 				710CC1E0113543E800349D61 /* mv_direct.c in Sources */,
+				71FBD3DB1198565400A92FBE /* loop_filter_mbaff.c in Sources */,
+				71FBD3DC1198565400A92FBE /* loop_filter_normal.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1324,8 +1368,8 @@
 		1DEB928608733DD80010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1 = "ppc i386";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
+				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -1333,7 +1377,8 @@
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = "";
-				LIBRARY_SEARCH_PATHS = /Applications/MATLAB_R2007b/bin/maci/;
+				LIBRARY_SEARCH_PATHS = "";
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = lencod;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 				USER_HEADER_SEARCH_PATHS = lencod/inc;
@@ -1344,13 +1389,13 @@
 		1DEB928708733DD80010E9CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1 = "ppc i386";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
+				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = "";
-				LIBRARY_SEARCH_PATHS = /Applications/MATLAB_R2007b/bin/maci/;
+				LIBRARY_SEARCH_PATHS = "";
 				PRODUCT_NAME = lencod;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 				USER_HEADER_SEARCH_PATHS = lencod/inc;
@@ -1360,6 +1405,7 @@
 		1DEB928A08733DD80010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ENABLE_OPENMP_SUPPORT = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				PREBINDING = NO;
@@ -1374,6 +1420,7 @@
 					ppc,
 					i386,
 				);
+				ENABLE_OPENMP_SUPPORT = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				PREBINDING = NO;
@@ -1393,7 +1440,6 @@
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = "";
-				LIBRARY_SEARCH_PATHS = /Applications/MATLAB_R2007b/bin/maci/;
 				PRODUCT_NAME = rtpdump;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 				USER_HEADER_SEARCH_PATHS = "";
@@ -1410,7 +1456,6 @@
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = "";
-				LIBRARY_SEARCH_PATHS = /Applications/MATLAB_R2007b/bin/maci/;
 				PRODUCT_NAME = rtpdump;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 				USER_HEADER_SEARCH_PATHS = "";
@@ -1429,7 +1474,6 @@
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = "";
-				LIBRARY_SEARCH_PATHS = /Applications/MATLAB_R2007b/bin/maci/;
 				PRODUCT_NAME = rtp_loss;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 				USER_HEADER_SEARCH_PATHS = "";
@@ -1446,7 +1490,6 @@
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = "";
-				LIBRARY_SEARCH_PATHS = /Applications/MATLAB_R2007b/bin/maci/;
 				PRODUCT_NAME = rtp_loss;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 				USER_HEADER_SEARCH_PATHS = "";
@@ -1456,8 +1499,8 @@
 		43FA4B150D4EECBB001709F1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1 = "ppc i386";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
+				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -1465,8 +1508,7 @@
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = "";
-				LIBRARY_SEARCH_PATHS = /Applications/MATLAB_R2007b/bin/maci/;
-				MACOSX_DEPLOYMENT_TARGET = 10.4;
+				LIBRARY_SEARCH_PATHS = "";
 				PRODUCT_NAME = ldecod;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 				USER_HEADER_SEARCH_PATHS = ldecod/inc;
@@ -1477,14 +1519,13 @@
 		43FA4B160D4EECBB001709F1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1 = "ppc i386";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
+				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = "";
-				LIBRARY_SEARCH_PATHS = /Applications/MATLAB_R2007b/bin/maci/;
-				MACOSX_DEPLOYMENT_TARGET = 10.4;
+				LIBRARY_SEARCH_PATHS = "";
 				PREBINDING = NO;
 				PRELINK_LIBS = "";
 				PRODUCT_NAME = ldecod;

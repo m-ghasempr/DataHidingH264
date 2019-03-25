@@ -51,8 +51,8 @@ typedef struct storable_picture
   int         top_poc;
   int         bottom_poc;
   int         frame_poc;
-  unsigned    frame_num;
-  unsigned    recovery_frame;
+  unsigned int  frame_num;
+  unsigned int  recovery_frame;
 
   int         pic_num;
   int         long_term_pic_num;
@@ -62,16 +62,19 @@ typedef struct storable_picture
   int         used_for_reference;
   int         is_output;
   int         non_existing;
+  int         separate_colour_plane_flag;
 
   short       max_slice_id;
 
   int         size_x, size_y, size_x_cr, size_y_cr;
   int         size_x_m1, size_y_m1, size_x_cr_m1, size_y_cr_m1;
-  int         chroma_vector_adjustment;
   int         coded_frame;
   int         mb_aff_frame_flag;
   unsigned    PicWidthInMbs;
   unsigned    PicSizeInMbs;
+  int         iLumaPadY, iLumaPadX;
+  int         iChromaPadY, iChromaPadX;
+
 
   imgpel **     imgY;         //!< Y picture component
   imgpel ***    imgUV;        //!< U and V picture components
@@ -209,9 +212,9 @@ extern void              init_dpb(VideoParameters *p_Vid, DecodedPictureBuffer *
 extern void              re_init_dpb(VideoParameters *p_Vid, DecodedPictureBuffer *p_Dpb);
 extern void              free_dpb(DecodedPictureBuffer *p_Dpb);
 extern FrameStore*       alloc_frame_store(void);
-extern void              free_frame_store(VideoParameters *p_Vid, FrameStore* f);
+extern void              free_frame_store (FrameStore* f);
 extern StorablePicture*  alloc_storable_picture(VideoParameters *p_Vid, PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
-extern void              free_storable_picture (VideoParameters *p_Vid, StorablePicture* p);
+extern void              free_storable_picture (StorablePicture* p);
 extern void              store_picture_in_dpb(DecodedPictureBuffer *p_Dpb, StorablePicture* p);
 extern StorablePicture*  get_short_term_pic (DecodedPictureBuffer *p_Dpb, int picNum);
 extern StorablePicture*  get_long_term_pic  (DecodedPictureBuffer *p_Dpb, int LongtermPicNum);

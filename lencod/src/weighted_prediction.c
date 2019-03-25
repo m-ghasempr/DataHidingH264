@@ -66,8 +66,8 @@ void InitWP(VideoParameters *p_Vid, InputParameters *p_Inp, int force_wp_method)
 void ResetWP(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   short default_weights[3];
-  int luma_log_weight_denom   = 5;
-  int chroma_log_weight_denom = 5;
+  short luma_log_weight_denom   = 5;
+  short chroma_log_weight_denom = 5;
   int cur_slice, clist, n;
 
   default_weights[0] = 1 << luma_log_weight_denom;

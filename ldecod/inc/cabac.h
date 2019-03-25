@@ -35,13 +35,13 @@ extern void readB8_typeInfo_CABAC_p_slice   (Macroblock *currMB, SyntaxElement *
 extern void readB8_typeInfo_CABAC_b_slice   (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readIntraPredMode_CABAC         (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readRefFrame_CABAC              (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
-extern void readMVD_CABAC                   (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
-extern void readCBP_CABAC                   (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void read_MVD_CABAC                  (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void read_CBP_CABAC                  (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readRunLevel_CABAC              (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
-extern void readDquant_CABAC                (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void read_dQuant_CABAC               (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readCIPredMode_CABAC            (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
-extern void readMB_skip_flagInfo_CABAC_p_slice (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
-extern void readMB_skip_flagInfo_CABAC_b_slice (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void read_skip_flag_CABAC_p_slice    (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void read_skip_flag_CABAC_b_slice    (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readFieldModeInfo_CABAC         (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readMB_transform_size_flag_CABAC(Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 

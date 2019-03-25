@@ -413,7 +413,8 @@ typedef struct macroblock
   distblk              min_rdcost;
   distblk              min_dcost;
   distblk              min_rate;
-
+  int                  min_bits;
+  
   short               best_mode;
   short               best_i16offset;
   char                best_i16mode;
@@ -1351,12 +1352,12 @@ typedef struct video_par
   void (*OneComponentChromaPrediction4x4)   (Macroblock *currMB, imgpel* , int , int , MotionVector ** , struct storable_picture *listX, int );
   
   // deblocking
-  void (*GetStrengthVer)    (byte Strength[16], Macroblock *MbQ, int dir,int edge, int mvlimit);
-  void (*GetStrengthHor)    (byte Strength[16], Macroblock *MbQ, int dir,int edge, int mvlimit);
-  void (*EdgeLoopLumaHor)   (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int width);
-  void (*EdgeLoopLumaVer)   (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int width);
-  void (*EdgeLoopChromaVer)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int width, int uv);
-  void (*EdgeLoopChromaHor)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int width, int uv);
+  void (*GetStrengthVer)    (byte Strength[16], Macroblock *MbQ, int edge, int mvlimit);
+  void (*GetStrengthHor)    (byte Strength[16], Macroblock *MbQ, int edge, int mvlimit);
+  void (*EdgeLoopLumaHor)   (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width);
+  void (*EdgeLoopLumaVer)   (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width);
+  void (*EdgeLoopChromaVer)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width, int uv);
+  void (*EdgeLoopChromaHor)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width, int uv);
 
   // We should move these at the slice level at some point.
   void (*EstimateWPBSlice) (struct slice *currSlice);

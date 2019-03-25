@@ -80,8 +80,6 @@ extern int  get_mem2DpelWithPad(imgpel ***array2D, int dim0, int dim1, int iPadY
 extern int  get_mem3Dpel(imgpel ****array3D, int frames, int rows, int columns);
 extern int  get_mem3DpelWithPad(imgpel ****array3D, int dim0, int dim1, int dim2, int iPadY, int iPadX);
 extern int  get_mem3DpelWithPadSeparately(imgpel ****array3D, int dim0, int dim1, int dim2, int iPadY, int iPadX);
-extern int  realloc_mem3DpelFrom5DpelWithPad(imgpel *****array5D, int dim3, int dim4, int iOldPadY, int iOldPadX, 
-                                     imgpel ****array3D, int dim0, int dim1, int dim2, int iNewPadY, int iNewPadX);
 extern int  get_mem4Dpel(imgpel *****array4D, int sub_x, int sub_y, int rows, int columns);
 extern int  get_mem4DpelWithPad(imgpel *****array4D, int sub_x, int sub_y, int rows, int columns, int iPadY, int iPadX);
 extern int  get_mem4DpelWithPadSeparately(imgpel *****array4D, int dim0, int dim1, int dim2, int dim3, int iPadY, int iPadX);

@@ -194,10 +194,11 @@ void ProfileCheck(InputParameters *p_Inp)
      (p_Inp->ProfileIDC != FREXT_Hi444 ) &&
      (p_Inp->ProfileIDC != FREXT_CAVLC444 ))
   {
-    snprintf(errortext, ET_SIZE, "Profile must be in\n\n  66 (Baseline),\n  77 (Main),\n  88 (Extended),\n 100 (High),\n 110 (High 10 or High 10 Intra)\n"
 #if (MVC_EXTENSION_ENABLE)
+    snprintf(errortext, ET_SIZE, "Profile must be in\n\n  66 (Baseline),\n  77 (Main),\n  88 (Extended),\n 100 (High),\n 110 (High 10 or High 10 Intra)\n"
       " 122 (High 4:2:2 or High 4:2:2 Intra),\n 244 (High 4:4:4 predictive or High 4:4:4 Intra),\n  44 (CAVLC 4:4:4 Intra)\n 118 (MVC profile)\n");
 #else
+    snprintf(errortext, ET_SIZE, "Profile must be in\n\n  66 (Baseline),\n  77 (Main),\n  88 (Extended),\n 100 (High),\n 110 (High 10 or High 10 Intra)\n"
       " 122 (High 4:2:2 or High 4:2:2 Intra),\n 244 (High 4:4:4 predictive or High 4:4:4 Intra),\n  44 (CAVLC 4:4:4 Intra)\n");
 #endif
     error (errortext, 500);
@@ -211,9 +212,9 @@ void ProfileCheck(InputParameters *p_Inp)
 
   if (p_Inp->redundant_pic_flag)
   {
-    if (p_Inp->ProfileIDC != BASELINE)
+    if ((p_Inp->ProfileIDC != BASELINE) && (p_Inp->ProfileIDC != EXTENDED))
     {
-      snprintf(errortext, ET_SIZE, "Redundant pictures are only allowed in Baseline profile (ProfileIDC = 66).");
+      snprintf(errortext, ET_SIZE, "Redundant pictures are only allowed in Baseline (ProfileIDC = 66) and Extended (ProfileIDC = 88) profiles.");
       error (errortext, 500);
     }
   }

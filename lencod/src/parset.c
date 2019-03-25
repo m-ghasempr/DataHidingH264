@@ -261,7 +261,6 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps,  //!< Sequence
                       (IdentifyProfile(p_Inp)==FREXT_CAVLC444)
 #if (MVC_EXTENSION_ENABLE)
                       || (IdentifyProfile(p_Inp)==MULTIVIEW_HIGH)
-                      || (IdentifyProfile(p_Inp)==MULTIVIEW_FIELDHIGH)
                       || (IdentifyProfile(p_Inp)==STEREO_HIGH)
 #endif
                       );
@@ -433,7 +432,6 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
                       (IdentifyProfile(p_Inp)==FREXT_CAVLC444)
 #if (MVC_EXTENSION_ENABLE)
                       || (IdentifyProfile(p_Inp)==MULTIVIEW_HIGH)
-                      || (IdentifyProfile(p_Inp)==MULTIVIEW_FIELDHIGH)
                       || (IdentifyProfile(p_Inp)==STEREO_HIGH)
 #endif
                       );
@@ -1260,6 +1258,84 @@ int WriteHRDParameters(seq_parameter_set_rbsp_t *sps, Bitstream *bitstream)
 }
 
 /*!
+ ************************************************************************
+ * \brief
+ *    Returns the size of the dpb depending on level and picture size
+ *
+ *
+ ************************************************************************
+ */
+static int getMaxDpbSize(seq_parameter_set_rbsp_t *active_sps)
+{
+  int pic_size = (active_sps->pic_width_in_mbs_minus1 + 1) * (active_sps->pic_height_in_map_units_minus1 + 1) * (active_sps->frame_mbs_only_flag?1:2) * 384;
+
+  int size = 0;
+
+  switch (active_sps->level_idc)
+  {
+  case 9:
+    size = 152064;
+    break;
+  case 10:
+    size = 152064;
+    break;
+  case 11:
+    if (!IS_FREXT_PROFILE(active_sps->profile_idc) && (active_sps->constrained_set3_flag == 1))
+      size = 152064;
+    else
+      size = 345600;
+    break;
+  case 12:
+    size = 912384;
+    break;
+  case 13:
+    size = 912384;
+    break;
+  case 20:
+    size = 912384;
+    break;
+  case 21:
+    size = 1824768;
+    break;
+  case 22:
+    size = 3110400;
+    break;
+  case 30:
+    size = 3110400;
+    break;
+  case 31:
+    size = 6912000;
+    break;
+  case 32:
+    size = 7864320;
+    break;
+  case 40:
+    size = 12582912;
+    break;
+  case 41:
+    size = 12582912;
+    break;
+  case 42:
+    size = 13369344;
+    break;
+  case 50:
+    size = 42393600;
+    break;
+  case 51:
+    size = 70778880;
+    break;
+  default:
+    error ("undefined level", 500);
+    break;
+  }
+
+  size /= pic_size;
+  size = imin( size, 16);
+
+  return size;
+}
+
+/*!
  *************************************************************************************
  * \brief
  *    void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps, InputParameters *p_Inp)
@@ -1340,9 +1416,9 @@ void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps, InputParameters *p_Inp
   vui->max_bytes_per_pic_denom                 = (unsigned int) iVui->max_bytes_per_pic_denom;
   vui->max_bits_per_mb_denom                   = (unsigned int) iVui->max_bits_per_mb_denom;
   vui->log2_max_mv_length_horizontal           = (unsigned int) iVui->log2_max_mv_length_horizontal;
-  vui->log2_max_mv_length_vertical             = (unsigned int) iVui->log2_max_mv_length_vertical;
-  vui->num_reorder_frames                      = (unsigned int) iVui->num_reorder_frames;
-  vui->max_dec_frame_buffering                 = (unsigned int) iVui->max_dec_frame_buffering;
+  vui->log2_max_mv_length_vertical             = (unsigned int) iVui->log2_max_mv_length_vertical;  
+  vui->max_dec_frame_buffering                 = (unsigned int) imin( iVui->max_dec_frame_buffering, getMaxDpbSize(sps) );
+  vui->num_reorder_frames                      = (unsigned int) imin( iVui->num_reorder_frames, (int)vui->max_dec_frame_buffering );
   
   // special case to signal the RGB format
   if (p_Inp->output.color_model != CM_YUV && p_Inp->output.yuv_format == YUV444)

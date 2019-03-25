@@ -535,7 +535,7 @@ static void pixMeanInterpolateBlock( VideoParameters *p_Vid, imgpel *src[], imgp
       }
 
       if ( srcCounter > 0 )
-        block[ k + column ] = (byte)(tmp/srcCounter);
+        block[ k + column ] = (imgpel)(tmp/srcCounter);
       else
         block[ k + column ] = (imgpel) (blockSize == 8 ? p_Vid->dc_pred_value_comp[1] : p_Vid->dc_pred_value_comp[0]);
     }

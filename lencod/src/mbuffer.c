@@ -34,6 +34,7 @@ static void get_smallest_poc             (DecodedPictureBuffer *p_Dpb, int *poc,
 static void gen_field_ref_ids            (StorablePicture *p);
 static int  is_used_for_reference        (FrameStore* fs);
 static int  remove_unused_frame_from_dpb (DecodedPictureBuffer *p_Dpb);
+static int  flush_unused_frame_from_dpb  (DecodedPictureBuffer *p_Dpb);
 static int  is_short_term_reference      (FrameStore* fs);
 static int  is_long_term_reference       (FrameStore* fs);
 
@@ -189,6 +190,7 @@ int getDpbSize(seq_parameter_set_rbsp_t *active_sps)
  */
 void check_num_ref(DecodedPictureBuffer *p_Dpb)
 {
+  //printf("%d  %d  %d\n", p_Dpb->ltref_frames_in_buffer, p_Dpb->ref_frames_in_buffer, p_Dpb->num_ref_frames);
   if ((int)(p_Dpb->ltref_frames_in_buffer +  p_Dpb->ref_frames_in_buffer ) > (imax(1, p_Dpb->num_ref_frames)))
   {
     error ("Max. number of reference frames exceeded. Invalid stream.", 500);
@@ -1568,7 +1570,7 @@ void init_lists_b_slice(Slice *currSlice)
       for (i=0; i<p_Dpb->ref_frames_in_buffer; i++)
       {
 #if (MVC_EXTENSION_ENABLE)
-        if (p_Dpb->fs_ref[i]->is_used==3 && (p_Inp->num_of_views==1 || p_Dpb->fs_ref[i]->view_id==p_Vid->view_id))
+        if (p_Dpb->fs_ref[i]->is_used && (p_Inp->num_of_views==1 || p_Dpb->fs_ref[i]->view_id==p_Vid->view_id))
 #else
         if (p_Dpb->fs_ref[i]->is_used)
 #endif
@@ -1584,7 +1586,7 @@ void init_lists_b_slice(Slice *currSlice)
       for (i=0; i<p_Dpb->ref_frames_in_buffer; i++)
       {
 #if (MVC_EXTENSION_ENABLE)
-        if (p_Dpb->fs_ref[i]->is_used==3 && (p_Inp->num_of_views==1 || p_Dpb->fs_ref[i]->view_id==p_Vid->view_id))
+        if (p_Dpb->fs_ref[i]->is_used && (p_Inp->num_of_views==1 || p_Dpb->fs_ref[i]->view_id==p_Vid->view_id))
 #else
         if (p_Dpb->fs_ref[i]->is_used)
 #endif
@@ -1680,7 +1682,7 @@ void init_lists_b_slice(Slice *currSlice)
       currSlice->listXsize[0] = (char) imin (currSlice->listXsize[0], currSlice->num_ref_idx_active[LIST_0]);
       currSlice->listXsize[1] = (char) imin (currSlice->listXsize[1], currSlice->num_ref_idx_active[LIST_1]);
       list0idx = currSlice->listXsize[0];
-      list1idx = currSlice->listXsize[1];
+      list1idx = currSlice->listXsize[1];     
       interview_pos = currSlice->structure!=BOTTOM_FIELD ? p_Dpb->used_size - 1: p_Dpb->used_size - 2; // top field is at the last position
       base_ref = currSlice->structure != BOTTOM_FIELD ? p_Dpb->fs[interview_pos]->top_field:p_Dpb->fs[interview_pos]->bottom_field;
       if (base_ref->used_for_reference || base_ref->inter_view_flag[cur_inter_view_flag])
@@ -1697,7 +1699,7 @@ void init_lists_b_slice(Slice *currSlice)
 
   // set max size
 #if (MVC_EXTENSION_ENABLE)
-  if(p_Inp->num_of_views==2 && p_Inp->MVCInterViewReorder && p_Vid->view_id == 1)
+  if(p_Inp->num_of_views == 2 && p_Inp->MVCInterViewReorder && p_Vid->view_id == 1)
   {
     currSlice->listXsize[0] = (char) imin (currSlice->listXsize[0], currSlice->num_ref_idx_active[LIST_0] + 1);
     currSlice->listXsize[1] = (char) imin (currSlice->listXsize[1], currSlice->num_ref_idx_active[LIST_1]);
@@ -2209,8 +2211,12 @@ static void mm_unmark_short_term_for_reference(DecodedPictureBuffer *p_Dpb, Stor
   int picNumX;
 
   unsigned i;
-
-  picNumX = get_pic_num_x(p, difference_of_pic_nums_minus1);
+#if MVC_EXTENSION_ENABLE
+  if(p_Dpb->p_Vid->active_sps->profile_idc >=MULTIVIEW_HIGH)
+    picNumX = get_pic_num_x(p, (difference_of_pic_nums_minus1+1)*2-1);
+  else
+#endif
+   picNumX = get_pic_num_x(p, difference_of_pic_nums_minus1);
 
   for (i=0; i<p_Dpb->ref_frames_in_buffer; i++)
   {
@@ -3389,6 +3395,28 @@ static void get_smallest_poc(DecodedPictureBuffer *p_Dpb, int *poc,int * pos)
  *    Remove a picture from DPB which is no longer needed.
  ************************************************************************
  */
+static int flush_unused_frame_from_dpb(DecodedPictureBuffer *p_Dpb)
+{
+  unsigned i;
+
+  // check for frames that were already output and no longer used for reference
+  for (i = 0; i < p_Dpb->used_size; i++)
+  {
+    if (p_Dpb->fs[i]->is_output && (!is_used_for_reference(p_Dpb->fs[i])))
+    {
+      remove_frame_from_dpb(p_Dpb, i);
+      return 1;
+    }
+  }
+  return 0;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Remove a picture from DPB which is no longer needed.
+ ************************************************************************
+ */
 static int remove_unused_frame_from_dpb(DecodedPictureBuffer *p_Dpb)
 {
   unsigned i;
@@ -3490,7 +3518,7 @@ void flush_dpb(DecodedPictureBuffer *p_Dpb, FrameFormat *output)
     unmark_for_reference (p_Dpb->fs[i]);
   }
 
-  while (remove_unused_frame_from_dpb(p_Dpb)) ;
+  while (flush_unused_frame_from_dpb(p_Dpb)) ;
 
   // output frames in POC order
   while (p_Dpb->used_size)
@@ -3594,11 +3622,13 @@ void dpb_split_field(VideoParameters *p_Vid, FrameStore *fs)
 
     frame->top_field    = fs->top_field;
     frame->bottom_field = fs->bottom_field;
-
+    frame->frame = frame;
     fs->top_field->bottom_field = fs->bottom_field;
     fs->top_field->frame        = fs->frame;
+    fs->top_field->top_field = fs->top_field;
     fs->bottom_field->top_field = fs->top_field;
     fs->bottom_field->frame     = frame;
+    fs->bottom_field->bottom_field = fs->bottom_field;
 
     fs->top_field->chroma_format_idc = fs->bottom_field->chroma_format_idc = frame->chroma_format_idc;
     fs->top_field->chroma_mask_mv_x  = fs->bottom_field->chroma_mask_mv_x  = frame->chroma_mask_mv_x;
@@ -3613,6 +3643,7 @@ void dpb_split_field(VideoParameters *p_Vid, FrameStore *fs)
     fs->bottom_field=NULL;
     frame->top_field=NULL;
     frame->bottom_field=NULL;
+    frame->frame = frame;
   }
 
 
@@ -3775,6 +3806,7 @@ void dpb_combine_field_yuv(VideoParameters *p_Vid, FrameStore *fs)
 
   fs->frame->top_field    = fs->top_field;
   fs->frame->bottom_field = fs->bottom_field;
+  fs->frame->frame = fs->frame;
 
   fs->frame->coded_frame = 0;
 
@@ -3794,6 +3826,10 @@ void dpb_combine_field_yuv(VideoParameters *p_Vid, FrameStore *fs)
   }
 
   fs->top_field->frame = fs->bottom_field->frame = fs->frame;
+  fs->top_field->top_field = fs->top_field;
+  fs->top_field->bottom_field = fs->bottom_field;
+  fs->bottom_field->top_field = fs->top_field;
+  fs->bottom_field->bottom_field = fs->bottom_field;
 }
 
 
@@ -3822,6 +3858,7 @@ void dpb_combine_field(VideoParameters *p_Vid, FrameStore *fs)
       UnifiedOneForthPix(p_Vid, fs->frame);
     }
   }
+
   //! Generate Frame parameters from field information.
   for (j=0 ; j<fs->top_field->size_y >> 2 ; j++)
   {

@@ -74,9 +74,9 @@ static void weighted_mc_prediction(imgpel **mb_pred,
                                    int hor_block_size, 
                                    int ioff,
                                    imgpel **block, 
-                                   short wp_scale,
-                                   short wp_offset,
-                                   short weight_denom,
+                                   int wp_scale,
+                                   int wp_offset,
+                                   int weight_denom,
                                    int color_clip)
 {
   int ii, jj;
@@ -134,9 +134,9 @@ static void bi_prediction(imgpel **mb_pred,
  ************************************************************************
  */
 static void weighted_bi_prediction(imgpel *mb_pred, imgpel *block_l0, imgpel *block_l1, int ver_block_size, int hor_block_size, 
-                                   short wp_scale_l0, short wp_scale_l1, short wp_offset, short weight_denom, int color_clip)
+                                   int wp_scale_l0, int wp_scale_l1, int wp_offset, int weight_denom, int color_clip)
 {
-   int ii, jj, result;
+  int ii, jj, result;
   int row_inc = MB_BLOCK_SIZE - hor_block_size;
 
   for(jj = 0; jj < ver_block_size; jj++)
@@ -893,7 +893,7 @@ static void get_luma_31(imgpel **block, imgpel **cur_imgY, int ver_block_size, i
  */ 
 
 void get_block_luma(StorablePicture *curr_ref, int x_pos, int y_pos, int hor_block_size, int ver_block_size, imgpel **block,
-                    int shift_x,int maxold_x,int maxold_y,int **tmp_res,int max_imgpel_value,imgpel no_ref_value,Macroblock *currMB)
+                    int shift_x, int maxold_x, int maxold_y, int **tmp_res, int max_imgpel_value, imgpel no_ref_value, Macroblock *currMB)
 {
   if (curr_ref->no_ref) {
     printf("list[ref_frame] is equal to 'no reference picture' before RAP\n");
@@ -975,7 +975,7 @@ void get_block_luma(StorablePicture *curr_ref, int x_pos, int y_pos, int hor_blo
  *    Chroma (0,X)
  ************************************************************************
  */ 
-static void get_chroma_0X(imgpel *block, imgpel *cur_img, int span, int ver_block_size, int hor_block_size, short w00, short w01, short total_scale)
+static void get_chroma_0X(imgpel *block, imgpel *cur_img, int span, int ver_block_size, int hor_block_size, int w00, int w01, int total_scale)
 {
   imgpel *cur_row = cur_img;
   imgpel *nxt_row = cur_img + span;
@@ -1008,7 +1008,7 @@ static void get_chroma_0X(imgpel *block, imgpel *cur_img, int span, int ver_bloc
  *    Chroma (X,0)
  ************************************************************************
  */ 
-static void get_chroma_X0(imgpel *block, imgpel *cur_img, int span, int ver_block_size, int hor_block_size, short w00, short w10, short total_scale)
+static void get_chroma_X0(imgpel *block, imgpel *cur_img, int span, int ver_block_size, int hor_block_size, int w00, int w10, int total_scale)
 {
   imgpel *cur_row = cur_img;
  
@@ -1039,7 +1039,7 @@ static void get_chroma_X0(imgpel *block, imgpel *cur_img, int span, int ver_bloc
  *    Chroma (X,X)
  ************************************************************************
  */ 
-static void get_chroma_XX(imgpel *block, imgpel *cur_img, int span, int ver_block_size, int hor_block_size, short w00, short w01, short w10, short w11, short total_scale)
+static void get_chroma_XX(imgpel *block, imgpel *cur_img, int span, int ver_block_size, int hor_block_size, int w00, int w01, int w10, int w11, int total_scale)
 { 
   imgpel *cur_row = cur_img;
   imgpel *nxt_row = cur_img + span;
@@ -1068,8 +1068,9 @@ static void get_chroma_XX(imgpel *block, imgpel *cur_img, int span, int ver_bloc
   }
 }
 
-static void get_block_chroma(StorablePicture *curr_ref,int x_pos,int y_pos,int subpel_x,int subpel_y,int maxold_x,int maxold_y,int hor_block_size,int vert_block_size,int shiftpel_x,int shiftpel_y,
-			                       imgpel *block1,imgpel *block2,short total_scale,imgpel no_ref_value,VideoParameters *p_Vid)
+static void get_block_chroma(StorablePicture *curr_ref, int x_pos, int y_pos, int subpel_x, int subpel_y, int maxold_x, int maxold_y,
+                             int hor_block_size, int vert_block_size, int shiftpel_x, int shiftpel_y,
+			                       imgpel *block1, imgpel *block2, int total_scale, imgpel no_ref_value, VideoParameters *p_Vid)
 {
   imgpel *img1,*img2;
   short dx,dy;
@@ -1086,7 +1087,7 @@ static void get_block_chroma(StorablePicture *curr_ref,int x_pos,int y_pos,int s
     x_pos = x_pos >> shiftpel_x;
     y_pos = y_pos >> shiftpel_y;
     //clip MV;
-    assert(vert_block_size <=8 && hor_block_size<=16);
+    assert(vert_block_size <=p_Vid->iChromaPadY && hor_block_size<=p_Vid->iChromaPadX);
     x_pos = iClip3(-p_Vid->iChromaPadX, maxold_x, x_pos); //16
     y_pos = iClip3(-p_Vid->iChromaPadY, maxold_y, y_pos); //8
     img1 = &curr_ref->imgUV[0][y_pos][x_pos];
@@ -1332,7 +1333,7 @@ static inline int check_vert_mv(int llimit, int vec1_y,int rlimit)
     return 0;
 }
 
-static void perform_mc_single_wp(Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int pred_dir, int i, int j, int block_size_x, int block_size_y, int curr_mb_field)
+static void perform_mc_single_wp(Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int pred_dir, int i, int j, int block_size_x, int block_size_y)
 {
   VideoParameters *p_Vid = currMB->p_Vid;  
   Slice *currSlice = currMB->p_Slice;
@@ -1376,7 +1377,7 @@ static void perform_mc_single_wp(Macroblock *currMB, ColorPlane pl, StorablePict
 
   {
     int alpha_l0, wp_offset;
-    if (curr_mb_field && ((p_Vid->active_pps->weighted_pred_flag&&(type==P_SLICE|| type == SP_SLICE))||(p_Vid->active_pps->weighted_bipred_idc==1 && (type==B_SLICE))))
+    if (currMB->mb_field && ((p_Vid->active_pps->weighted_pred_flag&&(type==P_SLICE|| type == SP_SLICE))||(p_Vid->active_pps->weighted_bipred_idc==1 && (type==B_SLICE))))
       ref_idx_wp >>=1;
     alpha_l0  = currSlice->wp_weight[pred_dir][ref_idx_wp][0];
     wp_offset = currSlice->wp_offset[pred_dir][ref_idx_wp][0];
@@ -1386,7 +1387,7 @@ static void perform_mc_single_wp(Macroblock *currMB, ColorPlane pl, StorablePict
   if ((chroma_format_idc != YUV400) && (chroma_format_idc != YUV444) ) 
   {
     int ioff_cr,joff_cr,block_size_x_cr,block_size_y_cr;
-    int vec1_y_cr = vec1_y + ((active_sps->chroma_format_idc == 1)? list->chroma_vector_adjustment : 0);
+    int vec1_y_cr = vec1_y + ((active_sps->chroma_format_idc == 1)? currSlice->chroma_vector_adjustment[list_offset + pred_dir][ref_idx] : 0);
     int total_scale = p_Vid->total_scale;
     int subpel_x = p_Vid->subpel_x;
     int subpel_y =  p_Vid->subpel_y;
@@ -1423,7 +1424,7 @@ static void perform_mc_single_wp(Macroblock *currMB, ColorPlane pl, StorablePict
 }
 
 
-static void perform_mc_single(Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int pred_dir, int i, int j, int block_size_x, int block_size_y, int curr_mb_field)
+static void perform_mc_single(Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int pred_dir, int i, int j, int block_size_x, int block_size_y)
 {
   VideoParameters *p_Vid = currMB->p_Vid;  
   Slice *currSlice = currMB->p_Slice;
@@ -1468,7 +1469,7 @@ static void perform_mc_single(Macroblock *currMB, ColorPlane pl, StorablePicture
   if ((chroma_format_idc != YUV400) && (chroma_format_idc != YUV444) ) 
   {
     int ioff_cr,joff_cr,block_size_x_cr,block_size_y_cr;
-    int vec1_y_cr = vec1_y + ((active_sps->chroma_format_idc == 1)? list->chroma_vector_adjustment : 0);
+    int vec1_y_cr = vec1_y + ((active_sps->chroma_format_idc == 1)? currSlice->chroma_vector_adjustment[list_offset + pred_dir][ref_idx] : 0);
     int total_scale = p_Vid->total_scale;
     int subpel_x = p_Vid->subpel_x;
     int subpel_y =  p_Vid->subpel_y;
@@ -1503,13 +1504,13 @@ static void perform_mc_single(Macroblock *currMB, ColorPlane pl, StorablePicture
   }
 }
 
-static void perform_mc_bi_wp(Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int i, int j, int block_size_x, int block_size_y, int curr_mb_field)
+static void perform_mc_bi_wp(Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int i, int j, int block_size_x, int block_size_y)
 {
   static const int mv_mul = 16;
   int  vec1_x, vec1_y, vec2_x, vec2_y;
   VideoParameters *p_Vid = currMB->p_Vid;    
   Slice *currSlice = currMB->p_Slice;
-  int type = currSlice->slice_type;
+
   int weighted_bipred_idc = p_Vid->active_pps->weighted_bipred_idc;
   int block_y_aff = currMB->block_y_aff;
   int i4 = currMB->block_x + i;
@@ -1522,9 +1523,10 @@ static void perform_mc_bi_wp(Macroblock *currMB, ColorPlane pl, StorablePicture 
   MotionVector *l0_mv_array = &mv_info->mv[LIST_0];
   MotionVector *l1_mv_array = &mv_info->mv[LIST_1];
   short l0_refframe = mv_info->ref_idx[LIST_0];
-  short l0_ref_idx  = l0_refframe;
   short l1_refframe = mv_info->ref_idx[LIST_1];
-  short l1_ref_idx  = l1_refframe;
+  int l0_ref_idx  = (currMB->mb_field && weighted_bipred_idc == 1) ? l0_refframe >> 1: l0_refframe;
+  int l1_ref_idx  = (currMB->mb_field && weighted_bipred_idc == 1) ? l1_refframe >> 1: l1_refframe;
+
   
   /// WP Parameters
   int wt_list_offset = (weighted_bipred_idc==2)? list_offset : 0;
@@ -1578,11 +1580,6 @@ static void perform_mc_bi_wp(Macroblock *currMB, ColorPlane pl, StorablePicture 
   else
     get_block_luma(list1, vec2_x, vec2_y, block_size_x, block_size_y, tmp_block_l1,shift_x,maxold_x,maxold_y,tmp_res,max_imgpel_value,no_ref_value, currMB);
 
-  if (((p_Vid->active_pps->weighted_pred_flag&&(type==P_SLICE|| type == SP_SLICE))|| (weighted_bipred_idc==1 && (type==B_SLICE))) && curr_mb_field)
-  {
-    l0_ref_idx >>=1;
-    l1_ref_idx >>=1;
-  }
 
   wp_offset = ((offset0[0] + offset1[0] + 1) >>1);
   weighted_bi_prediction(&currSlice->mb_pred[pl][joff][ioff], block0, block1, block_size_y, block_size_x, weight0[0], weight1[0], wp_offset, currSlice->luma_log2_weight_denom + 1, max_imgpel_value);
@@ -1622,8 +1619,8 @@ static void perform_mc_bi_wp(Macroblock *currMB, ColorPlane pl, StorablePicture 
     }
     if (chroma_format_idc == 1) 
     {
-      vec1_y_cr = vec1_y + list0->chroma_vector_adjustment;
-      vec2_y_cr = vec2_y + list1->chroma_vector_adjustment;
+      vec1_y_cr = vec1_y + currSlice->chroma_vector_adjustment[LIST_0 + list_offset][l0_refframe]; 
+      vec2_y_cr = vec2_y + currSlice->chroma_vector_adjustment[LIST_1 + list_offset][l1_refframe]; 
     }
     else 
     {
@@ -1641,7 +1638,7 @@ static void perform_mc_bi_wp(Macroblock *currMB, ColorPlane pl, StorablePicture 
   }    
 }
 
-static void perform_mc_bi(Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int i, int j, int block_size_x, int block_size_y, int curr_mb_field)
+static void perform_mc_bi(Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int i, int j, int block_size_x, int block_size_y)
 {
   static const int mv_mul = 16;
   int vec1_x=0, vec1_y=0, vec2_x=0, vec2_y=0;
@@ -1732,8 +1729,8 @@ static void perform_mc_bi(Macroblock *currMB, ColorPlane pl, StorablePicture *de
       block_size_y_cr = block_size_y >> 1;
     }
     if (chroma_format_idc == 1) {
-      vec1_y_cr = vec1_y + list0->chroma_vector_adjustment;
-      vec2_y_cr = vec2_y + list1->chroma_vector_adjustment;
+      vec1_y_cr = vec1_y + currSlice->chroma_vector_adjustment[LIST_0 + list_offset][l0_refframe]; 
+      vec2_y_cr = vec2_y + currSlice->chroma_vector_adjustment[LIST_1 + list_offset][l1_refframe]; 
     }
     else {
       vec1_y_cr = vec1_y;
@@ -1748,22 +1745,24 @@ static void perform_mc_bi(Macroblock *currMB, ColorPlane pl, StorablePicture *de
 }
 
 
-void perform_mc(Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int pred_dir, int i, int j, int block_size_x, int block_size_y, int curr_mb_field)
+void perform_mc(Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int pred_dir, int i, int j, int block_size_x, int block_size_y)
 {
   Slice *currSlice = currMB->p_Slice;
   assert (pred_dir<=2);
   if (pred_dir != 2)
   {
     if (currSlice->weighted_pred_flag)
-      perform_mc_single_wp(currMB, pl, dec_picture, pred_dir, i, j, block_size_x, block_size_y, curr_mb_field);
+      perform_mc_single_wp(currMB, pl, dec_picture, pred_dir, i, j, block_size_x, block_size_y);
     else
-      perform_mc_single(currMB, pl, dec_picture, pred_dir, i, j, block_size_x, block_size_y, curr_mb_field);
+      perform_mc_single(currMB, pl, dec_picture, pred_dir, i, j, block_size_x, block_size_y);
   }
   else
   {
     if (currSlice->weighted_bipred_idc)
-      perform_mc_bi_wp(currMB, pl, dec_picture, i, j, block_size_x, block_size_y, curr_mb_field);
+      perform_mc_bi_wp(currMB, pl, dec_picture, i, j, block_size_x, block_size_y);
     else
-      perform_mc_bi(currMB, pl, dec_picture, i, j, block_size_x, block_size_y, curr_mb_field);
+      perform_mc_bi(currMB, pl, dec_picture, i, j, block_size_x, block_size_y);
   }
 }
+
+

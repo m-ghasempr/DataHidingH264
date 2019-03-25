@@ -159,18 +159,18 @@ int arideco_bits_read(DecodingEnvironmentPtr dep)
 */
 unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct )
 {  
-  unsigned int bit   = bi_ct->MPS;
+  unsigned int bit    = bi_ct->MPS;
   unsigned int *value = &dep->Dvalue;
   unsigned int *range = &dep->Drange;  
-  unsigned int state = bi_ct->state;
-  unsigned int rLPS  = rLPS_table_64x4[state][(*range>>6) & 0x03];
+  uint16       *state = &bi_ct->state;
+  unsigned int rLPS   = rLPS_table_64x4[*state][(*range>>6) & 0x03];
   int *DbitsLeft = &dep->DbitsLeft;
 
   *range -= rLPS;
 
   if(*value < (*range << *DbitsLeft))   //MPS
   {
-    bi_ct->state = AC_next_state_MPS_64[state]; // next state 
+    *state = AC_next_state_MPS_64[*state]; // next state 
 
     if( *range >= QUARTER )
     {
@@ -190,15 +190,15 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
     (*DbitsLeft) -= renorm;
 
     bit ^= 0x01;
-    if (!state)          // switch meaning of MPS if necessary 
+    if (!(*state))          // switch meaning of MPS if necessary 
       bi_ct->MPS ^= 0x01; 
 
-    bi_ct->state = AC_next_state_LPS_64[state]; // next state 
+    *state = AC_next_state_LPS_64[*state]; // next state 
   }
 
   if( *DbitsLeft > 0 )
   {     
-    return(bit);
+    return (bit);
   } 
   else
   {
@@ -207,7 +207,7 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
     // contains 2 more bytes than actual bitstream
     (*DbitsLeft) += 16;
 
-    return(bit);
+    return (bit);
   }
 }
 

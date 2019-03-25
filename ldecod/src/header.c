@@ -180,14 +180,18 @@ int RestOfSliceHeader(Slice *currSlice)
     else
       currSlice->delta_pic_order_cnt_bottom = 0;
   }
-  if( active_sps->pic_order_cnt_type == 1 && !active_sps->delta_pic_order_always_zero_flag )
+  
+  if( active_sps->pic_order_cnt_type == 1)
   {
-    currSlice->delta_pic_order_cnt[ 0 ] = se_v("SH: delta_pic_order_cnt[0]", currStream);
-    if( p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag  ==  1  &&  !currSlice->field_pic_flag )
-      currSlice->delta_pic_order_cnt[ 1 ] = se_v("SH: delta_pic_order_cnt[1]", currStream);
-  }else
-  {
-    if (active_sps->pic_order_cnt_type == 1)
+    if ( !active_sps->delta_pic_order_always_zero_flag )
+    {
+      currSlice->delta_pic_order_cnt[ 0 ] = se_v("SH: delta_pic_order_cnt[0]", currStream);
+      if( p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag  ==  1  &&  !currSlice->field_pic_flag )
+        currSlice->delta_pic_order_cnt[ 1 ] = se_v("SH: delta_pic_order_cnt[1]", currStream);
+      else
+        currSlice->delta_pic_order_cnt[ 1 ] = 0;  // set to zero if not in stream
+    }
+    else
     {
       currSlice->delta_pic_order_cnt[ 0 ] = 0;
       currSlice->delta_pic_order_cnt[ 1 ] = 0;
@@ -235,10 +239,10 @@ int RestOfSliceHeader(Slice *currSlice)
   ref_pic_list_reordering(currSlice);
 #endif
 
-  currSlice->weighted_pred_flag = (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE) 
+  currSlice->weighted_pred_flag = (unsigned short) ((currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE) 
     ? p_Vid->active_pps->weighted_pred_flag 
-    : (currSlice->slice_type == B_SLICE && p_Vid->active_pps->weighted_bipred_idc == 1);
-  currSlice->weighted_bipred_idc = (currSlice->slice_type == B_SLICE && p_Vid->active_pps->weighted_bipred_idc > 0);
+    : (currSlice->slice_type == B_SLICE && p_Vid->active_pps->weighted_bipred_idc == 1));
+  currSlice->weighted_bipred_idc = (unsigned short) (currSlice->slice_type == B_SLICE && p_Vid->active_pps->weighted_bipred_idc > 0);
 
   if ((p_Vid->active_pps->weighted_pred_flag&&(p_Vid->type==P_SLICE|| p_Vid->type == SP_SLICE))||
       (p_Vid->active_pps->weighted_bipred_idc==1 && (p_Vid->type==B_SLICE)))
@@ -535,12 +539,12 @@ static void pred_weight_table(Slice *currSlice)
   int luma_weight_flag_l0, luma_weight_flag_l1, chroma_weight_flag_l0, chroma_weight_flag_l1;
   int i,j;
 
-  currSlice->luma_log2_weight_denom = ue_v ("SH: luma_log2_weight_denom", currStream);
+  currSlice->luma_log2_weight_denom = (unsigned short) ue_v ("SH: luma_log2_weight_denom", currStream);
   currSlice->wp_round_luma = currSlice->luma_log2_weight_denom ? 1<<(currSlice->luma_log2_weight_denom - 1): 0;
 
   if ( 0 != active_sps->chroma_format_idc)
   {
-    currSlice->chroma_log2_weight_denom = ue_v ("SH: chroma_log2_weight_denom", currStream);
+    currSlice->chroma_log2_weight_denom = (unsigned short) ue_v ("SH: chroma_log2_weight_denom", currStream);
     currSlice->wp_round_chroma = currSlice->chroma_log2_weight_denom ? 1<<(currSlice->chroma_log2_weight_denom - 1): 0;
   }
 
@@ -789,7 +793,6 @@ void decode_poc(VideoParameters *p_Vid, Slice *pSlice)
     if(pSlice->idr_flag)
     {
       p_Vid->FrameNumOffset=0;     //  first pix of IDRGOP,
-      pSlice->delta_pic_order_cnt[0]=0;                        //ignore first delta
       if(pSlice->frame_num)
         error("frame_num not equal to zero in IDR picture", -1020);
     }
@@ -940,7 +943,6 @@ int dumppoc(VideoParameters *p_Vid)
   printf ("bottom_field_pic_order_in_frame_present_flag                %d\n", (int) p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag);
   printf ("delta_pic_order_cnt[0]                %d\n", (int) p_Vid->ppSliceList[0]->delta_pic_order_cnt[0]);
   printf ("delta_pic_order_cnt[1]                %d\n", (int) p_Vid->ppSliceList[0]->delta_pic_order_cnt[1]);
-  printf ("delta_pic_order_cnt[2]                %d\n", (int) p_Vid->ppSliceList[0]->delta_pic_order_cnt[2]);
   printf ("idr_flag                              %d\n", (int) p_Vid->ppSliceList[0]->idr_flag);
   printf ("MaxFrameNum                           %d\n", (int) p_Vid->MaxFrameNum);
 
@@ -954,7 +956,7 @@ int dumppoc(VideoParameters *p_Vid)
  *  POC200301
  ************************************************************************
  */
-int picture_order(VideoParameters *p_Vid, Slice *pSlice)
+int picture_order( Slice *pSlice )
 {
   if (pSlice->field_pic_flag==0) // is a frame
     return pSlice->framepoc;

@@ -15,7 +15,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 17.0 (FRExt)
+ *     JM 17.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -106,42 +106,57 @@ void error(char *text, int code)
   exit(code);
 }
 
+static void reset_dpb( VideoParameters *p_Vid, DecodedPictureBuffer *p_Dpb )
+{
+  p_Dpb->p_Vid = p_Vid;
+  p_Dpb->init_done = 0;
+}
 /*!
  ***********************************************************************
  * \brief
- *    Allocate the Image structure
+ *    Allocate the Video Parameters structure
  * \par  Output:
- *    Image Parameters VideoParameters *p_Vid
+ *    Video Parameters VideoParameters *p_Vid
  ***********************************************************************
  */
-static void alloc_img( VideoParameters **p_Vid)
+static void alloc_video_params( VideoParameters **p_Vid)
 {
+  int i;
   if ((*p_Vid   =  (VideoParameters *) calloc(1, sizeof(VideoParameters)))==NULL) 
-    no_mem_exit("alloc_img: p_Vid");
+    no_mem_exit("alloc_video_params: p_Vid");
 
   if (((*p_Vid)->old_slice = (OldSliceParams *) calloc(1, sizeof(OldSliceParams)))==NULL) 
-    no_mem_exit("alloc_img: p_Vid->old_slice");
+    no_mem_exit("alloc_video_params: p_Vid->old_slice");
 
   if (((*p_Vid)->snr =  (SNRParameters *)calloc(1, sizeof(SNRParameters)))==NULL) 
-    no_mem_exit("alloc_img: p_Vid->snr");  
+    no_mem_exit("alloc_video_params: p_Vid->snr");  
 
-  if (((*p_Vid)->p_Dpb =  (DecodedPictureBuffer*)calloc(1, sizeof(DecodedPictureBuffer)))==NULL) 
-    no_mem_exit("alloc_img: p_Vid->p_Dpb");  
+  // Allocate legacy dpb
+  if (((*p_Vid)->p_Dpb_legacy =  (DecodedPictureBuffer*)calloc(1, sizeof(DecodedPictureBuffer)))==NULL) 
+    no_mem_exit("alloc_video_params: p_Vid->p_Dpb_legacy");  
 
-  (*p_Vid)->p_Dpb->p_Vid = (*p_Vid);
+  // Now set appropriate pointer
+  (*p_Vid)->p_Dpb = (*p_Vid)->p_Dpb_legacy;
+  reset_dpb(*p_Vid, (*p_Vid)->p_Dpb);
 
-  (*p_Vid)->p_Dpb->init_done = 0;
+  // Allocate new dpb buffer
+  for (i = 0; i < 2; i++)
+  {
+    if (((*p_Vid)->p_Dpb_layer[i] =  (DecodedPictureBuffer*)calloc(1, sizeof(DecodedPictureBuffer)))==NULL) 
+      no_mem_exit("alloc_video_params: p_Vid->p_Dpb_layer[i]");  
+    reset_dpb(*p_Vid, (*p_Vid)->p_Dpb_layer[i]);
+  }
   
   (*p_Vid)->global_init_done = 0;
 
 #if (ENABLE_OUTPUT_TONEMAPPING)  
   if (((*p_Vid)->seiToneMapping =  (ToneMappingSEI*)calloc(1, sizeof(ToneMappingSEI)))==NULL) 
-    no_mem_exit("alloc_img: (*p_Vid)->seiToneMapping");  
+    no_mem_exit("alloc_video_params: (*p_Vid)->seiToneMapping");  
 #endif
 
   if(((*p_Vid)->ppSliceList = (Slice **) calloc(MAX_NUM_DECSLICES, sizeof(Slice *))) == NULL)
   {
-    no_mem_exit("alloc_img: p_Vid->ppSliceList");
+    no_mem_exit("alloc_video_params: p_Vid->ppSliceList");
   }
   (*p_Vid)->iNumOfSlicesAllocated = MAX_NUM_DECSLICES;
   //(*p_Vid)->currentSlice = NULL;
@@ -182,7 +197,7 @@ static int alloc_decoder( DecoderParams **p_Dec)
     return -1;
   }
 
-  alloc_img(&((*p_Dec)->p_Vid));
+  alloc_video_params(&((*p_Dec)->p_Vid));
   alloc_params(&((*p_Dec)->p_Inp));
   (*p_Dec)->p_Vid->p_Inp = (*p_Dec)->p_Inp;
   (*p_Dec)->p_trace = NULL;
@@ -201,6 +216,7 @@ static int alloc_decoder( DecoderParams **p_Dec)
  */
 static void free_img( VideoParameters *p_Vid)
 {
+  int i;
   //free_mem3Dint(p_Vid->fcf    ); 
   if (p_Vid != NULL)
   {
@@ -219,11 +235,24 @@ static void free_img( VideoParameters *p_Vid)
       p_Vid->bitsfile = NULL;
     }
 
-    if (p_Vid->p_Dpb != NULL)
+    if (p_Vid->p_Dpb_legacy != NULL)
     {
-      free (p_Vid->p_Dpb);
-      p_Vid->p_Dpb = NULL;
+      free (p_Vid->p_Dpb_legacy);
+      p_Vid->p_Dpb_legacy = NULL;
     }
+
+    // Free new dpb layers
+    for (i = 0; i < 2; i++)
+    {
+      if (p_Vid->p_Dpb_layer[i] != NULL)
+      {
+        free (p_Vid->p_Dpb_layer[i]);
+        p_Vid->p_Dpb_layer[i] = NULL;
+      }
+    }
+
+    p_Vid->p_Dpb = NULL;
+
     if (p_Vid->snr != NULL)
     {
       free (p_Vid->snr);
@@ -654,8 +683,6 @@ DataPartition *AllocPartition(int n)
  *    n must be the same as for the corresponding call of AllocPartition
  ************************************************************************
  */
-
-
 void FreePartition (DataPartition *dp, int n)
 {
   int i;
@@ -693,14 +720,10 @@ Slice *malloc_slice(InputParameters *p_Inp, VideoParameters *p_Vid)
     snprintf(errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", p_Inp->FileFormat);
     error(errortext,100);
   }
-  //  p_Vid->currentSlice->rmpni_buffer=NULL;
-  //! you don't know whether we do CABAC here, hence initialize CABAC anyway
-  // if (p_Inp->symbol_mode == CABAC)
 
   // create all context models
   currSlice->mot_ctx = create_contexts_MotionInfo();
   currSlice->tex_ctx = create_contexts_TextureInfo();
-
 
   currSlice->max_part_nr = 3;  //! assume data partitioning (worst case) for the following mallocs()
   currSlice->partArr = AllocPartition(currSlice->max_part_nr);
@@ -753,7 +776,7 @@ Slice *malloc_slice(InputParameters *p_Inp, VideoParameters *p_Vid)
  *    data structures
  *
  * \par Input:
- *    Input Parameters InputParameters *p_Inp,  VideoParameters *p_Vid
+ *    Input Parameters Slice *currSlice
  ************************************************************************
  */
 static void free_slice(Slice *currSlice)
@@ -773,7 +796,7 @@ static void free_slice(Slice *currSlice)
 
   FreePartition (currSlice->partArr, 3);
 
-  if (1)
+  //if (1)
   {
     // delete all context models
     delete_contexts_MotionInfo(currSlice->mot_ctx);
@@ -807,7 +830,7 @@ static void free_slice(Slice *currSlice)
  *    void free_global_buffers()
  *
  *  \par Input:
- *    Input Parameters InputParameters *p_Inp, Image Parameters VideoParameters *p_Vid
+ *    Input Parameters VideoParameters *p_Vid
  *
  *  \par Output:
  *     Number of allocated bytes
@@ -916,7 +939,7 @@ int init_global_buffers(VideoParameters *p_Vid)
  *    int init_global_buffers()
  *
  * \par Input:
- *    Input Parameters InputParameters *p_Inp, Image Parameters VideoParameters *p_Vid
+ *    Input Parameters VideoParameters *p_Vid
  *
  * \par Output:
  *    none
@@ -978,9 +1001,6 @@ void free_global_buffers(VideoParameters *p_Vid)
     PicPos=NULL;
   }
 
-  
-  
-
   free_qp_matrices(p_Vid);
 
   p_Vid->global_init_done = 0;
@@ -994,7 +1014,7 @@ void report_stats_on_error(void)
 
 void ClearDecPicList(VideoParameters *p_Vid)
 {
-  DecodedPicList *pPic = p_Vid->pDecOuputPic, *pPrior;
+  DecodedPicList *pPic = p_Vid->pDecOuputPic, *pPrior = NULL;
   //find the head first;
   while(pPic && !pPic->bValid)
   {
@@ -1084,6 +1104,7 @@ int OpenDecoder(InputParameters *p_Inp)
     error(errortext,500);
   }
 #endif
+
   if(strlen(pDecoder->p_Inp->reffile)>0 && strcmp(pDecoder->p_Inp->reffile, "\"\""))
   {
    if ((pDecoder->p_Vid->p_ref = open(pDecoder->p_Inp->reffile, OPENFLAGS_READ))==-1)

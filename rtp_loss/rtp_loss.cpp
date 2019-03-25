@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
 
   }
 
-  while (1)
+  for (;;) 
   {
     if (4 != fread (&bufsize, 1, 4, fr))
       return 0;

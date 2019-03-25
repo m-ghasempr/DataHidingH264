@@ -364,7 +364,7 @@ typedef struct slice
   unsigned int pic_order_cnt_lsb;
   int delta_pic_order_cnt_bottom;
   // for poc mode 1.
-  int delta_pic_order_cnt[3];
+  int delta_pic_order_cnt[2];
 
   // ////////////////////////
   // for POC mode 0:
@@ -537,6 +537,7 @@ typedef struct slice
   int **siblock;
   byte **ipredmode;
   char  *intra_block;
+  char  chroma_vector_adjustment[6][16];
 } Slice;
 
 typedef struct decodedpic_t
@@ -618,13 +619,11 @@ typedef struct video_par
   //int colour_plane_id;               //!< colour_plane_id of the current coded slice
   int ChromaArrayType;
 
-
   // picture error concealment
   // concealment_head points to first node in list, concealment_end points to
   // last node in list. Initialize both to NULL, meaning no nodes in list yet
   struct concealment_node *concealment_head;
   struct concealment_node *concealment_end;
-
 
   unsigned int pre_frame_num;           //!< store the frame_num in the last decoded slice. For detecting gap in frame_num.
   int non_conforming_stream;
@@ -641,7 +640,6 @@ typedef struct video_par
   int ThisPOC;
   int PreviousFrameNumOffset;
   // /////////////////////////
-
 
   int MaxFrameNum;
 
@@ -769,7 +767,6 @@ typedef struct video_par
   struct frame_store *last_out_fs;
   int pocs_in_dpb[100];
 
-
   struct storable_picture *dec_picture;
   struct storable_picture *dec_picture_JV[MAX_PLANE];  //!< dec_picture to be used during 4:4:4 independent mode decoding
   struct storable_picture *no_reference_picture; //!< dummy storable picture for recovery point
@@ -785,7 +782,6 @@ typedef struct video_par
   struct annex_b_struct *annex_b;
   struct sBitsFile *bitsfile;
 
-
   struct frame_store *out_buffer;
 
   struct storable_picture *pending_output;
@@ -795,6 +791,9 @@ typedef struct video_par
   int BitStreamFile;
   // dpb
   struct decoded_picture_buffer *p_Dpb;
+  struct decoded_picture_buffer *p_Dpb_legacy; // This is the old JM dpb method and will be removed at some point
+  struct decoded_picture_buffer *p_Dpb_layer[2];
+
 
   // report
   char cslice_type[9];  
@@ -807,16 +806,15 @@ typedef struct video_par
   struct tone_mapping_struct_s *seiToneMapping;
 #endif
 
-
   void (*buf2img)          (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int o_size_x, int o_size_y, int symbol_size_in_bytes, int bitshift);
   void (*getNeighbour)     (Macroblock *currMB, int xN, int yN, int mb_size[2], PixelPos *pix);
   void (*get_mb_block_pos) (int mb_addr, short *x, short *y);
-  void (*GetStrengthVer)   (byte Strength[16], Macroblock *MbQ, int dir,int edge, int mvlimit, struct storable_picture *p);
-  void (*GetStrengthHor)   (byte Strength[16], Macroblock *MbQ, int dir,int edge, int mvlimit, struct storable_picture *p);
-  void (*EdgeLoopLumaVer)  (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, struct storable_picture *p);
-  void (*EdgeLoopLumaHor)  (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, struct storable_picture *p);
-  void (*EdgeLoopChromaVer)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int uv, struct storable_picture *p);
-  void (*EdgeLoopChromaHor)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int uv, struct storable_picture *p);
+  void (*GetStrengthVer)   (byte Strength[16], Macroblock *MbQ, int edge, int mvlimit, struct storable_picture *p);
+  void (*GetStrengthHor)   (byte Strength[16], Macroblock *MbQ, int edge, int mvlimit, struct storable_picture *p);
+  void (*EdgeLoopLumaVer)  (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, struct storable_picture *p);
+  void (*EdgeLoopLumaHor)  (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, struct storable_picture *p);
+  void (*EdgeLoopChromaVer)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int uv, struct storable_picture *p);
+  void (*EdgeLoopChromaHor)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int uv, struct storable_picture *p);
   void (*img2buf)          (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom, int iOutStride);
 
   DecodedPicList *pDecOuputPic;

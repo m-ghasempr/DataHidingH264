@@ -220,7 +220,7 @@ int residual_transform_quant_luma_16x16(Macroblock *currMB, ColorPlane pl)
   int   pl_off = pl<<2;
   Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currSlice->p_Vid;
-  InputParameters *p_Inp = currSlice->p_Inp;
+  //InputParameters *p_Inp = currSlice->p_Inp;
   QuantParameters *p_Quant = p_Vid->p_Quant;
 
   int*  DCLevel = currSlice->cofDC[pl][0];

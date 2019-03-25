@@ -16,7 +16,7 @@
 
 extern void calculate_frame_no(VideoParameters *p_Vid, StorablePicture *p);
 extern void find_snr          (VideoParameters *p_Vid, StorablePicture *p, int *p_ref);
-extern int  picture_order     (VideoParameters *p_Vid, Slice *pSlice);
+extern int  picture_order     ( Slice *pSlice );
 
 extern void decode_one_slice  (Slice *currSlice);
 extern int  read_new_slice    (Slice *currSlice);

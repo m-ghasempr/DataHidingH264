@@ -129,18 +129,24 @@ int Write_Filler_Data_NALU( VideoParameters *p_Vid, int num_bytes )
   int     RBSPlen = num_bytes - 1;
   int     NALUlen, len, bytes_written = 0;
   byte    rbsp[MAXRBSPSIZE];
+  byte    filler_byte = (byte)0xFF;
+  byte    trailing_byte = (byte)0x80;
   NALU_t *nalu = AllocNALU( MAXNALUSIZE );
 
   num_bytes = iClip3( 1, (MAXRBSPSIZE - 2), num_bytes );
   assert( num_bytes > 0 && num_bytes < (MAXRBSPSIZE - 1) );
 
-  while ( bytes_written < RBSPlen )
-  {
-    rbsp[ bytes_written++ ] = 0xFF;
-  }
-  rbsp[ bytes_written++ ] = 0x80; // rbsp_trailing_bits
+  num_bytes = imax( 2, num_bytes ); // one byte for the NAL header and one for the rbsp trailing byte
 
-  assert( num_bytes == bytes_written );
+  if ( RBSPlen > 1 )
+  {
+    while ( bytes_written < (RBSPlen - 1) )
+    {
+      rbsp[ bytes_written++ ] = filler_byte;
+    }
+  }
+  rbsp[ bytes_written++ ] = trailing_byte; // rbsp_trailing_bits    
+  assert( num_bytes == (bytes_written + 1) );  
 
   // write RBSP into NALU
   NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_FILL, NALU_PRIORITY_DISPOSABLE, 1 );

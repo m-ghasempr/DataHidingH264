@@ -36,6 +36,28 @@ typedef enum {
   SEI_STEREO_VIDEO_INFO,
   SEI_POST_FILTER_HINTS,
   SEI_TONE_MAPPING,
+  SEI_SCALABILITY_INFO,
+  SEI_SUB_PIC_SCALABLE_LAYER,
+  SEI_NON_REQUIRED_LAYER_REP,
+  SEI_PRIORITY_LAYER_INFO,
+  SEI_LAYERS_NOT_PRESENT,
+  SEI_LAYER_DEPENDENCY_CHANGE,
+  SEI_SCALABLE_NESTING,
+  SEI_BASE_LAYER_TEMPORAL_HRD,
+  SEI_QUALITY_LAYER_INTEGRITY_CHECK,
+  SEI_REDUNDANT_PIC_PROPERTY,
+  SEI_TL0_DEP_REP_INDEX,
+  SEI_TL_SWITCHING_POINT,
+  SEI_PARALLEL_DECODING_INFO,
+  SEI_MVC_SCALABLE_NESTING,
+  SEI_VIEW_SCALABILITY_INFO,
+  SEI_MULTIVIEW_SCENE_INFO,
+  SEI_MULTIVIEW_ACQUISITION_INFO,
+  SEI_NON_REQUIRED_VIEW_COMPONENT,
+  SEI_VIEW_DEPENDENCY_CHANGE,
+  SEI_OPERATION_POINTS_NOT_PRESENT,
+  SEI_BASE_VIEW_TEMPORAL_HRD,
+  SEI_FRAME_PACKING_ARRANGEMENT,
 
   SEI_MAX_ELEMENTS  //!< number of maximum syntax elements
 } SEI_type;
@@ -61,8 +83,30 @@ typedef struct tone_mapping_struct_s
   Bitstream *data;
   int payloadSize;
 } ToneMappingSEI;
-
 #endif
+
+//! Frame packing arrangement Information
+typedef struct
+{
+  unsigned int  frame_packing_arrangement_id;
+  Boolean       frame_packing_arrangement_cancel_flag;
+  unsigned char frame_packing_arrangement_type;
+  Boolean       quincunx_sampling_flag;
+  unsigned char content_interpretation_type;
+  Boolean       spatial_flipping_flag;
+  Boolean       frame0_flipped_flag;
+  Boolean       field_views_flag;
+  Boolean       current_frame_is_frame0_flag;
+  Boolean       frame0_self_contained_flag;
+  Boolean       frame1_self_contained_flag;
+  unsigned char frame0_grid_position_x;
+  unsigned char frame0_grid_position_y;
+  unsigned char frame1_grid_position_x;
+  unsigned char frame1_grid_position_y;
+  unsigned char frame_packing_arrangement_reserved_byte;
+  unsigned int  frame_packing_arrangement_repetition_period;
+  Boolean       frame_packing_arrangement_extension_flag;
+} frame_packing_arrangement_information_struct;
 
 void InterpretSEIMessage                                ( byte* payload, int size, VideoParameters *p_Vid, Slice *pSlice );
 void interpret_spare_pic                                ( byte* payload, int size, VideoParameters *p_Vid );
@@ -89,8 +133,8 @@ void interpret_film_grain_characteristics_info          ( byte* payload, int siz
 void interpret_deblocking_filter_display_preference_info( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_stereo_video_info_info                   ( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_post_filter_hints_info                   ( byte* payload, int size, VideoParameters *p_Vid );
-// functions for tone mapping SEI message
 void interpret_tone_mapping                             ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_frame_packing_arrangement_info           ( byte* payload, int size, VideoParameters *p_Vid );
 
 #if (ENABLE_OUTPUT_TONEMAPPING)
 void tone_map               (imgpel** imgX, imgpel* lut, int size_x, int size_y);

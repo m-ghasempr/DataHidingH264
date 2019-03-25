@@ -38,13 +38,16 @@ static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int s
  */
 static void initOutput(VideoParameters *p_Vid, int symbol_size_in_bytes)
 {
-  if (( sizeof(char) == sizeof (imgpel)) && ( sizeof(char) == symbol_size_in_bytes))
+  if (( sizeof(char) == sizeof (imgpel)))
   {
-    p_Vid->img2buf = img2buf_byte;
+    if ( sizeof(char) == symbol_size_in_bytes)
+      p_Vid->img2buf = img2buf_byte;
+    else
+      p_Vid->img2buf = img2buf_normal;
   }
   else
   {
-    if (( sizeof(char) != sizeof (imgpel)) && testEndian())
+    if (testEndian())
       p_Vid->img2buf = img2buf_endian;
     else
       p_Vid->img2buf = img2buf_normal;
@@ -112,13 +115,15 @@ static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int s
   }
   else
   {
-    if (sizeof(imgpel) == sizeof(char))
+#if (IMGTYPE == 0)
+    //if (sizeof(imgpel) == sizeof(char))
     {
       //memcpy(buf, &(imgX[0][0]), size_y * size_x * sizeof(imgpel));
       for(j=0; j<size_y; j++)
         memcpy(buf+j*iOutStride, imgX[j], size_x*sizeof(imgpel));
     }
-    else
+    //else
+#else
     {
       imgpel *cur_pixel;
       unsigned char *pDst; 
@@ -130,6 +135,7 @@ static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int s
           *(pDst++)=(unsigned char)*(cur_pixel++);
       }
     }
+#endif
   }
 }
 
@@ -163,7 +169,6 @@ static void img2buf_byte (imgpel** imgX, unsigned char* buf, int size_x, int siz
   int theight = size_y - crop_top - crop_bottom;
   imgpel **img = &imgX[crop_top];
   int i;
-
   for(i = 0; i < theight; i++) 
   {
     memcpy(buf, *img++ + crop_left, twidth);
@@ -722,7 +727,7 @@ void init_out_buffer(VideoParameters *p_Vid)
  */
 void uninit_out_buffer(VideoParameters *p_Vid)
 {
-  free_frame_store(p_Vid, p_Vid->out_buffer);
+  free_frame_store(p_Vid->out_buffer);
   p_Vid->out_buffer=NULL;
 #if (PAIR_FIELDS_IN_OUTPUT)
   flush_pending_output(p_Vid, p_Vid->p_out);
@@ -832,11 +837,11 @@ void flush_direct_output(VideoParameters *p_Vid, int p_out)
 {
   write_unpaired_field(p_Vid, p_Vid->out_buffer, p_out);
 
-  free_storable_picture(p_Vid, p_Vid->out_buffer->frame);
+  free_storable_picture(p_Vid->out_buffer->frame);
   p_Vid->out_buffer->frame = NULL;
-  free_storable_picture(p_Vid, p_Vid->out_buffer->top_field);
+  free_storable_picture(p_Vid->out_buffer->top_field);
   p_Vid->out_buffer->top_field = NULL;
-  free_storable_picture(p_Vid, p_Vid->out_buffer->bottom_field);
+  free_storable_picture(p_Vid->out_buffer->bottom_field);
   p_Vid->out_buffer->bottom_field = NULL;
   p_Vid->out_buffer->is_used = 0;
 }
@@ -901,7 +906,7 @@ void direct_output(VideoParameters *p_Vid, StorablePicture *p, int p_out)
     calculate_frame_no(p_Vid, p);
     if (-1 != p_Vid->p_ref && !p_Inp->silent)
       find_snr(p_Vid, p, &p_Vid->p_ref);
-    free_storable_picture(p_Vid, p);
+    free_storable_picture(p);
     return;
   }
 
@@ -933,11 +938,11 @@ void direct_output(VideoParameters *p_Vid, StorablePicture *p, int p_out)
     calculate_frame_no(p_Vid, p);
     if (-1 != p_Vid->p_ref && !p_Inp->silent)
       find_snr(p_Vid, p_Vid->out_buffer->frame, &p_Vid->p_ref);
-    free_storable_picture(p_Vid, p_Vid->out_buffer->frame);
+    free_storable_picture(p_Vid->out_buffer->frame);
     p_Vid->out_buffer->frame = NULL;
-    free_storable_picture(p_Vid, p_Vid->out_buffer->top_field);
+    free_storable_picture(p_Vid->out_buffer->top_field);
     p_Vid->out_buffer->top_field = NULL;
-    free_storable_picture(p_Vid, p_Vid->out_buffer->bottom_field);
+    free_storable_picture(p_Vid->out_buffer->bottom_field);
     p_Vid->out_buffer->bottom_field = NULL;
     p_Vid->out_buffer->is_used = 0;
   }

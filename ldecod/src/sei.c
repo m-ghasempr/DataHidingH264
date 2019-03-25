@@ -32,7 +32,7 @@
 // #define PRINT_SUBSEQUENCE_CHAR         // uncomment to print sub-sequence characteristics SEI info
 // #define PRINT_SCENE_INFORMATION        // uncomment to print scene information SEI info
 // #define PRINT_PAN_SCAN_RECT            // uncomment to print pan-scan rectangle SEI info
-// #define PRINT_RECOVERY_POINT            // uncomment to print random access point SEI info
+// #define PRINT_RECOVERY_POINT           // uncomment to print random access point SEI info
 // #define PRINT_FILLER_PAYLOAD_INFO      // uncomment to print filler payload SEI info
 // #define PRINT_DEC_REF_PIC_MARKING      // uncomment to print decoded picture buffer management repetition SEI info
 // #define PRINT_RESERVED_INFO            // uncomment to print reserved SEI info
@@ -46,9 +46,10 @@
 // #define PRINT_MOTION_CONST_SLICE_GROUP_SET_INFO    // uncomment to print Motion-constrained slice group set SEI info
 // #define PRINT_FILM_GRAIN_CHARACTERISTICS_INFO      // uncomment to print Film grain characteristics SEI info
 // #define PRINT_DEBLOCKING_FILTER_DISPLAY_PREFERENCE_INFO // uncomment to print deblocking filter display preference SEI info
-// #define PRINT_STEREO_VIDEO_INFO_INFO               // uncomment to print stero video SEI info
+// #define PRINT_STEREO_VIDEO_INFO_INFO               // uncomment to print stereo video SEI info
 // #define PRINT_TONE_MAPPING                         // uncomment to print tone-mapping SEI info
 // #define PRINT_POST_FILTER_HINT_INFO                // uncomment to print post-filter hint SEI info
+// #define PRINT_FRAME_PACKING_ARRANGEMENT_INFO       // uncomment to print frame packing arrangement SEI info
 /*!
  ************************************************************************
  *  \brief
@@ -157,14 +158,18 @@ void InterpretSEIMessage(byte* msg, int size, VideoParameters *p_Vid, Slice *pSl
     case  SEI_STEREO_VIDEO_INFO:
       interpret_stereo_video_info_info ( msg+offset, payload_size, p_Vid );
       break;
-    case SEI_TONE_MAPPING:
+    case  SEI_TONE_MAPPING:
       interpret_tone_mapping( msg+offset, payload_size, p_Vid );
       break;
-    case SEI_POST_FILTER_HINTS:
+    case  SEI_POST_FILTER_HINTS:
       interpret_post_filter_hints_info ( msg+offset, payload_size, p_Vid );
+      break;
+    case  SEI_FRAME_PACKING_ARRANGEMENT:
+      interpret_frame_packing_arrangement_info( msg+offset, payload_size, p_Vid );
+      break;
     default:
       interpret_reserved_info( msg+offset, payload_size, p_Vid );
-      break;
+      break;    
     }
     offset += payload_size;
 
@@ -1661,7 +1666,6 @@ void interpret_buffering_period_info( byte* payload, int size, VideoParameters *
  */
 void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_Vid )
 {
-
   seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
 
   int cpb_removal_delay, dpb_output_delay, picture_structure_present_flag, picture_structure;
@@ -1854,6 +1858,93 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
   free (buf);
 #ifdef PRINT_PCITURE_TIMING_INFO
 #undef PRINT_PCITURE_TIMING_INFO
+#endif
+}
+
+/*!
+ ************************************************************************
+ *  \brief
+ *     Interpret the Frame Packing Arrangement SEI message
+ *  \param payload
+ *     a pointer that point to the sei payload
+ *  \param size
+ *     the size of the sei message
+ *  \param p_Vid
+ *     the image pointer
+ ************************************************************************
+ */
+void interpret_frame_packing_arrangement_info( byte* payload, int size, VideoParameters *p_Vid )
+{
+  frame_packing_arrangement_information_struct seiFramePackingArrangement;
+  Bitstream* buf;
+
+  buf = malloc(sizeof(Bitstream));
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  p_Dec->UsedBits = 0;
+
+#ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
+  printf("Frame packing arrangement SEI message\n");
+#endif
+
+  seiFramePackingArrangement.frame_packing_arrangement_id = (unsigned int)ue_v( "SEI: frame_packing_arrangement_id", buf );
+  seiFramePackingArrangement.frame_packing_arrangement_cancel_flag = u_1( "SEI: frame_packing_arrangement_cancel_flag", buf );
+#ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
+  printf("frame_packing_arrangement_id                 = %d\n", seiFramePackingArrangement.frame_packing_arrangement_id);
+  printf("frame_packing_arrangement_cancel_flag        = %d\n", seiFramePackingArrangement.frame_packing_arrangement_cancel_flag);
+#endif
+  if ( seiFramePackingArrangement.frame_packing_arrangement_cancel_flag == FALSE )
+  {
+    seiFramePackingArrangement.frame_packing_arrangement_type = (unsigned char)u_v( 7, "SEI: frame_packing_arrangement_type", buf );
+    seiFramePackingArrangement.quincunx_sampling_flag         = u_1( "SEI: quincunx_sampling_flag", buf );
+    seiFramePackingArrangement.content_interpretation_type    = (unsigned char)u_v( 6, "SEI: content_interpretation_type", buf );
+    seiFramePackingArrangement.spatial_flipping_flag          = u_1( "SEI: spatial_flipping_flag", buf );
+    seiFramePackingArrangement.frame0_flipped_flag            = u_1( "SEI: frame0_flipped_flag", buf );
+    seiFramePackingArrangement.field_views_flag               = u_1( "SEI: field_views_flag", buf );
+    seiFramePackingArrangement.current_frame_is_frame0_flag   = u_1( "SEI: current_frame_is_frame0_flag", buf );
+    seiFramePackingArrangement.frame0_self_contained_flag     = u_1( "SEI: frame0_self_contained_flag", buf );
+    seiFramePackingArrangement.frame1_self_contained_flag     = u_1( "SEI: frame1_self_contained_flag", buf );
+#ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
+    printf("frame_packing_arrangement_type    = %d\n", seiFramePackingArrangement.frame_packing_arrangement_type);
+    printf("quincunx_sampling_flag            = %d\n", seiFramePackingArrangement.quincunx_sampling_flag);
+    printf("content_interpretation_type       = %d\n", seiFramePackingArrangement.content_interpretation_type);
+    printf("spatial_flipping_flag             = %d\n", seiFramePackingArrangement.spatial_flipping_flag);
+    printf("frame0_flipped_flag               = %d\n", seiFramePackingArrangement.frame0_flipped_flag);
+    printf("field_views_flag                  = %d\n", seiFramePackingArrangement.field_views_flag);
+    printf("current_frame_is_frame0_flag      = %d\n", seiFramePackingArrangement.current_frame_is_frame0_flag);
+    printf("frame0_self_contained_flag        = %d\n", seiFramePackingArrangement.frame0_self_contained_flag);
+    printf("frame1_self_contained_flag        = %d\n", seiFramePackingArrangement.frame1_self_contained_flag);
+#endif
+    if ( seiFramePackingArrangement.quincunx_sampling_flag == FALSE && seiFramePackingArrangement.frame_packing_arrangement_type != 5 )
+    {
+      seiFramePackingArrangement.frame0_grid_position_x = (unsigned char)u_v( 4, "SEI: frame0_grid_position_x", buf );
+      seiFramePackingArrangement.frame0_grid_position_y = (unsigned char)u_v( 4, "SEI: frame0_grid_position_y", buf );
+      seiFramePackingArrangement.frame1_grid_position_x = (unsigned char)u_v( 4, "SEI: frame1_grid_position_x", buf );
+      seiFramePackingArrangement.frame1_grid_position_y = (unsigned char)u_v( 4, "SEI: frame1_grid_position_y", buf );
+#ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
+      printf("frame0_grid_position_x      = %d\n", seiFramePackingArrangement.frame0_grid_position_x);
+      printf("frame0_grid_position_y      = %d\n", seiFramePackingArrangement.frame0_grid_position_y);
+      printf("frame1_grid_position_x      = %d\n", seiFramePackingArrangement.frame1_grid_position_x);
+      printf("frame1_grid_position_y      = %d\n", seiFramePackingArrangement.frame1_grid_position_y);
+#endif
+    }
+    seiFramePackingArrangement.frame_packing_arrangement_reserved_byte = (unsigned char)u_v( 8, "SEI: frame_packing_arrangement_reserved_byte", buf );
+    seiFramePackingArrangement.frame_packing_arrangement_repetition_period = (unsigned int)ue_v( "SEI: frame_packing_arrangement_repetition_period", buf );
+#ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
+    printf("frame_packing_arrangement_reserved_byte          = %d\n", seiFramePackingArrangement.frame_packing_arrangement_reserved_byte);
+    printf("frame_packing_arrangement_repetition_period      = %d\n", seiFramePackingArrangement.frame_packing_arrangement_repetition_period);
+#endif
+  }
+  seiFramePackingArrangement.frame_packing_arrangement_extension_flag = u_1( "SEI: frame_packing_arrangement_extension_flag", buf );
+#ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
+  printf("frame_packing_arrangement_extension_flag          = %d\n", seiFramePackingArrangement.frame_packing_arrangement_extension_flag);
+#endif
+
+  free (buf);
+#ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
+#undef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
 #endif
 }
 

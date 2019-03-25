@@ -28,6 +28,6 @@ extern void get_block_luma(StorablePicture *curr_ref, int x_pos, int y_pos, int 
 
 extern void intra_cr_decoding    (Macroblock *currMB, int yuv);
 extern void prepare_direct_params(Macroblock *currMB, StorablePicture *dec_picture, MotionVector *pmvl0, MotionVector *pmvl1,char *l0_rFrame, char *l1_rFrame);
-extern void perform_mc           (Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int pred_dir, int i, int j, int block_size_x, int block_size_y, int curr_mb_field);
+extern void perform_mc           (Macroblock *currMB, ColorPlane pl, StorablePicture *dec_picture, int pred_dir, int i, int j, int block_size_x, int block_size_y);
 #endif
 

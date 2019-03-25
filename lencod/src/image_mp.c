@@ -98,7 +98,6 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
   int apply_wp = 0;
   int selection;
 
-
   frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
   store_coding_info(p_Vid, &coding_info);
 
@@ -120,17 +119,16 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     return;
   }
 
-
   // for P_Slice, consider WP  
   wp_pass = 0;
   if (p_Inp->GenerateMultiplePPS)
   {
     Slice *dummy_slice = NULL;
-    init_slice(p_Vid, &dummy_slice, 0);
 
     InitWP(p_Vid, p_Inp, 0);
     if ( p_Inp->WPMCPrecision )
       p_Vid->pWPX->curr_wp_rd_pass = p_Vid->pWPX->wp_rd_passes + 1;
+    init_slice_lite(p_Vid, &dummy_slice, 0);
 
     if (p_Vid->TestWPPSlice(dummy_slice, 0) == 1)
     {
@@ -156,7 +154,7 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
       frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
       selection = picture_coding_decision(p_Vid, p_Vid->frame_pic[0], p_Vid->frame_pic[rd_pass], rd_qp);
 #if (DBG_IMAGE_MP)
-      printf("rd_pass = %d, selection = %d\n", rd_pass, p_Vid->rd_pass);
+      printf("rd_pass = %d, selection = %d\n", rd_pass, selection);
 #endif
 #if (DBG_IMAGE_MP)
       printf("rd_pass = %d: %d (%.0f, %.0f, %.0f)\n", rd_pass, 
@@ -201,7 +199,7 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
           frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
           selection = picture_coding_decision(p_Vid, p_Vid->frame_pic[0], p_Vid->frame_pic[rd_pass], rd_qp);
 #if (DBG_IMAGE_MP)
-          printf("rd_pass = %d, selection = %d\n", rd_pass, p_Vid->rd_pass);
+          printf("rd_pass = %d, selection = %d\n", rd_pass, selection);
 #endif
 #if (DBG_IMAGE_MP)
           printf("rd_pass = %d: %d (%.0f, %.0f, %.0f)\n", rd_pass, 
@@ -221,19 +219,20 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
         }
       }
 
+      free_slice(dummy_slice);
       rd_pass++;
       if(rd_pass >= p_Inp->RDPictureMaxPassPSlice)
       {
         frame_picture_mp_exit(p_Vid, &coding_info);
         return;
       }
-      //free_slice(dummy_slice);  
     }
   }
 
+
   // code as I? or maybe as B?
   frame_type_pass = 0;
-  if((coding_info.intras * 100/p_Vid->FrameSizeInMbs) >= 75)
+  if(p_Inp->RDPSliceITest && (coding_info.intras * 100/p_Vid->FrameSizeInMbs) >= 75)
   {
     frame_type = I_SLICE; 
     set_slice_type(p_Vid, p_Inp, I_SLICE);
@@ -258,7 +257,7 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
     selection = picture_coding_decision(p_Vid, p_Vid->frame_pic[0], p_Vid->frame_pic[rd_pass], rd_qp);
 #if (DBG_IMAGE_MP)
-  printf("rd_pass = %d, selection = %d\n", rd_pass, p_Vid->rd_pass);
+  printf("rd_pass = %d, selection = %d\n", rd_pass, selection);
 #endif
 
     if (selection)
@@ -296,7 +295,7 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
     selection = picture_coding_decision(p_Vid, p_Vid->frame_pic[0], p_Vid->frame_pic[rd_pass], rd_qp);
 #if (DBG_IMAGE_MP)
-  printf("DB OFF, rd_pass = %d, selection = %d\n", rd_pass, p_Vid->rd_pass);
+  printf("DB OFF, rd_pass = %d, selection = %d\n", rd_pass, selection);
 #endif
 
     if (selection)
@@ -338,7 +337,7 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
     selection = picture_coding_decision(p_Vid, p_Vid->frame_pic[0], p_Vid->frame_pic[rd_pass], rd_qp);
 #if (DBG_IMAGE_MP)
-    printf("rd_pass = %d, selection = %d\n", rd_pass, p_Vid->rd_pass);
+    printf("rd_pass = %d, selection = %d\n", rd_pass, selection);
 #endif
 
     if (selection)
@@ -460,7 +459,6 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
   int selection;
   Slice *dummy_slice = NULL;
 
-
 #if (DBG_IMAGE_MP)
   printf("pass0_wp = %d\n", p_Vid->pass0_wp);
 #endif  
@@ -480,6 +478,8 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     return;
   }
 
+  init_slice_lite(p_Vid, &dummy_slice, 0);
+
 #if (DBG_IMAGE_MP)
     printf("rd_pass = %d: %d (%.0f, %.0f, %.0f)\n", rd_pass, 
       p_Vid->frame_pic[0]->bits_per_picture, 
@@ -491,7 +491,6 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
   {    
     if (p_Inp->GenerateMultiplePPS)
     {
-      init_slice(p_Vid, &dummy_slice, 0);
       InitWP(p_Vid, p_Inp, 0);
       if ( p_Inp->WPMCPrecision )
         p_Vid->pWPX->curr_wp_rd_pass = p_Vid->pWPX->wp_rd_passes + 1;
@@ -504,8 +503,6 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
           p_Vid->pWPX->curr_wp_rd_pass->algorithm = WP_REGULAR;
         wp_pass = 1;
       }
-      //p_Vid->currentPicture->no_slices = 1;
-      //free_slice(dummy_slice);
     }
 
     if(wp_pass)
@@ -515,7 +512,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
       frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
       selection = picture_coding_decision(p_Vid, p_Vid->frame_pic[0], p_Vid->frame_pic[rd_pass], rd_qp);
 #if (DBG_IMAGE_MP)
-      printf("IMP WP, rd_pass = %d, selection = %d\n", rd_pass, p_Vid->rd_pass);
+      printf("IMP WP, rd_pass = %d, selection = %d\n", rd_pass, selection);
       printf("rd_pass = %d: %d (%.0f, %.0f, %.0f)\n", rd_pass, 
         p_Vid->frame_pic[rd_pass]->bits_per_picture, 
         p_Vid->frame_pic[rd_pass]->distortion.value[0], p_Vid->frame_pic[rd_pass]->distortion.value[1], p_Vid->frame_pic[rd_pass]->distortion.value[2]);
@@ -535,6 +532,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
       if(rd_pass >= p_Inp->RDPictureMaxPassBSlice)
       {
         frame_picture_mp_exit(p_Vid, &coding_info);
+        free_slice(dummy_slice);
         return;
       }
     }
@@ -543,10 +541,9 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     wp_pass = 0;
     if (p_Inp->GenerateMultiplePPS)
     {
-      init_slice(p_Vid, &dummy_slice, 0);
       InitWP(p_Vid, p_Inp, 0);
       if( p_Inp->WPMCPrecision )
-        p_Vid->pWPX->curr_wp_rd_pass = p_Vid->pWPX->wp_rd_passes + 2;
+        p_Vid->pWPX->curr_wp_rd_pass = p_Vid->pWPX->wp_rd_passes + 1;
 
       if (p_Vid->TestWPBSlice(dummy_slice, 0) == 1)
       {
@@ -557,9 +554,10 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
         wp_pass = 1;
       }
       else if ( p_Inp->WPMCPrecision == 2 && (p_Inp->WPMCPrecBSlice == 2 || (p_Inp->WPMCPrecBSlice == 1 && p_Vid->nal_reference_idc) ) )
+      {
         p_Vid->active_pps = p_Vid->PicParSet[1];
-      //p_Vid->currentPicture->no_slices = 1;
-      //free_slice(dummy_slice);
+        wp_pass = 1;
+      }
     }
 
     if(wp_pass)
@@ -569,7 +567,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
       frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
       selection = picture_coding_decision(p_Vid, p_Vid->frame_pic[0], p_Vid->frame_pic[rd_pass], rd_qp);
 #if (DBG_IMAGE_MP)
-      printf("EXP WP, rd_pass = %d, selection = %d\n", rd_pass, p_Vid->rd_pass);
+      printf("EXP WP, rd_pass = %d, selection = %d\n", rd_pass, selection);
       printf("rd_pass = %d: %d (%.0f, %.0f, %.0f)\n", rd_pass, 
         p_Vid->frame_pic[rd_pass]->bits_per_picture, 
         p_Vid->frame_pic[rd_pass]->distortion.value[0], p_Vid->frame_pic[rd_pass]->distortion.value[1], p_Vid->frame_pic[rd_pass]->distortion.value[2]);
@@ -589,6 +587,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
       if(rd_pass >= p_Inp->RDPictureMaxPassBSlice)
       {
         frame_picture_mp_exit(p_Vid, &coding_info);
+        free_slice(dummy_slice);
         return;
       }
     }
@@ -611,7 +610,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
     selection = picture_coding_decision(p_Vid, p_Vid->frame_pic[0], p_Vid->frame_pic[rd_pass], rd_qp);
 #if (DBG_IMAGE_MP)
-    printf("frame QP, rd_pass = %d, selection = %d \n", rd_pass, p_Vid->rd_pass);
+    printf("frame QP, rd_pass = %d, selection = %d \n", rd_pass, selection);
     printf("rd_pass = %d: %d (%.0f, %.0f, %.0f)\n", rd_pass, 
       p_Vid->frame_pic[rd_pass]->bits_per_picture, 
       p_Vid->frame_pic[rd_pass]->distortion.value[0], p_Vid->frame_pic[rd_pass]->distortion.value[1], p_Vid->frame_pic[rd_pass]->distortion.value[2]);
@@ -630,6 +629,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     if(rd_pass >= p_Inp->RDPictureMaxPassBSlice)
     {
       frame_picture_mp_exit(p_Vid, &coding_info);
+      free_slice(dummy_slice);
       return;
     }
   }
@@ -651,7 +651,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
     selection = picture_coding_decision(p_Vid, p_Vid->frame_pic[0], p_Vid->frame_pic[rd_pass], rd_qp);
 #if (DBG_IMAGE_MP)
-    printf("alternate direct mode, rd_pass = %d, selection = %d\n", rd_pass, p_Vid->rd_pass);
+    printf("alternate direct mode, rd_pass = %d, selection = %d\n", rd_pass, selection);
 #endif
 
     if (selection)
@@ -667,10 +667,13 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     if(rd_pass >= p_Inp->RDPictureMaxPassBSlice)
     {
       frame_picture_mp_exit(p_Vid, &coding_info);
+      free_slice(dummy_slice);
       return;
     }
   }
   frame_picture_mp_exit(p_Vid, &coding_info);
+  free_slice(dummy_slice);
+  return;
 }
 
 void frame_picture_mp(VideoParameters *p_Vid, InputParameters *p_Inp)
