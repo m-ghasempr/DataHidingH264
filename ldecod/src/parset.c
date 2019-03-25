@@ -244,10 +244,14 @@ void ProcessSPS (NALU_t *nalu)
   {
     if (sps->seq_parameter_set_id == active_sps->seq_parameter_set_id)
     {
-      if (dec_picture)
+      if (!sps_is_equal(sps, active_sps))
       {
-        // this may only happen on slice loss
-        exit_frame();
+        if (dec_picture)
+        {
+          // this may only happen on slice loss
+          exit_frame();
+        }
+        active_sps=NULL;
       }
     }
   }
@@ -277,10 +281,14 @@ void ProcessPPS (NALU_t *nalu)
   {
     if (pps->pic_parameter_set_id == active_pps->pic_parameter_set_id)
     {
-      if (dec_picture)
+      if (!pps_is_equal(pps, active_pps))
       {
-        // this may only happen on slice loss
-        exit_frame();
+        if (dec_picture)
+        {
+          // this may only happen on slice loss
+          exit_frame();
+        }
+        active_pps = NULL;
       }
     }
   }
@@ -289,6 +297,57 @@ void ProcessPPS (NALU_t *nalu)
   FreePPS (pps);
 }
 
+void activate_sps (seq_parameter_set_rbsp_t *sps)
+{
+  if (active_sps != sps)
+  {
+    if (dec_picture)
+    {
+      // this may only happen on slice loss
+      exit_frame();
+    }
+    active_sps = sps;
+    
+    img->MaxFrameNum = 1<<(sps->log2_max_frame_num_minus4+4);
+    img->PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
+    img->PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
+    img->FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * img->PicHeightInMapUnits;
+    img->FrameSizeInMbs = img->PicWidthInMbs * img->FrameHeightInMbs;
+    
+    img->width = img->PicWidthInMbs * MB_BLOCK_SIZE;
+    img->width_cr = img->width /2;
+    img->height = img->FrameHeightInMbs * MB_BLOCK_SIZE;
+    img->height_cr = img->height / 2;
+    
+    init_global_buffers();
+    if (!img->no_output_of_prior_pics_flag)
+    {
+      flush_dpb();
+    }
+    init_dpb();
+    
+    if (NULL!=Co_located)
+    {
+      free_collocated(Co_located);
+    }
+    Co_located = alloc_colocated (img->width, img->height,sps->mb_adaptive_frame_field_flag);
+    ercInit(img->width, img->height, 1);
+  }
+}
+
+void activate_pps(pic_parameter_set_rbsp_t *pps)
+{
+  if (active_pps != pps)
+  {
+    if (dec_picture)
+    {
+      // this may only happen on slice loss
+      exit_frame();
+    }
+    active_pps = pps;
+  }
+
+}
 
 void UseParameterSet (int PicParsetId)
 {
@@ -313,8 +372,6 @@ void UseParameterSet (int PicParsetId)
 
 //  printf ("Using Picture Parameter set %d and associated Sequence Parameter Set %d\n", PicParsetId, PicParSet[PicParsetId].seq_parameter_set_id);
 
-  img->MaxFrameNum = 1<<(sps->log2_max_frame_num_minus4+4);
-  
   if (sps->pic_order_cnt_type < 0 || sps->pic_order_cnt_type > 2)  // != 1
   {
     printf ("invalid sps->pic_order_cnt_type = %d\n", sps->pic_order_cnt_type);
@@ -329,49 +386,8 @@ void UseParameterSet (int PicParsetId)
     }
   }
   
-  img->PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
-  img->PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
-  img->FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * img->PicHeightInMapUnits;
-  img->FrameSizeInMbs = img->PicWidthInMbs * img->FrameHeightInMbs;
-
-  img->width = img->PicWidthInMbs * MB_BLOCK_SIZE;
-  img->width_cr = img->width /2;
-  img->height = img->FrameHeightInMbs * MB_BLOCK_SIZE;
-  img->height_cr = img->height / 2;
-
-  if (active_sps != sps)
-  {
-    if (dec_picture)
-    {
-      // this may only happen on slice loss
-      exit_frame();
-    }
-    active_sps = sps;
-    init_global_buffers();
-    if (!img->no_output_of_prior_pics_flag)
-    {
-      flush_dpb();
-    }
-    init_dpb();
-
-    if (NULL!=Co_located)
-    {
-      free_collocated(Co_located);
-    }
-    Co_located = alloc_colocated (img->width, img->height,sps->mb_adaptive_frame_field_flag);
-    ercInit(img->width, img->height, 1);
-  }
-
-
-  if (active_pps != pps)
-  {
-    if (dec_picture)
-    {
-      // this may only happen on slice loss
-      exit_frame();
-    }
-    active_pps = pps;
-  }
+  activate_sps(sps);
+  activate_pps(pps);
 
   // currSlice->dp_mode is set by read_new_slice (NALU first byte available there)
   if (pps->entropy_coding_mode_flag == UVLC)

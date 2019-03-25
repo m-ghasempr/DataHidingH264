@@ -89,6 +89,7 @@ static void ReportSP(int tmp_time, int me_time);
 static void ReportBS(int tmp_time, int me_time);
 static void ReportP(int tmp_time, int me_time);
 static void ReportB(int tmp_time, int me_time);
+static void ReportNALNonVLCBits(int tmp_time, int me_time);
 
 /*
 static void ReportFirstframe(int tmp_time);
@@ -547,6 +548,9 @@ int encode_one_frame ()
     prev_frame_no = frame_no;
   }
 
+  if (stat->bit_ctr_parametersets_n!=0)
+    ReportNALNonVLCBits(tmp_time, me_time);
+
   if (IMG_NUMBER == 0)
     ReportFirstframe(tmp_time,me_time);
     //ReportFirstframe(tmp_time);
@@ -605,6 +609,8 @@ int encode_one_frame ()
       &&(img->IFLAG==0))
       updateRCModel();
   }
+
+  stat->bit_ctr_parametersets_n=0;
 
   FreeSourceframe (srcframe);
 
@@ -1755,15 +1761,20 @@ static void copy_motion_vectors_MB ()
 }
   
 
+static void ReportNALNonVLCBits(int tmp_time, int me_time)
+{
+  //! Need to add type (i.e. SPS, PPS, SEI etc).
+    printf ("%04d(NVB)%8d \n", frame_no, stat->bit_ctr_parametersets_n);
 
+}
 static void ReportFirstframe(int tmp_time,int me_time)
 {
   //Rate control
   int bits;
-  printf ("%04d(I)  %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s \n",
+  printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d\n",
     frame_no, stat->bit_ctr - stat->bit_ctr_n,0,
     img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-    img->fld_flag ? "FLD" : "FRM");
+    img->fld_flag ? "FLD" : "FRM", intras);
 
   //Rate control
   if(input->RCEnable)
@@ -1787,15 +1798,15 @@ static void ReportIntra(int tmp_time, int me_time)
 {
 	
   if (img->currentPicture->idr_flag == 1)
-    printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s \n",
+    printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d\n",
     frame_no, stat->bit_ctr - stat->bit_ctr_n, 0,
     img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-    img->fld_flag ? "FLD" : "FRM"); 
+    img->fld_flag ? "FLD" : "FRM", intras); 
   else
-    printf ("%04d(I)  %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s \n",
+    printf ("%04d(I)  %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d\n",
     frame_no, stat->bit_ctr - stat->bit_ctr_n, 0,
     img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-    img->fld_flag ? "FLD" : "FRM");
+    img->fld_flag ? "FLD" : "FRM", intras);
 
 }
 

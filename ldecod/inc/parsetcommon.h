@@ -131,7 +131,6 @@ typedef struct
   Boolean   deblocking_filter_control_present_flag;           // u(1)
   Boolean   constrained_intra_pred_flag;                      // u(1)
   Boolean   redundant_pic_cnt_present_flag;                   // u(1)
-  Boolean   vui_pic_parameters_flag;                          // u(1)
 } pic_parameter_set_rbsp_t;
 
 
@@ -176,7 +175,11 @@ typedef struct
 
 pic_parameter_set_rbsp_t *AllocPPS ();
 seq_parameter_set_rbsp_t *AllocSPS ();
+
 void FreePPS (pic_parameter_set_rbsp_t *pps);
 void FreeSPS (seq_parameter_set_rbsp_t *sps);
+
+int sps_is_equal(seq_parameter_set_rbsp_t *sps1, seq_parameter_set_rbsp_t *sps2);
+int pps_is_equal(pic_parameter_set_rbsp_t *pps1, pic_parameter_set_rbsp_t *pps2);
 
 #endif

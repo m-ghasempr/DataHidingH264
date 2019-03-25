@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 8.3
+ *     JM 8.4
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -62,7 +62,7 @@
 #include "ratectl.h"
 
 #define JM      "8"
-#define VERSION "8.3"
+#define VERSION "8.4"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -153,7 +153,9 @@ int main(int argc,char **argv)
   PatchInputNoFrames();
 
   // Write sequence header (with parameter sets)
+  stat->bit_ctr_parametersets = 0;
   stat->bit_slice = start_sequence();
+  stat->bit_ctr_parametersets += stat->bit_ctr_parametersets_n;
   start_frame_no_in_this_IGOP = 0;
 
   for (img->number=0; img->number < input->no_frames; img->number++)
@@ -752,7 +754,9 @@ void report()
   {
     frame_rate = (float)(img->framerate *(input->successive_Bframe + 1)) / (float) (input->jumpd+1);
 
-    stat->bitrate_P=(stat->bit_ctr_0+stat->bit_ctr_P)*(float)(frame_rate)/(float) (input->no_frames + Bframe_ctr);
+//! Currently adding NVB bits on P rate. Maybe additional stat info should be created instead and added in log file
+//    stat->bitrate_P=(stat->bit_ctr_0+stat->bit_ctr_P)*(float)(frame_rate)/(float) (input->no_frames + Bframe_ctr);
+    stat->bitrate_P=(stat->bit_ctr_0+stat->bit_ctr_P + stat->bit_ctr_parametersets)*(float)(frame_rate)/(float) (input->no_frames + Bframe_ctr);
 
 #ifdef _ADAPT_LAST_GROUP_
     stat->bitrate_B=(stat->bit_ctr_B)*(float)(frame_rate)/(float) (input->no_frames + Bframe_ctr);    
@@ -864,8 +868,10 @@ void report()
   if(Bframe_ctr!=0)
   {
 
-    fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, B %d) \n",
-      total_bits=stat->bit_ctr_P + stat->bit_ctr_0 + stat->bit_ctr_B, stat->bit_ctr_0, stat->bit_ctr_P, stat->bit_ctr_B);
+//      fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, B %d) \n",
+//            total_bits=stat->bit_ctr_P + stat->bit_ctr_0 + stat->bit_ctr_B, stat->bit_ctr_0, stat->bit_ctr_P, stat->bit_ctr_B);
+      fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, B %d NVB %d) \n",
+            total_bits=stat->bit_ctr_P + stat->bit_ctr_0 + stat->bit_ctr_B + stat->bit_ctr_parametersets, stat->bit_ctr_0, stat->bit_ctr_P, stat->bit_ctr_B,stat->bit_ctr_parametersets);
 
     frame_rate = (float)(img->framerate *(input->successive_Bframe + 1)) / (float) (input->jumpd+1);
     stat->bitrate= ((float) total_bits * frame_rate)/((float) (input->no_frames + Bframe_ctr));
@@ -875,8 +881,11 @@ void report()
   }
   else if (input->sp_periodicity==0)
   {
-    fprintf(stdout, " Total bits                        : %d (I %5d, P %5d) \n",
-    total_bits=stat->bit_ctr_P + stat->bit_ctr_0 , stat->bit_ctr_0, stat->bit_ctr_P);
+//    fprintf(stdout, " Total bits                        : %d (I %5d, P %5d) \n",
+//    total_bits=stat->bit_ctr_P + stat->bit_ctr_0 , stat->bit_ctr_0, stat->bit_ctr_P);
+      fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, NVB %d) \n",
+      total_bits=stat->bit_ctr_P + stat->bit_ctr_0 + stat->bit_ctr_parametersets, stat->bit_ctr_0, stat->bit_ctr_P, stat->bit_ctr_parametersets);
+
 
     frame_rate = (float)img->framerate / ( (float) (input->jumpd + 1) );
     stat->bitrate= ((float) total_bits * frame_rate)/((float) input->no_frames );
@@ -884,8 +893,11 @@ void report()
     fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stat->bitrate/1000);
   }else
   {
-    fprintf(stdout, " Total bits                        : %d (I %5d, P %5d) \n",
-    total_bits=stat->bit_ctr_P + stat->bit_ctr_0 , stat->bit_ctr_0, stat->bit_ctr_P);
+    //fprintf(stdout, " Total bits                        : %d (I %5d, P %5d) \n",
+    //total_bits=stat->bit_ctr_P + stat->bit_ctr_0 , stat->bit_ctr_0, stat->bit_ctr_P);
+      fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, NVB %d) \n",
+      total_bits=stat->bit_ctr_P + stat->bit_ctr_0 + stat->bit_ctr_parametersets, stat->bit_ctr_0, stat->bit_ctr_P, stat->bit_ctr_parametersets);
+
 
     frame_rate = (float)img->framerate / ( (float) (input->jumpd + 1) );
     stat->bitrate= ((float) total_bits * frame_rate)/((float) input->no_frames );

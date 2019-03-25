@@ -108,6 +108,17 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
   // Save the slice number of this macroblock. When the macroblock below
   // is coded it will use this to decide if prediction for above is possible
   currMB->slice_nr = img->current_slice_nr;
+
+  if (img->current_slice_nr >= MAX_NUM_SLICES)
+  {
+    error ("maximum number of supported slices exceeded, please recompile with increased value for MAX_NUM_SLICES", 200);
+  }
+
+  dec_picture->slice_id[img->mb_x][img->mb_y] = img->current_slice_nr;
+  if (img->current_slice_nr > dec_picture->max_slice_id)
+  {
+    dec_picture->max_slice_id=img->current_slice_nr;
+  }
   
   CheckAvailabilityOfNeighbors(img);
 
@@ -881,7 +892,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       for(j=0;j<BLOCK_SIZE;j++)
       {
         dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j] = 0;
-        dec_picture->ref_pic_id[LIST_0][img->block_x+i][img_block_y+j] = dec_picture->ref_pic_num[LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j]];
+        dec_picture->ref_pic_id[LIST_0][img->block_x+i][img_block_y+j] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j]];
       }
 
     return DECODE_MB;
@@ -1599,7 +1610,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               if (fw_rFrame >= 0)
               {
                 
-                if  (!fw_rFrame  && !moving_block[i4][j6])       
+                if  (!fw_rFrame  && ((!moving_block[i4][j6]) && (!listX[1+list_offset][0]->is_long_term)))
                 {                    
                   dec_picture->mv  [LIST_0][i4][j4][0] = 0;
                   dec_picture->mv  [LIST_0][i4][j4][1] = 0;
@@ -1621,7 +1632,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               }
               if (bw_rFrame >= 0)
               {
-                if  (bw_rFrame==0 && !moving_block[i4][j6])                         
+                if  (bw_rFrame==0 && ((!moving_block[i4][j6])&& (!listX[1+list_offset][0]->is_long_term)))
                 {
                   dec_picture->mv  [LIST_1][i4][j4][0] = 0;
                   dec_picture->mv  [LIST_1][i4][j4][1] = 0;
@@ -1678,7 +1689,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               {
                 for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
                 {
-                  if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==co_located_ref_id[refList][img->block_x + k][imgblock_y + j])
+                  if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][img->block_x + k][imgblock_y + j])
                   {
                     mapped_idx=iref;
                     break;
@@ -1936,7 +1947,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
             for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
             {
               
-              if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==co_located_ref_id[refList][img->block_x+i0][imgblock_y+j0])
+              if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][img->block_x+i0][imgblock_y+j0])
               {
                 mapped_idx=iref;
                 break;
@@ -2048,11 +2059,11 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   for(j4=img->block_y;j4<(img->block_y+4);j4++)
   {
     if(dec_picture->ref_idx[LIST_0][i4][j4]>=0)
-       dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][i4][j4]];
+       dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][i4][j4]];
     else
        dec_picture->ref_pic_id[LIST_0][i4][j4] = INT64_MIN;
     if(dec_picture->ref_idx[LIST_1][i4][j4]>=0)
-       dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[LIST_1 + list_offset][dec_picture->ref_idx[LIST_1][i4][j4]];  
+       dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_1 + list_offset][dec_picture->ref_idx[LIST_1][i4][j4]];  
     else
        dec_picture->ref_pic_id[LIST_1][i4][j4] = INT64_MIN;  
   }
@@ -3431,7 +3442,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
               if (fw_rFrame >=0)
               {
-                if (!fw_rFrame  && !moving_block[i4][j6]) 
+                if (!fw_rFrame  && ((!moving_block[i4][j6]) && (!listX[1+list_offset][0]->is_long_term)))
                 {
                   dec_picture->mv  [LIST_0][i4][j4][0]= 0;
                   dec_picture->mv  [LIST_0][i4][j4][1]= 0;
@@ -3453,7 +3464,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               
               if (bw_rFrame >=0)
               {
-                if  (bw_rFrame==0 && !moving_block[i4][j6])  
+                if  (bw_rFrame==0 && ((!moving_block[i4][j6]) && (!listX[1+list_offset][0]->is_long_term)))
                 {                  
                   
                   dec_picture->mv  [LIST_1][i4][j4][0]= 0;
@@ -3526,7 +3537,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 {
                   for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
                   {
-                    if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==co_located_ref_id[refList][i4][j6])
+                    if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][i4][j6])
                     {
                       mapped_idx=iref;
                       break;
@@ -3572,8 +3583,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               }
             }
             // store reference picture ID determined by direct mode
-            dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][i4][j4]];
-            dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[LIST_1 + list_offset][dec_picture->ref_idx[LIST_1][i4][j4]];  
+            dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][i4][j4]];
+            dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_1 + list_offset][dec_picture->ref_idx[LIST_1][i4][j4]];  
           }
                  
           if (mv_mode==0 && img->direct_type )
@@ -3821,7 +3832,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     ref_idx >>=1;
                   }
 
-                  img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[pred_dir][ref_idx][uv+1] * pred  + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[pred_dir][fw_refframe>>curr_mb_field][uv+1]);
+                  img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[pred_dir][ref_idx][uv+1] * pred  + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[pred_dir][ref_idx][uv+1]);
                 }
                 else
                 {

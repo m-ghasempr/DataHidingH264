@@ -183,12 +183,12 @@ void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int e
 {
   int    blkP, blkQ, idx;
   int    blk_x, blk_x2, blk_y, blk_y2 ;
-  int    ***list0_mv = dec_picture->mv[LIST_0];
-  int    ***list1_mv = dec_picture->mv[LIST_1];
-  int    **list0_refIdxArr = dec_picture->ref_idx[LIST_0];
-  int    **list1_refIdxArr = dec_picture->ref_idx[LIST_1];
-  int64    **list0_refPicIdArr = dec_picture->ref_pic_id[LIST_0];
-  int64    **list1_refPicIdArr = dec_picture->ref_pic_id[LIST_1];
+  int    ***list0_mv = p->mv[LIST_0];
+  int    ***list1_mv = p->mv[LIST_1];
+  int    **list0_refIdxArr = p->ref_idx[LIST_0];
+  int    **list1_refIdxArr = p->ref_idx[LIST_1];
+  int64    **list0_refPicIdArr = p->ref_pic_id[LIST_0];
+  int64    **list1_refPicIdArr = p->ref_pic_id[LIST_1];
   int    xQ, xP, yQ, yP;
   int    mb_x, mb_y;
   Macroblock    *MbQ;

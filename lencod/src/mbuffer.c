@@ -2745,7 +2745,7 @@ void dpb_split_field(FrameStore *fs)
     {   
       int idiv4=i/4,jdiv4=j/4;
       int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
-        if (img->MbaffFrameFlag && img->mb_data[currentmb].mb_field)
+      if (fs->frame->MbaffFrameFlag  && fs->frame->mb_field[currentmb])
       {    
         int list_offset = currentmb%2? 4: 2;
         dummylist0 = fs->frame->ref_idx[LIST_0][i][j];
@@ -2778,7 +2778,7 @@ void dpb_split_field(FrameStore *fs)
         
         int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
         // Assign field mvs attached to MB-Frame buffer to the proper buffer
-        if (img->MbaffFrameFlag && img->mb_data[currentmb].mb_field)
+        if (fs->frame->MbaffFrameFlag  && fs->frame->mb_field[currentmb])
         {
           fs->bottom_field->field_frame[i][j] = fs->top_field->field_frame[i][j]=1;
           fs->frame->field_frame[i][2*j] = fs->frame->field_frame[i][2*j+1]=1;
@@ -2815,8 +2815,9 @@ void dpb_split_field(FrameStore *fs)
       int idiv4=i/4,jdiv4=j/2;
       
       int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
-      //! Do nothing if macroblock is field coded in MB-AFF
-      if (!img->MbaffFrameFlag || !img->mb_data[currentmb].mb_field)    
+      
+      
+      if (!fs->frame->MbaffFrameFlag  || !fs->frame->mb_field[currentmb])    
       {
         
         fs->frame->field_frame[i][2*j+1] = fs->frame->field_frame[i][2*j]=0;
@@ -2871,7 +2872,7 @@ void dpb_split_field(FrameStore *fs)
         int idiv4=i/4,jdiv4=j/4;
         int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
         
-        fs->frame->field_frame[i][j]=img->MbaffFrameFlag? img->mb_data[currentmb].mb_field : 0;
+        fs->frame->field_frame[i][j]=fs->frame->MbaffFrameFlag ? fs->frame->mb_field[currentmb] : 0;        
       }
     }
   }

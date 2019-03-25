@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 8.3
+ *     JM 8.4
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -62,7 +62,7 @@
 #include "erc_api.h"
 
 #define JM          "8"
-#define VERSION     "8.3"
+#define VERSION     "8.4"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -132,6 +132,7 @@ int main(int argc, char **argv)
   dec_picture = NULL;
 
   dpb.init_done = 0;
+  g_nFrame = 0;
 
 //  init_dpb(input);
   init_out_buffer();
@@ -198,6 +199,8 @@ void init(struct img_par *img)  //!< image parameters
   {
     img->quad[i]=i*i; // fix from TML 1, truncation removed
   }
+
+  img->oldFrameSizeInMbs = -1;
 }
 
 
@@ -662,6 +665,8 @@ int init_global_buffers()
 
   global_init_done = 1;
 
+  img->oldFrameSizeInMbs = img->FrameSizeInMbs;
+
   return (memory_size);
 }
 
@@ -686,7 +691,7 @@ void free_global_buffers()
   free_mem3D (imgUV_ref,2);
 
   // CAVLC free mem
-  free_mem3Dint(img->nz_coeff, img->FrameSizeInMbs);
+  free_mem3Dint(img->nz_coeff, img->oldFrameSizeInMbs);
 
   free_mem2Dint(img->siblock);
 

@@ -29,10 +29,10 @@ typedef struct storable_picture
   int         bottom_poc;
   int         frame_poc;
   int         order_num;
-  int64       ref_pic_num[6][MAX_LIST_SIZE];
-  int64       frm_ref_pic_num[6][MAX_LIST_SIZE];
-  int64       top_ref_pic_num[6][MAX_LIST_SIZE];
-  int64       bottom_ref_pic_num[6][MAX_LIST_SIZE];
+  int64       ref_pic_num        [MAX_NUM_SLICES][6][MAX_LIST_SIZE];
+  int64       frm_ref_pic_num    [MAX_NUM_SLICES][6][MAX_LIST_SIZE];
+  int64       top_ref_pic_num    [MAX_NUM_SLICES][6][MAX_LIST_SIZE];
+  int64       bottom_ref_pic_num [MAX_NUM_SLICES][6][MAX_LIST_SIZE];
   unsigned    frame_num;
   int         pic_num;
   int         long_term_pic_num;
@@ -42,6 +42,8 @@ typedef struct storable_picture
   int         used_for_reference;
   int         is_output;
   int         non_existing;
+
+  int         max_slice_id;
 
   int         size_x, size_y, size_x_cr, size_y_cr;
   int         chroma_vector_adjustment;
@@ -54,8 +56,9 @@ typedef struct storable_picture
 
   byte *      mb_field;      //!< field macroblock indicator
 
+  int  **     slice_id;      //!< reference picture   [mb_x][mb_y]
+
   int  ***    ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-                             //   [list][mb_nr][subblock_x][subblock_y]
 
   int64 ***    ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
                              //   (not  simply index) 
@@ -77,6 +80,13 @@ typedef struct storable_picture
   int         no_output_of_prior_pics_flag;
   int         long_term_reference_flag;
   int         adaptive_ref_pic_buffering_flag;
+
+  int         frame_mbs_only_flag;
+  int         frame_cropping_flag;
+  int         frame_cropping_rect_left_offset;
+  int         frame_cropping_rect_right_offset;
+  int         frame_cropping_rect_top_offset;
+  int         frame_cropping_rect_bottom_offset;
 
   DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //!< stores the memory management control operations
 
@@ -156,6 +166,7 @@ typedef struct decoded_picture_buffer
   int           max_long_term_pic_idx;
 
   int           init_done;
+  int           num_ref_frames;
 
   FrameStore   *last_picture;
 } DecodedPictureBuffer;

@@ -171,6 +171,7 @@ void find_snr(
 
   // calculate frame number
   int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? p->poc /(input->poc_scale) : p->poc/(3-input->poc_scale);
+//  int  psnrPOC = p->MbaffFrameFlag ? p->poc /(input->poc_scale) : p->poc/(3-input->poc_scale);
 
   // KS: Code below might work better if you have fields and a large (>1) poc offset between them
 //  int  poc_diff=max(1,(p->bottom_poc - p->top_poc));
@@ -477,32 +478,34 @@ void set_ref_pic_num()
 {
   int i,j;
   
+  int slice_id=img->current_slice_nr;
+
   for (i=0;i<listXsize[LIST_0];i++)
   {
-    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
-    dec_picture->frm_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->frame_poc * 2; 
-    dec_picture->top_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->top_poc * 2; 
-    dec_picture->bottom_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->bottom_poc * 2 + 1; 
+    dec_picture->ref_pic_num        [slice_id][LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
+    dec_picture->frm_ref_pic_num    [slice_id][LIST_0][i]=listX[LIST_0][i]->frame_poc * 2; 
+    dec_picture->top_ref_pic_num    [slice_id][LIST_0][i]=listX[LIST_0][i]->top_poc * 2; 
+    dec_picture->bottom_ref_pic_num [slice_id][LIST_0][i]=listX[LIST_0][i]->bottom_poc * 2 + 1; 
     //printf("POCS %d %d %d %d ",listX[LIST_0][i]->frame_poc,listX[LIST_0][i]->bottom_poc,listX[LIST_0][i]->top_poc,listX[LIST_0][i]->poc);
     //printf("refid %d %d %d %d\n",(int) dec_picture->frm_ref_pic_num[LIST_0][i],(int) dec_picture->top_ref_pic_num[LIST_0][i],(int) dec_picture->bottom_ref_pic_num[LIST_0][i],(int) dec_picture->ref_pic_num[LIST_0][i]);
   }
 
   for (i=0;i<listXsize[LIST_1];i++)
   {
-    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
-    dec_picture->frm_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->frame_poc * 2; 
-    dec_picture->top_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->top_poc * 2; 
-    dec_picture->bottom_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->bottom_poc * 2 + 1; 
+    dec_picture->ref_pic_num        [slice_id][LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
+    dec_picture->frm_ref_pic_num    [slice_id][LIST_1][i]=listX[LIST_1][i]->frame_poc * 2; 
+    dec_picture->top_ref_pic_num    [slice_id][LIST_1][i]=listX[LIST_1][i]->top_poc * 2; 
+    dec_picture->bottom_ref_pic_num [slice_id][LIST_1][i]=listX[LIST_1][i]->bottom_poc * 2 + 1; 
   }
 
   if (img->structure==FRAME)
     for (j=2;j<6;j++)
       for (i=0;i<listXsize[j];i++)
       {    
-        dec_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
-        dec_picture->frm_ref_pic_num[j][i] = listX[j][i]->frame_poc * 2 ;
-        dec_picture->top_ref_pic_num[j][i] = listX[j][i]->top_poc * 2 ;
-        dec_picture->bottom_ref_pic_num[j][i] = listX[j][i]->bottom_poc * 2 + 1;
+        dec_picture->ref_pic_num        [slice_id][j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
+        dec_picture->frm_ref_pic_num    [slice_id][j][i] = listX[j][i]->frame_poc * 2 ;
+        dec_picture->top_ref_pic_num    [slice_id][j][i] = listX[j][i]->top_poc * 2 ;
+        dec_picture->bottom_ref_pic_num [slice_id][j][i] = listX[j][i]->bottom_poc * 2 + 1;
       }
 
 }
@@ -945,6 +948,18 @@ void init_picture(struct img_par *img, struct inp_par *inp)
   dec_picture->pic_num = img->frame_num;
   dec_picture->frame_num = img->frame_num;
   dec_picture->coded_frame = (img->structure==FRAME);
+
+  dec_picture->frame_mbs_only_flag = active_sps->frame_mbs_only_flag;
+  dec_picture->frame_cropping_flag = active_sps->frame_cropping_flag;
+
+  if (dec_picture->frame_cropping_flag)
+  {
+    dec_picture->frame_cropping_rect_left_offset   = active_sps->frame_cropping_rect_left_offset;
+    dec_picture->frame_cropping_rect_right_offset  = active_sps->frame_cropping_rect_right_offset;
+    dec_picture->frame_cropping_rect_top_offset    = active_sps->frame_cropping_rect_top_offset;
+    dec_picture->frame_cropping_rect_bottom_offset = active_sps->frame_cropping_rect_bottom_offset;
+  }
+
 }
 
 /*!
@@ -988,7 +1003,7 @@ void exit_frame()
   {
     ercStartSegment(0, ercSegment, 0 , erc_errorVar);
     //! generate the segments according to the macroblock map
-    for(i = 1; i<img->PicSizeInMbs; i++)
+    for(i = 1; i<dec_picture->PicSizeInMbs; i++)
     {
       if(img->mb_data[i].ei_flag != img->mb_data[i-1].ei_flag)
       {
@@ -1075,20 +1090,12 @@ void exit_frame()
     
     fflush(stdout);
     
-    //! TO 19.11.2001 Known Problem: for init_frame we have to know the picture type of the actual frame
-    //! in case the first slice of the P-Frame following the I-Frame was lost we decode this P-Frame but 
-    //! do not write it because it was assumed to be an I-Frame in init_frame. So we force the decoder to
-    //! guess the right picture type. This is a hack a should be removed by the time there is a clean
-    //! solution where we do not have to know the picture type for the function init_frame.
-//    if(img->type == I_SLICE)
-//      img->type = P_SLICE;
-    //! End TO 19.11.2001
-    
     if(slice_type == I_SLICE || slice_type == SI_SLICE || slice_type == P_SLICE || refpic)   // I or P pictures
       img->number++;
     else
       Bframe_ctr++;    // B pictures
-    
+ 
+    g_nFrame++;
   }
 
   img->current_mb_nr = -4712;   // impossible value for debugging, StW

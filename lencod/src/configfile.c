@@ -451,7 +451,7 @@ static int ParameterNameToMapIndex (char *s)
  */
 unsigned CeilLog2( unsigned uiVal)
 {
-  unsigned uiTmp = uiVal;
+  unsigned uiTmp = uiVal-1;
   unsigned uiRet = 0;
 
   while( uiTmp != 0 )

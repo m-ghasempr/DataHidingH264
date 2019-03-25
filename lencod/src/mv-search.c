@@ -1970,6 +1970,7 @@ int Get_Direct_CostMB (double lambda)
   for (i=0; i<4; i++)
   {
     cost += Get_Direct_Cost8x8 (i, lambda);
+    if (cost >= (1<<30)) return cost;
   }
   return cost;
 }

@@ -907,6 +907,7 @@ typedef struct
   int   em_prev_bits_fld;
   int  *em_prev_bits;
   int   bit_ctr_parametersets;
+  int   bit_ctr_parametersets_n;
 } StatParameters;
 
 //!< For MB level field/frame coding tools

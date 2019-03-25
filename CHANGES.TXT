@@ -1,3 +1,19 @@
+Changes for Version JM 8.4 to JM 8.3
+------------------------------------
+- encoder: fix encoder merge bug (AT)
+- encoder: count parameter set bits (AT)
+- decoder: spatial direct long-term support (KS)
+- decoder: fix colocation problem (KS)
+- decoder: fix SPS/PPS changes (KS)
+- decoder: fix reordering with multiple slices (KS)
+- decoder: allow paired output of unpaired fields (KS)
+- decoder: fix POC on MMCO=5 (KS)
+- decoder: fix picture unmarking problem (KS)
+- decoder: SPS activation on buffering SEI (KS)
+- decoder: weighted prediction typo (AT)
+- decoder: fix CeilLog2 function (KS)
+
+
 Changes for Version JM 8.3 to JM 8.2
 ------------------------------------
 - encoder: fast motion estimation fixes und cleanup (WF)

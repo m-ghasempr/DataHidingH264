@@ -65,6 +65,8 @@ int  ReMapRef[20];
 int  Bframe_ctr;
 int  frame_no;
 
+int  g_nFrame;
+
 // For MB level frame/field coding
 int  TopFieldForSkip_Y[16][16];
 int  TopFieldForSkip_UV[2][16][16];
@@ -529,6 +531,7 @@ typedef struct img_par
   unsigned PicHeightInMbs;
   unsigned PicSizeInMbs;
   unsigned FrameSizeInMbs;
+  unsigned oldFrameSizeInMbs;
 
   int no_output_of_prior_pics_flag;
   int long_term_reference_flag;

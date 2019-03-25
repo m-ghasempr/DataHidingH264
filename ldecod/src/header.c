@@ -46,7 +46,7 @@ static void pred_weight_table();
  */
 unsigned CeilLog2( unsigned uiVal)
 {
-  unsigned uiTmp = uiVal;
+  unsigned uiTmp = uiVal-1;
   unsigned uiRet = 0;
 
   while( uiTmp != 0 )
@@ -627,6 +627,7 @@ void decode_poc(struct img_par *img)
       if (img->last_has_mmco_5)
       {
         img->PreviousFrameNumOffset = 0;
+        img->PreviousFrameNum = 0;
       }
       if (img->frame_num<img->PreviousFrameNum)
       {             //not first pix of IDRGOP
@@ -648,9 +649,10 @@ void decode_poc(struct img_par *img)
 
     // 3rd
     img->ExpectedDeltaPerPicOrderCntCycle=0;
+
     if(active_sps->num_ref_frames_in_pic_order_cnt_cycle)
-    for(i=0;i<(int) active_sps->num_ref_frames_in_pic_order_cnt_cycle;i++)
-      img->ExpectedDeltaPerPicOrderCntCycle += active_sps->offset_for_ref_frame[i];
+      for(i=0;i<(int) active_sps->num_ref_frames_in_pic_order_cnt_cycle;i++)
+        img->ExpectedDeltaPerPicOrderCntCycle += active_sps->offset_for_ref_frame[i];
 
     if(img->AbsFrameNum)
     {

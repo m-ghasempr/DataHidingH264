@@ -24,6 +24,10 @@
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
 
+#define PAIR_FIELDS_IN_OUTPUT
+
+#define MAX_NUM_SLICES 150
+
 // CAVLC
 #define LUMA              0
 #define LUMA_INTRA16x16DC 1

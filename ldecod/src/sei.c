@@ -24,10 +24,12 @@
 #include "vlc.h"
 #include "header.h"
 #include "mbuffer.h"
+#include "parset.h"
 
 extern int UsedBits;
 
 extern seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
+
 
 // #define PRINT_BUFFERING_PERIOD_INFO    // uncomment to print buffering period SEI info
 // #define PRINT_PCITURE_TIMING_INFO      // uncomment to print picture timing SEI info
@@ -727,7 +729,7 @@ void interpret_user_data_unregistered_info( byte* payload, int size, ImageParame
   printf("User data unregistered SEI message\n");
   printf("uuid_iso_11578 = 0x");
 #endif
-  assert (size<16);
+  assert (size>=16);
 
   for (offset = 0; offset < 16; offset++)
   {
@@ -1317,17 +1319,9 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
   UsedBits = 0;
 
   seq_parameter_set_id   = ue_v("SEI: seq_parameter_set_id"  , buf);
+  sps = &SeqParSet[seq_parameter_set_id];
 
-   sps = &SeqParSet[seq_parameter_set_id];
-   if (active_sps != sps)
-   {
-     active_sps = sps;
-     if (!img->no_output_of_prior_pics_flag)
-     {
-       flush_dpb();
-     }
-     init_dpb();
-   }
+  activate_sps(sps);
 
 #ifdef PRINT_BUFFERING_PERIOD_INFO
   printf("Buffering period SEI message\n");

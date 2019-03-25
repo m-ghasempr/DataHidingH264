@@ -90,7 +90,9 @@ int start_sequence()
   nalu = GeneratePic_parameter_set_NALU ();
   len += WriteNALU (nalu);
   FreeNALU (nalu);
-  stat->bit_ctr_parametersets = len;
+
+//  stat->bit_ctr_parametersets = len;
+    stat->bit_ctr_parametersets_n = len;
   return 0;
 }
 
