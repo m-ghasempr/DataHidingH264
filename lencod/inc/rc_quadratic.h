@@ -11,7 +11,7 @@
  *    14 Jan 2003
  *
  * \brief
- *    Headerfile for rate control 
+ *    Headerfile for rate control
  **************************************************************************
  */
 
@@ -24,13 +24,13 @@
 
 typedef struct
 {
-  float  bit_rate; 
+  float  bit_rate;
   float  frame_rate;
   float  PrevBitRate;           //LIZG  25/10/2002
   double GAMMAP;                //LIZG, JVT019r1
   double BETAP;                 //LIZG, JVT019r1
-  double GOPTargetBufferLevel;  
-  double TargetBufferLevel;     //LIZG 25/10/2002  
+  double GOPTargetBufferLevel;
+  double TargetBufferLevel;     //LIZG 25/10/2002
   double AveWp;
   double AveWb;
   int    RC_MAX_QUANT;          //LIZG 28/10/2002
@@ -44,26 +44,26 @@ typedef struct
   double MADPictureC2;
   double PMADPictureC1;
   double PMADPictureC2;
-  /* LIZG JVT50V2 picture layer MAD */  
+  /* LIZG JVT50V2 picture layer MAD */
   double PPictureMAD [RC_MODEL_HISTORY];
   double PictureMAD  [RC_MODEL_HISTORY];
-  double ReferenceMAD[RC_MODEL_HISTORY];  
+  double ReferenceMAD[RC_MODEL_HISTORY];
   double m_rgQp      [RC_MODEL_HISTORY];
   double m_rgRp      [RC_MODEL_HISTORY];
   double Pm_rgQp     [RC_MODEL_HISTORY];
   double Pm_rgRp     [RC_MODEL_HISTORY];
 
   double m_X1;
-  double m_X2;  
+  double m_X2;
   double Pm_X1;
   double Pm_X2;
   int    Pm_Qp;
   int    Pm_Hp;
-  
+
   int    MADm_windowSize;
   int    m_windowSize;
   int    m_Qc;
-  
+
   int    PPreHeader;
   int    PrevLastQP; // QP of the second-to-last coded frame in the primary layer
   int    CurrLastQP; // QP of the last coded frame in the primary layer
@@ -100,13 +100,13 @@ typedef struct
 
   Boolean GOPOverdue;
   int64   Iprev_bits;
-  int64   Pprev_bits;  
+  int64   Pprev_bits;
 
   /* rate control variables */
   int    Xp, Xb;
   int    Target;
   int    TargetField;
-  int    Np, Nb, bits_topfield;  
+  int    Np, Nb, bits_topfield;
   //HRD consideration
   int    UpperBound1, UpperBound2, LowerBound;
   double Wp, Wb; // complexity weights
@@ -152,6 +152,9 @@ int  updateQPRC3(rc_quadratic *prc, int topfield);
 void updateMADModel   (rc_quadratic *prc);
 void RCModelEstimator (rc_quadratic *prc, int n_windowSize, Boolean *m_rgRejected);
 void MADModelEstimator(rc_quadratic *prc, int n_windowSize, Boolean *PictureRejected);
+int  updateComplexity( rc_quadratic *prc, Boolean is_updated, int nbits );
+void updatePparams( rc_quadratic *prc, int complexity );
+void updateBparams( rc_quadratic *prc, int complexity );
 
 // rate control CURRENT pointers
 rc_quadratic *quadratic_RC;

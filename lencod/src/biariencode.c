@@ -34,7 +34,7 @@ int binCount = 0;
                        eep->C-=8; \
                        eep->E++; \
                      } \
-                    } 
+                    }
 
 #define put_one_bit(b) { \
                          Ebuffer <<= 1; Ebuffer |= (b); \
@@ -173,33 +173,33 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   register unsigned int range = Erange;
   register unsigned int low = Elow;
   unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3];
-  
+
 #if (2==TRACE)
   if (cabac_encoding)
     fprintf(p_trace, "%d  0x%04x  %d  %d\n", binCount++, Erange , bi_ct->state, bi_ct->MPS );
 #endif
-  
-  range -= rLPS;  
+
+  range -= rLPS;
   bi_ct->count += cabac_encoding;
 
-  /* covers all cases where code does not bother to shift down symbol to be 
-   * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code simply 
+  /* covers all cases where code does not bother to shift down symbol to be
+   * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code simply
    * masks off the bit position and passes in the resulting value */
   symbol = (short) (symbol != 0);
 
-  if (symbol != bi_ct->MPS) 
+  if (symbol != bi_ct->MPS)
   {
     low += range;
     range = rLPS;
-    
+
     if (!bi_ct->state)
       bi_ct->MPS = (unsigned char) (bi_ct->MPS ^ 0x01);               // switch LPS if necessary
     bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
-  } 
-  else 
+  }
+  else
     bi_ct->state = AC_next_state_MPS_64[bi_ct->state]; // next state
- 
-  /* renormalisation */    
+
+  /* renormalisation */
   while (range < QUARTER)
   {
     if (low >= HALF)
@@ -227,31 +227,31 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
 /*!
  ************************************************************************
  * \brief
- *    Arithmetic encoding of one binary symbol assuming 
+ *    Arithmetic encoding of one binary symbol assuming
  *    a fixed prob. distribution with p(symbol) = 0.5
  ************************************************************************
  */
 void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol)
 {
   register unsigned int low = (Elow<<1);
-  
+
 #if (2==TRACE)
   extern int cabac_encoding;
   if (cabac_encoding)
     fprintf(p_trace, "%d  0x%04x\n", binCount++, Erange );
 #endif
-  
+
   if (symbol != 0)
     low += Erange;
 
-  /* renormalisation as for biari_encode_symbol; 
-     note that low has already been doubled */ 
+  /* renormalisation as for biari_encode_symbol;
+     note that low has already been doubled */
   if (low >= ONE)
   {
     put_one_bit_plus_outstanding(1);
     low -= ONE;
   }
-  else 
+  else
     if (low < HALF)
     {
       put_one_bit_plus_outstanding(0);
@@ -262,7 +262,7 @@ void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol
       low -= HALF;
     }
     Elow = low;
-    eep->C++;    
+    eep->C++;
 }
 
 /*!
@@ -275,18 +275,18 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
 {
   register unsigned int range = Erange-2;
   register unsigned int low = Elow;
-  
+
 #if (2==TRACE)
   extern int cabac_encoding;
   if (cabac_encoding)
     fprintf(p_trace, "%d  0x%04x\n", binCount++, Erange);
 #endif
-  
+
   if (symbol) {
     low += range;
     range = 2;
   }
-  
+
   while (range < QUARTER)
   {
     if (low >= HALF)
@@ -294,7 +294,7 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
       put_one_bit_plus_outstanding(1);
       low -= HALF;
     }
-    else 
+    else
       if (low < QUARTER)
       {
         put_one_bit_plus_outstanding(0);
@@ -333,7 +333,7 @@ void biari_init_context (BiContextTypePtr ctx, const int* ini)
     ctx->state  = (unsigned short) (63 - pstate);
     ctx->MPS    = 0;
   }
-  
+
   ctx->count = 0;
 }
 

@@ -104,7 +104,7 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
     // imgpel == pixel_in_file == 1 byte -> simple copy
     for(i=0;i<theight;i++)
       memcpy(buf+crop_left+(i*twidth),&(imgX[i+crop_top][crop_left]), twidth);
-    
+
   }
   else
   {
@@ -183,7 +183,7 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
       else
       {
         for(i=0;i<size_y;i++)
-        {          
+        {
           for(j=0;j<size_x;j++)
           {
             *(buf++)=(char) imgX[i][j];
@@ -213,7 +213,7 @@ void flush_pending_output(int p_out)
   {
     write_out_picture(pending_output, p_out);
   }
-  
+
   if (pending_output->imgY)
   {
     free_mem2Dpel (pending_output->imgY);
@@ -232,8 +232,8 @@ void flush_pending_output(int p_out)
 /*!
  ************************************************************************
  * \brief
- *    Writes out a storable picture 
- *    If the picture is a field, the output buffers the picture and tries 
+ *    Writes out a storable picture
+ *    If the picture is a field, the output buffers the picture and tries
  *    to pair it with the next field.
  * \param p
  *    Picture to be written
@@ -304,7 +304,7 @@ void write_picture(StorablePicture *p, int p_out, int real_structure)
   }
   else
   {
-    if (  (pending_output->size_x!=p->size_x) || (pending_output->size_y!= p->size_y) 
+    if (  (pending_output->size_x!=p->size_x) || (pending_output->size_y!= p->size_y)
        || (pending_output->frame_mbs_only_flag != p->frame_mbs_only_flag)
        || (pending_output->frame_cropping_flag != p->frame_cropping_flag)
        || ( pending_output->frame_cropping_flag &&
@@ -458,25 +458,25 @@ void write_out_picture(StorablePicture *p, int p_out)
     {
       int i,j;
       imgpel cr_val = (imgpel) (1<<(img->bitdepth_luma - 1));
-      
+
       get_mem3Dpel (&(p->imgUV), 1, p->size_y/2, p->size_x/2);
       for (j=0; j<p->size_y/2; j++)
         for (i=0; i<p->size_x/2; i++)
           p->imgUV[0][j][i]=cr_val;
-        
+
       // fake out U=V=128 to make a YUV 4:2:0 stream
       img2buf (p->imgUV[0], buf, p->size_x/2, p->size_y/2, symbol_size_in_bytes, crop_left/2, crop_right/2, crop_top/2, crop_bottom/2);
-        
+
       write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
       write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
-      
+
       free_mem3Dpel(p->imgUV, 1);
       p->imgUV=NULL;
     }
   }
 
   free(buf);
-    
+
 //  fsync(p_out);
 }
 
@@ -538,7 +538,7 @@ void clear_picture(StorablePicture *p)
     for (j=0; j<p->size_x_cr; j++)
       p->imgUV[1][i][j] = (imgpel) img->dc_pred_value_chroma;
   }
-    
+
 }
 
 /*!
@@ -577,7 +577,7 @@ void write_unpaired_field(FrameStore* fs, int p_out)
     fs->top_field->chroma_format_idc = p->chroma_format_idc;
     clear_picture(fs->top_field);
     fs ->top_field->frame_cropping_flag = fs->bottom_field->frame_cropping_flag;
-    if(fs ->top_field->frame_cropping_flag) 
+    if(fs ->top_field->frame_cropping_flag)
     {
       fs ->top_field->frame_cropping_rect_top_offset = fs->bottom_field->frame_cropping_rect_top_offset;
       fs ->top_field->frame_cropping_rect_bottom_offset = fs->bottom_field->frame_cropping_rect_bottom_offset;
@@ -646,7 +646,7 @@ void write_stored_frame( FrameStore *fs,int p_out)
 /*!
  ************************************************************************
  * \brief
- *    Directly output a picture without storing it in the DPB. Fields 
+ *    Directly output a picture without storing it in the DPB. Fields
  *    are buffered before they are written to the file.
  * \param p
  *    Picture for output

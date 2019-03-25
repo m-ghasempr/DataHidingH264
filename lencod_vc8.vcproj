@@ -413,6 +413,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\symbol.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\transform8x8.c"
 				>
 			</File>
@@ -614,6 +618,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\inc\symbol.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\transform8x8.h"
 				>
 			</File>
@@ -632,10 +640,6 @@
 		</File>
 		<File
 			RelativePath="bin\encoder_yuv422.cfg"
-			>
-		</File>
-		<File
-			RelativePath="bin\encoder_yuv444.cfg"
 			>
 		</File>
 	</Files>

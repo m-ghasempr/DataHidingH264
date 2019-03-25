@@ -1,7 +1,7 @@
 
 /*!
  *************************************************************************************
- * \file 
+ * \file
  *      erc_do_i.c
  *
  * \brief
@@ -19,7 +19,7 @@
 #include "global.h"
 #include "erc_do.h"
 
-static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, int32 picSizeX, int *condition );
+static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, int picSizeX, int *condition );
 static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize, int frameWidth );
 
 /*!
@@ -36,30 +36,30 @@ static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize
  *      Width of the frame in pixels
  * \param picSizeY
  *      Height of the frame in pixels
- * \param errorVar   
+ * \param errorVar
  *      Variables for error concealment
  ************************************************************************
  */
-int ercConcealIntraFrame( frame *recfr, int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar ) 
+int ercConcealIntraFrame( frame *recfr, int picSizeX, int picSizeY, ercVariables_t *errorVar )
 {
   int lastColumn = 0, lastRow = 0;
-  
+
   // if concealment is on
-  if ( errorVar && errorVar->concealment ) 
+  if ( errorVar && errorVar->concealment )
   {
     // if there are segments to be concealed
-    if ( errorVar->nOfCorruptedSegments ) 
-    { 
+    if ( errorVar->nOfCorruptedSegments )
+    {
       // Y
       lastRow = (int) (picSizeY>>3);
       lastColumn = (int) (picSizeX>>3);
       concealBlocks( lastColumn, lastRow, 0, recfr, picSizeX, errorVar->yCondition );
-      
+
       // U (dimensions halved compared to Y)
       lastRow = (int) (picSizeY>>4);
       lastColumn = (int) (picSizeX>>4);
       concealBlocks( lastColumn, lastRow, 1, recfr, picSizeX, errorVar->uCondition );
-      
+
       // V ( dimensions equal to U )
       concealBlocks( lastColumn, lastRow, 2, recfr, picSizeX, errorVar->vCondition );
     }
@@ -80,7 +80,7 @@ int ercConcealIntraFrame( frame *recfr, int32 picSizeX, int32 picSizeY, ercVaria
  *      y coordinate in blocks
  * \param column
  *      x coordinate in blocks
- * \param predBlocks[]   
+ * \param predBlocks[]
  *      list of neighboring source blocks (numbering 0 to 7, 1 means: use the neighbor)
  * \param frameWidth
  *      width of frame in pixels
@@ -88,7 +88,7 @@ int ercConcealIntraFrame( frame *recfr, int32 picSizeX, int32 picSizeY, ercVaria
  *      2 for Y, 1 for U/V components
  ************************************************************************
  */
-void ercPixConcealIMB(imgpel *currFrame, int row, int column, int predBlocks[], int frameWidth, int mbWidthInBlocks) 
+void ercPixConcealIMB(imgpel *currFrame, int row, int column, int predBlocks[], int frameWidth, int mbWidthInBlocks)
 {
    imgpel *src[8]={NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
    imgpel *currBlock = NULL;
@@ -110,7 +110,7 @@ void ercPixConcealIMB(imgpel *currFrame, int row, int column, int predBlocks[], 
       src[6] = currFrame + (row+mbWidthInBlocks)*frameWidth*8 + column*8;
    if (predBlocks[7])
       src[7] = currFrame + row*frameWidth*8 + (column+mbWidthInBlocks)*8;
-   
+
    currBlock = currFrame + row*frameWidth*8 + column*8;
    pixMeanInterpolateBlock( src, currBlock, mbWidthInBlocks*8, frameWidth );
 }
@@ -119,106 +119,106 @@ void ercPixConcealIMB(imgpel *currFrame, int row, int column, int predBlocks[], 
  ************************************************************************
  * \brief
  *      This function checks the neighbors of a Macroblock for usability in
- *      concealment. First the OK macroblocks are marked, and if there is not 
+ *      concealment. First the OK macroblocks are marked, and if there is not
  *      enough of them, then the CONCEALED ones as well.
  *      A "1" in the the output array means reliable, a "0" non reliable MB.
  *      The block order in "predBlocks":
  *              1 4 0
  *              5 x 7
- *              2 6 3   
+ *              2 6 3
  *      i.e., corners first.
  * \return
  *      Number of useable neighbor macroblocks for concealment.
- * \param predBlocks[] 
+ * \param predBlocks[]
  *      Array for indicating the valid neighbor blocks
- * \param currRow 
+ * \param currRow
  *      Current block row in the frame
- * \param currColumn    
+ * \param currColumn
  *      Current block column in the frame
- * \param condition    
+ * \param condition
  *      The block condition (ok, lost) table
- * \param maxRow      
+ * \param maxRow
  *      Number of block rows in the frame
- * \param maxColumn   
+ * \param maxColumn
  *      Number of block columns in the frame
- * \param step          
+ * \param step
  *      Number of blocks belonging to a MB, when counting
  *      in vertical/horizontal direction. (Y:2 U,V:1)
- * \param fNoCornerNeigh 
+ * \param fNoCornerNeigh
  *      No corner neighbors are considered
  ************************************************************************
  */
-int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, int *condition, 
+int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, int *condition,
                            int maxRow, int maxColumn, int step, byte fNoCornerNeigh )
 {
   int srcCounter  = 0;
   int srcCountMin = (fNoCornerNeigh ? 2 : 4);
   int threshold   = ERC_BLOCK_OK;
-  
+
   memset( predBlocks, 0, 8*sizeof(int) );
-  
+
   // collect the reliable neighboring blocks
-  do 
+  do
   {
     srcCounter = 0;
     // top
-    if (currRow > 0 && condition[ (currRow-1)*maxColumn + currColumn ] >= threshold ) 
+    if (currRow > 0 && condition[ (currRow-1)*maxColumn + currColumn ] >= threshold )
     {                           //ERC_BLOCK_OK (3) or ERC_BLOCK_CONCEALED (2)
       predBlocks[4] = condition[ (currRow-1)*maxColumn + currColumn ];
       srcCounter++;
     }
     // bottom
-    if ( currRow < (maxRow-step) && condition[ (currRow+step)*maxColumn + currColumn ] >= threshold ) 
+    if ( currRow < (maxRow-step) && condition[ (currRow+step)*maxColumn + currColumn ] >= threshold )
     {
       predBlocks[6] = condition[ (currRow+step)*maxColumn + currColumn ];
       srcCounter++;
     }
-    
-    if ( currColumn > 0 ) 
+
+    if ( currColumn > 0 )
     {
       // left
-      if ( condition[ currRow*maxColumn + currColumn - 1 ] >= threshold ) 
+      if ( condition[ currRow*maxColumn + currColumn - 1 ] >= threshold )
       {
         predBlocks[5] = condition[ currRow*maxColumn + currColumn - 1 ];
         srcCounter++;
       }
-      
-      if ( !fNoCornerNeigh ) 
+
+      if ( !fNoCornerNeigh )
       {
         // top-left
-        if ( currRow > 0 && condition[ (currRow-1)*maxColumn + currColumn - 1 ] >= threshold ) 
+        if ( currRow > 0 && condition[ (currRow-1)*maxColumn + currColumn - 1 ] >= threshold )
         {
           predBlocks[1] = condition[ (currRow-1)*maxColumn + currColumn - 1 ];
           srcCounter++;
         }
         // bottom-left
-        if ( currRow < (maxRow-step) && condition[ (currRow+step)*maxColumn + currColumn - 1 ] >= threshold ) 
+        if ( currRow < (maxRow-step) && condition[ (currRow+step)*maxColumn + currColumn - 1 ] >= threshold )
         {
           predBlocks[2] = condition[ (currRow+step)*maxColumn + currColumn - 1 ];
           srcCounter++;
         }
       }
     }
-    
-    if ( currColumn < (maxColumn-step) ) 
+
+    if ( currColumn < (maxColumn-step) )
     {
       // right
-      if ( condition[ currRow*maxColumn+currColumn + step ] >= threshold ) 
+      if ( condition[ currRow*maxColumn+currColumn + step ] >= threshold )
       {
         predBlocks[7] = condition[ currRow*maxColumn+currColumn + step ];
         srcCounter++;
       }
-      
-      if ( !fNoCornerNeigh ) 
+
+      if ( !fNoCornerNeigh )
       {
         // top-right
-        if ( currRow > 0 && condition[ (currRow-1)*maxColumn + currColumn + step ] >= threshold ) 
+        if ( currRow > 0 && condition[ (currRow-1)*maxColumn + currColumn + step ] >= threshold )
         {
           predBlocks[0] = condition[ (currRow-1)*maxColumn + currColumn + step ];
           srcCounter++;
         }
         // bottom-right
-        if ( currRow < (maxRow-step) && condition[ (currRow+step)*maxColumn + currColumn + step ] >= threshold ) 
+        if ( currRow < (maxRow-step) && condition[ (currRow+step)*maxColumn + currColumn + step ] >= threshold )
         {
           predBlocks[3] = condition[ (currRow+step)*maxColumn + currColumn + step ];
           srcCounter++;
@@ -230,7 +230,7 @@ int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, int *c
     if (threshold < ERC_BLOCK_CONCEALED)
       break;
   } while ( srcCounter < srcCountMin);
-  
+
   return srcCounter;
 }
 
@@ -240,19 +240,19 @@ int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, int *c
  *      collects prediction blocks only from the current column
  * \return
  *      Number of usable neighbour Macroblocks for concealment.
- * \param predBlocks[] 
+ * \param predBlocks[]
  *      Array for indicating the valid neighbor blocks
- * \param currRow 
+ * \param currRow
  *      Current block row in the frame
- * \param currColumn    
+ * \param currColumn
  *      Current block column in the frame
- * \param condition    
+ * \param condition
  *      The block condition (ok, lost) table
- * \param maxRow      
+ * \param maxRow
  *      Number of block rows in the frame
- * \param maxColumn   
+ * \param maxColumn
  *      Number of block columns in the frame
- * \param step          
+ * \param step
  *      Number of blocks belonging to a MB, when counting
  *      in vertical/horizontal direction. (Y:2 U,V:1)
  ************************************************************************
@@ -260,21 +260,21 @@ int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, int *c
 int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *condition, int maxRow, int maxColumn, int step )
 {
   int srcCounter = 0, threshold = ERC_BLOCK_CORRUPTED;
-  
+
   memset( predBlocks, 0, 8*sizeof(int) );
-  
+
   // in this case, row > 0 and row < 17
-  if ( condition[ (currRow-1)*maxColumn + currColumn ] > threshold ) 
+  if ( condition[ (currRow-1)*maxColumn + currColumn ] > threshold )
   {
     predBlocks[4] = 1;
     srcCounter++;
   }
-  if ( condition[ (currRow+step)*maxColumn + currColumn ] > threshold ) 
+  if ( condition[ (currRow+step)*maxColumn + currColumn ] > threshold )
   {
     predBlocks[6] = 1;
     srcCounter++;
   }
-  
+
   return srcCounter;
 }
 
@@ -283,13 +283,13 @@ int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *
  * \brief
  *      Core for the Intra blocks concealment.
  *      It is called for each color component (Y,U,V) separately
- *      Finds the corrupted blocks and calls pixel interpolation functions 
+ *      Finds the corrupted blocks and calls pixel interpolation functions
  *      to correct them, one block at a time.
  *      Scanning is done vertically and each corrupted column is corrected
  *      bi-directionally, i.e., first block, last block, first block+1, last block -1 ...
- * \param lastColumn  
+ * \param lastColumn
  *      Number of block columns in the frame
- * \param lastRow     
+ * \param lastRow
  *      Number of block rows in the frame
  * \param comp
  *      color component
@@ -301,47 +301,47 @@ int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *
  *      The block condition (ok, lost) table
  ************************************************************************
  */
-static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, int32 picSizeX, int *condition )
+static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, int picSizeX, int *condition )
 {
   int row, column, srcCounter = 0,  thr = ERC_BLOCK_CORRUPTED,
-      lastCorruptedRow = -1, firstCorruptedRow = -1, currRow = 0, 
+      lastCorruptedRow = -1, firstCorruptedRow = -1, currRow = 0,
       areaHeight = 0, i = 0, smoothColumn = 0;
   int predBlocks[8], step = 1;
-  
+
   // in the Y component do the concealment MB-wise (not block-wise):
   // this is useful if only whole MBs can be damaged or lost
   if ( comp == 0 )
     step = 2;
   else
     step = 1;
-  
-  for ( column = 0; column < lastColumn; column += step ) 
+
+  for ( column = 0; column < lastColumn; column += step )
   {
-    for ( row = 0; row < lastRow; row += step ) 
+    for ( row = 0; row < lastRow; row += step )
     {
-      if ( condition[row*lastColumn+column] <= thr ) 
+      if ( condition[row*lastColumn+column] <= thr )
       {
         firstCorruptedRow = row;
         // find the last row which has corrupted blocks (in same continuous area)
-        for ( lastCorruptedRow = row+step; lastCorruptedRow < lastRow; lastCorruptedRow += step ) 
+        for ( lastCorruptedRow = row+step; lastCorruptedRow < lastRow; lastCorruptedRow += step )
         {
           // check blocks in the current column
-          if ( condition[ lastCorruptedRow*lastColumn + column ] > thr ) 
+          if ( condition[ lastCorruptedRow*lastColumn + column ] > thr )
           {
             // current one is already OK, so the last was the previous one
             lastCorruptedRow -= step;
             break;
           }
         }
-        if ( lastCorruptedRow >= lastRow ) 
+        if ( lastCorruptedRow >= lastRow )
         {
           // correct only from above
           lastCorruptedRow = lastRow-step;
-          for ( currRow = firstCorruptedRow; currRow < lastRow; currRow += step ) 
+          for ( currRow = firstCorruptedRow; currRow < lastRow; currRow += step )
           {
             srcCounter = ercCollect8PredBlocks( predBlocks, currRow, column, condition, lastRow, lastColumn, step, 1 );
-          
-            switch( comp ) 
+
+            switch( comp )
             {
             case 0 :
               ercPixConcealIMB( recfr->yptr, currRow, column, predBlocks, picSizeX, 2 );
@@ -353,30 +353,30 @@ static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, 
               ercPixConcealIMB( recfr->vptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
               break;
             }
-            
-            if ( comp == 0 ) 
+
+            if ( comp == 0 )
             {
               condition[ currRow*lastColumn+column] = ERC_BLOCK_CONCEALED;
               condition[ currRow*lastColumn+column + 1] = ERC_BLOCK_CONCEALED;
               condition[ currRow*lastColumn+column + lastColumn] = ERC_BLOCK_CONCEALED;
               condition[ currRow*lastColumn+column + lastColumn + 1] = ERC_BLOCK_CONCEALED;
             }
-            else 
+            else
             {
               condition[ currRow*lastColumn+column] = ERC_BLOCK_CONCEALED;
             }
-            
+
           }
           row = lastRow;
-        } 
-        else if ( firstCorruptedRow == 0 ) 
+        }
+        else if ( firstCorruptedRow == 0 )
         {
-          // correct only from below 
-          for ( currRow = lastCorruptedRow; currRow >= 0; currRow -= step ) 
+          // correct only from below
+          for ( currRow = lastCorruptedRow; currRow >= 0; currRow -= step )
           {
             srcCounter = ercCollect8PredBlocks( predBlocks, currRow, column, condition, lastRow, lastColumn, step, 1 );
-            
-            switch( comp ) 
+
+            switch( comp )
             {
             case 0 :
               ercPixConcealIMB( recfr->yptr, currRow, column, predBlocks, picSizeX, 2 );
@@ -388,76 +388,76 @@ static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, 
               ercPixConcealIMB( recfr->vptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
               break;
             }
-            
-            if ( comp == 0 ) 
+
+            if ( comp == 0 )
             {
               condition[ currRow*lastColumn+column] = ERC_BLOCK_CONCEALED;
               condition[ currRow*lastColumn+column + 1] = ERC_BLOCK_CONCEALED;
               condition[ currRow*lastColumn+column + lastColumn] = ERC_BLOCK_CONCEALED;
               condition[ currRow*lastColumn+column + lastColumn + 1] = ERC_BLOCK_CONCEALED;
             }
-            else 
+            else
             {
               condition[ currRow*lastColumn+column] = ERC_BLOCK_CONCEALED;
             }
-            
+
           }
-          
+
           row = lastCorruptedRow+step;
         }
-        else 
+        else
         {
           // correct bi-directionally
-          
+
           row = lastCorruptedRow+step;
           areaHeight = lastCorruptedRow-firstCorruptedRow+step;
-          
-          // Conceal the corrupted area switching between the up and the bottom rows 
-          for ( i = 0; i < areaHeight; i += step ) 
+
+          // Conceal the corrupted area switching between the up and the bottom rows
+          for ( i = 0; i < areaHeight; i += step )
           {
-            if ( i % 2 ) 
+            if ( i % 2 )
             {
               currRow = lastCorruptedRow;
               lastCorruptedRow -= step;
             }
-            else 
+            else
             {
               currRow = firstCorruptedRow;
               firstCorruptedRow += step;
             }
-            
-            if (smoothColumn > 0) 
+
+            if (smoothColumn > 0)
             {
               srcCounter = ercCollectColumnBlocks( predBlocks, currRow, column, condition, lastRow, lastColumn, step );
             }
-            else 
+            else
             {
               srcCounter = ercCollect8PredBlocks( predBlocks, currRow, column, condition, lastRow, lastColumn, step, 1 );
             }
-            
-            switch( comp ) 
+
+            switch( comp )
             {
             case 0 :
               ercPixConcealIMB( recfr->yptr, currRow, column, predBlocks, picSizeX, 2 );
               break;
-              
+
             case 1 :
               ercPixConcealIMB( recfr->uptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
               break;
-              
+
             case 2 :
               ercPixConcealIMB( recfr->vptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
               break;
             }
-            
-            if ( comp == 0 ) 
+
+            if ( comp == 0 )
             {
               condition[ currRow*lastColumn+column] = ERC_BLOCK_CONCEALED;
               condition[ currRow*lastColumn+column + 1] = ERC_BLOCK_CONCEALED;
               condition[ currRow*lastColumn+column + lastColumn] = ERC_BLOCK_CONCEALED;
               condition[ currRow*lastColumn+column + lastColumn + 1] = ERC_BLOCK_CONCEALED;
             }
-            else 
+            else
             {
               condition[ currRow*lastColumn+column ] = ERC_BLOCK_CONCEALED;
             }
@@ -477,9 +477,9 @@ static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, 
  * \brief
  *      Does the actual pixel based interpolation for block[]
  *      using weighted average
- * \param src[] 
+ * \param src[]
  *      pointers to neighboring source blocks
- * \param block     
+ * \param block
  *      destination block
  * \param blockSize
  *      16 for Y, 8 for U/V components
@@ -490,37 +490,37 @@ static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, 
 static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize, int frameWidth )
 {
   int row, column, k, tmp, srcCounter = 0, weight = 0, bmax = blockSize - 1;
-  
+
   k = 0;
-  for ( row = 0; row < blockSize; row++ ) 
+  for ( row = 0; row < blockSize; row++ )
   {
-    for ( column = 0; column < blockSize; column++ ) 
+    for ( column = 0; column < blockSize; column++ )
     {
       tmp = 0;
       srcCounter = 0;
       // above
-      if ( src[4] != NULL )   
+      if ( src[4] != NULL )
       {
         weight = blockSize-row;
         tmp += weight * (*(src[4]+bmax*frameWidth+column));
         srcCounter += weight;
       }
       // left
-      if ( src[5] != NULL )   
+      if ( src[5] != NULL )
       {
         weight = blockSize-column;
         tmp += weight * (*(src[5]+row*frameWidth+bmax));
         srcCounter += weight;
       }
       // below
-      if ( src[6] != NULL )   
+      if ( src[6] != NULL )
       {
         weight = row+1;
         tmp += weight * (*(src[6]+column));
         srcCounter += weight;
       }
       // right
-      if ( src[7] != NULL )   
+      if ( src[7] != NULL )
       {
         weight = column+1;
         tmp += weight * (*(src[7]+row*frameWidth));
@@ -529,7 +529,7 @@ static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize
 
       if ( srcCounter > 0 )
         block[ k + column ] = (byte)(tmp/srcCounter);
-      else 
+      else
         block[ k + column ] = blockSize == 8 ? img->dc_pred_value_chroma : img->dc_pred_value_luma;
     }
     k += frameWidth;

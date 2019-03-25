@@ -104,14 +104,14 @@ void
 store_coding_state (CSptr cs)
 {
   int  i;
-  int  i_last = img->currentPicture->idr_flag? 1:cs->no_part; 
+  int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;
   Slice *currSlice = img->currentSlice;
 
   Macroblock *currMB  = &(img->mb_data [img->current_mb_nr]);
-  
-  
+
+
   if (!input->rdopt)  return;
-  
+
   if (cs->symbol_mode==CABAC)
   {
     //=== important variables of data partition array ===
@@ -121,23 +121,22 @@ store_coding_state (CSptr cs)
       cs->encenv[i] = currSlice->partArr[i].ee_cabac;;
       cs->bitstream[i] = *currSlice->partArr[i].bitstream;;
     }
-    
+
     //=== contexts for binary arithmetic coding ===
     *cs->mot_ctx = *currSlice->mot_ctx;
-    *cs->tex_ctx = *currSlice->tex_ctx;    
+    *cs->tex_ctx = *currSlice->tex_ctx;
   }
   else
   {
     //=== important variables of data partition array ===
     for (i = 0; i < i_last; i++)
-    {    
+    {
       cs->bitstream[i] = *currSlice->partArr[i].bitstream;;
     }
   }
   //=== syntax element number and bitcounters ===
-  cs->currSEnr = currMB->currSEnr;
   memcpy (cs->bitcounter, currMB->bitcounter, MAX_BITCOUNTER_MB * sizeof(int));
-  
+
   //=== elements of current macroblock ===
   memcpy (cs->mvd, currMB->mvd, BLOCK_CONTEXT * sizeof(int));
   cs->cbp_bits = currMB->cbp_bits;
@@ -153,14 +152,14 @@ store_coding_state (CSptr cs)
 void reset_coding_state (CSptr cs)
 {
   int  i;
-  int  i_last = img->currentPicture->idr_flag? 1:cs->no_part; 
+  int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;
   Slice *currSlice = img->currentSlice;
 
   Macroblock *currMB  = &(img->mb_data [img->current_mb_nr]);
-  
+
   if (!input->rdopt)  return;
-  
-  if (cs->symbol_mode==CABAC) 
+
+  if (cs->symbol_mode==CABAC)
   {
     //=== important variables of data partition array ===
     //only one partition for IDR img
@@ -170,26 +169,25 @@ void reset_coding_state (CSptr cs)
       currSlice->partArr[i].ee_cabac = cs->encenv[i];
       *currSlice->partArr[i].bitstream = cs->bitstream[i];
     }
-    
+
     //=== contexts for binary arithmetic coding ===
     *currSlice->mot_ctx = *cs->mot_ctx;
-    *currSlice->tex_ctx = *cs->tex_ctx;    
+    *currSlice->tex_ctx = *cs->tex_ctx;
   }
   else
   {
     //=== important variables of data partition array ===
     //only one partition for IDR img
-    for (i = 0; i < i_last; i++)      
+    for (i = 0; i < i_last; i++)
     {
-      //--- parameters of encoding environments ---   
+      //--- parameters of encoding environments ---
       *currSlice->partArr[i].bitstream = cs->bitstream[i];
     }
   }
-  
+
   //=== syntax element number and bit counters ===
-  currMB->currSEnr = cs->currSEnr;
   memcpy (currMB->bitcounter, cs->bitcounter, MAX_BITCOUNTER_MB * sizeof(int));
-  
+
   //=== elements of current macroblock ===
   memcpy (currMB->mvd, cs->mvd, BLOCK_CONTEXT * sizeof(int));
   currMB->cbp_bits = cs->cbp_bits;

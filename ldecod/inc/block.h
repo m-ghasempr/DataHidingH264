@@ -21,7 +21,6 @@
 #include "global.h"
 
 #define DQ_BITS         6
-#define DQ_ROUND        (1<<(DQ_BITS-1))
 
 extern const byte QP_SCALE_CR[52] ;
 extern const int  dequant_coef[6][4][4];

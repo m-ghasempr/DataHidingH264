@@ -56,7 +56,7 @@ seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
 pic_parameter_set_rbsp_t PicParSet[MAXPPS];
 
 extern StorablePicture* dec_picture;
-                          
+
 extern void init_frext(struct img_par *img);
 
 // syntax for scaling list matrix values
@@ -99,13 +99,13 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   UsedBits = 0;
 
   sps->profile_idc                            = u_v  (8, "SPS: profile_idc"                           , s);
-  
+
   if ((sps->profile_idc!=66 ) &&
       (sps->profile_idc!=77 ) &&
       (sps->profile_idc!=88 ) &&
       (sps->profile_idc!=100 ) &&
-      (sps->profile_idc!=110 ) && 
-      (sps->profile_idc!=122 ) &&  
+      (sps->profile_idc!=110 ) &&
+      (sps->profile_idc!=122 ) &&
       (sps->profile_idc!=144 ))
   {
     return UsedBits;
@@ -119,7 +119,7 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   assert (reserved_zero==0);
 
   sps->level_idc                              = u_v  (8, "SPS: level_idc"                             , s);
-  
+
   sps->seq_parameter_set_id                   = ue_v ("SPS: seq_parameter_set_id"                     , s);
 
   // Fidelity Range Extensions stuff
@@ -134,7 +134,7 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
      (sps->profile_idc==FREXT_Hi444))
   {
     sps->chroma_format_idc                      = ue_v ("SPS: chroma_format_idc"                       , s);
-    
+
     // Residue Color Transform
     if(sps->chroma_format_idc == 3)
     {
@@ -201,10 +201,10 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
     sps->frame_cropping_rect_bottom_offset    = ue_v ("SPS: frame_cropping_rect_bottom_offset"         , s);
   }
   sps->vui_parameters_present_flag           = (Boolean) u_1  ("SPS: vui_parameters_present_flag"            , s);
-  
+
   InitVUI(sps);
   ReadVUI(p, sps);
-  
+
   sps->Valid = TRUE;
 
   return UsedBits;
@@ -292,7 +292,7 @@ int ReadVUI(DataPartition *p, seq_parameter_set_rbsp_t *sps)
       sps->vui_seq_parameters.max_dec_frame_buffering                 =  ue_v ("VUI: max_dec_frame_buffering"                , s);
     }
   }
-  
+
   return 0;
 }
 
@@ -306,17 +306,17 @@ int ReadHRDParameters(DataPartition *p, hrd_parameters_t *hrd)
   hrd->bit_rate_scale                                      = u_v  ( 4,"VUI: bit_rate_scale"                       , s);
   hrd->cpb_size_scale                                      = u_v  ( 4,"VUI: cpb_size_scale"                       , s);
 
-	for( SchedSelIdx = 0; SchedSelIdx <= hrd->cpb_cnt_minus1; SchedSelIdx++ ) 
+  for( SchedSelIdx = 0; SchedSelIdx <= hrd->cpb_cnt_minus1; SchedSelIdx++ )
   {
-		hrd->bit_rate_value_minus1[ SchedSelIdx ]             = ue_v  ( "VUI: bit_rate_value_minus1"                  , s);
-		hrd->cpb_size_value_minus1[ SchedSelIdx ]             = ue_v  ( "VUI: cpb_size_value_minus1"                  , s);
-		hrd->cbr_flag[ SchedSelIdx ]                          = u_1   ( "VUI: cbr_flag"                               , s);
-	}
+    hrd->bit_rate_value_minus1[ SchedSelIdx ]             = ue_v  ( "VUI: bit_rate_value_minus1"                  , s);
+    hrd->cpb_size_value_minus1[ SchedSelIdx ]             = ue_v  ( "VUI: cpb_size_value_minus1"                  , s);
+    hrd->cbr_flag[ SchedSelIdx ]                          = u_1   ( "VUI: cbr_flag"                               , s);
+  }
 
   hrd->initial_cpb_removal_delay_length_minus1            = u_v  ( 5,"VUI: initial_cpb_removal_delay_length_minus1" , s);
-	hrd->cpb_removal_delay_length_minus1                    = u_v  ( 5,"VUI: cpb_removal_delay_length_minus1"         , s);
-	hrd->dpb_output_delay_length_minus1                     = u_v  ( 5,"VUI: dpb_output_delay_length_minus1"          , s);
-	hrd->time_offset_length                                 = u_v  ( 5,"VUI: time_offset_length"          , s);
+  hrd->cpb_removal_delay_length_minus1                    = u_v  ( 5,"VUI: cpb_removal_delay_length_minus1"         , s);
+  hrd->dpb_output_delay_length_minus1                     = u_v  ( 5,"VUI: dpb_output_delay_length_minus1"          , s);
+  hrd->time_offset_length                                 = u_v  ( 5,"VUI: time_offset_length"          , s);
 
   return 0;
 }
@@ -327,7 +327,7 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
   unsigned i;
   int NumberBitsPerSliceGroupId;
   Bitstream *s = p->bitstream;
-  
+
   assert (p != NULL);
   assert (p->bitstream != NULL);
   assert (p->bitstream->streamBuffer != 0);
@@ -392,7 +392,7 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
 
   pps->num_ref_idx_l0_active_minus1          = ue_v ("PPS: num_ref_idx_l0_active_minus1"           , s);
   pps->num_ref_idx_l1_active_minus1          = ue_v ("PPS: num_ref_idx_l1_active_minus1"           , s);
-  pps->weighted_pred_flag                    = u_1  ("PPS: weighted_prediction_flag"               , s);
+  pps->weighted_pred_flag                    = u_1  ("PPS: weighted_pred_flag"                     , s);
   pps->weighted_bipred_idc                   = u_v  ( 2, "PPS: weighted_bipred_idc"                , s);
   pps->pic_init_qp_minus26                   = se_v ("PPS: pic_init_qp_minus26"                    , s);
   pps->pic_init_qs_minus26                   = se_v ("PPS: pic_init_qs_minus26"                    , s);
@@ -456,7 +456,7 @@ void MakePPSavailable (int id, pic_parameter_set_rbsp_t *pps)
 
   memcpy (&PicParSet[id], pps, sizeof (pic_parameter_set_rbsp_t));
 
-  // we can simply use the memory provided with the pps. the PPS is destroyed after this function 
+  // we can simply use the memory provided with the pps. the PPS is destroyed after this function
   // call and will not try to free if pps->slice_group_id == NULL
   PicParSet[id].slice_group_id = pps->slice_group_id;
   pps->slice_group_id          = NULL;
@@ -574,14 +574,14 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
     // Fidelity Range Extensions stuff (part 1)
     img->bitdepth_luma   = sps->bit_depth_luma_minus8 + 8;
     if (sps->chroma_format_idc != YUV400)
-      img->bitdepth_chroma = sps->bit_depth_chroma_minus8 + 8;  
+      img->bitdepth_chroma = sps->bit_depth_chroma_minus8 + 8;
 
     img->MaxFrameNum = 1<<(sps->log2_max_frame_num_minus4+4);
     img->PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
     img->PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
     img->FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * img->PicHeightInMapUnits;
     img->FrameSizeInMbs = img->PicWidthInMbs * img->FrameHeightInMbs;
-    
+
     img->yuv_format=sps->chroma_format_idc;
 
     img->width = img->PicWidthInMbs * MB_BLOCK_SIZE;
@@ -605,7 +605,7 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
     }
 
     img->width_cr_m1 = img->width_cr - 1;
-    init_frext(img);                                               
+    init_frext(img);
     init_global_buffers();
     if (!img->no_output_of_prior_pics_flag)
     {
@@ -638,7 +638,7 @@ void activate_pps(pic_parameter_set_rbsp_t *pps)
     img->Transform8x8Mode = pps->transform_8x8_mode_flag;
 
   }
-}  
+}
 
 void UseParameterSet (int PicParsetId)
 {
@@ -654,7 +654,7 @@ void UseParameterSet (int PicParsetId)
 
   sps =  &SeqParSet[PicParSet[PicParsetId].seq_parameter_set_id];
 
-  
+
   // In theory, and with a well-designed software, the lines above
   // are everything necessary.  In practice, we need to patch many values
   // in img-> (but no more in inp-> -- these have been taken care of)
@@ -676,7 +676,7 @@ void UseParameterSet (int PicParsetId)
       error("num_ref_frames_in_pic_order_cnt_cycle too large",-1011);
     }
   }
-  
+
   activate_sps(sps);
   activate_pps(pps);
 

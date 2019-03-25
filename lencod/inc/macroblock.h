@@ -18,95 +18,41 @@
 #ifndef _MACROBLOCK_H_
 #define _MACROBLOCK_H_
 
+void proceed2nextMacroblock(void);
 
-//! just to make new temp intra mode table
-const int  MODTAB[3][2]=
-{
-  { 0, 4},
-  {16,12},
-  { 8,20}
-};
+void  start_macroblock(int mb_addr, int mb_field);
+void  terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock);
 
-//! gives codeword number from CBP value, both for intra and inter
-const unsigned char NCBP[2][48][2]=
-{
-  {  // 0      1        2       3       4       5       6       7       8       9      10      11
-    { 1, 0},{10, 1},{11, 2},{ 6, 5},{12, 3},{ 7, 6},{14,14},{ 2,10},{13, 4},{15,15},{ 8, 7},{ 3,11},
-    { 9, 8},{ 4,12},{ 5,13},{ 0, 9},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},
-    { 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},
-    { 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0}
-  },
-  {
-    { 3, 0},{29, 2},{30, 3},{17, 7},{31, 4},{18, 8},{37,17},{ 8,13},{32, 5},{38,18},{19, 9},{ 9,14},
-    {20,10},{10,15},{11,16},{ 2,11},{16, 1},{33,32},{34,33},{21,36},{35,34},{22,37},{39,44},{ 4,40},
-    {36,35},{40,45},{23,38},{ 5,41},{24,39},{ 6,42},{ 7,43},{ 1,19},{41, 6},{42,24},{43,25},{25,20},
-    {44,26},{26,21},{46,46},{12,28},{45,27},{47,47},{27,22},{13,29},{28,23},{14,30},{15,31},{ 0,12}
-  },
-};
+void  write_one_macroblock(int eos_bit);
 
+void LumaPrediction4x4   (int, int, int, int, int,   short, short);
+void LumaPrediction4x4Bi (int, int, int, int, short, short, int  );
 
-extern int QP2QUANT[40];
-extern int ver_offset[4][8][4];
-extern int hor_offset[4][8][4];
+int  LumaResidualCoding8x8 (int*, int64*, int, short, int, int, short, short);
+void LumaResidualCoding (void);
 
-const unsigned char subblk_offset_x[3][8][4] =
-{
-  { {0, 4, 0, 4}, 
-    {0, 4, 0, 4}, 
-    {0, 0, 0, 0}, 
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},  
-    {0, 0, 0, 0},  
-    {0, 0, 0, 0},  
-    {0, 0, 0, 0}, },
-  
-  { {0, 4, 0, 4}, 
-    {0, 4, 0, 4}, 
-    {0, 4, 0, 4}, 
-    {0, 4, 0, 4},
-    {0, 0, 0, 0},    
-    {0, 0, 0, 0},    
-    {0, 0, 0, 0},    
-    {0, 0, 0, 0}, },
-  
-  { {0, 4, 0, 4}, 
-    {8,12, 8,12},
-    {0, 4, 0, 4},
-    {8,12, 8,12},
-    {0, 4, 0, 4},  
-    {8,12, 8,12},  
-    {0, 4, 0, 4},  
-    {8,12, 8,12}  }
-};
-    
-const unsigned char subblk_offset_y[3][8][4] =
-{ { {0, 0, 4, 4}, 
-    {0, 0, 4, 4},
-    {0, 0, 0, 0}, 
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0}, 
-    {0, 0, 0, 0},
-    {0, 0, 0, 0}, },
+void ChromaResidualCoding (int*);
 
-  { {0, 0, 4, 4}, 
-    {8, 8,12,12}, 
-    {0, 0, 4, 4},
-    {8, 8,12,12},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0}, 
-    {0, 0, 0, 0},
-    {0, 0, 0, 0}  },
+void IntraChromaPrediction (int*, int*, int*);
+void IntraChromaRDDecision (RD_PARAMS);
 
-  { {0, 0, 4, 4},
-    {0, 0, 4, 4},
-    {8, 8,12,12},
-    {8, 8,12,12}, 
-    {0, 0, 4, 4},
-    {0, 0, 4, 4},
-    {8, 8,12,12},
-    {8, 8,12,12} }
-};
+int  TransformDecision(int, int*);
+
+int  B8Mode2Value (int b8mode, int b8pdir);
+
+int  writeMBLayer (int rdopt, int *coeff_rate);
+void write_terminating_bit (short bit);
+
+int  writeReferenceFrame  (int mode, int i, int j, int fwd_flag, int  ref);
+int  writeMotionVector8x8 (int  i0, int  j0, int  i1, int  j1, int  refframe, int  list_idx, int  mv_mode);
+
+int  writeLumaCoeff4x4_CABAC (int, int, int);
+int  writeLumaCoeff8x8_CABAC (int, int);
+int  writeLumaCoeff8x8       (int, int, int);
+
+int  writeCoeff4x4_CAVLC     (int block_type, int b8, int b4, int param);
+
+int  find_sad_16x16 (int *intra_mode);
 
 #endif
 

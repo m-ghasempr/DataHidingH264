@@ -56,7 +56,7 @@ void getSubImagesChroma( StorablePicture *s )
 
   if ( img->yuv_format == YUV420 ) {
     subimages_x = 8;
-    subimages_y = 8; 
+    subimages_y = 8;
     mul_x = mul_y = 1;
   }
   else if ( img->yuv_format == YUV422 ) {
@@ -72,10 +72,10 @@ void getSubImagesChroma( StorablePicture *s )
   }
 
   xpadded_size = s->size_x_cr + 2*img_pad_size_uv_x;
-  ypadded_size = s->size_y_cr + 2*img_pad_size_uv_y;    
+  ypadded_size = s->size_y_cr + 2*img_pad_size_uv_y;
 
   maxx = xpadded_size - 1;
-  maxy = ypadded_size - 1;  
+  maxy = ypadded_size - 1;
 
   // U or V
   for ( uv = 0; uv < 2; uv++ )
@@ -102,7 +102,7 @@ void getSubImagesChroma( StorablePicture *s )
 
           for (i = -img_pad_size_uv_x, ipad = 0; i < 0; i++, ipad++)
           {
-            wBufDst[ipad] = (imgpel) shift_right_round( 
+            wBufDst[ipad] = (imgpel) rshift_rnd_sf(
               mm * wBufSrc0[0] + kk * wBufSrc1[0], 6 );
           }
 
@@ -110,13 +110,13 @@ void getSubImagesChroma( StorablePicture *s )
           {
             ii_plus_one = i + 1;
 
-            wBufDst[ipad] = (imgpel) shift_right_round( 
-              weight00 * wBufSrc0[i] + weight01 * wBufSrc0[ii_plus_one] + 
+            wBufDst[ipad] = (imgpel) rshift_rnd_sf(
+              weight00 * wBufSrc0[i] + weight01 * wBufSrc0[ii_plus_one] +
               weight10 * wBufSrc1[i] + weight11 * wBufSrc1[ii_plus_one], 6 );
           }
           for (i = size_x_minus1; i < xpadded_size - img_pad_size_uv_x; i++, ipad++)
           {
-            wBufDst[ipad] = (imgpel) shift_right_round( 
+            wBufDst[ipad] = (imgpel) rshift_rnd_sf(
               mm * wBufSrc0[size_x_minus1] + kk * wBufSrc1[size_x_minus1], 6 );
           }
         }

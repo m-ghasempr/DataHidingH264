@@ -46,7 +46,7 @@ FILE *f;
 /*!
  *****************************************************************************
  *
- * \brief 
+ * \brief
  *    ComposeRTPpacket composes the complete RTP packet using the various
  *    structure members of the RTPpacket_t structure
  *
@@ -93,7 +93,7 @@ int ComposeRTPPacket (RTPpacket_t *p)
 
   // Compose RTP header, little endian
 
-  p->packet[0] = (byte) 
+  p->packet[0] = (byte)
     ( ((p->v  & 0x03) << 6)
     | ((p->p  & 0x01) << 5)
     | ((p->x  & 0x01) << 4)
@@ -114,7 +114,7 @@ int ComposeRTPPacket (RTPpacket_t *p)
   temp32 = htonl(p->ssrc);
   memcpy (&p->packet[8], &temp32, 4);// change to shifts for unified byte sex
 
-  // Copy payload 
+  // Copy payload
 
   memcpy (&p->packet[12], p->payload, p->paylen);
   p->packlen = p->paylen+12;
@@ -126,7 +126,7 @@ int ComposeRTPPacket (RTPpacket_t *p)
 /*!
  *****************************************************************************
  *
- * \brief 
+ * \brief
  *    WriteRTPPacket writes the supplied RTP packet to the output file
  *
  * \return
@@ -170,7 +170,7 @@ int WriteRTPPacket (RTPpacket_t *p, FILE *f)
 /*!
  *****************************************************************************
  *
- * \brief 
+ * \brief
  *    int RTPWriteNALU write a NALU to the RTP file
  *
  * \return
@@ -178,7 +178,7 @@ int WriteRTPPacket (RTPpacket_t *p, FILE *f)
  *
  * \par Side effects
  *    Packet written, RTPSequenceNumber and RTPTimestamp updated
- *   
+ *
  * \date
  *    December 13, 2002
  *
@@ -225,8 +225,6 @@ int WriteRTPNALU (NALU_t *n)
   p->paylen = n->len;
   memcpy (p->payload, n->buf, n->len);
 
-
-
   // Generate complete RTP packet
   if (ComposeRTPPacket (p) < 0)
   {
@@ -247,14 +245,14 @@ int WriteRTPNALU (NALU_t *n)
 
 /*!
  ********************************************************************************************
- * \brief 
+ * \brief
  *    RTPUpdateTimestamp: patches the RTP timestamp depending on the TR
  *
- * \param 
+ * \param
  *    tr: TRof the following NALUs
  *
  * \return
- *    none.  
+ *    none.
  *
  ********************************************************************************************
 */
@@ -275,7 +273,7 @@ void RTPUpdateTimestamp (int tr)
 
   /*! The following code assumes a wrap around of TR at 256, and
       needs to be changed as soon as this is no more true.
-      
+
       The support for B frames is a bit tricky, because it is not easy to distinguish
       between a natural wrap-around of the tr, and the intentional going back of the
       tr because of a B frame.  It is solved here by a heuristic means: It is assumed that
@@ -295,7 +293,7 @@ void RTPUpdateTimestamp (int tr)
 
 /*!
  ********************************************************************************************
- * \brief 
+ * \brief
  *    Opens the output file for the RTP packet stream
  *
  * \param Filename
@@ -319,7 +317,7 @@ void OpenRTPFile (char *Filename)
 
 /*!
  ********************************************************************************************
- * \brief 
+ * \brief
  *    Closes the output file for the RTP packet stream
  *
  * \return
@@ -344,8 +342,8 @@ void CloseRTPFile ()
 /*!
  *****************************************************************************
  *
- * \brief 
- *    int aggregationRTPWriteBits (int marker) write the Slice header for the RTP NAL      
+ * \brief
+ *    int aggregationRTPWriteBits (int marker) write the Slice header for the RTP NAL
  *
  * \return
  *    Number of bytes written to output file
@@ -355,7 +353,7 @@ void CloseRTPFile ()
  *
  * \par Side effects
  *    Packet written, RTPSequenceNumber and RTPTimestamp updated
- *   
+ *
  * \date
  *    September 10, 2002
  *
@@ -363,7 +361,7 @@ void CloseRTPFile ()
  *    Dong Tian   tian@cs.tut.fi
  *****************************************************************************/
 
-int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void * bitstream, 
+int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void * bitstream,
                     int BitStreamLenInByte, FILE *out)
 {
   RTPpacket_t *p;
@@ -436,14 +434,14 @@ int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void
 /*!
  *****************************************************************************
  * \isAggregationPacket
- * \brief 
+ * \brief
  *    Determine if current packet is normal packet or compound packet (aggregation
  *    packet)
  *
  * \return
  *    return TRUE, if it is compound packet.
  *    return FALSE, otherwise.
- *   
+ *
  * \date
  *    September 10, 2002
  *
@@ -464,9 +462,9 @@ Boolean isAggregationPacket()
 /*!
  *****************************************************************************
  * \PrepareAggregationSEIMessage
- * \brief 
+ * \brief
  *    Prepare the aggregation sei message.
- *    
+ *
  * \date
  *    September 10, 2002
  *
@@ -560,9 +558,9 @@ void PrepareAggregationSEIMessage()
 /*!
  *****************************************************************************
  * \begin_sub_sequence_rtp
- * \brief 
+ * \brief
  *    do some initialization for sub-sequence under rtp
- *    
+ *
  * \date
  *    September 10, 2002
  *
@@ -572,7 +570,7 @@ void PrepareAggregationSEIMessage()
 
 void begin_sub_sequence_rtp()
 {
-  if ( input->of_mode != PAR_OF_RTP || input->NumFramesInELSubSeq == 0 ) 
+  if ( input->of_mode != PAR_OF_RTP || input->NumFramesInELSubSeq == 0 )
     return;
 
   // begin to encode the base layer subseq
@@ -597,9 +595,9 @@ void begin_sub_sequence_rtp()
 /*!
  *****************************************************************************
  * \end_sub_sequence_rtp
- * \brief 
+ * \brief
  *    do nothing
- *    
+ *
  * \date
  *    September 10, 2002
  *

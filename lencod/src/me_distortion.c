@@ -51,7 +51,7 @@ SubImageContainer ref_pic2_sub;
 short weight1, weight2, offsetBi;
 short weight1_cr[2], weight2_cr[2], offsetBi_cr[2];
 int weight_luma, weight_cr[2], offset_luma, offset_cr[2];
-short img_width, img_height;  
+short img_width, img_height;
 int test8x8transform;
 int ChromaMEEnable;
 
@@ -85,7 +85,7 @@ int distortion4x4(int* diff)
       distortion += byte_abs [diff [k]];
     }
     break;
-  case ERROR_SSE:    
+  case ERROR_SSE:
     byte_sse = img->quad;
     for (k = 0; k < 16; k++)
     {
@@ -119,7 +119,7 @@ int distortion8x8(int* diff)
       distortion += byte_abs [diff [k]];
     }
     break;
-  case ERROR_SSE:    
+  case ERROR_SSE:
     byte_sse = img->quad;
     for (k = 0; k < 64; k++)
     {
@@ -144,11 +144,11 @@ int distortion8x8(int* diff)
 int HadamardMB (int c_diff[MB_PIXELS], int blocktype)
 {
   int sad=0;
-  
+
   switch(blocktype)
   {
     //16x16
-  case 1: 
+  case 1:
     sad  = HadamardSAD8x8( c_diff     );
     sad += HadamardSAD8x8(&c_diff[ 64]);
     sad += HadamardSAD8x8(&c_diff[128]);
@@ -156,12 +156,12 @@ int HadamardMB (int c_diff[MB_PIXELS], int blocktype)
     break;
     //16x8 8x16
   case 2:
-  case 3: 
+  case 3:
     sad  = HadamardSAD8x8( c_diff    );
     sad += HadamardSAD8x8(&c_diff[64]);
     break;
     //8x8
-  case 4: 
+  case 4:
     sad  = HadamardSAD8x8(c_diff);
     break;
     //8x4 4x8
@@ -169,7 +169,7 @@ int HadamardMB (int c_diff[MB_PIXELS], int blocktype)
     sad=-1;
     break;
   }
-  
+
   return sad;
 }
 
@@ -196,9 +196,9 @@ int HadamardSAD4x4 (int* diff)
   m[ 9] = diff[ 5] - diff[ 9];
   m[10] = diff[ 6] - diff[10];
   m[11] = diff[ 7] - diff[11];
-  m[12] = diff[ 0] - diff[12];    
-  m[13] = diff[ 1] - diff[13];        
-  m[14] = diff[ 2] - diff[14];            
+  m[12] = diff[ 0] - diff[12];
+  m[13] = diff[ 1] - diff[13];
+  m[14] = diff[ 2] - diff[14];
   m[15] = diff[ 3] - diff[15];
 
   d[ 0] = m[ 0] + m[ 4];
@@ -345,12 +345,12 @@ int HadamardSAD8x8 (int* diff)
 /*!
 ************************************************************************
 * \brief
-*    SAD computation 
+*    SAD computation
 ************************************************************************
 */
 int computeSAD(imgpel* src_pic,
                int blocksize_y,
-               int blocksize_x, 
+               int blocksize_x,
                int min_mcost,
                int cand_x,
                int cand_y)
@@ -362,7 +362,7 @@ int computeSAD(imgpel* src_pic,
   src_line = src_pic;
   ref_line = get_line[ref_access_method] (ref_pic_sub.luma, cand_y, cand_x);
   for (y=0; y<blocksize_y; y++)
-  {    
+  {
     for (x4 = 0; x4 < blocksize_x; x4+=4)
     {
       mcost += byte_abs[ *src_line++ - *ref_line++ ];
@@ -370,7 +370,7 @@ int computeSAD(imgpel* src_pic,
       mcost += byte_abs[ *src_line++ - *ref_line++ ];
       mcost += byte_abs[ *src_line++ - *ref_line++ ];
     }
-    if (mcost >= min_mcost) return mcost;      
+    if (mcost >= min_mcost) return mcost;
     ref_line += pad_size_x;
   }
   if ( ChromaMEEnable ) {
@@ -387,7 +387,7 @@ int computeSAD(imgpel* src_pic,
       for (y=0; y<blocksize_y_c; y++)
       {
         for (x4 = 0; x4 < blocksize_x_c2; x4++)
-        {        
+        {
           mcost += byte_abs[ *src_line++ - *ref_line++ ];
           mcost += byte_abs[ *src_line++ - *ref_line++ ];
         }
@@ -408,7 +408,7 @@ int computeSAD(imgpel* src_pic,
 */
 int computeSADWP(imgpel* src_pic,
                int blocksize_y,
-               int blocksize_x, 
+               int blocksize_x,
                int min_mcost,
                int cand_x,
                int cand_y)
@@ -421,7 +421,7 @@ int computeSADWP(imgpel* src_pic,
   src_line = src_pic;
   ref_line = get_line[ref_access_method] (ref_pic_sub.luma, cand_y, cand_x);
   for (y=0; y<blocksize_y; y++)
-  {    
+  {
     for (x4 = 0; x4 < blocksize_x; x4+=4)
     {
       weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
@@ -433,7 +433,7 @@ int computeSADWP(imgpel* src_pic,
       weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
       mcost += byte_abs[ *src_line++ -  weighted_pel ];
     }
-    if (mcost >= min_mcost) return mcost;      
+    if (mcost >= min_mcost) return mcost;
     ref_line += pad_size_x;
   }
   if ( ChromaMEEnable ) {
@@ -450,7 +450,7 @@ int computeSADWP(imgpel* src_pic,
       for (y=0; y<blocksize_y_c; y++)
       {
         for (x4 = 0; x4 < blocksize_x_c2; x4++)
-        {        
+        {
           weighted_pel = iClip1( img->max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
           mcost += byte_abs[ *src_line++ -  weighted_pel ];
           weighted_pel = iClip1( img->max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
@@ -473,24 +473,24 @@ int computeSADWP(imgpel* src_pic,
 */
 int computeBiPredSAD1(imgpel* src_pic,
                       int blocksize_y,
-                      int blocksize_x, 
+                      int blocksize_x,
                       int min_mcost,
-                      int cand_x1, int cand_y1, 
+                      int cand_x1, int cand_y1,
                       int cand_x2, int cand_y2)
 {
   int mcost = 0;
-  int bi_diff; 
-  int y,x4; 
+  int bi_diff;
+  int y,x4;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line   = src_pic;
-  ref2_line  = get_line[bipred2_access_method] (ref_pic2_sub.luma, cand_y2, cand_x2); 
-  ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, cand_y1, cand_x1); 
+  ref2_line  = get_line[bipred2_access_method] (ref_pic2_sub.luma, cand_y2, cand_x2);
+  ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, cand_y1, cand_x1);
 
   for (y = 0; y < blocksize_y; y++)
-  {   
+  {
     for (x4 = 0; x4 < blocksize_x; x4+=4)
-    {         
+    {
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
       mcost += byte_abs[bi_diff];
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
@@ -498,8 +498,8 @@ int computeBiPredSAD1(imgpel* src_pic,
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
       mcost += byte_abs[bi_diff];
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-      mcost += byte_abs[bi_diff];      
-    }        
+      mcost += byte_abs[bi_diff];
+    }
     if (mcost >= min_mcost) return mcost;
     ref2_line += pad_size_x;
     ref1_line += pad_size_x;
@@ -508,7 +508,7 @@ int computeBiPredSAD1(imgpel* src_pic,
   if ( ChromaMEEnable ) {
     // calculate chroma conribution to motion compensation error
     int blocksize_x_c2 = blocksize_x >> shift_cr_x;
-    int blocksize_y_c  = blocksize_y >> shift_cr_y;  
+    int blocksize_y_c  = blocksize_y >> shift_cr_y;
     int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_c2;
     int k;
 
@@ -519,7 +519,7 @@ int computeBiPredSAD1(imgpel* src_pic,
       ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
 
       for (y=0; y<blocksize_y_c; y++)
-      {      
+      {
         for (x4 = 0; x4 < blocksize_x_c2; x4++)
         {
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
@@ -545,27 +545,27 @@ int computeBiPredSAD1(imgpel* src_pic,
 */
 int computeBiPredSAD2(imgpel* src_pic,
                       int blocksize_y,
-                      int blocksize_x, 
+                      int blocksize_x,
                       int min_mcost,
-                      int cand_x1, int cand_y1, 
+                      int cand_x1, int cand_y1,
                       int cand_x2, int cand_y2)
 {
   int mcost = 0;
-  int bi_diff; 
+  int bi_diff;
   int denom = luma_log_weight_denom + 1;
   int lround = 2 * wp_luma_round;
-  int y,x4;  
+  int y,x4;
   int weighted_pel, pixel1, pixel2;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line   = src_pic;
-  ref2_line  = get_line[bipred2_access_method] (ref_pic2_sub.luma, cand_y2, cand_x2); 
-  ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, cand_y1, cand_x1); 
+  ref2_line  = get_line[bipred2_access_method] (ref_pic2_sub.luma, cand_y2, cand_x2);
+  ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, cand_y1, cand_x1);
 
   for (y=0; y<blocksize_y; y++)
   {
     for (x4 = 0; x4 < blocksize_x; x4+=4)
-    { 
+    {
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
       weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
@@ -580,7 +580,7 @@ int computeBiPredSAD2(imgpel* src_pic,
 
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
-      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);                     
+      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
       mcost += byte_abs[bi_diff];
 
@@ -589,8 +589,8 @@ int computeBiPredSAD2(imgpel* src_pic,
       weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
       mcost += byte_abs[bi_diff];
-    }        
-    if (mcost >= min_mcost) return mcost;    
+    }
+    if (mcost >= min_mcost) return mcost;
     ref2_line += pad_size_x;
     ref1_line += pad_size_x;
   }
@@ -627,7 +627,7 @@ int computeBiPredSAD2(imgpel* src_pic,
         if (mcost >= min_mcost) return mcost;
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
-      }    
+      }
     }
   }
   return mcost;
@@ -641,7 +641,7 @@ int computeBiPredSAD2(imgpel* src_pic,
 */
 int computeSATD(imgpel* src_pic,
                 int blocksize_y,
-                int blocksize_x, 
+                int blocksize_x,
                 int min_mcost,
                 int cand_x,
                 int cand_y)
@@ -679,12 +679,12 @@ int computeSATD(imgpel* src_pic,
     }
   }
   else
-  { // 8x8 TRANSFORM    
+  { // 8x8 TRANSFORM
     pad_size_x = img_padded_size_x - BLOCK_SIZE8x8;
     src_size_x = (blocksize_x - BLOCK_SIZE8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE8x8;
     for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE8x8_SP) )
-    { 
+    {
       for (x=0; x<blocksize_x; x += BLOCK_SIZE8x8 )
       {
         d = diff;
@@ -720,7 +720,7 @@ int computeSATD(imgpel* src_pic,
 */
 int computeSATDWP(imgpel* src_pic,
                 int blocksize_y,
-                int blocksize_x, 
+                int blocksize_x,
                 int min_mcost,
                 int cand_x,
                 int cand_y)
@@ -763,12 +763,12 @@ int computeSATDWP(imgpel* src_pic,
     }
   }
   else
-  { // 8x8 TRANSFORM    
+  { // 8x8 TRANSFORM
     pad_size_x = img_padded_size_x - BLOCK_SIZE8x8;
     src_size_x = (blocksize_x - BLOCK_SIZE8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE8x8;
     for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE8x8_SP) )
-    { 
+    {
       for (x=0; x<blocksize_x; x += BLOCK_SIZE8x8 )
       {
         d = diff;
@@ -812,9 +812,9 @@ int computeSATDWP(imgpel* src_pic,
 */
 int computeBiPredSATD1(imgpel* src_pic,
                        int blocksize_y,
-                       int blocksize_x, 
+                       int blocksize_x,
                        int min_mcost,
-                       int cand_x1, int cand_y1, 
+                       int cand_x1, int cand_y1,
                        int cand_x2, int cand_y2)
 {
   int mcost = 0;
@@ -852,12 +852,12 @@ int computeBiPredSATD1(imgpel* src_pic,
     }
   }
   else
-  { // 8x8 TRANSFORM    
+  { // 8x8 TRANSFORM
     pad_size_x = img_padded_size_x - BLOCK_SIZE8x8;
     src_size_x = (blocksize_x - BLOCK_SIZE8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE8x8;
     for (y=0; y<blocksize_y; y += BLOCK_SIZE8x8 )
-    { 
+    {
       int y_pos2 = cand_y2 + (y<<2);
       int y_pos1 = cand_y1 + (y<<2);
       for (x=0; x<blocksize_x; x += BLOCK_SIZE8x8 )
@@ -897,9 +897,9 @@ int computeBiPredSATD1(imgpel* src_pic,
 */
 int computeBiPredSATD2(imgpel* src_pic,
                        int blocksize_y,
-                       int blocksize_x, 
+                       int blocksize_x,
                        int min_mcost,
-                       int cand_x1, int cand_y1, 
+                       int cand_x1, int cand_y1,
                        int cand_x2, int cand_y2)
 {
   int mcost = 0;
@@ -938,14 +938,14 @@ int computeBiPredSATD2(imgpel* src_pic,
           // 2
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);                     
+          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 3
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
-          
+
           ref1_line += pad_size_x;
           ref2_line += pad_size_x;
           src_line  += src_size_x;
@@ -956,14 +956,14 @@ int computeBiPredSATD2(imgpel* src_pic,
     }
   }
   else
-  { // 8x8 TRANSFORM    
+  { // 8x8 TRANSFORM
     pad_size_x = img_padded_size_x - BLOCK_SIZE8x8;
     src_size_x = (blocksize_x - BLOCK_SIZE8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE8x8;
     for (y=0; y<blocksize_y; y += BLOCK_SIZE8x8 )
-    { 
+    {
       int y_pos2 = cand_y2 + (y<<2);
-      int y_pos1 = cand_y1 + (y<<2);    
+      int y_pos1 = cand_y1 + (y<<2);
       for (x=0; x<blocksize_x; x += BLOCK_SIZE8x8 )
       {
         d = diff;
@@ -985,7 +985,7 @@ int computeBiPredSATD2(imgpel* src_pic,
           // 2
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);                     
+          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 3
           pixel1 = weight1 * (*ref1_line++);
@@ -1005,7 +1005,7 @@ int computeBiPredSATD2(imgpel* src_pic,
           // 6
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);                     
+          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 7
           pixel1 = weight1 * (*ref1_line++);
@@ -1028,19 +1028,19 @@ int computeBiPredSATD2(imgpel* src_pic,
 /*!
 ************************************************************************
 * \brief
-*    SSE computation 
+*    SSE computation
 ************************************************************************
 */
 
 int computeSSE(imgpel* src_pic,
                int blocksize_y,
-               int blocksize_x, 
+               int blocksize_x,
                int min_mcost,
                int cand_x,
                int cand_y)
 {
   int mcost = 0;
-  int y,x4;  
+  int y,x4;
   int *byte_sse = img->quad;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
@@ -1054,9 +1054,9 @@ int computeSSE(imgpel* src_pic,
       mcost += byte_sse[ *src_line++ - *ref_line++ ];
       mcost += byte_sse[ *src_line++ - *ref_line++ ];
       mcost += byte_sse[ *src_line++ - *ref_line++ ];
-    }    
+    }
     if (mcost >= min_mcost) return mcost;
-    ref_line += pad_size_x;    
+    ref_line += pad_size_x;
   }
 
   if ( ChromaMEEnable ) {
@@ -1071,9 +1071,9 @@ int computeSSE(imgpel* src_pic,
       src_line = src_pic + (256 << k);
       ref_line = get_crline[ref_access_method] ( ref_pic_sub.crcb[k], cand_y, cand_x);
       for (y=0; y<blocksize_y_c; y++)
-      {        
+      {
         for (x4 = 0; x4 < blocksize_x_c2; x4++)
-        {        
+        {
           mcost += byte_sse[ *src_line++ - *ref_line++ ];
           mcost += byte_sse[ *src_line++ - *ref_line++ ];
         }
@@ -1096,13 +1096,13 @@ int computeSSE(imgpel* src_pic,
 
 int computeSSEWP(imgpel* src_pic,
                int blocksize_y,
-               int blocksize_x, 
+               int blocksize_x,
                int min_mcost,
                int cand_x,
                int cand_y)
 {
   int mcost = 0;
-  int y,x4;  
+  int y,x4;
   int weighted_pel;
   int *byte_sse = img->quad;
   int pad_size_x = img_padded_size_x - blocksize_x;
@@ -1121,9 +1121,9 @@ int computeSSEWP(imgpel* src_pic,
       mcost += byte_sse[ *src_line++ - weighted_pel ];
       weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
       mcost += byte_sse[ *src_line++ - weighted_pel ];
-    }    
+    }
     if (mcost >= min_mcost) return mcost;
-    ref_line += pad_size_x;    
+    ref_line += pad_size_x;
   }
 
   if ( ChromaMEEnable ) {
@@ -1140,9 +1140,9 @@ int computeSSEWP(imgpel* src_pic,
       ref_line = get_crline[ref_access_method] ( ref_pic_sub.crcb[k], cand_y, cand_x);
       for (y=0; y<blocksize_y_c; y++)
       {
-        
+
         for (x4 = 0; x4 < blocksize_x_c2; x4++)
-        {      
+        {
           weighted_pel = iClip1( img->max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
           mcost += byte_sse[ *src_line++ - weighted_pel ];
           weighted_pel = iClip1( img->max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
@@ -1165,25 +1165,25 @@ int computeSSEWP(imgpel* src_pic,
 */
 int computeBiPredSSE1(imgpel* src_pic,
                       int blocksize_y,
-                      int blocksize_x, 
+                      int blocksize_x,
                       int min_mcost,
-                      int cand_x1, int cand_y1, 
+                      int cand_x1, int cand_y1,
                       int cand_x2, int cand_y2)
 {
   int mcost = 0;
-  int bi_diff; 
-  int y,x4; 
+  int bi_diff;
+  int y,x4;
   int *byte_sse = img->quad;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line   = src_pic;
-  ref2_line  = get_line[bipred2_access_method] (ref_pic2_sub.luma, cand_y2, cand_x2); 
-  ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, cand_y1, cand_x1); 
+  ref2_line  = get_line[bipred2_access_method] (ref_pic2_sub.luma, cand_y2, cand_x2);
+  ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, cand_y1, cand_x1);
 
   for (y = 0; y < blocksize_y; y++)
   {
     for (x4 = 0; x4 < blocksize_x; x4+=4)
-    {         
+    {
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
       mcost += byte_sse[bi_diff];
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
@@ -1192,11 +1192,11 @@ int computeBiPredSSE1(imgpel* src_pic,
       mcost += byte_sse[bi_diff];
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
       mcost += byte_sse[bi_diff];
-    }        
+    }
 
     if (mcost >= min_mcost) return mcost;
-    ref2_line += pad_size_x;    
-    ref1_line += pad_size_x;    
+    ref2_line += pad_size_x;
+    ref1_line += pad_size_x;
   }
 
   if ( ChromaMEEnable ) {
@@ -1213,7 +1213,7 @@ int computeBiPredSSE1(imgpel* src_pic,
       ref1_line = get_crline[bipred1_access_method] ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
 
       for (y=0; y<blocksize_y_c; y++)
-      {      
+      {
         for (x4 = 0; x4 < blocksize_x_c2; x4++)
         {
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
@@ -1240,26 +1240,26 @@ int computeBiPredSSE1(imgpel* src_pic,
 */
 int computeBiPredSSE2(imgpel* src_pic,
                       int blocksize_y,
-                      int blocksize_x, 
+                      int blocksize_x,
                       int min_mcost,
-                      int cand_x1, int cand_y1, 
+                      int cand_x1, int cand_y1,
                       int cand_x2, int cand_y2)
 {
   int mcost = 0;
-  int bi_diff; 
+  int bi_diff;
   int denom = luma_log_weight_denom + 1;
   int lround = 2 * wp_luma_round;
-  int y,x4;  
+  int y,x4;
   int weighted_pel, pixel1, pixel2;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line   = src_pic;
-  ref2_line  = get_line[bipred2_access_method] (ref_pic2_sub.luma, cand_y2, cand_x2); 
-  ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, cand_y1, cand_x1); 
+  ref2_line  = get_line[bipred2_access_method] (ref_pic2_sub.luma, cand_y2, cand_x2);
+  ref1_line  = get_line[bipred1_access_method] (ref_pic1_sub.luma, cand_y1, cand_x1);
   for (y=0; y<blocksize_y; y++)
   {
     for (x4 = 0; x4 < blocksize_x; x4+=4)
-    { 
+    {
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
       weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
@@ -1274,7 +1274,7 @@ int computeBiPredSSE2(imgpel* src_pic,
 
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
-      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);                     
+      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
       mcost += bi_diff * bi_diff;
 
@@ -1283,10 +1283,10 @@ int computeBiPredSSE2(imgpel* src_pic,
       weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
       mcost += bi_diff * bi_diff;
-    }    
+    }
     if (mcost >= min_mcost) return mcost;
-    ref2_line += pad_size_x;    
-    ref1_line += pad_size_x;    
+    ref2_line += pad_size_x;
+    ref1_line += pad_size_x;
   }
 
   if ( ChromaMEEnable ) {
@@ -1321,7 +1321,7 @@ int computeBiPredSSE2(imgpel* src_pic,
         if (mcost >= min_mcost) return mcost;
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
-      }    
+      }
     }
   }
 

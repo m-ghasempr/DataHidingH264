@@ -18,50 +18,47 @@
 #include "nalu.h"
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Allocates memory for a NALU
  *
  * \param buffersize
- *     size of NALU buffer 
+ *     size of NALU buffer
  *
  * \return
  *    pointer to a NALU
  *************************************************************************************
  */
- 
-
 NALU_t *AllocNALU(int buffersize)
 {
   NALU_t *n;
 
-  if ((n = (NALU_t*)calloc (1, sizeof (NALU_t))) == NULL) 
+  if ((n = (NALU_t*)calloc (1, sizeof (NALU_t))) == NULL)
     no_mem_exit ("AllocNALU: n");
 
   n->max_size=buffersize;
 
-  if ((n->buf = (byte*)calloc (buffersize, sizeof (byte))) == NULL) 
+  if ((n->buf = (byte*)calloc (buffersize, sizeof (byte))) == NULL)
   {
     free (n);
     no_mem_exit ("AllocNALU: n->buf");
   }
-  
+
   return n;
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Frees a NALU
  *
- * \param n 
+ * \param n
  *    NALU to be freed
  *
  *************************************************************************************
  */
-
 void FreeNALU(NALU_t *n)
 {
   if (n)
@@ -74,4 +71,3 @@ void FreeNALU(NALU_t *n)
     free (n);
   }
 }
-

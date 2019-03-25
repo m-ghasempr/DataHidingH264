@@ -139,8 +139,8 @@ void allocate_QOffsets ()
   int max_qp_per = imax(max_qp_per_luma,max_qp_per_cr);
   get_mem4Dint(&LevelOffset4x4Luma,      2, max_qp_per, 4, 4);
   get_mem5Dint(&LevelOffset4x4Chroma, 2, 2, max_qp_per, 4, 4);
-  get_mem4Dint(&LevelOffset8x8Luma,      2, max_qp_per, 8, 8);  
-  
+  get_mem4Dint(&LevelOffset8x8Luma,      2, max_qp_per, 8, 8);
+
   get_mem2Dshort(&OffsetList4x4input, 15, 16);
   get_mem2Dshort(&OffsetList8x8input,  5, 64);
   get_mem2Dshort(&OffsetList4x4, 15, 16);
@@ -166,7 +166,7 @@ void free_QOffsets ()
   free_mem2Dshort(OffsetList8x8);
   free_mem2Dshort(OffsetList4x4);
   free_mem2Dshort(OffsetList8x8input);
-  free_mem2Dshort(OffsetList4x4input);  
+  free_mem2Dshort(OffsetList4x4input);
 }
 
 
@@ -366,7 +366,7 @@ void Init_QOffsetMatrix ()
         ("\nError: %s\nProceeding with default values for all matrices.",
         errortext);
       input->OffsetMatrixPresentFlag = 0;
-    }   
+    }
 
     printf ("\n");
 
@@ -379,7 +379,7 @@ void Init_QOffsetMatrix ()
 /*!
  ************************************************************************
  * \brief
- *    Intit quantization offset params 
+ *    Intit quantization offset params
  *
  * \par Input:
  *    none
@@ -391,19 +391,19 @@ void Init_QOffsetMatrix ()
 void InitOffsetParam ()
 {
   int k;
-  
+
   if (input->OffsetMatrixPresentFlag)
   {
     memcpy(&(OffsetList4x4[0][0]),&(OffsetList4x4input[0][0]), 15 * 16 * sizeof(short));
     memcpy(&(OffsetList8x8[0][0]),&(OffsetList8x8input[0][0]),  5 * 64 * sizeof(short));
   }
   else
-  {        
+  {
     memcpy(&(OffsetList4x4[0][0]),&(Offset_intra_default_intra[0]), 16 * sizeof(short));
     for (k = 1; k < 3; k++)
       memcpy(&(OffsetList4x4[k][0]),&(Offset_intra_default_chroma[0]),  16 * sizeof(short));
     for (k = 3; k < 9; k++)
-      memcpy(&(OffsetList4x4[k][0]),&(Offset_intra_default_inter[0]),  16 * sizeof(short));      
+      memcpy(&(OffsetList4x4[k][0]),&(Offset_intra_default_inter[0]),  16 * sizeof(short));
     for (k = 9; k < 15; k++)
       memcpy(&(OffsetList4x4[k][0]),&(Offset_inter_default[0]),  16 * sizeof(short));
 
@@ -433,10 +433,10 @@ void CalculateOffsetParam ()
   int i, j, k, temp;
   int qp_per;
   int img_type = (img->type == SI_SLICE ? I_SLICE : (img->type == SP_SLICE ? P_SLICE : img->type));
-  
+
   int max_qp_per_luma = qp_per_matrix[(51 + img->bitdepth_luma_qp_scale - MIN_QP)] + 1;
   int max_qp_per_cr   = qp_per_matrix[(51 + img->bitdepth_chroma_qp_scale - MIN_QP)] + 1;
-  
+
   AdaptRndWeight = input->AdaptRndWFactor[img->nal_reference_idc!=0][img_type];
   AdaptRndCrWeight = input->AdaptRndCrWFactor[img->nal_reference_idc!=0][img_type];
   for (k = 0; k < imax(max_qp_per_luma,max_qp_per_cr); k++)
@@ -454,7 +454,7 @@ void CalculateOffsetParam ()
           LevelOffset4x4Chroma[0][1][k][j][i] =
             (int) OffsetList4x4[1][temp] << qp_per;
           LevelOffset4x4Chroma[1][1][k][j][i] =
-            (int) OffsetList4x4[2][temp] << qp_per;          
+            (int) OffsetList4x4[2][temp] << qp_per;
         }
         else if (img_type == B_SLICE)
         {
@@ -474,7 +474,7 @@ void CalculateOffsetParam ()
           LevelOffset4x4Chroma[1][1][k][j][i] =
             (int) OffsetList4x4[5][temp] << qp_per;
         }
-        
+
         if (img_type == B_SLICE)
         {
           LevelOffset4x4Luma[0][k][j][i] =
@@ -497,7 +497,7 @@ void CalculateOffsetParam ()
     }
   }
 }
- 
+
  /*!
  ************************************************************************
  * \brief
@@ -509,7 +509,7 @@ void CalculateOffset8Param ()
 {
   int i, j, k, temp;
   int q_bits;
-  
+
   int max_qp_per_luma = qp_per_matrix[(51 + img->bitdepth_luma_qp_scale - MIN_QP)] + 1;
   int max_qp_per_cr   = qp_per_matrix[(51 + img->bitdepth_chroma_qp_scale - MIN_QP)] + 1;
 
@@ -519,7 +519,7 @@ void CalculateOffset8Param ()
     for (j = 0; j < 8; j++)
     {
       for (i = 0; i < 8; i++)
-      {           
+      {
         temp = (j << 3) + i;
         if (img->type == I_SLICE)
           LevelOffset8x8Luma[1][k][j][i] =

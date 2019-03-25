@@ -350,6 +350,10 @@ SOURCE=.\lencod\src\slice.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\symbol.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\transform8x8.c
 # End Source File
 # Begin Source File
@@ -550,6 +554,10 @@ SOURCE=.\lencod\inc\sei.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\symbol.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\transform8x8.h
 # End Source File
 # Begin Source File
@@ -568,10 +576,6 @@ SOURCE=.\bin\encoder.cfg
 # Begin Source File
 
 SOURCE=.\bin\encoder_yuv422.cfg
-# End Source File
-# Begin Source File
-
-SOURCE=.\bin\encoder_yuv444.cfg
 # End Source File
 # End Target
 # End Project

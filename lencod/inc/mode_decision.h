@@ -79,8 +79,8 @@ void submacroblock_mode_decision(RD_PARAMS, RD_8x8DATA *, Macroblock *,int ***, 
 void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bslice);
 void list_prediction_cost(int list, int block, int mode, RD_PARAMS enc_mb, int bmcost[5], char best_ref[2]);
 void determine_prediction_list(int, int [5], char [2], char *, int *, short *);
-void compute_mode_RD_cost(int mode, Macroblock *currMB, RD_PARAMS enc_mb, 
-                               double *min_rdcost, double *min_rate, 
+void compute_mode_RD_cost(int mode, Macroblock *currMB, RD_PARAMS enc_mb,
+                               double *min_rdcost, double *min_rate,
                                int i16mode, short bslice, short *inter_skip);
 
 

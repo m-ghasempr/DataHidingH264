@@ -30,16 +30,17 @@
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
-#define SYMTRACESTRING(s) strncpy(sym->tracestring,s,TRACESTRING_SIZE)
+#define SYMTRACESTRING(s) strncpy(sym.tracestring,s,TRACESTRING_SIZE)
 #else
 #define SYMTRACESTRING(s) // do nothing
 #endif
 
 int * assignSE2partition[2] ;
 int assignSE2partition_NoDP[SE_MAX_ELEMENTS] =
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int assignSE2partition_DP[SE_MAX_ELEMENTS] =
-  {  0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 2, 2, 2, 2, 0, 0, 0, 0 } ;
+  // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17
+  {  0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0 } ;
 
 static int ref_pic_list_reordering(Bitstream *bitstream);
 static int dec_ref_pic_marking    (Bitstream *bitstream);
@@ -47,11 +48,11 @@ static int pred_weight_table      (Bitstream *bitstream);
 
 /*!
  ********************************************************************************************
- * \brief 
+ * \brief
  *    Write a slice header
  *
  * \return
- *    number of bits used 
+ *    number of bits used
  ********************************************************************************************
 */
 int SliceHeader()
@@ -63,8 +64,8 @@ int SliceHeader()
   unsigned int field_pic_flag = 0, bottom_field_flag = 0;
 
   int num_bits_slice_group_change_cycle;
-  float numtmp;	
-	
+  float numtmp;
+
   if (img->MbaffFrameFlag)
     len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr >> 1,   bitstream);
   else
@@ -136,7 +137,7 @@ int SliceHeader()
   // Direct Mode Type selection for B pictures
   if (img->type==B_SLICE)
   {
-    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", img->direct_spatial_mv_pred_flag, bitstream);  	
+    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", img->direct_spatial_mv_pred_flag, bitstream);
   }
 
   if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type==SP_SLICE))
@@ -148,13 +149,13 @@ int SliceHeader()
     }
     else
     {
-      override_flag = ((img->num_ref_idx_l0_active != (active_pps->num_ref_idx_l0_active_minus1 +1)) 
+      override_flag = ((img->num_ref_idx_l0_active != (active_pps->num_ref_idx_l0_active_minus1 +1))
                       || (img->num_ref_idx_l1_active != (active_pps->num_ref_idx_l1_active_minus1 +1))) ? 1 : 0;
     }
 
     len +=  u_1 ("SH: num_ref_idx_active_override_flag", override_flag, bitstream);
-    
-    if (override_flag) 
+
+    if (override_flag)
     {
       len += ue_v ("SH: num_ref_idx_l0_active_minus1", img->num_ref_idx_l0_active-1, bitstream);
       if (img->type==B_SLICE)
@@ -166,8 +167,8 @@ int SliceHeader()
   }
   len += ref_pic_list_reordering(bitstream);
 
-  if (((img->type == P_SLICE || img->type == SP_SLICE) && active_pps->weighted_pred_flag) || 
-     ((img->type == B_SLICE) && active_pps->weighted_bipred_idc == 1))  
+  if (((img->type == P_SLICE || img->type == SP_SLICE) && active_pps->weighted_pred_flag) ||
+     ((img->type == B_SLICE) && active_pps->weighted_bipred_idc == 1))
   {
     len += pred_weight_table(bitstream);
   }
@@ -180,7 +181,7 @@ int SliceHeader()
     len += ue_v("SH: cabac_init_idc", img->model_number, bitstream);
   }
 
-  len += se_v("SH: slice_qp_delta", (currSlice->qp - 26 - active_pps->pic_init_qp_minus26), bitstream);  
+  len += se_v("SH: slice_qp_delta", (currSlice->qp - 26 - active_pps->pic_init_qp_minus26), bitstream);
 
   if (img->type==SP_SLICE /*|| img->type==SI_SLICE*/)
   {
@@ -193,7 +194,7 @@ int SliceHeader()
 
   if (active_pps->deblocking_filter_control_present_flag)
   {
-    len += ue_v("SH: disable_deblocking_filter_idc",img->LFDisableIdc, bitstream);  // Turn loop filter on/off on slice basis 
+    len += ue_v("SH: disable_deblocking_filter_idc",img->LFDisableIdc, bitstream);  // Turn loop filter on/off on slice basis
 
     if (img->LFDisableIdc!=1)
     {
@@ -203,7 +204,7 @@ int SliceHeader()
     }
   }
 
-	
+
   if ( active_pps->num_slice_groups_minus1>0 &&
     active_pps->slice_group_map_type>=3 && active_pps->slice_group_map_type<=5)
   {
@@ -214,7 +215,7 @@ int SliceHeader()
     len += u_v (num_bits_slice_group_change_cycle, "SH: slice_group_change_cycle", img->slice_group_change_cycle, bitstream);
   }
 
-  // NOTE: The following syntax element is actually part 
+  // NOTE: The following syntax element is actually part
   //        Slice data bitstream A RBSP syntax
 
   if(input->partition_mode&&!img->currentPicture->idr_flag)
@@ -227,12 +228,12 @@ int SliceHeader()
 
 /*!
  ********************************************************************************************
- * \brief 
+ * \brief
  *    writes the ref_pic_list_reordering syntax
  *    based on content of according fields in img structure
  *
  * \return
- *    number of bits used 
+ *    number of bits used
  ********************************************************************************************
 */
 static int ref_pic_list_reordering(Bitstream *bitstream)
@@ -249,10 +250,10 @@ static int ref_pic_list_reordering(Bitstream *bitstream)
     currSlice->reordering_of_pic_nums_idc_l0[1] = 3;
     currSlice->abs_diff_pic_num_minus1_l0[0] = redundant_ref_idx - 1;
     currSlice->long_term_pic_idx_l0[0] = 0;
-    reorder_ref_pic_list( listX[LIST_0], &listXsize[LIST_0], 
-                          img->num_ref_idx_l0_active-1, 
-                          currSlice->reordering_of_pic_nums_idc_l0, 
-                          currSlice->abs_diff_pic_num_minus1_l0, 
+    reorder_ref_pic_list( listX[LIST_0], &listXsize[LIST_0],
+                          img->num_ref_idx_l0_active-1,
+                          currSlice->reordering_of_pic_nums_idc_l0,
+                          currSlice->abs_diff_pic_num_minus1_l0,
                           currSlice->long_term_pic_idx_l0);
   }
 
@@ -319,7 +320,7 @@ static int ref_pic_list_reordering(Bitstream *bitstream)
  *    write the memory management control operations
  *
  * \return
- *    number of bits used 
+ *    number of bits used
  ************************************************************************
  */
 static int dec_ref_pic_marking(Bitstream *bitstream)
@@ -342,15 +343,15 @@ static int dec_ref_pic_marking(Bitstream *bitstream)
     if (img->adaptive_ref_pic_buffering_flag)
     {
       tmp_drpm = img->dec_ref_pic_marking_buffer;
-      // write Memory Management Control Operation 
+      // write Memory Management Control Operation
       do
       {
         if (tmp_drpm==NULL) error ("Error encoding MMCO commands", 500);
-        
+
         val = tmp_drpm->memory_management_control_operation;
         len += ue_v("SH: memory_management_control_operation", val, bitstream);
 
-        if ((val==1)||(val==3)) 
+        if ((val==1)||(val==3))
         {
           len += 1 + ue_v("SH: difference_of_pic_nums_minus1", tmp_drpm->difference_of_pic_nums_minus1, bitstream);
         }
@@ -366,11 +367,11 @@ static int dec_ref_pic_marking(Bitstream *bitstream)
         {
           len += ue_v("SH: max_long_term_pic_idx_plus1", tmp_drpm->max_long_term_frame_idx_plus1, bitstream);
         }
-        
+
         tmp_drpm=tmp_drpm->Next;
-        
+
       } while (val != 0);
-      
+
     }
   }
   return len;
@@ -383,7 +384,7 @@ static int dec_ref_pic_marking(Bitstream *bitstream)
  *    write prediction weight table
  *
  * \return
- *    number of bits used 
+ *    number of bits used
  ************************************************************************
  */
 static int pred_weight_table(Bitstream *bitstream)
@@ -403,9 +404,9 @@ static int pred_weight_table(Bitstream *bitstream)
     if ( (wp_weight[0][i][0] != 1<<luma_log_weight_denom) || (wp_offset[0][i][0] != 0) )
     {
       len += u_1 ("SH: luma_weight_flag_l0", 1, bitstream);
-      
+
       len += se_v ("SH: luma_weight_l0", wp_weight[0][i][0], bitstream);
-        
+
       len += se_v ("SH: luma_offset_l0", wp_offset[0][i][0], bitstream);
     }
     else
@@ -415,14 +416,14 @@ static int pred_weight_table(Bitstream *bitstream)
 
     if (active_sps->chroma_format_idc!=0)
     {
-      if ( (wp_weight[0][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][1] != 0) || 
+      if ( (wp_weight[0][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][1] != 0) ||
         (wp_weight[0][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][2] != 0)  )
       {
         len += u_1 ("chroma_weight_flag_l0", 1, bitstream);
         for (j=1; j<3; j++)
         {
           len += se_v ("chroma_weight_l0", wp_weight[0][i][j] ,bitstream);
-          
+
           len += se_v ("chroma_offset_l0", wp_offset[0][i][j] ,bitstream);
         }
       }
@@ -440,26 +441,25 @@ static int pred_weight_table(Bitstream *bitstream)
       if ( (wp_weight[1][i][0] != 1<<luma_log_weight_denom) || (wp_offset[1][i][0] != 0) )
       {
         len += u_1 ("SH: luma_weight_flag_l1", 1, bitstream);
-        
+
         len += se_v ("SH: luma_weight_l1", wp_weight[1][i][0], bitstream);
-        
+
         len += se_v ("SH: luma_offset_l1", wp_offset[1][i][0], bitstream);
       }
       else
       {
         len += u_1 ("SH: luma_weight_flag_l1", 0, bitstream);
       }
-      
+
       if (active_sps->chroma_format_idc!=0)
       {
-        if ( (wp_weight[1][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][1] != 0) || 
+        if ( (wp_weight[1][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][1] != 0) ||
           (wp_weight[1][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][2] != 0) )
         {
           len += u_1 ("chroma_weight_flag_l1", 1, bitstream);
           for (j=1; j<3; j++)
           {
             len += se_v ("chroma_weight_l1", wp_weight[1][i][j] ,bitstream);
-            
             len += se_v ("chroma_offset_l1", wp_offset[1][i][j] ,bitstream);
           }
         }
@@ -472,7 +472,7 @@ static int pred_weight_table(Bitstream *bitstream)
   }
   return len;
 }
-  
+
 
 /*!
  ************************************************************************
@@ -485,7 +485,7 @@ static int pred_weight_table(Bitstream *bitstream)
  */
 int get_picture_type()
 {
-  // set this value to zero for transmission without signaling 
+  // set this value to zero for transmission without signaling
   // that the whole picture has the same slice type
   int same_slicetype_for_whole_frame = 5;
 
@@ -507,7 +507,7 @@ int get_picture_type()
     error("Picture Type not supported!",1);
     break;
   }
-   
+
   return 0;
 }
 
@@ -516,7 +516,7 @@ int get_picture_type()
 /*!
  *****************************************************************************
  *
- * \brief 
+ * \brief
  *    int Partition_BC_Header () write the Partition type B, C header
  *
  * \return
@@ -526,7 +526,7 @@ int get_picture_type()
  *    PartNo: Partition Number to which the header should be written
  *
  * \par Side effects
- *    Partition header as per VCEG-N72r2 is written into the appropriate 
+ *    Partition header as per VCEG-N72r2 is written into the appropriate
  *    partition bit buffer
  *
  * \par Limitations/Shortcomings/Tweaks
@@ -543,22 +543,17 @@ int get_picture_type()
 int Partition_BC_Header(int PartNo)
 {
   DataPartition *partition = &((img->currentSlice)->partArr[PartNo]);
-  SyntaxElement symbol, *sym = &symbol;
-
-  int len = 0;
+  SyntaxElement sym;
 
   assert (PartNo > 0 && PartNo < img->currentSlice->max_part_nr);
 
-  sym->type = SE_HEADER;         // This will be true for all symbols generated here
-  sym->mapping = ue_linfo;       // Mapping rule: Simple code number to len/info
-  sym->value2  = 0;
+  sym.type = SE_HEADER;         // This will be true for all symbols generated here
+  sym.value2  = 0;
 
-  //ZL 
-  //changed according to the g050r1
   SYMTRACESTRING("RTP-PH: Slice ID");
-  sym->value1 = img->current_slice_nr;
-  len += writeSyntaxElement_UVLC (sym, partition);
+  sym.value1 = img->current_slice_nr;
+  writeSE_UVLC (&sym, partition);
 
-  return len;
+  return sym.len;
 }
 

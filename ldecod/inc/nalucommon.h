@@ -7,7 +7,7 @@
  *    NALU handling common to encoder and decoder
  *  \date 25 November 2002
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Stephan Wenger        <stewe@cs.tu-berlin.de>
  ***************************************************************************************
  */
@@ -37,7 +37,7 @@
 #define NALU_PRIORITY_DISPOSABLE  0
 
 
-typedef struct 
+typedef struct
 {
   int startcodeprefix_len;      //! 4 for parameter sets and first slice in picture, 3 for everything else (suggested)
   unsigned len;                 //! Length of the NAL unit (Excluding the start code, which does not belong to the NALU)

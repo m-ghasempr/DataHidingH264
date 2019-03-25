@@ -6,7 +6,7 @@
  *    8x8 transform functions
  *
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *    - Yuri Vatis                      <vatis@hhi.de>
  *    - Jan Muenster                    <muenster@hhi.de>
  *    - Lowell Winger                   <lwinger@lsil.com>
@@ -29,13 +29,16 @@
 #include "vlc.h"
 #include "minmax.h"
 #include "transform8x8.h"
+#include "macroblock.h"
+#include "symbol.h"
 
 int   cofAC8x8_chroma[2][4][2][18];
+static int diff64[64];
 
 
-const int quant_coef8[6][8][8] = 
+const int quant_coef8[6][8][8] =
 {
-  { 
+  {
     {13107, 12222,  16777,  12222,  13107,  12222,  16777,  12222},
     {12222, 11428,  15481,  11428,  12222,  11428,  15481,  11428},
     {16777, 15481,  20972,  15481,  16777,  15481,  20972,  15481},
@@ -98,7 +101,7 @@ const int quant_coef8[6][8][8] =
 };
 
 
-const int dequant_coef8[6][8][8] = 
+const int dequant_coef8[6][8][8] =
 {
   {
     {20,  19, 25, 19, 20, 19, 25, 19},
@@ -166,7 +169,7 @@ const int dequant_coef8[6][8][8] =
 
 //! single scan pattern
 const byte SNGL_SCAN8x8[64][2] = {
-  {0,0}, {1,0}, {0,1}, {0,2}, {1,1}, {2,0}, {3,0}, {2,1}, 
+  {0,0}, {1,0}, {0,1}, {0,2}, {1,1}, {2,0}, {3,0}, {2,1},
   {1,2}, {0,3}, {0,4}, {1,3}, {2,2}, {3,1}, {4,0}, {5,0},
   {4,1}, {3,2}, {2,3}, {1,4}, {0,5}, {0,6}, {1,5}, {2,4},
   {3,3}, {4,2}, {5,1}, {6,0}, {7,0}, {6,1}, {5,2}, {4,3},
@@ -179,13 +182,13 @@ const byte SNGL_SCAN8x8[64][2] = {
 
 //! field scan pattern
 const byte FIELD_SCAN8x8[64][2] = {   // 8x8
-  {0,0}, {0,1}, {0,2}, {1,0}, {1,1}, {0,3}, {0,4}, {1,2}, 
-  {2,0}, {1,3}, {0,5}, {0,6}, {0,7}, {1,4}, {2,1}, {3,0}, 
-  {2,2}, {1,5}, {1,6}, {1,7}, {2,3}, {3,1}, {4,0}, {3,2}, 
-  {2,4}, {2,5}, {2,6}, {2,7}, {3,3}, {4,1}, {5,0}, {4,2}, 
-  {3,4}, {3,5}, {3,6}, {3,7}, {4,3}, {5,1}, {6,0}, {5,2}, 
-  {4,4}, {4,5}, {4,6}, {4,7}, {5,3}, {6,1}, {6,2}, {5,4}, 
-  {5,5}, {5,6}, {5,7}, {6,3}, {7,0}, {7,1}, {6,4}, {6,5}, 
+  {0,0}, {0,1}, {0,2}, {1,0}, {1,1}, {0,3}, {0,4}, {1,2},
+  {2,0}, {1,3}, {0,5}, {0,6}, {0,7}, {1,4}, {2,1}, {3,0},
+  {2,2}, {1,5}, {1,6}, {1,7}, {2,3}, {3,1}, {4,0}, {3,2},
+  {2,4}, {2,5}, {2,6}, {2,7}, {3,3}, {4,1}, {5,0}, {4,2},
+  {3,4}, {3,5}, {3,6}, {3,7}, {4,3}, {5,1}, {6,0}, {5,2},
+  {4,4}, {4,5}, {4,6}, {4,7}, {5,3}, {6,1}, {6,2}, {5,4},
+  {5,5}, {5,6}, {5,7}, {6,3}, {7,0}, {7,1}, {6,4}, {6,5},
   {6,6}, {6,7}, {7,2}, {7,3}, {7,4}, {7,5}, {7,6}, {7,7}
 };
 
@@ -203,7 +206,7 @@ const byte COEFF_COST8x8[2][64] =
    9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9}
 };
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    8x8 Intra mode decision for a macroblock
@@ -228,7 +231,7 @@ int Mode_Decision_for_new_Intra8x8Macroblock (double lambda, int *min_cost)
   return cbp;
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    8x8 Intra mode decision for a macroblock
@@ -239,7 +242,6 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
 {
   int     ipmode, best_ipmode = 0, i, j, k, y, cost, dummy;
   int     c_nz, nonzero = 0;
-  int     diff[64];
   imgpel  rec8x8[8][8];
   double  rdcost = 0.0;
   int     block_x     = 8*(b8 & 0x01);
@@ -252,13 +254,13 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
   int     pic_block_y = pic_pix_y/4;
   double  min_rdcost  = 1e30;
   imgpel    **imgY_orig  = imgY_org;
-  extern  int ****cofAC8x8; 
+  extern  int ****cofAC8x8;
   int fadjust8x8[2][16][16];
   int left_available, up_available, all_available;
 
   char   upMode;
   char   leftMode;
-  int     mostProbableMode;  
+  int    mostProbableMode;
 
   PixelPos left_block;
   PixelPos top_block;
@@ -275,7 +277,7 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
   }
 
   if(b8 >> 1)
-    upMode    =  top_block.available ? img->ipredmode8x8[top_block.pos_y ][top_block.pos_x ] : -1; 
+    upMode    =  top_block.available ? img->ipredmode8x8[top_block.pos_y ][top_block.pos_x ] : -1;
   else
     upMode    =  top_block.available ? img->ipredmode   [top_block.pos_y ][top_block.pos_x ] : -1;
   if(b8 & 0x01)
@@ -303,10 +305,10 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
         for (k=j=0; j<8; j++)
           for (i=0; i<8; i++, k++)
           {
-            diff[k] = imgY_orig[pic_opix_y+j][pic_opix_x+i] - img->mprr_3[ipmode][j][i];
+            diff64[k] = imgY_orig[pic_opix_y+j][pic_opix_x+i] - img->mprr_3[ipmode][j][i];
           }
         cost  = (ipmode == mostProbableMode) ? 0 : (int)floor(4 * lambda );
-        cost += distortion8x8 (diff);
+        cost += distortion8x8 (diff64);
         if (cost < *min_cost)
         {
           best_ipmode = ipmode;
@@ -356,15 +358,15 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
           min_rdcost  = rdcost;
           best_ipmode = ipmode;
         }
-        reset_coding_state_cs_cm();  
+        reset_coding_state_cs_cm();
       }
     }
   }
 
   //===== set intra mode prediction =====
   img->ipredmode8x8[pic_block_y][pic_block_x] = (char) best_ipmode;
-  currMB->intra_pred_modes8x8[4*b8] = (mostProbableMode == best_ipmode) 
-    ? -1 
+  currMB->intra_pred_modes8x8[4*b8] = (mostProbableMode == best_ipmode)
+    ? -1
     : (best_ipmode < mostProbableMode ? best_ipmode : best_ipmode-1);
 
   for(j = img->mb_y*4+(b8 >> 1)*2; j < img->mb_y*4+(b8 >> 1)*2 + 2; j++)   //loop 4x4s in the subblock for 8x8 prediction setting
@@ -381,13 +383,13 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
       {
         img->m7[j][i] = imgY_orig[pic_opix_y+j][pic_opix_x+i] - img->mprr_3[best_ipmode][j][i];
       }
-    } 
+    }
     nonzero = dct_luma8x8 (b8, &dummy, 1);
   }
   else
   {
     //===== restore coefficients =====
-    for(k=0; k<4; k++) // do 4x now    
+    for(k=0; k<4; k++) // do 4x now
     {
       for (j=0; j<2; j++)
         memcpy(img->cofAC[b8][k][j],cofAC8x8[b8][k][j], 65 * sizeof(int));
@@ -398,9 +400,9 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
       for (j=0; j<8; j++)
         memcpy(&img->fadjust8x8[1][block_y+j][block_x], &fadjust8x8[1][block_y+j][block_x], 8 * sizeof(int));
     }
-    
+
     //===== restore reconstruction and prediction (needed if single coeffs are removed) =====
-    for (y=0; y<8; y++) 
+    for (y=0; y<8; y++)
     {
       memcpy(&enc_picture->imgY[pic_pix_y+y][pic_pix_x], rec8x8[y], 8 * sizeof(imgpel));
       memcpy(&img->mpr[block_y+y][block_x], img->mprr_3[best_ipmode][y], 8 * sizeof(imgpel));
@@ -416,7 +418,7 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
 // The pels of the 4x4 block are labelled a..p. The predictor pels above
 // are labelled A..H, from the left I..P, and from above left X, as follows:
 //
-//  Z  A  B  C  D  E  F  G  H  I  J  K  L  M   N  O  P  
+//  Z  A  B  C  D  E  F  G  H  I  J  K  L  M   N  O  P
 //  Q  a1 b1 c1 d1 e1 f1 g1 h1
 //  R  a2 b2 c2 d2 e2 f2 g2 h2
 //  S  a3 b3 c3 d3 e3 f3 g3 h3
@@ -499,7 +501,7 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   getNeighbour(mb_nr, ioff    , joff -1 , IS_LUMA, &pix_b);
   getNeighbour(mb_nr, ioff +8 , joff -1 , IS_LUMA, &pix_c);
   getNeighbour(mb_nr, ioff -1 , joff -1 , IS_LUMA, &pix_d);
-  
+
   pix_c.available = pix_c.available &&!(ioff == 8 && joff == 8);
 
   if (input->UseConstrainedIntraPred)
@@ -597,26 +599,26 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   ///////////////////////////////
   s0 = 0;
   if (block_available_up && block_available_left)
-  {   
+  {
     // no edge
-    s0 = shift_right_round((P_A + P_B + P_C + P_D + P_E + P_F + P_G + P_H + P_Q + P_R + P_S + P_T + P_U + P_V + P_W + P_X), 4);
+    s0 = rshift_rnd_sf((P_A + P_B + P_C + P_D + P_E + P_F + P_G + P_H + P_Q + P_R + P_S + P_T + P_U + P_V + P_W + P_X), 4);
   }
   else if (!block_available_up && block_available_left)
   {
     // upper edge
-    s0 = shift_right_round((P_Q + P_R + P_S + P_T + P_U + P_V + P_W + P_X), 3);
+    s0 = rshift_rnd_sf((P_Q + P_R + P_S + P_T + P_U + P_V + P_W + P_X), 3);
   }
   else if (block_available_up && !block_available_left)
   {
     // left edge
-    s0 = shift_right_round((P_A + P_B + P_C + P_D + P_E + P_F + P_G + P_H), 3);
+    s0 = rshift_rnd_sf((P_A + P_B + P_C + P_D + P_E + P_F + P_G + P_H), 3);
   }
   else //if (!block_available_up && !block_available_left)
   {
     // top left corner, nothing to predict from
-    s0 = img->dc_pred_value_luma;                           
+    s0 = img->dc_pred_value_luma;
   }
-  
+
   // store DC prediction
   cur_pred = img->mprr_3[DC_PRED];
   for (j=0; j < 2*BLOCK_SIZE; j++)
@@ -627,20 +629,20 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
     }
   }
 
-  
+
   ///////////////////////////////
   // make horiz and vert prediction
   ///////////////////////////////
   cur_pred = img->mprr_3[VERT_PRED];
   for (i=0; i < 2*BLOCK_SIZE; i++)
   {
-    cur_pred[0][i] = 
-    cur_pred[1][i] = 
-    cur_pred[2][i] = 
-    cur_pred[3][i] = 
-    cur_pred[4][i] = 
-    cur_pred[5][i] = 
-    cur_pred[6][i] = 
+    cur_pred[0][i] =
+    cur_pred[1][i] =
+    cur_pred[2][i] =
+    cur_pred[3][i] =
+    cur_pred[4][i] =
+    cur_pred[5][i] =
+    cur_pred[6][i] =
     cur_pred[7][i] = (imgpel)(&P_A)[i];
   }
   if(!block_available_up)
@@ -649,13 +651,13 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   cur_pred = img->mprr_3[HOR_PRED];
   for (i=0; i < 2*BLOCK_SIZE; i++)
   {
-    cur_pred[i][0]  = 
-    cur_pred[i][1]  = 
-    cur_pred[i][2]  = 
-    cur_pred[i][3]  = 
-    cur_pred[i][4]  = 
-    cur_pred[i][5]  = 
-    cur_pred[i][6]  = 
+    cur_pred[i][0]  =
+    cur_pred[i][1]  =
+    cur_pred[i][2]  =
+    cur_pred[i][3]  =
+    cur_pred[i][4]  =
+    cur_pred[i][5]  =
+    cur_pred[i][6]  =
     cur_pred[i][7]  = (imgpel) (&P_Q)[i];
   }
   if(!block_available_left)
@@ -664,72 +666,72 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   ///////////////////////////////////
   // make diagonal down left prediction
   ///////////////////////////////////
-  if (block_available_up) 
+  if (block_available_up)
   {
     // Mode DIAG_DOWN_LEFT_PRED
     cur_pred = img->mprr_3[DIAG_DOWN_LEFT_PRED];
     cur_pred[0][0] = (imgpel) ((P_A + P_C + 2*(P_B) + 2) >> 2);
-    cur_pred[0][1] = 
+    cur_pred[0][1] =
     cur_pred[1][0] = (imgpel) ((P_B + P_D + 2*(P_C) + 2) >> 2);
     cur_pred[0][2] =
     cur_pred[1][1] =
     cur_pred[2][0] = (imgpel) ((P_C + P_E + 2*(P_D) + 2) >> 2);
-    cur_pred[0][3] = 
-    cur_pred[1][2] = 
-    cur_pred[2][1] = 
+    cur_pred[0][3] =
+    cur_pred[1][2] =
+    cur_pred[2][1] =
     cur_pred[3][0] = (imgpel) ((P_D + P_F + 2*(P_E) + 2) >> 2);
-    cur_pred[0][4] = 
-    cur_pred[1][3] = 
-    cur_pred[2][2] = 
-    cur_pred[3][1] = 
+    cur_pred[0][4] =
+    cur_pred[1][3] =
+    cur_pred[2][2] =
+    cur_pred[3][1] =
     cur_pred[4][0] = (imgpel) ((P_E + P_G + 2*(P_F) + 2) >> 2);
-    cur_pred[0][5] = 
-    cur_pred[1][4] = 
-    cur_pred[2][3] = 
-    cur_pred[3][2] = 
-    cur_pred[4][1] = 
+    cur_pred[0][5] =
+    cur_pred[1][4] =
+    cur_pred[2][3] =
+    cur_pred[3][2] =
+    cur_pred[4][1] =
     cur_pred[5][0] = (imgpel) ((P_F + P_H + 2*(P_G) + 2) >> 2);
-    cur_pred[0][6] = 
-    cur_pred[1][5] = 
-    cur_pred[2][4] = 
-    cur_pred[3][3] = 
-    cur_pred[4][2] = 
-    cur_pred[5][1] = 
+    cur_pred[0][6] =
+    cur_pred[1][5] =
+    cur_pred[2][4] =
+    cur_pred[3][3] =
+    cur_pred[4][2] =
+    cur_pred[5][1] =
     cur_pred[6][0] = (imgpel) ((P_G + P_I + 2*(P_H) + 2) >> 2);
-    cur_pred[0][7] = 
-    cur_pred[1][6] = 
-    cur_pred[2][5] = 
-    cur_pred[3][4] = 
-    cur_pred[4][3] = 
-    cur_pred[5][2] = 
-    cur_pred[6][1] = 
+    cur_pred[0][7] =
+    cur_pred[1][6] =
+    cur_pred[2][5] =
+    cur_pred[3][4] =
+    cur_pred[4][3] =
+    cur_pred[5][2] =
+    cur_pred[6][1] =
     cur_pred[7][0] = (imgpel) ((P_H + P_J + 2*(P_I) + 2) >> 2);
-    cur_pred[1][7] = 
-    cur_pred[2][6] = 
-    cur_pred[3][5] = 
-    cur_pred[4][4] = 
-    cur_pred[5][3] = 
-    cur_pred[6][2] = 
+    cur_pred[1][7] =
+    cur_pred[2][6] =
+    cur_pred[3][5] =
+    cur_pred[4][4] =
+    cur_pred[5][3] =
+    cur_pred[6][2] =
     cur_pred[7][1] = (imgpel) ((P_I + P_K + 2*(P_J) + 2) >> 2);
-    cur_pred[2][7] = 
-    cur_pred[3][6] = 
-    cur_pred[4][5] = 
-    cur_pred[5][4] = 
-    cur_pred[6][3] = 
+    cur_pred[2][7] =
+    cur_pred[3][6] =
+    cur_pred[4][5] =
+    cur_pred[5][4] =
+    cur_pred[6][3] =
     cur_pred[7][2] = (imgpel) ((P_J + P_L + 2*(P_K) + 2) >> 2);
-    cur_pred[3][7] = 
-    cur_pred[4][6] = 
-    cur_pred[5][5] = 
-    cur_pred[6][4] = 
+    cur_pred[3][7] =
+    cur_pred[4][6] =
+    cur_pred[5][5] =
+    cur_pred[6][4] =
     cur_pred[7][3] = (imgpel) ((P_K + P_M + 2*(P_L) + 2) >> 2);
-    cur_pred[4][7] = 
-    cur_pred[5][6] = 
-    cur_pred[6][5] = 
+    cur_pred[4][7] =
+    cur_pred[5][6] =
+    cur_pred[6][5] =
     cur_pred[7][4] = (imgpel) ((P_L + P_N + 2*(P_M) + 2) >> 2);
-    cur_pred[5][7] = 
-    cur_pred[6][6] = 
+    cur_pred[5][7] =
+    cur_pred[6][6] =
     cur_pred[7][5] = (imgpel) ((P_M + P_O + 2*(P_N) + 2) >> 2);
-    cur_pred[6][7] = 
+    cur_pred[6][7] =
     cur_pred[7][6] = (imgpel) ((P_N + P_P + 2*(P_O) + 2) >> 2);
     cur_pred[7][7] = (imgpel) ((P_O + 3*(P_P) + 2) >> 2);
 
@@ -738,67 +740,67 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
     ///////////////////////////////////
     cur_pred = img->mprr_3[VERT_LEFT_PRED];
     cur_pred[0][0] = (imgpel) ((P_A + P_B + 1) >> 1);
-    cur_pred[0][1] = 
+    cur_pred[0][1] =
     cur_pred[2][0] = (imgpel) ((P_B + P_C + 1) >> 1);
-    cur_pred[0][2] = 
-    cur_pred[2][1] = 
+    cur_pred[0][2] =
+    cur_pred[2][1] =
     cur_pred[4][0] = (imgpel) ((P_C + P_D + 1) >> 1);
-    cur_pred[0][3] = 
-    cur_pred[2][2] = 
-    cur_pred[4][1] = 
+    cur_pred[0][3] =
+    cur_pred[2][2] =
+    cur_pred[4][1] =
     cur_pred[6][0] = (imgpel) ((P_D + P_E + 1) >> 1);
-    cur_pred[0][4] = 
-    cur_pred[2][3] = 
-    cur_pred[4][2] = 
+    cur_pred[0][4] =
+    cur_pred[2][3] =
+    cur_pred[4][2] =
     cur_pred[6][1] = (imgpel) ((P_E + P_F + 1) >> 1);
-    cur_pred[0][5] = 
-    cur_pred[2][4] = 
-    cur_pred[4][3] = 
+    cur_pred[0][5] =
+    cur_pred[2][4] =
+    cur_pred[4][3] =
     cur_pred[6][2] = (imgpel) ((P_F + P_G + 1) >> 1);
-    cur_pred[0][6] = 
-    cur_pred[2][5] = 
-    cur_pred[4][4] = 
+    cur_pred[0][6] =
+    cur_pred[2][5] =
+    cur_pred[4][4] =
     cur_pred[6][3] = (imgpel) ((P_G + P_H + 1) >> 1);
-    cur_pred[0][7] = 
-    cur_pred[2][6] = 
-    cur_pred[4][5] = 
+    cur_pred[0][7] =
+    cur_pred[2][6] =
+    cur_pred[4][5] =
     cur_pred[6][4] = (imgpel) ((P_H + P_I + 1) >> 1);
-    cur_pred[2][7] = 
-    cur_pred[4][6] = 
+    cur_pred[2][7] =
+    cur_pred[4][6] =
     cur_pred[6][5] = (imgpel) ((P_I + P_J + 1) >> 1);
-    cur_pred[4][7] = 
+    cur_pred[4][7] =
     cur_pred[6][6] = (imgpel) ((P_J + P_K + 1) >> 1);
     cur_pred[6][7] = (imgpel) ((P_K + P_L + 1) >> 1);
     cur_pred[1][0] = (imgpel) ((P_A + P_C + 2*P_B + 2) >> 2);
-    cur_pred[1][1] = 
+    cur_pred[1][1] =
     cur_pred[3][0] = (imgpel) ((P_B + P_D + 2*P_C + 2) >> 2);
-    cur_pred[1][2] = 
-    cur_pred[3][1] = 
+    cur_pred[1][2] =
+    cur_pred[3][1] =
     cur_pred[5][0] = (imgpel) ((P_C + P_E + 2*P_D + 2) >> 2);
-    cur_pred[1][3] = 
-    cur_pred[3][2] = 
-    cur_pred[5][1] = 
+    cur_pred[1][3] =
+    cur_pred[3][2] =
+    cur_pred[5][1] =
     cur_pred[7][0] = (imgpel) ((P_D + P_F + 2*P_E + 2) >> 2);
-    cur_pred[1][4] = 
-    cur_pred[3][3] = 
-    cur_pred[5][2] = 
+    cur_pred[1][4] =
+    cur_pred[3][3] =
+    cur_pred[5][2] =
     cur_pred[7][1] = (imgpel) ((P_E + P_G + 2*P_F + 2) >> 2);
-    cur_pred[1][5] = 
-    cur_pred[3][4] = 
-    cur_pred[5][3] = 
+    cur_pred[1][5] =
+    cur_pred[3][4] =
+    cur_pred[5][3] =
     cur_pred[7][2] = (imgpel) ((P_F + P_H + 2*P_G + 2) >> 2);
-    cur_pred[1][6] = 
-    cur_pred[3][5] = 
-    cur_pred[5][4] = 
+    cur_pred[1][6] =
+    cur_pred[3][5] =
+    cur_pred[5][4] =
     cur_pred[7][3] = (imgpel) ((P_G + P_I + 2*P_H + 2) >> 2);
-    cur_pred[1][7] = 
-    cur_pred[3][6] = 
-    cur_pred[5][5] = 
+    cur_pred[1][7] =
+    cur_pred[3][6] =
+    cur_pred[5][5] =
     cur_pred[7][4] = (imgpel) ((P_H + P_J + 2*P_I + 2) >> 2);
-    cur_pred[3][7] = 
-    cur_pred[5][6] = 
+    cur_pred[3][7] =
+    cur_pred[5][6] =
     cur_pred[7][5] = (imgpel) ((P_I + P_K + 2*P_J + 2) >> 2);
-    cur_pred[5][7] = 
+    cur_pred[5][7] =
     cur_pred[7][6] = (imgpel) ((P_J + P_L + 2*P_K + 2) >> 2);
     cur_pred[7][7] = (imgpel) ((P_K + P_M + 2*P_L + 2) >> 2);
   }
@@ -806,72 +808,72 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   ///////////////////////////////////
   // make diagonal down right prediction
   ///////////////////////////////////
-  if (block_available_up && block_available_left && block_available_up_left) 
+  if (block_available_up && block_available_left && block_available_up_left)
   {
     // Mode DIAG_DOWN_RIGHT_PRED
     cur_pred = img->mprr_3[DIAG_DOWN_RIGHT_PRED];
     cur_pred[7][0] = (imgpel) ((P_X + P_V + 2*(P_W) + 2) >> 2);
-    cur_pred[6][0] = 
+    cur_pred[6][0] =
     cur_pred[7][1] = (imgpel) ((P_W + P_U + 2*(P_V) + 2) >> 2);
-    cur_pred[5][0] = 
-    cur_pred[6][1] = 
+    cur_pred[5][0] =
+    cur_pred[6][1] =
     cur_pred[7][2] = (imgpel) ((P_V + P_T + 2*(P_U) + 2) >> 2);
-    cur_pred[4][0] = 
-    cur_pred[5][1] = 
-    cur_pred[6][2] = 
+    cur_pred[4][0] =
+    cur_pred[5][1] =
+    cur_pred[6][2] =
     cur_pred[7][3] = (imgpel) ((P_U + P_S + 2*(P_T) + 2) >> 2);
-    cur_pred[3][0] = 
-    cur_pred[4][1] = 
-    cur_pred[5][2] = 
-    cur_pred[6][3] = 
+    cur_pred[3][0] =
+    cur_pred[4][1] =
+    cur_pred[5][2] =
+    cur_pred[6][3] =
     cur_pred[7][4] = (imgpel) ((P_T + P_R + 2*(P_S) + 2) >> 2);
-    cur_pred[2][0] = 
-    cur_pred[3][1] = 
-    cur_pred[4][2] = 
-    cur_pred[5][3] = 
-    cur_pred[6][4] = 
+    cur_pred[2][0] =
+    cur_pred[3][1] =
+    cur_pred[4][2] =
+    cur_pred[5][3] =
+    cur_pred[6][4] =
     cur_pred[7][5] = (imgpel) ((P_S + P_Q + 2*(P_R) + 2) >> 2);
-    cur_pred[1][0] = 
-    cur_pred[2][1] = 
-    cur_pred[3][2] = 
-    cur_pred[4][3] = 
-    cur_pred[5][4] = 
-    cur_pred[6][5] = 
+    cur_pred[1][0] =
+    cur_pred[2][1] =
+    cur_pred[3][2] =
+    cur_pred[4][3] =
+    cur_pred[5][4] =
+    cur_pred[6][5] =
     cur_pred[7][6] = (imgpel) ((P_R + P_Z + 2*(P_Q) + 2) >> 2);
-    cur_pred[0][0] = 
-    cur_pred[1][1] = 
-    cur_pred[2][2] = 
-    cur_pred[3][3] = 
-    cur_pred[4][4] = 
-    cur_pred[5][5] = 
-    cur_pred[6][6] = 
+    cur_pred[0][0] =
+    cur_pred[1][1] =
+    cur_pred[2][2] =
+    cur_pred[3][3] =
+    cur_pred[4][4] =
+    cur_pred[5][5] =
+    cur_pred[6][6] =
     cur_pred[7][7] = (imgpel) ((P_Q + P_A + 2*(P_Z) + 2) >> 2);
-    cur_pred[0][1] = 
-    cur_pred[1][2] = 
-    cur_pred[2][3] = 
-    cur_pred[3][4] = 
-    cur_pred[4][5] = 
-    cur_pred[5][6] = 
+    cur_pred[0][1] =
+    cur_pred[1][2] =
+    cur_pred[2][3] =
+    cur_pred[3][4] =
+    cur_pred[4][5] =
+    cur_pred[5][6] =
     cur_pred[6][7] = (imgpel) ((P_Z + P_B + 2*(P_A) + 2) >> 2);
-    cur_pred[0][2] = 
-    cur_pred[1][3] = 
-    cur_pred[2][4] = 
-    cur_pred[3][5] = 
-    cur_pred[4][6] = 
+    cur_pred[0][2] =
+    cur_pred[1][3] =
+    cur_pred[2][4] =
+    cur_pred[3][5] =
+    cur_pred[4][6] =
     cur_pred[5][7] = (imgpel) ((P_A + P_C + 2*(P_B) + 2) >> 2);
-    cur_pred[0][3] = 
-    cur_pred[1][4] = 
-    cur_pred[2][5] = 
-    cur_pred[3][6] = 
+    cur_pred[0][3] =
+    cur_pred[1][4] =
+    cur_pred[2][5] =
+    cur_pred[3][6] =
     cur_pred[4][7] = (imgpel) ((P_B + P_D + 2*(P_C) + 2) >> 2);
-    cur_pred[0][4] = 
-    cur_pred[1][5] = 
-    cur_pred[2][6] = 
+    cur_pred[0][4] =
+    cur_pred[1][5] =
+    cur_pred[2][6] =
     cur_pred[3][7] = (imgpel) ((P_C + P_E + 2*(P_D) + 2) >> 2);
-    cur_pred[0][5] = 
-    cur_pred[1][6] = 
+    cur_pred[0][5] =
+    cur_pred[1][6] =
     cur_pred[2][7] = (imgpel) ((P_D + P_F + 2*(P_E) + 2) >> 2);
-    cur_pred[0][6] = 
+    cur_pred[0][6] =
     cur_pred[1][7] = (imgpel) ((P_E + P_G + 2*(P_F) + 2) >> 2);
     cur_pred[0][7] = (imgpel) ((P_F + P_H + 2*(P_G) + 2) >> 2);
 
@@ -879,56 +881,56 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   // make vertical right prediction
   ///////////////////////////////////
     cur_pred = img->mprr_3[VERT_RIGHT_PRED];
-    cur_pred[0][0] = 
-    cur_pred[2][1] = 
-    cur_pred[4][2] = 
+    cur_pred[0][0] =
+    cur_pred[2][1] =
+    cur_pred[4][2] =
     cur_pred[6][3] = (imgpel) ((P_Z + P_A + 1) >> 1);
-    cur_pred[0][1] = 
-    cur_pred[2][2] = 
-    cur_pred[4][3] = 
+    cur_pred[0][1] =
+    cur_pred[2][2] =
+    cur_pred[4][3] =
     cur_pred[6][4] = (imgpel) ((P_A + P_B + 1) >> 1);
-    cur_pred[0][2] = 
-    cur_pred[2][3] = 
-    cur_pred[4][4] = 
+    cur_pred[0][2] =
+    cur_pred[2][3] =
+    cur_pred[4][4] =
     cur_pred[6][5] = (imgpel) ((P_B + P_C + 1) >> 1);
-    cur_pred[0][3] = 
-    cur_pred[2][4] = 
-    cur_pred[4][5] = 
+    cur_pred[0][3] =
+    cur_pred[2][4] =
+    cur_pred[4][5] =
     cur_pred[6][6] = (imgpel) ((P_C + P_D + 1) >> 1);
-    cur_pred[0][4] = 
-    cur_pred[2][5] = 
-    cur_pred[4][6] = 
+    cur_pred[0][4] =
+    cur_pred[2][5] =
+    cur_pred[4][6] =
     cur_pred[6][7] = (imgpel) ((P_D + P_E + 1) >> 1);
-    cur_pred[0][5] = 
-    cur_pred[2][6] = 
+    cur_pred[0][5] =
+    cur_pred[2][6] =
     cur_pred[4][7] = (imgpel) ((P_E + P_F + 1) >> 1);
-    cur_pred[0][6] = 
+    cur_pred[0][6] =
     cur_pred[2][7] = (imgpel) ((P_F + P_G + 1) >> 1);
     cur_pred[0][7] = (imgpel) ((P_G + P_H + 1) >> 1);
-    cur_pred[1][0] = 
-    cur_pred[3][1] = 
-    cur_pred[5][2] = 
+    cur_pred[1][0] =
+    cur_pred[3][1] =
+    cur_pred[5][2] =
     cur_pred[7][3] = (imgpel) ((P_Q + P_A + 2*P_Z + 2) >> 2);
-    cur_pred[1][1] = 
-    cur_pred[3][2] = 
-    cur_pred[5][3] = 
+    cur_pred[1][1] =
+    cur_pred[3][2] =
+    cur_pred[5][3] =
     cur_pred[7][4] = (imgpel) ((P_Z + P_B + 2*P_A + 2) >> 2);
-    cur_pred[1][2] = 
-    cur_pred[3][3] = 
-    cur_pred[5][4] = 
+    cur_pred[1][2] =
+    cur_pred[3][3] =
+    cur_pred[5][4] =
     cur_pred[7][5] = (imgpel) ((P_A + P_C + 2*P_B + 2) >> 2);
-    cur_pred[1][3] = 
-    cur_pred[3][4] = 
-    cur_pred[5][5] = 
+    cur_pred[1][3] =
+    cur_pred[3][4] =
+    cur_pred[5][5] =
     cur_pred[7][6] = (imgpel) ((P_B + P_D + 2*P_C + 2) >> 2);
-    cur_pred[1][4] = 
-    cur_pred[3][5] = 
-    cur_pred[5][6] = 
+    cur_pred[1][4] =
+    cur_pred[3][5] =
+    cur_pred[5][6] =
     cur_pred[7][7] = (imgpel) ((P_C + P_E + 2*P_D + 2) >> 2);
-    cur_pred[1][5] = 
-    cur_pred[3][6] = 
+    cur_pred[1][5] =
+    cur_pred[3][6] =
     cur_pred[5][7] = (imgpel) ((P_D + P_F + 2*P_E + 2) >> 2);
-    cur_pred[1][6] = 
+    cur_pred[1][6] =
     cur_pred[3][7] = (imgpel) ((P_E + P_G + 2*P_F + 2) >> 2);
     cur_pred[1][7] = (imgpel) ((P_F + P_H + 2*P_G + 2) >> 2);
     cur_pred[2][0] =
@@ -948,30 +950,30 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   // make horizontal down prediction
   ///////////////////////////////////
     cur_pred = img->mprr_3[HOR_DOWN_PRED];
-    cur_pred[0][0] = 
-    cur_pred[1][2] = 
-    cur_pred[2][4] = 
+    cur_pred[0][0] =
+    cur_pred[1][2] =
+    cur_pred[2][4] =
     cur_pred[3][6] = (imgpel) ((P_Q + P_Z + 1) >> 1);
-    cur_pred[1][0] = 
-    cur_pred[2][2] = 
-    cur_pred[3][4] = 
+    cur_pred[1][0] =
+    cur_pred[2][2] =
+    cur_pred[3][4] =
     cur_pred[4][6] = (imgpel) ((P_R + P_Q + 1) >> 1);
-    cur_pred[2][0] = 
-    cur_pred[3][2] = 
-    cur_pred[4][4] = 
+    cur_pred[2][0] =
+    cur_pred[3][2] =
+    cur_pred[4][4] =
     cur_pred[5][6] = (imgpel) ((P_S + P_R + 1) >> 1);
-    cur_pred[3][0] = 
-    cur_pred[4][2] = 
-    cur_pred[5][4] = 
+    cur_pred[3][0] =
+    cur_pred[4][2] =
+    cur_pred[5][4] =
     cur_pred[6][6] = (imgpel) ((P_T + P_S + 1) >> 1);
-    cur_pred[4][0] = 
-    cur_pred[5][2] = 
-    cur_pred[6][4] = 
+    cur_pred[4][0] =
+    cur_pred[5][2] =
+    cur_pred[6][4] =
     cur_pred[7][6] = (imgpel) ((P_U + P_T + 1) >> 1);
-    cur_pred[5][0] = 
-    cur_pred[6][2] = 
+    cur_pred[5][0] =
+    cur_pred[6][2] =
     cur_pred[7][4] = (imgpel) ((P_V + P_U + 1) >> 1);
-    cur_pred[6][0] = 
+    cur_pred[6][0] =
     cur_pred[7][2] = (imgpel) ((P_W + P_V + 1) >> 1);
     cur_pred[7][0] = (imgpel) ((P_X + P_W + 1) >> 1);
     cur_pred[0][1] =
@@ -1000,15 +1002,15 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
     cur_pred[6][1] =
     cur_pred[7][3] = (imgpel) ((P_U + P_W + 2*P_V + 2) >> 2);
     cur_pred[7][1] = (imgpel) ((P_V + P_X + 2*P_W + 2) >> 2);
-    cur_pred[0][2] = 
-    cur_pred[1][4] = 
+    cur_pred[0][2] =
+    cur_pred[1][4] =
     cur_pred[2][6] = (imgpel) ((P_Z + P_B + 2*P_A + 2) >> 2);
-    cur_pred[0][3] = 
-    cur_pred[1][5] = 
+    cur_pred[0][3] =
+    cur_pred[1][5] =
     cur_pred[2][7] = (imgpel) ((P_A + P_C + 2*P_B + 2) >> 2);
-    cur_pred[0][4] = 
+    cur_pred[0][4] =
     cur_pred[1][6] = (imgpel) ((P_B + P_D + 2*P_C + 2) >> 2);
-    cur_pred[0][5] = 
+    cur_pred[0][5] =
     cur_pred[1][7] = (imgpel) ((P_C + P_E + 2*P_D + 2) >> 2);
     cur_pred[0][6] = (imgpel) ((P_D + P_F + 2*P_E + 2) >> 2);
     cur_pred[0][7] = (imgpel) ((P_E + P_G + 2*P_F + 2) >> 2);
@@ -1087,7 +1089,7 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   }
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Prefiltering for Intra8x8 prediction
@@ -1097,57 +1099,55 @@ void LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, in
 {
   int i;
   imgpel LoopArray[25];
- 
+
   memcpy(LoopArray,PredPel, 25 * sizeof(imgpel));
 
- 	if(block_up)
-	{
-		if(block_up_left) 
-		{
-			LoopArray[1] = (((&P_Z)[0] + ((&P_Z)[1]<<1) + (&P_Z)[2] + 2)>>2);
-		}
-		else
-			LoopArray[1] = (((&P_Z)[1] + ((&P_Z)[1]<<1) + (&P_Z)[2] + 2)>>2); 
+  if(block_up)
+  {
+    if(block_up_left)
+    {
+      LoopArray[1] = (((&P_Z)[0] + ((&P_Z)[1]<<1) + (&P_Z)[2] + 2)>>2);
+    }
+    else
+      LoopArray[1] = (((&P_Z)[1] + ((&P_Z)[1]<<1) + (&P_Z)[2] + 2)>>2);
 
 
-		for(i = 2; i <16; i++)
-		{
-			LoopArray[i] = (((&P_Z)[i-1] + ((&P_Z)[i]<<1) + (&P_Z)[i+1] + 2)>>2);
-		}
-		LoopArray[16] = ((P_P + (P_P<<1) + P_O + 2)>>2);
-	}
+    for(i = 2; i <16; i++)
+    {
+      LoopArray[i] = (((&P_Z)[i-1] + ((&P_Z)[i]<<1) + (&P_Z)[i+1] + 2)>>2);
+    }
+    LoopArray[16] = ((P_P + (P_P<<1) + P_O + 2)>>2);
+  }
 
-	if(block_up_left) 
-	{
-		
-		if(block_up && block_left)
-		{
-				LoopArray[0] = ((P_Q + (P_Z<<1) + P_A +2)>>2);
-		}
-		else
-		{
-			if(block_up)
-				LoopArray[0] = ((P_Z + (P_Z<<1) + P_A +2)>>2);
-			else
-				if(block_left)
-					LoopArray[0] = ((P_Z + (P_Z<<1) + P_Q +2)>>2);
-		}
+  if(block_up_left)
+  {
+    if(block_up && block_left)
+    {
+      LoopArray[0] = ((P_Q + (P_Z<<1) + P_A +2)>>2);
+    }
+    else
+    {
+      if(block_up)
+        LoopArray[0] = ((P_Z + (P_Z<<1) + P_A +2)>>2);
+      else
+        if(block_left)
+          LoopArray[0] = ((P_Z + (P_Z<<1) + P_Q +2)>>2);
+    }
+  }
 
-	}
+  if(block_left)
+  {
+    if(block_up_left)
+      LoopArray[17] = ((P_Z + (P_Q<<1) + P_R + 2)>>2);
+    else
+      LoopArray[17] = ((P_Q + (P_Q<<1) + P_R + 2)>>2);
 
-	if(block_left)
-	{
-		if(block_up_left)
-			LoopArray[17] = ((P_Z + (P_Q<<1) + P_R + 2)>>2); 
-		else
-			LoopArray[17] = ((P_Q + (P_Q<<1) + P_R + 2)>>2);
-
-		for(i = 18; i <24; i++)
-		{
-			LoopArray[i] = (((&P_Z)[i-1] + ((&P_Z)[i]<<1) + (&P_Z)[i+1] + 2)>>2);
-		}
-		LoopArray[24] = ((P_W + (P_X<<1) + P_X + 2)>>2);
-	}
+    for(i = 18; i <24; i++)
+    {
+      LoopArray[i] = (((&P_Z)[i-1] + ((&P_Z)[i]<<1) + (&P_Z)[i+1] + 2)>>2);
+    }
+    LoopArray[24] = ((P_W + (P_X<<1) + P_X + 2)>>2);
+  }
 
   memcpy(PredPel, LoopArray, 25 * sizeof(imgpel));
 }
@@ -1156,7 +1156,7 @@ void LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, in
 
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    R-D Cost for an 8x8 Intra block
@@ -1177,8 +1177,7 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
   imgpel    **imgY       = enc_picture->imgY;
 
   Slice          *currSlice    =  img->currentSlice;
-  Macroblock     *currMB       = &img->mb_data[img->current_mb_nr];
-  SyntaxElement  *currSE       = &img->MB_SyntaxElements[currMB->currSEnr];
+  SyntaxElement  se;
   const int      *partMap      = assignSE2partition[input->partition_mode];
   DataPartition  *dataPart;
 
@@ -1189,15 +1188,15 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
 
   //===== get distortion (SSD) of 8x8 block =====
   for (y=0; y<8; y++)
-    for (x=pic_pix_x; x<pic_pix_x+8; x++)  
+    for (x=pic_pix_x; x<pic_pix_x+8; x++)
       distortion += img->quad [imgY_orig[pic_opix_y+y][x] - imgY[pic_pix_y+y][x]];
 
   //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO UVLC) =====
-  currSE->value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
+  se.value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
 
   //--- set position and type ---
-  currSE->context = b8;
-  currSE->type    = SE_INTRAPREDMODE;
+  se.context = b8;
+  se.type    = SE_INTRAPREDMODE;
 
   //--- choose data partition ---
   if (img->type!=B_SLICE)
@@ -1206,17 +1205,18 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
     dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
   //--- encode and update rate ---
+  writeIntraPredMode (&se, dataPart);
+  /*
   if (input->symbol_mode == UVLC)
-    writeSyntaxElement_Intra4x4PredictionMode(currSE, dataPart);
+    writeIntraPredMode_CAVLC(currSE, dataPart);
   else
   {
     currSE->writing = writeIntraPredMode_CABAC;
     dataPart->writeSyntaxElement (currSE, dataPart);
   }
+  */
 
-  rate = currSE->len;
-  currSE++;
-  currMB->currSEnr++;
+  rate = se.len;
 
   //===== RATE for LUMINANCE COEFFICIENTS =====
 
@@ -1248,7 +1248,7 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
  *    b8: Block position inside a macro block (0,1,2,3).
  *
  * \par Output:
- *    nonzero: 0 if no levels are nonzero.  1 if there are nonzero levels.  
+ *    nonzero: 0 if no levels are nonzero.  1 if there are nonzero levels.
  *    coeff_cost: Counter for nonzero coefficients, used to discard expensive levels.
  ************************************************************************
  */
@@ -1274,7 +1274,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
   int **invlevelscale;
   int MCcoeff;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-  
+
   Boolean lossless_qpprime = (Boolean) ((img->qp_scaled)==0 && img->lossless_qpprime_flag==1);
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN8x8 : SNGL_SCAN8x8;
 
@@ -1286,7 +1286,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
   invlevelscale = InvLevelScale8x8Luma[intra][qp_rem];
 
   // horizontal transform
-  if (!lossless_qpprime) 
+  if (!lossless_qpprime)
   {
     for( i=0; i<8; i++)
     {
@@ -1294,22 +1294,22 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       a[1] = img->m7[i][1] + img->m7[i][6];
       a[2] = img->m7[i][2] + img->m7[i][5];
       a[3] = img->m7[i][3] + img->m7[i][4];
-      
+
       b[0] = a[0] + a[3];
       b[1] = a[1] + a[2];
       b[2] = a[0] - a[3];
       b[3] = a[1] - a[2];
-      
+
       a[4] = img->m7[i][0] - img->m7[i][7];
       a[5] = img->m7[i][1] - img->m7[i][6];
       a[6] = img->m7[i][2] - img->m7[i][5];
       a[7] = img->m7[i][3] - img->m7[i][4];
-      
+
       b[4]= a[5] + a[6] + ((a[4]>>1) + a[4]);
       b[5]= a[4] - a[7] - ((a[6]>>1) + a[6]);
       b[6]= a[4] + a[7] - ((a[5]>>1) + a[5]);
       b[7]= a[5] - a[6] + ((a[7]>>1) + a[7]);
-      
+
       m6[0][i] = b[0] + b[1];
       m6[2][i] = b[2] + (b[3]>>1);
       m6[4][i] = b[0] - b[1];
@@ -1317,7 +1317,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       m6[1][i] =   b[4] + (b[7]>>2);
       m6[3][i] =   b[5] + (b[6]>>2);
       m6[5][i] =   b[6] - (b[5]>>2);
-      m6[7][i] = - b[7] + (b[4]>>2);      
+      m6[7][i] = - b[7] + (b[4]>>2);
     }
     // vertical transform
     for( i=0; i<8; i++)
@@ -1326,22 +1326,22 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       a[1] = m6[i][1] + m6[i][6];
       a[2] = m6[i][2] + m6[i][5];
       a[3] = m6[i][3] + m6[i][4];
-      
+
       b[0] = a[0] + a[3];
       b[1] = a[1] + a[2];
       b[2] = a[0] - a[3];
       b[3] = a[1] - a[2];
-      
+
       a[4] = m6[i][0] - m6[i][7];
       a[5] = m6[i][1] - m6[i][6];
       a[6] = m6[i][2] - m6[i][5];
       a[7] = m6[i][3] - m6[i][4];
-      
+
       b[4]= a[5] + a[6] + ((a[4]>>1) + a[4]);
       b[5]= a[4] - a[7] - ((a[6]>>1) + a[6]);
       b[6]= a[4] + a[7] - ((a[5]>>1) + a[5]);
       b[7]= a[5] - a[6] + ((a[7]>>1) + a[7]);
-      
+
       img->m7[0][i] = b[0] + b[1];
       img->m7[2][i] = b[2] + (b[3]>>1);
       img->m7[4][i] = b[0] - b[1];
@@ -1352,7 +1352,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       img->m7[7][i] = - b[7] + (b[4]>>2);
     }
 
-    // Quant  
+    // Quant
     nonzero=FALSE;
 
     run=-1;
@@ -1374,13 +1374,13 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       runs[MCcoeff]++;
 
       level = (iabs (img->m7[j][i]) * levelscale[j][i] + leveloffset[j][i]) >> q_bits;
-        
+
 
       if (img->AdaptiveRounding)
       {
         img->fadjust8x8[intra][block_y + j][block_x + i] = ( level == 0 )
-          ? 0 
-          : shift_right_round((AdaptRndWeight * (iabs (img->m7[j][i]) * levelscale[j][i] - (level << q_bits))), (q_bits + 1));
+          ? 0
+          : rshift_rnd_sf((AdaptRndWeight * (iabs (img->m7[j][i]) * levelscale[j][i] - (level << q_bits))), (q_bits + 1));
       }
 
       if (level != 0)
@@ -1403,18 +1403,18 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
           ACRun  [scan_pos] = run;
           ++scan_pos;
           run=-1;                     // reset zero level counter
-        }      
+        }
 
         level = isignab(level, img->m7[j][i]);
 
-        ilev = shift_right_round(level*invlevelscale[j][i]<<qp_per, 6); // dequantization
+        ilev = rshift_rnd_sf(level*invlevelscale[j][i]<<qp_per, 6); // dequantization
       }
       img->m7[j][i] = ilev;
     }
   }
   else
   {
-    // Quant  
+    // Quant
     nonzero=FALSE;
 
     run=-1;
@@ -1461,7 +1461,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
           ACRun  [scan_pos] = run;
           ++scan_pos;
           run=-1;                     // reset zero level counter
-        }      
+        }
 
         level = isignab(level, img->m7[j][i]);
         ilev = level;
@@ -1548,12 +1548,12 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
 
     for( j=0; j<2*BLOCK_SIZE; j++)
     {
-      pix_y = block_y + j;    
+      pix_y = block_y + j;
       ipix_y = img->pix_y + pix_y;
       for( i=0; i<2*BLOCK_SIZE; i++)
       {
         pix_x = block_x + i;
-        img->m7[j][i] = iClip1( img->max_imgpel_value, shift_right_round((img->m7[j][i]+((long)img->mpr[pix_y][pix_x] << DQ_BITS_8)),DQ_BITS_8));
+        img->m7[j][i] = iClip1( img->max_imgpel_value, rshift_rnd_sf((img->m7[j][i]+((long)img->mpr[pix_y][pix_x] << DQ_BITS_8)),DQ_BITS_8));
         enc_picture->imgY[ipix_y][img->pix_x + pix_x]= (imgpel) img->m7[j][i];
       }
     }
@@ -1562,7 +1562,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
   {
     for( j=0; j<2*BLOCK_SIZE; j++)
     {
-      pix_y = block_y + j;    
+      pix_y = block_y + j;
       ipix_y = img->pix_y + pix_y;
       for( i=0; i<2*BLOCK_SIZE; i++)
       {

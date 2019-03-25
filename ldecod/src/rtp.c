@@ -30,8 +30,8 @@
   in partition #0.  When individual partitions are missing, this is
   indicated by the size of the bit strings in the partition array.
   A complete missing slice (e.g. if a Full Slice packet was lost) is
-  indicated in a similar way.  
-  
+  indicated in a similar way.
+
   part of the slice structure is the error indication (ei-flag).  The
   Ei-flag is set in such cases in which at least one partition of a slice
   is damaged or missing.When data partitioning is used, it can happen that
@@ -56,8 +56,8 @@
   state of the decoder
     1.1 Loss detected
       In this case the last packet is unread (fseek back), and a dummy slice
-      containing the missing macroblocks is conveyed to the VCL.  At the next 
-      call of the NAL, the same packet is read again, but this time no packet 
+      containing the missing macroblocks is conveyed to the VCL.  At the next
+      call of the NAL, the same packet is read again, but this time no packet
       loss is detected by the above algorithm,
     1.2. No loss
       In this case it is checked whether a Full Slice packet or a type A data
@@ -69,8 +69,8 @@
           the remaining type B, C partitions and handles them appropriately.
 
   Paraneter Update Packets (aka Header packets) are in an SDP-like syntax
-  and are interpreted by a simple parser in the function 
-  RTPInterpretParameterSetPacket() 
+  and are interpreted by a simple parser in the function
+  RTPInterpretParameterSetPacket()
 
   Each Slice header contaions the information on which parameter set to be used.
   The function RTPSetImgInp() copies the information of the relevant parameter
@@ -83,7 +83,7 @@
   header.  Decoding has to start at bitoffset 0 (UVLC) or bytreoffset 0 (CABAC).
 
   The remaining functions should be self-explanatory.
-  
+
 */
 
 #include "contributors.h"
@@ -144,8 +144,8 @@ void CloseRTPFile()
 /*!
  ************************************************************************
  * \brief
- *    Fills nalu->buf and nalu->len with the payload of an RTP packet.  
- *    Other fields in nalu-> remain uninitialized (will be taken care of 
+ *    Fills nalu->buf and nalu->len with the payload of an RTP packet.
+ *    Other fields in nalu-> remain uninitialized (will be taken care of
  *    by NALUtoRBSP.
  *
  * \return
@@ -171,7 +171,7 @@ int GetRTPNALU (NALU_t *nalu)
   ret = RTPReadPacket (p, bits);
   nalu->forbidden_bit = 1;
   nalu->len = 0;
-  
+
   if (ret < 0)
     return -1;
   if (ret == 0)
@@ -187,7 +187,7 @@ int GetRTPNALU (NALU_t *nalu)
 
   free (p->payload);
   free (p->packet);
-  free (p); 
+  free (p);
 //  printf ("Got an RTP NALU, len %d, first byte %x\n", nalu->len, nalu->buf[0]);
   return nalu->len;
 }
@@ -197,7 +197,7 @@ int GetRTPNALU (NALU_t *nalu)
 /*!
  *****************************************************************************
  *
- * \brief 
+ * \brief
  *    DecomposeRTPpacket interprets the RTP packet and writes the various
  *    structure members of the RTPpacket_t structure
  *
@@ -222,7 +222,7 @@ int GetRTPNALU (NALU_t *nalu)
 int DecomposeRTPpacket (RTPpacket_t *p)
 
 {
-  // consistency check 
+  // consistency check
   assert (p->packlen < 65536 - 28);  // IP, UDP headers
   assert (p->packlen >= 12);         // at least a complete RTP header
   assert (p->payload != NULL);
@@ -264,7 +264,7 @@ int DecomposeRTPpacket (RTPpacket_t *p)
 /*!
  *****************************************************************************
  *
- * \brief 
+ * \brief
  *    DumpRTPHeader is a debug tool that dumps a human-readable interpretation
  *    of the RTP header
  *
@@ -304,7 +304,7 @@ void DumpRTPHeader (RTPpacket_t *p)
 /*!
  *****************************************************************************
  *
- * \brief 
+ * \brief
  *    RTPReadPacket reads one packet from file
  *
  * \return
@@ -342,7 +342,7 @@ int RTPReadPacket (RTPpacket_t *p, FILE *bits)
     {
       return 0;
     }
-    
+
   if (4 != fread (&intime, 1, 4, bits))
     {
       fseek (bits, Filepos, SEEK_SET);

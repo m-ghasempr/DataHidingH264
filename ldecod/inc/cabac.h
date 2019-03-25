@@ -40,7 +40,7 @@ void readRunLevel_CABAC(SyntaxElement *se, struct img_par *img,  DecodingEnviron
 void readDquant_CABAC(SyntaxElement *se,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 void readCIPredMode_CABAC(SyntaxElement *se,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 void readMB_skip_flagInfo_CABAC( SyntaxElement *se, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readFieldModeInfo_CABAC(SyntaxElement *se, struct img_par *img,DecodingEnvironmentPtr dep_dp); 
+void readFieldModeInfo_CABAC(SyntaxElement *se, struct img_par *img,DecodingEnvironmentPtr dep_dp);
 
 void readMB_transform_size_flag_CABAC( SyntaxElement *se, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 

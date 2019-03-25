@@ -7,7 +7,7 @@
  *    Rate Control algorithm
  *
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *     - Siwei Ma <swma@jdl.ac.cn>
  *     - Zhengguo LI<ezgli@lit.a-star.edu.sg>
  *
@@ -48,7 +48,7 @@ void update_rc(Macroblock *currMB, short best_mode)
       currMB->qp = currMB->prev_qp;
       img->qp = currMB->qp;
       currMB->prev_cbp = 0;
-    }    
+    }
 
     if (input->MbInterlace)
     {
@@ -59,12 +59,12 @@ void update_rc(Macroblock *currMB, short best_mode)
 
       delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
       qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
-    }       
+    }
   }
   set_chroma_qp(currMB);
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    map QP to Qstep
@@ -73,19 +73,19 @@ void update_rc(Macroblock *currMB, short best_mode)
 */
 double QP2Qstep( int QP )
 {
-  int i; 
+  int i;
   double Qstep;
   static const double QP2QSTEP[6] = { 0.625, 0.6875, 0.8125, 0.875, 1.0, 1.125 };
-  
+
   Qstep = QP2QSTEP[QP % 6];
   for( i=0; i<(QP/6); i++)
     Qstep *= 2;
-  
+
   return Qstep;
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    map Qstep to QP
@@ -95,7 +95,7 @@ double QP2Qstep( int QP )
 int Qstep2QP( double Qstep )
 {
   int q_per = 0, q_rem = 0;
-  
+
   //  assert( Qstep >= QP2Qstep(0) && Qstep <= QP2Qstep(51) );
   if( Qstep < QP2Qstep(0))
     return 0;
@@ -130,7 +130,7 @@ int Qstep2QP( double Qstep )
   }
   else if (Qstep <= 1.0625)
   {
-    Qstep = 1.0;  
+    Qstep = 1.0;
     q_rem = 4;
   }
   else
@@ -138,14 +138,14 @@ int Qstep2QP( double Qstep )
     Qstep = 1.125;
     q_rem = 5;
   }
-  
+
   return (q_per * 6 + q_rem);
 }
 
-/*! 
+/*!
  ************************************************************************************
  * \brief
- *    calculate MAD for the current macroblock 
+ *    calculate MAD for the current macroblock
  *
  * \return
  *    calculated MAD
@@ -163,7 +163,7 @@ int calc_MAD()
   return sum;
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Compute Frame MAD
@@ -180,7 +180,7 @@ double ComputeFrameMAD()
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Copy JVT rate control objects
@@ -202,7 +202,7 @@ void copy_rc_generic( rc_generic *dst, rc_generic *src )
   memcpy( (void *)dst->MADofMB, (void *)src->MADofMB, img->FrameSizeInMbs * sizeof (int) );
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Dynamically allocate memory needed for generic rate control
@@ -220,12 +220,12 @@ void generic_alloc( rc_generic **prc )
   if (NULL==(*prc)->MADofMB)
   {
     no_mem_exit("init_global_buffers: (*prc)->MADofMB");
-  }  
+  }
   (*prc)->FieldFrame = 1;
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Free memory needed for generic rate control

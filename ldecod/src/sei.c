@@ -65,7 +65,7 @@ extern seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
@@ -94,7 +94,7 @@ void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
       tmp_byte = msg[offset++];
     }
     payload_size += tmp_byte;   // this is the last byte
-    
+
     switch ( payload_type )     // sei_payload( type, size );
     {
     case  SEI_BUFFERING_PERIOD:
@@ -167,7 +167,7 @@ void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
       break;
     }
     offset += payload_size;
-    
+
   } while( msg[offset] != 0x80 );    // more_rbsp_data()  msg[offset] != 0x80
   // ignore the trailing bits rbsp_trailing_bits();
   assert(msg[offset] == 0x80);      // this is the trailing bits
@@ -185,7 +185,7 @@ void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
 *     the size of the sei message
 *  \param img
 *     the image pointer
-*    
+*
 ************************************************************************
 */
 void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
@@ -193,14 +193,14 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
   int i,x,y;
   Bitstream* buf;
   int bit0, bit1, bitc, no_bit0;
-  int target_frame_num;
+  int target_frame_num = 0;
   int num_spare_pics;
   int delta_spare_frame_num, CandidateSpareFrameNum, SpareFrameNum = 0;
   int ref_area_indicator;
 
   int m, n, left, right, top, bottom,directx, directy;
   byte ***map;
-  
+
 #ifdef WRITE_MAP_IMAGE
   int symbol_size_in_bytes = img->pic_unit_bitsize_on_disk/8;
   int  j, k, i0, j0, tmp, kk;
@@ -239,7 +239,7 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
 
   for (i=0; i<num_spare_pics; i++)
   {
-    if (i==0) 
+    if (i==0)
     {
       CandidateSpareFrameNum = target_frame_num - 1;
       if ( CandidateSpareFrameNum < 0 ) CandidateSpareFrameNum = MAX_FN - 1;
@@ -409,7 +409,7 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
       for (i=0; i < img->height; i++)
         for (j=0; j < img->width; j++)
           fwrite(&(Y[i][j]), symbol_size_in_bytes, 1, p_out);
-        
+
       for (k=0; k < 2; k++)
         for (i=0; i < img->height/2; i++)
           for (j=0; j < img->width/2; j++)
@@ -438,13 +438,13 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_subsequence_info( byte* payload, int size, ImageParameters *img )
 {
   Bitstream* buf;
-  int sub_seq_layer_num, sub_seq_id, first_ref_pic_flag, leading_non_ref_pic_flag, last_pic_flag, 
+  int sub_seq_layer_num, sub_seq_id, first_ref_pic_flag, leading_non_ref_pic_flag, last_pic_flag,
       sub_seq_frame_num_flag, sub_seq_frame_num;
 
   buf = malloc(sizeof(Bitstream));
@@ -495,7 +495,7 @@ void interpret_subsequence_info( byte* payload, int size, ImageParameters *img )
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_subsequence_layer_characteristics_info( byte* payload, int size, ImageParameters *img )
@@ -544,7 +544,7 @@ void interpret_subsequence_layer_characteristics_info( byte* payload, int size, 
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_subsequence_characteristics_info( byte* payload, int size, ImageParameters *img )
@@ -636,7 +636,7 @@ void interpret_subsequence_characteristics_info( byte* payload, int size, ImageP
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_scene_information( byte* payload, int size, ImageParameters *img )
@@ -684,7 +684,7 @@ void interpret_scene_information( byte* payload, int size, ImageParameters *img 
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_filler_payload_info( byte* payload, int size, ImageParameters *img )
@@ -728,7 +728,7 @@ void interpret_filler_payload_info( byte* payload, int size, ImageParameters *im
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_user_data_unregistered_info( byte* payload, int size, ImageParameters *img )
@@ -777,7 +777,7 @@ void interpret_user_data_unregistered_info( byte* payload, int size, ImageParame
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_user_data_registered_itu_t_t35_info( byte* payload, int size, ImageParameters *img )
@@ -791,12 +791,12 @@ void interpret_user_data_registered_itu_t_t35_info( byte* payload, int size, Ima
   printf("User data registered by ITU-T T.35 SEI message\n");
   printf(" itu_t_t35_country_code = %d \n", itu_t_t35_country_code);
 #endif
-  if(itu_t_t35_country_code == 0xFF) 
+  if(itu_t_t35_country_code == 0xFF)
   {
     itu_t_t35_country_code_extension_byte = payload[offset];
     offset++;
 #ifdef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
-    printf(" ITU_T_T35_COUNTRTY_CODE_EXTENSION_BYTE %d \n", itu_t_t35_country_code_extension_byte);
+    printf(" ITU_T_T35_COUNTRY_CODE_EXTENSION_BYTE %d \n", itu_t_t35_country_code_extension_byte);
 #endif
   }
   while (offset < size)
@@ -823,7 +823,7 @@ void interpret_user_data_registered_itu_t_t35_info( byte* payload, int size, Ima
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_pan_scan_rect_info( byte* payload, int size, ImageParameters *img )
@@ -882,7 +882,7 @@ void interpret_pan_scan_rect_info( byte* payload, int size, ImageParameters *img
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_recovery_point_info( byte* payload, int size, ImageParameters *img )
@@ -932,7 +932,7 @@ void interpret_recovery_point_info( byte* payload, int size, ImageParameters *im
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, ImageParameters *img )
@@ -993,8 +993,8 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
       while (tmp_drpm != NULL)
       {
         printf("memory_management_control_operation  = %d\n", tmp_drpm->memory_management_control_operation);
-        
-        if ((tmp_drpm->memory_management_control_operation==1)||(tmp_drpm->memory_management_control_operation==3)) 
+
+        if ((tmp_drpm->memory_management_control_operation==1)||(tmp_drpm->memory_management_control_operation==3))
         {
           printf("difference_of_pic_nums_minus1        = %d\n", tmp_drpm->difference_of_pic_nums_minus1);
         }
@@ -1012,18 +1012,17 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
         }
         tmp_drpm = tmp_drpm->Next;
       }
-      
     }
   }
 #endif
 
   while (img->dec_ref_pic_marking_buffer)
-  { 
+  {
     tmp_drpm=img->dec_ref_pic_marking_buffer;
 
     img->dec_ref_pic_marking_buffer=tmp_drpm->Next;
     free (tmp_drpm);
-  } 
+  }
 
   // restore old values in img
   img->dec_ref_pic_marking_buffer = old_drpm;
@@ -1031,8 +1030,7 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
   img->no_output_of_prior_pics_flag = old_no_output_of_prior_pics_flag;
   img->long_term_reference_flag = old_long_term_reference_flag;
   img->adaptive_ref_pic_buffering_flag = old_adaptive_ref_pic_buffering_flag;
-  
-   
+
   free (buf);
 #ifdef PRINT_DEC_REF_PIC_MARKING
 #undef PRINT_DEC_REF_PIC_MARKING
@@ -1049,7 +1047,7 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_full_frame_freeze_info( byte* payload, int size, ImageParameters *img )
@@ -1078,7 +1076,7 @@ void interpret_full_frame_freeze_info( byte* payload, int size, ImageParameters 
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_full_frame_freeze_release_info( byte* payload, int size, ImageParameters *img )
@@ -1106,7 +1104,7 @@ void interpret_full_frame_freeze_release_info( byte* payload, int size, ImagePar
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_full_frame_snapshot_info( byte* payload, int size, ImageParameters *img )
@@ -1144,7 +1142,7 @@ void interpret_full_frame_snapshot_info( byte* payload, int size, ImageParameter
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_progressive_refinement_start_info( byte* payload, int size, ImageParameters *img )
@@ -1185,7 +1183,7 @@ void interpret_progressive_refinement_start_info( byte* payload, int size, Image
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_progressive_refinement_end_info( byte* payload, int size, ImageParameters *img )
@@ -1224,7 +1222,7 @@ void interpret_progressive_refinement_end_info( byte* payload, int size, ImagePa
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_motion_constrained_slice_group_set_info( byte* payload, int size, ImageParameters *img )
@@ -1241,7 +1239,7 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
   buf->frame_bitoffset = 0;
 
   UsedBits = 0;
-  
+
   num_slice_groups_minus1   = ue_v("SEI: num_slice_groups_minus1"  , buf);
   sliceGroupSize = CeilLog2( num_slice_groups_minus1 + 1 );
 #ifdef PRINT_MOTION_CONST_SLICE_GROUP_SET_INFO
@@ -1257,7 +1255,7 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
     printf("slice_group_id            = %d\n", slice_group_id);
 #endif
   }
-  
+
   exact_match_flag   = u_1("SEI: exact_match_flag"  , buf);
   pan_scan_rect_flag = u_1("SEI: pan_scan_rect_flag"  , buf);
 
@@ -1265,7 +1263,7 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
   printf("exact_match_flag         = %d\n", exact_match_flag);
   printf("pan_scan_rect_flag       = %d\n", pan_scan_rect_flag);
 #endif
-  
+
   if (pan_scan_rect_flag)
   {
     pan_scan_rect_id = ue_v("SEI: pan_scan_rect_id"  , buf);
@@ -1290,7 +1288,7 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_film_grain_characteristics_info( byte* payload, int size, ImageParameters *img )
@@ -1305,7 +1303,7 @@ void interpret_film_grain_characteristics_info( byte* payload, int size, ImagePa
   int film_grain_characteristics_repetition_period;
 
   int c, i, j;
-  
+
   Bitstream* buf;
 
   buf = malloc(sizeof(Bitstream));
@@ -1404,14 +1402,14 @@ void interpret_film_grain_characteristics_info( byte* payload, int size, ImagePa
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_deblocking_filter_display_preference_info( byte* payload, int size, ImageParameters *img )
 {
   int deblocking_display_preference_cancel_flag;
   int display_prior_to_deblocking_preferred_flag, dec_frame_buffering_constraint_flag, deblocking_display_preference_repetition_period;
-  
+
   Bitstream* buf;
 
   buf = malloc(sizeof(Bitstream));
@@ -1451,7 +1449,7 @@ void interpret_deblocking_filter_display_preference_info( byte* payload, int siz
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_stereo_video_info_info( byte* payload, int size, ImageParameters *img )
@@ -1460,7 +1458,7 @@ void interpret_stereo_video_info_info( byte* payload, int size, ImageParameters 
   int top_field_is_left_view_flag, current_frame_is_left_view_flag, next_frame_is_second_view_flag;
   int left_view_self_contained_flag;
   int right_view_self_contained_flag;
-  
+
   Bitstream* buf;
 
   buf = malloc(sizeof(Bitstream));
@@ -1512,7 +1510,7 @@ void interpret_stereo_video_info_info( byte* payload, int size, ImageParameters 
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_reserved_info( byte* payload, int size, ImageParameters *img )
@@ -1548,7 +1546,7 @@ void interpret_reserved_info( byte* payload, int size, ImageParameters *img )
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_buffering_period_info( byte* payload, int size, ImageParameters *img )
@@ -1568,7 +1566,7 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
   UsedBits = 0;
 
   seq_parameter_set_id   = ue_v("SEI: seq_parameter_set_id"  , buf);
-  
+
   sps = &SeqParSet[seq_parameter_set_id];
 
   activate_sps(sps);
@@ -1581,7 +1579,7 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
   // Note: NalHrdBpPresentFlag and CpbDpbDelaysPresentFlag can also be set "by some means not specified in this Recommendation | International Standard"
   if (sps->vui_parameters_present_flag)
   {
-    
+
     if (sps->vui_seq_parameters.nal_hrd_parameters_present_flag)
     {
       for (k=0; k<sps->vui_seq_parameters.nal_hrd_parameters.cpb_cnt_minus1+1; k++)
@@ -1595,7 +1593,7 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
 #endif
       }
     }
-    
+
     if (sps->vui_seq_parameters.vcl_hrd_parameters_present_flag)
     {
       for (k=0; k<sps->vui_seq_parameters.vcl_hrd_parameters.cpb_cnt_minus1+1; k++)
@@ -1628,7 +1626,7 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
  *     the size of the sei message
  *  \param img
  *     the image pointer
- *    
+ *
  ************************************************************************
  */
 void interpret_picture_timing_info( byte* payload, int size, ImageParameters *img )
@@ -1666,7 +1664,7 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
 #endif
 
   // CpbDpbDelaysPresentFlag can also be set "by some means not specified in this Recommendation | International Standard"
-  CpbDpbDelaysPresentFlag =  (Boolean) (active_sps->vui_parameters_present_flag 
+  CpbDpbDelaysPresentFlag =  (Boolean) (active_sps->vui_parameters_present_flag
                               && (   (active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag != 0)
                                    ||(active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag != 0)));
 
@@ -1685,7 +1683,7 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
         dpb_output_len  = active_sps->vui_seq_parameters.vcl_hrd_parameters.dpb_output_delay_length_minus1  + 1;
       }
     }
-    
+
     if ((active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag)||
       (active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag))
     {
@@ -1712,7 +1710,7 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
     picture_structure = u_v(4, "SEI: pic_struct" , buf);
 #ifdef PRINT_PCITURE_TIMING_INFO
     printf("picture_structure = %d\n",picture_structure);
-#endif    
+#endif
     switch (picture_structure)
     {
     case 0:
@@ -1756,7 +1754,7 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
         printf("discontinuity_flag    = %d\n",discontinuity_flag);
         printf("cnt_dropped_flag      = %d\n",cnt_dropped_flag);
         printf("nframes               = %d\n",nframes);
-#endif    
+#endif
         if (full_timestamp_flag)
         {
           seconds_value         = u_v(6, "SEI: seconds_value"   , buf);
@@ -1766,14 +1764,14 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
           printf("seconds_value = %d\n",seconds_value);
           printf("minutes_value = %d\n",minutes_value);
           printf("hours_value   = %d\n",hours_value);
-#endif    
+#endif
         }
         else
         {
           seconds_flag          = u_1(   "SEI: seconds_flag" , buf);
 #ifdef PRINT_PCITURE_TIMING_INFO
           printf("seconds_flag = %d\n",seconds_flag);
-#endif    
+#endif
           if (seconds_flag)
           {
             seconds_value         = u_v(6, "SEI: seconds_value"   , buf);
@@ -1781,7 +1779,7 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
 #ifdef PRINT_PCITURE_TIMING_INFO
             printf("seconds_value = %d\n",seconds_value);
             printf("minutes_flag  = %d\n",minutes_flag);
-#endif    
+#endif
             if(minutes_flag)
             {
               minutes_value         = u_v(6, "SEI: minutes_value"   , buf);
@@ -1789,15 +1787,14 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
 #ifdef PRINT_PCITURE_TIMING_INFO
               printf("minutes_value = %d\n",minutes_value);
               printf("hours_flag    = %d\n",hours_flag);
-#endif    
+#endif
               if(hours_flag)
               {
                 hours_value           = u_v(5, "SEI: hours_value"     , buf);
 #ifdef PRINT_PCITURE_TIMING_INFO
                 printf("hours_value   = %d\n",hours_value);
-#endif    
+#endif
               }
-            
             }
           }
         }
@@ -1815,7 +1812,7 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
             time_offset = 0;
 #ifdef PRINT_PCITURE_TIMING_INFO
           printf("time_offset   = %d\n",time_offset);
-#endif    
+#endif
         }
       }
     }

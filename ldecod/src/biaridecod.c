@@ -32,7 +32,7 @@ int binCount = 0;
 #define HALF      (1 << (B_BITS-1))
 #define QUARTER   (1 << (B_BITS-2))
 
-/* Range table for  LPS */ 
+/* Range table for  LPS */
 const byte rLPS_table_64x4[64][4]=
 {
   { 128, 176, 208, 240},
@@ -103,7 +103,7 @@ const byte rLPS_table_64x4[64][4]=
 
 
 
-const unsigned short AC_next_state_MPS_64[64] =    
+const unsigned short AC_next_state_MPS_64[64] =
 {
   1,2,3,4,5,6,7,8,9,10,
   11,12,13,14,15,16,17,18,19,20,
@@ -115,14 +115,14 @@ const unsigned short AC_next_state_MPS_64[64] =
 };
 
 
-const unsigned short AC_next_state_LPS_64[64] =    
+const unsigned short AC_next_state_LPS_64[64] =
 {
   0, 0, 1, 2, 2, 4, 4, 5, 6, 7,
-  8, 9, 9,11,11,12,13,13,15,15, 
+  8, 9, 9,11,11,12,13,13,15,15,
   16,16,18,18,19,19,21,21,22,22,
   23,24,24,25,26,26,27,27,28,29,
   29,30,30,30,31,32,32,33,33,33,
-  34,34,35,35,35,36,36,36,37,37, 
+  34,34,35,35,35,36,36,36,37,37,
   37,38,38,63
 };
 
@@ -189,13 +189,13 @@ void arideco_delete_decoding_environment(DecodingEnvironmentPtr dep)
 void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *cpixcode,
                             int firstbyte, int *cpixcode_len, int slice_type )
 {
- 
+
   int value = 0;
 
   Dcodestrm = cpixcode;
   Dcodestrm_len = cpixcode_len;
   *Dcodestrm_len = firstbyte;
- 
+
   {
     int i;
     Dbits_to_go = 0;
@@ -257,29 +257,29 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
 
   range -= rLPS;
 
-  if (value < range) /* MPS */ 
+  if (value < range) /* MPS */
     bi_ct->state = AC_next_state_MPS_64[bi_ct->state]; // next state
   else              /* LPS */
   {
     value -= range;
     range = rLPS;
     bit = !bit;
-    if (!bi_ct->state)       // switch meaning of MPS if necessary  
-      bi_ct->MPS ^= 0x01;              
-    bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state 
+    if (!bi_ct->state)       // switch meaning of MPS if necessary
+      bi_ct->MPS ^= 0x01;
+    bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
   }
-  
+
   while (range < QUARTER)
   {
     /* Double range */
     range <<= 1;
-    if (--Dbits_to_go < 0) 
-      get_byte();   
+    if (--Dbits_to_go < 0)
+      get_byte();
     /* Shift in next bit and add to value */
     value = (value << 1) | ((Dbuffer >> Dbits_to_go) & 0x01);
 
   }
-  
+
   dep->Drange = range;
   dep->Dvalue = value;
 
@@ -304,11 +304,11 @@ unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep)
 //  fprintf(p_trace, "%d  0x%04x\n", binCount++, dep->Drange );
 #endif
 
-  if (--Dbits_to_go < 0) 
-    get_byte(); 
-  /* Shift in next bit and add to value */  
-  value |= (Dbuffer >> Dbits_to_go) &  0x01;  
-  if (value >= dep->Drange) 
+  if (--Dbits_to_go < 0)
+    get_byte();
+  /* Shift in next bit and add to value */
+  value |= (Dbuffer >> Dbits_to_go) &  0x01;
+  if (value >= dep->Drange)
   {
     bit = 1;
     value -= dep->Drange;
@@ -335,8 +335,8 @@ unsigned int biari_decode_final(DecodingEnvironmentPtr dep)
 #if (2==TRACE)
   fprintf(p_trace, "%d  0x%04x\n", binCount++, dep->Drange );
 #endif
-    
-  if (value >= range) 
+
+  if (value >= range)
   {
     return 1;
   }
@@ -346,11 +346,11 @@ unsigned int biari_decode_final(DecodingEnvironmentPtr dep)
     {
     /* Double range */
       range <<= 1;
-      if (--Dbits_to_go < 0) 
-        get_byte();   
+      if (--Dbits_to_go < 0)
+        get_byte();
       /* Shift in next bit and add to value */
       value = (value << 1) | ((Dbuffer >> Dbits_to_go) & 0x01);
-    } 
+    }
     dep->Dvalue = value;
     dep->Drange = range;
     return 0;

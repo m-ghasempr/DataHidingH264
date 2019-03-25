@@ -17,65 +17,75 @@
 #ifndef _IFUNCTIONS_H_
 #define _IFUNCTIONS_H_
 
-# if defined(WIN32) || (__STDC_VERSION__ >= 199901L) 
-static inline int imin(int a, int b) 
+# if defined(WIN32) || (__STDC_VERSION__ >= 199901L)
+static inline int imin(int a, int b)
 {
   return ((a) < (b)) ? (a) : (b);
 }
 
-static inline int imax(int a, int b) 
+static inline int imax(int a, int b)
 {
   return ((a) > (b)) ? (a) : (b);
 }
 
-static inline double dmin(double a, double b) 
+static inline double dmin(double a, double b)
 {
   return ((a) < (b)) ? (a) : (b);
 }
 
-static inline double dmax(double a, double b) 
+static inline double dmax(double a, double b)
 {
   return ((a) > (b)) ? (a) : (b);
 }
 
-static inline int64 i64min(int64 a, int64 b) 
+static inline int64 i64min(int64 a, int64 b)
 {
   return ((a) < (b)) ? (a) : (b);
 }
 
-static inline int64 i64max(int64 a, int64 b) 
+static inline int64 i64max(int64 a, int64 b)
 {
   return ((a) > (b)) ? (a) : (b);
 }
 
-static inline int iabs(int x) 
+static inline int iabs(int x)
 {
   return ((x) < 0) ? -(x) : (x);
 }
 
-static inline double dabs(double x) 
+static inline double dabs(double x)
 {
   return ((x) < 0) ? -(x) : (x);
 }
 
-static inline int isign(int x) 
+static inline int isign(int x)
 {
   return ((x) < 0) ? -1 : 1;
 }
 
-static inline int isignab(int a, int b) 
+static inline int isignab(int a, int b)
 {
   return ((b) < 0) ? -iabs(a) : iabs(a);
 }
 
-static inline int shift_right_round(int x, int a) 
+static inline int rshift_rnd(int x, int a)
+{
+  return (a > 0) ? ((x + (1 << (a-1) )) >> a) : (x << (-a));
+}
+
+static inline unsigned int rshift_rnd_us(unsigned int x, unsigned int a)
+{
+  return (a > 0) ? ((x + (1 << (a-1))) >> a) : x;
+}
+
+static inline int rshift_rnd_sf(int x, int a)
 {
   return ((x + (1 << (a-1) )) >> a);
 }
 
-static inline unsigned int shift_right_round_us(unsigned int x, unsigned int a) 
+static inline unsigned int rshift_rnd_us_sf(unsigned int x, unsigned int a)
 {
-  return (x + (1 << (a-1))) >> a;
+  return ((x + (1 << (a-1))) >> a);
 }
 
 static inline int iClip1(int high, int x)
@@ -120,18 +130,20 @@ static inline int RSD(int x)
 #  define dmax(a, b)                  (((a) > (b)) ? (a) : (b))
 #  define i64min(a, b)                (((a) < (b)) ? (a) : (b))
 #  define i64max(a, b)                (((a) > (b)) ? (a) : (b))
-#  define iabs(x)                     (((x) < 0) ? -(x) : (x))
-#  define dabs(x)                     (((x) < 0) ? -(x) : (x))
-#  define isign(x)                    (((x) < 0) ? -1 : 1)
-#  define isignab(a, b)               (((b) < 0) ? -iabs(a) : iabs(a))
-#  define shift_right_round(x, a)     (((x) + (1 << ((a)-1))) >> (a))
-#  define shift_right_round_us(x, a)  (((x) + (1 << ((a)-1))) >> (a))
+#  define iabs(x)                     (((x) < 0)   ? -(x) : (x))
+#  define dabs(x)                     (((x) < 0)   ? -(x) : (x))
+#  define isign(x)                    (((x) < 0)   ? -1 : 1)
+#  define isignab(a, b)               (((b) < 0)   ? -iabs(a) : iabs(a))
+#  define rshift_rnd(x, a)            (((a) > 0)   ? (((x) + (1 << ((a)-1))) >> (a)) : ((x) << (-(a)))
+#  define rshift_rnd_us(x, a)         (((a) > 0)   ? (((x) + (1 << ((a)-1))) >> (a)) : (x))
+#  define rshift_rnd_sf(x, a)         (((x) + (1 << ((a)-1))) >> (a))
+#  define rshift_rnd_us_sf(x, a)      (((x) + (1 << ((a)-1))) >> (a))
 #  define iClip1(high, x)             (imax( imin(x, high), 0))
 #  define iClip3(low, high, x)        (imax( imin(x, high), low))
 #  define dClip3(low, high, x)        (dmax( dmin(x, high), low))
-#  define weighted_cost(factor, bits) (((factor)*(bits))>>LAMBDA_ACCURACY_BITS)
 #  define RSD(x)                      (((x)&2)?((x)|1):((x)&(~1)))
+#  define weighted_cost(factor, bits) (((factor)*(bits))>>LAMBDA_ACCURACY_BITS)
 
-#endif
+# endif
 #endif
 

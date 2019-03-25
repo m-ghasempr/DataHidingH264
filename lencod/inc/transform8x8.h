@@ -11,7 +11,7 @@
  *    9. October 2003
  *
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *    Yuri Vatis  vatis@hhi.de
  **************************************************************************/
 

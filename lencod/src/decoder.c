@@ -1,5 +1,5 @@
 
-/*! 
+/*!
  *************************************************************************************
  * \file decoder.c
  *
@@ -10,7 +10,7 @@
  *    October 22nd, 2001
  *
  * \author
- *    Main contributors (see contributors.h for copyright, address and 
+ *    Main contributors (see contributors.h for copyright, address and
  *    affiliation details)
  *    - Dimitrios Kontopodis                    <dkonto@eikon.tum.de>
  *************************************************************************************
@@ -23,13 +23,13 @@
 #include "refbuf.h"
 #include "image.h"
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    decodes one 8x8 partition
  *
  * \note
- *    Gives the expected value in the decoder of one 8x8 block. This is done based on the 
+ *    Gives the expected value in the decoder of one 8x8 block. This is done based on the
  *    stored reconstructed residue decs->resY[][], the reconstructed values imgY[][]
  *    and the motion vectors. The decoded 8x8 block is moved to decs->decY[][].
  *************************************************************************************
@@ -87,7 +87,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
           mv[0][by][bx] = mv[1][by][bx] = 0;
         }
       }
-          
+
       for(i=i0;i<i1;i++)
       for(j=j0;j<j1;j++)
       {
@@ -118,7 +118,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
         }
       }
     }
-    else 
+    else
     {
       // Intra Refresh - Assume no spatial prediction
       for(i=i0;i<i1;i++)
@@ -131,7 +131,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    decodes one macroblock
@@ -145,7 +145,7 @@ void decode_one_mb (int decoder, Macroblock* currMB)
   decode_one_b8block (decoder, currMB->mb_type, 3, currMB->b8mode[3], enc_picture->ref_idx[LIST_0][img->block_y+2][img->block_x+2]);//refFrArr[img->block_y+2][img->block_x+2]);
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Finds the reference MB given the decoded reference frame
@@ -168,11 +168,11 @@ void decode_one_mb (int decoder, Macroblock* currMB)
  *    Output: The prediction for the block (block_y, block_x)
  *************************************************************************************
  */
-void Get_Reference_Block(imgpel **imY, 
-                         int block_y, 
-                         int block_x, 
-                         int mvhor, 
-                         int mvver, 
+void Get_Reference_Block(imgpel **imY,
+                         int block_y,
+                         int block_x,
+                         int mvhor,
+                         int mvver,
                          imgpel **out)
 {
   int i,j,y,x;
@@ -185,7 +185,7 @@ void Get_Reference_Block(imgpel **imY,
       out[j][i] = Get_Reference_Pixel(imY, y+j*4, x+i*4);
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Finds a pixel (y,x) of the upsampled reference frame
@@ -205,7 +205,7 @@ byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
 
   int result = 0, result1, result2;
   int pres_x;
-  int pres_y; 
+  int pres_y;
 
   int tmp_res[6];
 
@@ -341,12 +341,12 @@ byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
 
   return result;
 }
-  
-/*! 
+
+/*!
  *************************************************************************************
  * \brief
  *    Performs the simulation of the packet losses, calls the error concealment funcs
- *    and copies the decoded images to the reference frame buffers of the decoders 
+ *    and copies the decoded images to the reference frame buffers of the decoders
  *
  *************************************************************************************
  */
@@ -357,12 +357,12 @@ void UpdateDecoders()
   {
     Build_Status_Map(decs->status_map); // simulates the packet losses
     Error_Concealment(decs->decY_best[k], decs->status_map, decs->decref[k]); // for the moment error concealment is just a "copy"
-    // Move decoded frames to reference buffers: (at the decoders this is done 
+    // Move decoded frames to reference buffers: (at the decoders this is done
     // without interpolation (upsampling) - upsampling is done while decoding
-    DecOneForthPix(decs->decY_best[k], decs->decref[k]); 
+    DecOneForthPix(decs->decY_best[k], decs->decref[k]);
   }
 }
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Copies one (reconstructed) image to the respective reference frame buffer
@@ -383,7 +383,7 @@ void DecOneForthPix(imgpel **dY, imgpel ***dref)
     memcpy(dref[ref][j], dY[j], img->width*sizeof(imgpel));
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Gives the prediction residue for a 8x8 block
@@ -413,7 +413,7 @@ void compute_residue_b8block (int b8block, int i16mode) // if not INTRA16x16 it 
   }
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Gives the prediction residue for a macroblock
@@ -428,7 +428,7 @@ void compute_residue_mb (int i16mode)
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Builds a random status map showing whether each MB is received or lost, based
@@ -444,7 +444,7 @@ void Build_Status_Map(byte **s_map)
 
   jj = img->height/MB_BLOCK_SIZE;
   ii = img->width/MB_BLOCK_SIZE;
-  
+
   for (j=0 ; j<jj; j++)
   for (i=0 ; i<ii; i++)
   {
@@ -469,12 +469,12 @@ void Build_Status_Map(byte **s_map)
   }
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Performs some sort of error concealment for the areas that are lost according
  *    to the status_map
- *    
+ *
  * \param inY
  *    Error concealment is performed on this frame imY[][]
  * \param s_map
@@ -488,7 +488,7 @@ void Error_Concealment(imgpel **inY, byte **s_map, imgpel ***refY)
   int mb_y, mb_x, mb_h, mb_w;
   mb_h = img->height/MB_BLOCK_SIZE;
   mb_w = img->width/MB_BLOCK_SIZE;
-  
+
   for (mb_y=0; mb_y < mb_h; mb_y++)
   for (mb_x=0; mb_x < mb_w; mb_x++)
   {
@@ -496,7 +496,7 @@ void Error_Concealment(imgpel **inY, byte **s_map, imgpel ***refY)
   }
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Copies a certain MB (mb_y,mb_x) of the frame inY[][] from the previous frame.
@@ -513,7 +513,7 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
   int copy  = (decs->dec_mb_mode[mb_y][mb_x]==0 && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
   int inter = (((decs->dec_mb_mode[mb_y][mb_x]>=1 && decs->dec_mb_mode[mb_y][mb_x]<=3) || decs->dec_mb_mode[mb_y][mb_x]==P8x8) && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
   short ***tmp_mv = enc_picture->mv[LIST_0];
-  
+
   switch(s_map[mb_y][mb_x])
   {
   case 1: //! whole slice lost (at least partition A lost)
@@ -531,18 +531,18 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
     }
     break;
   case 5: //! partition B and partition C lost
-    
-    //! Copy motion vectors 
+
+    //! Copy motion vectors
     for (block_y=0; block_y<BLOCK_MULTIPLE; block_y++)
       for (block_x=0; block_x<BLOCK_MULTIPLE; block_x++)
         for (i=0;i<2;i++)
           mv[i][block_y][block_x]=tmp_mv[mb_y*BLOCK_SIZE+block_y][mb_x*BLOCK_SIZE+block_x+4][i];
-    
-    //! Residuum ist set to zero    
+
+    //! Residue ist set to zero
     for(i=0;i<MB_BLOCK_SIZE;i++)
       for(j=0;j<MB_BLOCK_SIZE;j++)
         resY[j][i]=0;
-    
+
     //! not first frame
     if (img->type!=I_SLICE)
     {
@@ -554,7 +554,7 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
             inY[pos_y+j][pos_x+i] = refY[ref_inx][pos_y+j][pos_x+i];
       }
       //! if inter mb
-      else if (inter)  
+      else if (inter)
       {
         for (block_y = mb_y*BLOCK_SIZE ; block_y < (mb_y*BLOCK_SIZE + BLOCK_MULTIPLE) ; block_y++)
           for (block_x = mb_x*BLOCK_SIZE ; block_x < (mb_x*BLOCK_SIZE + BLOCK_MULTIPLE) ; block_x++)
@@ -571,14 +571,14 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
               }
           }
       }
-      else //intra; up to now only copy mb, may integrate nokia EC 
+      else //intra; up to now only copy mb, may integrate nokia EC
       {
         for (j=0;j<MB_BLOCK_SIZE;j++)
           for (i=0;i<MB_BLOCK_SIZE;i++)
             inY[pos_y+j][pos_x+i] = refY[ref_inx][pos_y+j][pos_x+i];
       }
     }
-    else //! first frame; up to now set value to grey, may integrate nokia EC 
+    else //! first frame; up to now set value to grey, may integrate nokia EC
     {
       for (j=0;j<MB_BLOCK_SIZE;j++)
         for (i=0;i<MB_BLOCK_SIZE;i++)
@@ -588,13 +588,13 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
   case 3: //! Partition C lost
     if(img->type!=I_SLICE)
     {
-      //! Copy motion vectors 
+      //! Copy motion vectors
       for (block_y=0; block_y<BLOCK_MULTIPLE; block_y++)
         for (block_x=0; block_x<BLOCK_MULTIPLE; block_x++)
           for (i=0;i<2;i++)
             mv[i][block_y][block_x]=tmp_mv[mb_y*BLOCK_SIZE+block_y][mb_x*BLOCK_SIZE+block_x+4][i];
-    
-      //! Residuum ist set to zero    
+
+      //! Residue ist set to zero
       for(i=0;i<MB_BLOCK_SIZE;i++)
         for(j=0;j<MB_BLOCK_SIZE;j++)
           resY[j][i]=0;
@@ -607,7 +607,7 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
             inY[pos_y+j][pos_x+i] = refY[ref_inx][pos_y+j][pos_x+i];
       }
       //! if inter mb
-      else if (inter)  
+      else if (inter)
       {
         for (block_y = mb_y*BLOCK_SIZE ; block_y < (mb_y*BLOCK_SIZE + BLOCK_MULTIPLE) ; block_y++)
           for (block_x = mb_x*BLOCK_SIZE ; block_x < (mb_x*BLOCK_SIZE + BLOCK_MULTIPLE) ; block_x++)
@@ -636,7 +636,7 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
             inY[pos_y+j][pos_x+i] = refY[ref_inx][pos_y+j][pos_x+i];
       }
     }
-    else //! first frame; up to now set value to grey, may integrate nokia EC 
+    else //! first frame; up to now set value to grey, may integrate nokia EC
     {
       for (j=0;j<MB_BLOCK_SIZE;j++)
         for (i=0;i<MB_BLOCK_SIZE;i++)

@@ -1,7 +1,7 @@
 
 /*!
  *************************************************************************************
- * \file 
+ * \file
  *      erc_do_p.c
  *
  * \brief
@@ -30,32 +30,30 @@ extern int erc_mvperMB;
 struct img_par *erc_img;
 
 // picture error concealment
-// concealment_head points to first node in list, concealment_end points to 
+// concealment_head points to first node in list, concealment_end points to
 // last node in list. Initialize both to NULL, meaning no nodes in list yet
 struct concealment_node *concealment_head = NULL;
 struct concealment_node *concealment_end = NULL;
 
 // static function declarations
-static int concealByCopy(frame *recfr, int currMBNum,
-  objectBuffer_t *object_list, int32 picSizeX);
-static int concealByTrial(frame *recfr, imgpel *predMB, 
-                          int currMBNum, objectBuffer_t *object_list, int predBlocks[], 
-                          int32 picSizeX, int32 picSizeY, int *yCondition);
-static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB, 
-                           imgpel *recY, int32 picSizeX, int32 regionSize);
-static void copyBetweenFrames (frame *recfr, 
-   int currYBlockNum, int32 picSizeX, int32 regionSize);
-static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, imgpel *predMB);
+static int concealByCopy(frame *recfr, int currMBNum, objectBuffer_t *object_list, int picSizeX);
+static int concealByTrial(frame *recfr, imgpel *predMB,
+                          int currMBNum, objectBuffer_t *object_list, int predBlocks[],
+                          int picSizeX, int picSizeY, int *yCondition);
+static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
+                           imgpel *recY, int picSizeX, int regionSize);
+static void copyBetweenFrames (frame *recfr, int currYBlockNum, int picSizeX, int regionSize);
+static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpel *predMB);
 
 // picture error concealment
-static void buildPredblockRegionYUV(struct img_par *img, int32 *mv, 
+static void buildPredblockRegionYUV(struct img_par *img, int *mv,
                                     int x, int y, imgpel *predMB, int list);
-static void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY, 
+static void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY,
                         imgpel ***outputUV, int img_width, int img_height);
 
 
-static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr, 
-                        int32 picSizeX, int32 regionSize);
+static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
+                        int picSizeX, int regionSize);
 
 extern const unsigned char subblk_offset_y[3][8][4];
 extern const unsigned char subblk_offset_x[3][8][4];
@@ -76,142 +74,142 @@ static int uv_div[2][4] = {{0, 1, 1, 0}, {0, 1, 0, 0}}; //[x/y][yuv_format]
  *      Width of the frame in pixels
  * \param picSizeY
  *      Height of the frame in pixels
- * \param errorVar   
+ * \param errorVar
  *      Variables for error concealment
- * \param chroma_format_idc   
+ * \param chroma_format_idc
  *      Chroma format IDC
  ************************************************************************
  */
-int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list, 
-                         int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar, int chroma_format_idc ) 
+int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
+                         int picSizeX, int picSizeY, ercVariables_t *errorVar, int chroma_format_idc )
 {
   int lastColumn = 0, lastRow = 0, predBlocks[8];
-  int lastCorruptedRow = -1, firstCorruptedRow = -1, currRow = 0, 
+  int lastCorruptedRow = -1, firstCorruptedRow = -1, currRow = 0,
     row, column, columnInd, areaHeight = 0, i = 0;
   imgpel *predMB;
-  
+
   /* if concealment is on */
-  if ( errorVar && errorVar->concealment ) 
+  if ( errorVar && errorVar->concealment )
   {
     /* if there are segments to be concealed */
-    if ( errorVar->nOfCorruptedSegments ) 
+    if ( errorVar->nOfCorruptedSegments )
     {
       if (chroma_format_idc != YUV400)
         predMB = (imgpel *) malloc ( (256 + (img->mb_cr_size_x*img->mb_cr_size_y)*2) * sizeof (imgpel));
       else
         predMB = (imgpel *) malloc(256 * sizeof (imgpel));
-      
+
       if ( predMB == NULL ) no_mem_exit("ercConcealInterFrame: predMB");
-      
+
       lastRow = (int) (picSizeY>>4);
       lastColumn = (int) (picSizeX>>4);
-      
-      for ( columnInd = 0; columnInd < lastColumn; columnInd ++) 
+
+      for ( columnInd = 0; columnInd < lastColumn; columnInd ++)
       {
-        
+
         column = ((columnInd%2) ? (lastColumn - columnInd/2 -1) : (columnInd/2));
-        
-        for ( row = 0; row < lastRow; row++) 
+
+        for ( row = 0; row < lastRow; row++)
         {
-          
-          if ( errorVar->yCondition[MBxy2YBlock(column, row, 0, picSizeX)] <= ERC_BLOCK_CORRUPTED ) 
+
+          if ( errorVar->yCondition[MBxy2YBlock(column, row, 0, picSizeX)] <= ERC_BLOCK_CORRUPTED )
           {                           // ERC_BLOCK_CORRUPTED (1) or ERC_BLOCK_EMPTY (0)
             firstCorruptedRow = row;
             /* find the last row which has corrupted blocks (in same continuous area) */
-            for ( lastCorruptedRow = row+1; lastCorruptedRow < lastRow; lastCorruptedRow++) 
+            for ( lastCorruptedRow = row+1; lastCorruptedRow < lastRow; lastCorruptedRow++)
             {
               /* check blocks in the current column */
-              if (errorVar->yCondition[MBxy2YBlock(column, lastCorruptedRow, 0, picSizeX)] > ERC_BLOCK_CORRUPTED) 
+              if (errorVar->yCondition[MBxy2YBlock(column, lastCorruptedRow, 0, picSizeX)] > ERC_BLOCK_CORRUPTED)
               {
                 /* current one is already OK, so the last was the previous one */
                 lastCorruptedRow --;
                 break;
               }
             }
-            if ( lastCorruptedRow >= lastRow ) 
+            if ( lastCorruptedRow >= lastRow )
             {
               /* correct only from above */
               lastCorruptedRow = lastRow-1;
-              for ( currRow = firstCorruptedRow; currRow < lastRow; currRow++ ) 
+              for ( currRow = firstCorruptedRow; currRow < lastRow; currRow++ )
               {
-                
-                ercCollect8PredBlocks (predBlocks, (currRow<<1), (column<<1), 
-                  errorVar->yCondition, (lastRow<<1), (lastColumn<<1), 2, 0);      
-                
+
+                ercCollect8PredBlocks (predBlocks, (currRow<<1), (column<<1),
+                  errorVar->yCondition, (lastRow<<1), (lastColumn<<1), 2, 0);
+
                 if(erc_mvperMB >= MVPERMB_THR)
-                  concealByTrial(recfr, predMB, 
-                    currRow*lastColumn+column, object_list, predBlocks, 
+                  concealByTrial(recfr, predMB,
+                    currRow*lastColumn+column, object_list, predBlocks,
                     picSizeX, picSizeY,
                     errorVar->yCondition);
-                else 
-                  concealByCopy(recfr, currRow*lastColumn+column, 
+                else
+                  concealByCopy(recfr, currRow*lastColumn+column,
                     object_list, picSizeX);
-                
+
                 ercMarkCurrMBConcealed (currRow*lastColumn+column, -1, picSizeX, errorVar);
               }
               row = lastRow;
-            } 
-            else if ( firstCorruptedRow == 0 ) 
+            }
+            else if ( firstCorruptedRow == 0 )
             {
               /* correct only from below */
-              for ( currRow = lastCorruptedRow; currRow >= 0; currRow-- ) 
+              for ( currRow = lastCorruptedRow; currRow >= 0; currRow-- )
               {
-                
-                ercCollect8PredBlocks (predBlocks, (currRow<<1), (column<<1), 
-                  errorVar->yCondition, (lastRow<<1), (lastColumn<<1), 2, 0);      
-                
+
+                ercCollect8PredBlocks (predBlocks, (currRow<<1), (column<<1),
+                  errorVar->yCondition, (lastRow<<1), (lastColumn<<1), 2, 0);
+
                 if(erc_mvperMB >= MVPERMB_THR)
-                  concealByTrial(recfr, predMB, 
-                    currRow*lastColumn+column, object_list, predBlocks, 
+                  concealByTrial(recfr, predMB,
+                    currRow*lastColumn+column, object_list, predBlocks,
                     picSizeX, picSizeY,
                     errorVar->yCondition);
-                else 
-                  concealByCopy(recfr, currRow*lastColumn+column, 
+                else
+                  concealByCopy(recfr, currRow*lastColumn+column,
                     object_list, picSizeX);
-                
+
                 ercMarkCurrMBConcealed (currRow*lastColumn+column, -1, picSizeX, errorVar);
               }
-              
+
               row = lastCorruptedRow+1;
             }
-            else 
+            else
             {
               /* correct bi-directionally */
-              
+
               row = lastCorruptedRow+1;
-              
+
               areaHeight = lastCorruptedRow-firstCorruptedRow+1;
-              
-              /* 
-              *  Conceal the corrupted area switching between the up and the bottom rows 
+
+              /*
+              *  Conceal the corrupted area switching between the up and the bottom rows
               */
-              for ( i = 0; i < areaHeight; i++) 
+              for ( i = 0; i < areaHeight; i++)
               {
-                if ( i % 2 ) 
+                if ( i % 2 )
                 {
                   currRow = lastCorruptedRow;
                   lastCorruptedRow --;
                 }
-                else 
+                else
                 {
                   currRow = firstCorruptedRow;
-                  firstCorruptedRow ++; 
+                  firstCorruptedRow ++;
                 }
-                
-                ercCollect8PredBlocks (predBlocks, (currRow<<1), (column<<1), 
-                  errorVar->yCondition, (lastRow<<1), (lastColumn<<1), 2, 0);      
-                
+
+                ercCollect8PredBlocks (predBlocks, (currRow<<1), (column<<1),
+                  errorVar->yCondition, (lastRow<<1), (lastColumn<<1), 2, 0);
+
                 if(erc_mvperMB >= MVPERMB_THR)
-                  concealByTrial(recfr, predMB, 
-                    currRow*lastColumn+column, object_list, predBlocks, 
+                  concealByTrial(recfr, predMB,
+                    currRow*lastColumn+column, object_list, predBlocks,
                     picSizeX, picSizeY,
                     errorVar->yCondition);
                 else
-                  concealByCopy(recfr, currRow*lastColumn+column, 
+                  concealByCopy(recfr, currRow*lastColumn+column,
                     object_list, picSizeX);
-                
+
                 ercMarkCurrMBConcealed (currRow*lastColumn+column, -1, picSizeX, errorVar);
-                
+
               }
             }
             lastCorruptedRow = -1;
@@ -219,7 +217,7 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
           }
         }
       }
-    
+
       free(predMB);
     }
     return 1;
@@ -231,9 +229,9 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
 /*!
  ************************************************************************
  * \brief
- *      It conceals a given MB by simply copying the pixel area from the reference image 
- *      that is at the same location as the macroblock in the current image. This correcponds 
- *      to COPY MBs. 
+ *      It conceals a given MB by simply copying the pixel area from the reference image
+ *      that is at the same location as the macroblock in the current image. This correcponds
+ *      to COPY MBs.
  * \return
  *      Always zero (0).
  * \param recfr
@@ -247,25 +245,25 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
  ************************************************************************
  */
 static int concealByCopy(frame *recfr, int currMBNum,
-  objectBuffer_t *object_list, int32 picSizeX)
+  objectBuffer_t *object_list, int picSizeX)
 {
   objectBuffer_t *currRegion;
-   
+
   currRegion = object_list+(currMBNum<<2);
   currRegion->regionMode = REGMODE_INTER_COPY;
-   
+
   currRegion->xMin = (xPosMB(currMBNum,picSizeX)<<4);
   currRegion->yMin = (yPosMB(currMBNum,picSizeX)<<4);
-   
+
   copyBetweenFrames (recfr, MBNum2YBlock(currMBNum,0,picSizeX), picSizeX, 16);
-   
+
   return 0;
 }
 
 /*!
  ************************************************************************
  * \brief
- *      Copies the co-located pixel values from the reference to the current frame. 
+ *      Copies the co-located pixel values from the reference to the current frame.
  *      Used by concealByCopy
  * \param recfr
  *      Reconstructed frame buffer
@@ -273,12 +271,11 @@ static int concealByCopy(frame *recfr, int currMBNum,
  *      index of the block (8x8) in the Y plane
  * \param picSizeX
  *      Width of the frame in pixels
- * \param regionSize      
+ * \param regionSize
  *      can be 16 or 8 to tell the dimension of the region to copy
  ************************************************************************
  */
-static void copyBetweenFrames (frame *recfr, 
-   int currYBlockNum, int32 picSizeX, int32 regionSize)
+static void copyBetweenFrames (frame *recfr, int currYBlockNum, int picSizeX, int regionSize)
 {
   int j, k, location, xmin, ymin;
   StorablePicture* refPic = listX[0][0];
@@ -286,33 +283,33 @@ static void copyBetweenFrames (frame *recfr,
   /* set the position of the region to be copied */
   xmin = (xPosYBlock(currYBlockNum,picSizeX)<<3);
   ymin = (yPosYBlock(currYBlockNum,picSizeX)<<3);
-   
+
   for (j = ymin; j < ymin + regionSize; j++)
     for (k = xmin; k < xmin + regionSize; k++)
     {
-      location = j * picSizeX + k; 
+      location = j * picSizeX + k;
 //th      recfr->yptr[location] = dec_picture->imgY[j][k];
       recfr->yptr[location] = refPic->imgY[j][k];
     }
-     
+
     for (j = ymin >> uv_div[1][dec_picture->chroma_format_idc]; j < (ymin + regionSize) >> uv_div[1][dec_picture->chroma_format_idc]; j++)
       for (k = xmin >> uv_div[0][dec_picture->chroma_format_idc]; k < (xmin + regionSize) >> uv_div[0][dec_picture->chroma_format_idc]; k++)
       {
 //        location = j * picSizeX / 2 + k;
         location = ((j * picSizeX) >> uv_div[0][dec_picture->chroma_format_idc]) + k;
-        
+
 //th        recfr->uptr[location] = dec_picture->imgUV[0][j][k];
 //th        recfr->vptr[location] = dec_picture->imgUV[1][j][k];
         recfr->uptr[location] = refPic->imgUV[0][j][k];
         recfr->vptr[location] = refPic->imgUV[1][j][k];
-      }                                
+      }
 }
 
 /*!
  ************************************************************************
  * \brief
- *      It conceals a given MB by using the motion vectors of one reliable neighbor. That MV of a 
- *      neighbor is selected wich gives the lowest pixel difference at the edges of the MB 
+ *      It conceals a given MB by using the motion vectors of one reliable neighbor. That MV of a
+ *      neighbor is selected wich gives the lowest pixel difference at the edges of the MB
  *      (see function edgeDistortion). This corresponds to a spatial smoothness criteria.
  * \return
  *      Always zero (0).
@@ -335,9 +332,9 @@ static void copyBetweenFrames (frame *recfr,
  *      array for conditions of Y blocks from ercVariables_t
  ************************************************************************
  */
-static int concealByTrial(frame *recfr, imgpel *predMB, 
-                          int currMBNum, objectBuffer_t *object_list, int predBlocks[], 
-                          int32 picSizeX, int32 picSizeY, int *yCondition)
+static int concealByTrial(frame *recfr, imgpel *predMB,
+                          int currMBNum, objectBuffer_t *object_list, int predBlocks[],
+                          int picSizeX, int picSizeY, int *yCondition)
 {
   int predMBNum = 0, numMBPerLine,
       compSplit1 = 0, compSplit2 = 0, compLeft = 1, comp = 0, compPred, order = 1,
@@ -345,196 +342,196 @@ static int concealByTrial(frame *recfr, imgpel *predMB,
       fZeroMotionChecked, predSplitted = 0,
       threshold = ERC_BLOCK_OK,
       minDist, currDist, i, k, bestDir;
-  int32 regionSize;
+  int regionSize;
   objectBuffer_t *currRegion;
-  int32 mvBest[3] , mvPred[3], *mvptr;
-  
+  int mvBest[3] , mvPred[3], *mvptr;
+
   numMBPerLine = (int) (picSizeX>>4);
-  
+
   comp = 0;
   regionSize = 16;
-  
-  do 
+
+  do
   { /* 4 blocks loop */
-    
+
     currRegion = object_list+(currMBNum<<2)+comp;
-    
+
     /* set the position of the region to be concealed */
-    
+
     currRegion->xMin = (xPosYBlock(MBNum2YBlock(currMBNum,comp,picSizeX),picSizeX)<<3);
     currRegion->yMin = (yPosYBlock(MBNum2YBlock(currMBNum,comp,picSizeX),picSizeX)<<3);
-    
-    do 
+
+    do
     { /* reliability loop */
-      
-      minDist = 0; 
-      fInterNeighborExists = 0; 
-      numIntraNeighbours = 0; 
+
+      minDist = 0;
+      fInterNeighborExists = 0;
+      numIntraNeighbours = 0;
       fZeroMotionChecked = 0;
-      
+
       /* loop the 4 neighbours */
-      for (i = 4; i < 8; i++) 
+      for (i = 4; i < 8; i++)
       {
-        
+
         /* if reliable, try it */
-        if (predBlocks[i] >= threshold) 
+        if (predBlocks[i] >= threshold)
         {
-          switch (i) 
+          switch (i)
           {
           case 4:
             predMBNum = currMBNum-numMBPerLine;
             compSplit1 = 2;
             compSplit2 = 3;
             break;
-              
+
           case 5:
             predMBNum = currMBNum-1;
             compSplit1 = 1;
             compSplit2 = 3;
             break;
-              
+
           case 6:
             predMBNum = currMBNum+numMBPerLine;
             compSplit1 = 0;
             compSplit2 = 1;
             break;
-              
+
           case 7:
             predMBNum = currMBNum+1;
             compSplit1 = 0;
             compSplit2 = 2;
             break;
           }
-          
+
           /* try the concealment with the Motion Info of the current neighbour
           only try if the neighbour is not Intra */
-          if (isBlock(object_list,predMBNum,compSplit1,INTRA) || 
+          if (isBlock(object_list,predMBNum,compSplit1,INTRA) ||
             isBlock(object_list,predMBNum,compSplit2,INTRA))
-          {            
+          {
             numIntraNeighbours++;
-          } 
-          else 
+          }
+          else
           {
             /* if neighbour MB is splitted, try both neighbour blocks */
-            for (predSplitted = isSplitted(object_list, predMBNum), 
+            for (predSplitted = isSplitted(object_list, predMBNum),
               compPred = compSplit1;
               predSplitted >= 0;
               compPred = compSplit2,
-              predSplitted -= ((compSplit1 == compSplit2) ? 2 : 1)) 
+              predSplitted -= ((compSplit1 == compSplit2) ? 2 : 1))
             {
-              
+
               /* if Zero Motion Block, do the copying. This option is tried only once */
-              if (isBlock(object_list, predMBNum, compPred, INTER_COPY)) 
+              if (isBlock(object_list, predMBNum, compPred, INTER_COPY))
               {
-                
-                if (fZeroMotionChecked) 
+
+                if (fZeroMotionChecked)
                 {
                   continue;
                 }
-                else 
+                else
                 {
                   fZeroMotionChecked = 1;
 
                   mvPred[0] = mvPred[1] = 0;
                   mvPred[2] = 0;
-                  
+
                   buildPredRegionYUV(erc_img, mvPred, currRegion->xMin, currRegion->yMin, predMB);
                 }
               }
               /* build motion using the neighbour's Motion Parameters */
-              else if (isBlock(object_list,predMBNum,compPred,INTRA)) 
+              else if (isBlock(object_list,predMBNum,compPred,INTRA))
               {
                 continue;
               }
-              else 
+              else
               {
                 mvptr = getParam(object_list, predMBNum, compPred, mv);
-                
+
                 mvPred[0] = mvptr[0];
                 mvPred[1] = mvptr[1];
                 mvPred[2] = mvptr[2];
 
                 buildPredRegionYUV(erc_img, mvPred, currRegion->xMin, currRegion->yMin, predMB);
               }
-              
+
               /* measure absolute boundary pixel difference */
-              currDist = edgeDistortion(predBlocks, 
+              currDist = edgeDistortion(predBlocks,
                 MBNum2YBlock(currMBNum,comp,picSizeX),
                 predMB, recfr->yptr, picSizeX, regionSize);
-              
+
               /* if so far best -> store the pixels as the best concealment */
-              if (currDist < minDist || !fInterNeighborExists) 
+              if (currDist < minDist || !fInterNeighborExists)
               {
-                
+
                 minDist = currDist;
                 bestDir = i;
-                
-                for (k=0;k<3;k++) 
+
+                for (k=0;k<3;k++)
                   mvBest[k] = mvPred[k];
-                
-                currRegion->regionMode = 
-                  (isBlock(object_list, predMBNum, compPred, INTER_COPY)) ? 
-                  ((regionSize == 16) ? REGMODE_INTER_COPY : REGMODE_INTER_COPY_8x8) : 
+
+                currRegion->regionMode =
+                  (isBlock(object_list, predMBNum, compPred, INTER_COPY)) ?
+                  ((regionSize == 16) ? REGMODE_INTER_COPY : REGMODE_INTER_COPY_8x8) :
                   ((regionSize == 16) ? REGMODE_INTER_PRED : REGMODE_INTER_PRED_8x8);
-                
-                copyPredMB(MBNum2YBlock(currMBNum,comp,picSizeX), predMB, recfr, 
+
+                copyPredMB(MBNum2YBlock(currMBNum,comp,picSizeX), predMB, recfr,
                   picSizeX, regionSize);
               }
-              
+
               fInterNeighborExists = 1;
             }
           }
         }
     }
-    
+
     threshold--;
-    
+
     } while ((threshold >= ERC_BLOCK_CONCEALED) && (fInterNeighborExists == 0));
-    
+
     /* always try zero motion */
-    if (!fZeroMotionChecked) 
+    if (!fZeroMotionChecked)
     {
       mvPred[0] = mvPred[1] = 0;
       mvPred[2] = 0;
 
       buildPredRegionYUV(erc_img, mvPred, currRegion->xMin, currRegion->yMin, predMB);
-      
-      currDist = edgeDistortion(predBlocks, 
+
+      currDist = edgeDistortion(predBlocks,
         MBNum2YBlock(currMBNum,comp,picSizeX),
         predMB, recfr->yptr, picSizeX, regionSize);
-      
-      if (currDist < minDist || !fInterNeighborExists) 
+
+      if (currDist < minDist || !fInterNeighborExists)
       {
-        
-        minDist = currDist;            
-        for (k=0;k<3;k++) 
+
+        minDist = currDist;
+        for (k=0;k<3;k++)
           mvBest[k] = mvPred[k];
-        
-        currRegion->regionMode = 
+
+        currRegion->regionMode =
           ((regionSize == 16) ? REGMODE_INTER_COPY : REGMODE_INTER_COPY_8x8);
-        
-        copyPredMB(MBNum2YBlock(currMBNum,comp,picSizeX), predMB, recfr, 
+
+        copyPredMB(MBNum2YBlock(currMBNum,comp,picSizeX), predMB, recfr,
           picSizeX, regionSize);
       }
     }
-    
+
     for (i=0; i<3; i++)
       currRegion->mv[i] = mvBest[i];
-    
+
     yCondition[MBNum2YBlock(currMBNum,comp,picSizeX)] = ERC_BLOCK_CONCEALED;
     comp = (comp+order+4)%4;
     compLeft--;
-    
+
     } while (compLeft);
-    
+
     return 0;
 }
 
 /*!
 ************************************************************************
 * \brief
-*      Builds the motion prediction pixels from the given location (in 1/4 pixel units) 
-*      of the reference frame. It not only copies the pixel values but builds the interpolation 
+*      Builds the motion prediction pixels from the given location (in 1/4 pixel units)
+*      of the reference frame. It not only copies the pixel values but builds the interpolation
 *      when the pixel positions to be copied from is not full pixel (any 1/4 pixel position).
 *      It copies the resulting pixel vlaues into predMB.
 * \param img
@@ -550,7 +547,7 @@ static int concealByTrial(frame *recfr, imgpel *predMB,
 *      the Y,U,V planes are concatenated y = predMB, u = predMB+256, v = predMB+320
 ************************************************************************
 */
-static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, imgpel *predMB)
+static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpel *predMB)
 {
   int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
   int i=0,j=0,ii=0,jj=0,i1=0,j1=0,j4=0,i4=0;
@@ -559,15 +556,15 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
   int vec1_x=0,vec1_y=0;
   int ioff,joff;
   imgpel *pMB = predMB;
-  
+
   int ii0,jj0,ii1,jj1,if1,jf1,if0,jf0;
   int mv_mul;
-  
+
   //FRExt
   int f1_x, f1_y, f2_x, f2_y, f3, f4, ifx;
   int b8, b4;
   int yuv = dec_picture->chroma_format_idc - 1;
-  
+
   int ref_frame = imax (mv[2], 0); // !!KS: quick fix, we sometimes seem to get negative ref_pic here, so restrict to zero an above
 
   /* Update coordinates of the current concealed macroblock */
@@ -602,7 +599,7 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
     }
   }
 
-  
+
   for (j = 0; j < 16; j++)
   {
     for (i = 0; i < 16; i++)
@@ -644,17 +641,17 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
 
               i1=(i4+ii)*f1_x + mv[0];
               j1=(j4+jj)*f1_y + mv[1];
-            
+
               ii0=iClip3 (0, dec_picture->size_x_cr-1, i1/f1_x);
               jj0=iClip3 (0, dec_picture->size_y_cr-1, j1/f1_y);
               ii1=iClip3 (0, dec_picture->size_x_cr-1, ((i1+f2_x)/f1_x));
               jj1=iClip3 (0, dec_picture->size_y_cr-1, ((j1+f2_y)/f1_y));
-            
+
               if1=(i1 & f2_x);
               jf1=(j1 & f2_y);
               if0=f1_x-if1;
               jf0=f1_y-jf1;
-            
+
               img->mpr[jj+joff][ii+ioff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
                                           if1*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii1]+
                                           if0*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii0]+
@@ -680,36 +677,36 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
  ************************************************************************
  * \brief
  *      Copies pixel values between a YUV frame and the temporary pixel value storage place. This is
- *      used to save some pixel values temporarily before overwriting it, or to copy back to a given 
+ *      used to save some pixel values temporarily before overwriting it, or to copy back to a given
  *      location in a frame the saved pixel values.
- * \param currYBlockNum   
+ * \param currYBlockNum
  *      index of the block (8x8) in the Y plane
- * \param predMB          
+ * \param predMB
  *      memory area where the temporary pixel values are stored
  *      the Y,U,V planes are concatenated y = predMB, u = predMB+256, v = predMB+320
- * \param recfr           
+ * \param recfr
  *      pointer to a YUV frame
- * \param picSizeX        
+ * \param picSizeX
  *      picture width in pixels
- * \param regionSize      
+ * \param regionSize
  *      can be 16 or 8 to tell the dimension of the region to copy
  ************************************************************************
  */
-static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr, 
-                        int32 picSizeX, int32 regionSize) 
+static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
+                        int picSizeX, int regionSize)
 {
-  
+
   int j, k, xmin, ymin, xmax, ymax;
-  int32 locationTmp, locationPred;
+  int locationTmp, locationPred;
   int uv_x = uv_div[0][dec_picture->chroma_format_idc];
   int uv_y = uv_div[1][dec_picture->chroma_format_idc];
-  
+
   xmin = (xPosYBlock(currYBlockNum,picSizeX)<<3);
   ymin = (yPosYBlock(currYBlockNum,picSizeX)<<3);
   xmax = xmin + regionSize -1;
   ymax = ymin + regionSize -1;
-  
-  for (j = ymin; j <= ymax; j++) 
+
+  for (j = ymin; j <= ymax; j++)
   {
     for (k = xmin; k <= xmax; k++)
     {
@@ -718,19 +715,19 @@ static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
       dec_picture->imgY[j][k] = predMB[locationTmp];
     }
   }
-  
+
   if (dec_picture->chroma_format_idc != YUV400)
   {
-    for (j = (ymin>>uv_y); j <= (ymax>>uv_y); j++) 
+    for (j = (ymin>>uv_y); j <= (ymax>>uv_y); j++)
     {
       for (k = (xmin>>uv_x); k <= (xmax>>uv_x); k++)
       {
         locationPred = ((j * picSizeX) >> uv_x) + k;
         locationTmp = (j-(ymin>>uv_y)) * img->mb_cr_size_x + (k-(xmin>>1)) + 256;
         dec_picture->imgUV[0][j][k] = predMB[locationTmp];
-        
+
         locationTmp += 64;
-        
+
         dec_picture->imgUV[1][j][k] = predMB[locationTmp];
       }
     }
@@ -741,93 +738,93 @@ static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
  ************************************************************************
  * \brief
  *      Calculates a weighted pixel difference between edge Y pixels of the macroblock stored in predMB
- *      and the pixels in the given Y plane of a frame (recY) that would become neighbor pixels if 
+ *      and the pixels in the given Y plane of a frame (recY) that would become neighbor pixels if
  *      predMB was placed at currYBlockNum block position into the frame. This "edge distortion" value
  *      is used to determine how well the given macroblock in predMB would fit into the frame when
- *      considering spatial smoothness. If there are correctly received neighbor blocks (status stored 
+ *      considering spatial smoothness. If there are correctly received neighbor blocks (status stored
  *      in predBlocks) only they are used in calculating the edge distorion; otherwise also the already
  *      concealed neighbor blocks can also be used.
- * \return 
+ * \return
  *      The calculated weighted pixel difference at the edges of the MB.
- * \param predBlocks      
+ * \param predBlocks
  *      status array of the neighboring blocks (if they are OK, concealed or lost)
- * \param currYBlockNum   
+ * \param currYBlockNum
  *      index of the block (8x8) in the Y plane
- * \param predMB          
+ * \param predMB
  *      memory area where the temporary pixel values are stored
  *      the Y,U,V planes are concatenated y = predMB, u = predMB+256, v = predMB+320
- * \param recY            
+ * \param recY
  *      pointer to a Y plane of a YUV frame
- * \param picSizeX        
+ * \param picSizeX
  *      picture width in pixels
- * \param regionSize      
+ * \param regionSize
  *      can be 16 or 8 to tell the dimension of the region to copy
  ************************************************************************
  */
-static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB, 
-                           imgpel *recY, int32 picSizeX, int32 regionSize)
+static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
+                           imgpel *recY, int picSizeX, int regionSize)
 {
   int i, j, distortion, numOfPredBlocks, threshold = ERC_BLOCK_OK;
   imgpel *currBlock = NULL, *neighbor = NULL;
-  int32 currBlockOffset = 0;
-  
+  int currBlockOffset = 0;
+
   currBlock = recY + (yPosYBlock(currYBlockNum,picSizeX)<<3)*picSizeX + (xPosYBlock(currYBlockNum,picSizeX)<<3);
-  
-  do 
+
+  do
   {
-    
+
     distortion = 0; numOfPredBlocks = 0;
-    
-    /* loop the 4 neighbours */
-    for (j = 4; j < 8; j++) 
+
+    // loop the 4 neighbors
+    for (j = 4; j < 8; j++)
     {
       /* if reliable, count boundary pixel difference */
-      if (predBlocks[j] >= threshold) 
+      if (predBlocks[j] >= threshold)
       {
-        
-        switch (j) 
+
+        switch (j)
         {
         case 4:
           neighbor = currBlock - picSizeX;
-          for ( i = 0; i < regionSize; i++ ) 
+          for ( i = 0; i < regionSize; i++ )
           {
             distortion += mabs((int)(predMB[i] - neighbor[i]));
           }
-          break;          
+          break;
         case 5:
           neighbor = currBlock - 1;
-          for ( i = 0; i < regionSize; i++ ) 
+          for ( i = 0; i < regionSize; i++ )
           {
             distortion += mabs((int)(predMB[i*16] - neighbor[i*picSizeX]));
           }
-          break;                
+          break;
         case 6:
           neighbor = currBlock + regionSize*picSizeX;
           currBlockOffset = (regionSize-1)*16;
-          for ( i = 0; i < regionSize; i++ ) 
+          for ( i = 0; i < regionSize; i++ )
           {
             distortion += mabs((int)(predMB[i+currBlockOffset] - neighbor[i]));
           }
-          break;                
+          break;
         case 7:
           neighbor = currBlock + regionSize;
           currBlockOffset = regionSize-1;
-          for ( i = 0; i < regionSize; i++ ) 
+          for ( i = 0; i < regionSize; i++ )
           {
             distortion += mabs((int)(predMB[i*16+currBlockOffset] - neighbor[i*picSizeX]));
           }
           break;
         }
-        
+
         numOfPredBlocks++;
       }
     }
-    
+
     threshold--;
     if (threshold < ERC_BLOCK_CONCEALED)
       break;
   } while (numOfPredBlocks == 0);
-  
+
   if(numOfPredBlocks == 0)
   {
     return 0;
@@ -841,13 +838,13 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
 /*!
 ************************************************************************
 * \brief
-* The motion prediction pixels are calculated from the given location (in 
-* 1/4 pixel units) of the referenced frame. It copies the sub block from the 
+* The motion prediction pixels are calculated from the given location (in
+* 1/4 pixel units) of the referenced frame. It copies the sub block from the
 * corresponding reference to the frame to be concealed.
 *
 *************************************************************************
 */
-static void buildPredblockRegionYUV(struct img_par *img, int32 *mv, 
+static void buildPredblockRegionYUV(struct img_par *img, int *mv,
                                     int x, int y, imgpel *predMB, int list)
 {
     int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
@@ -886,8 +883,8 @@ static void buildPredblockRegionYUV(struct img_par *img, int32 *mv,
     get_block(ref_frame, listX[list], vec1_x,vec1_y,img,tmp_block);
 
     for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-    for(ii=0;ii<BLOCK_SIZE;ii++)
-      img->mpr[jj][ii]=tmp_block[jj][ii];
+      for(ii=0;ii<BLOCK_SIZE;ii++)
+        img->mpr[jj][ii]=tmp_block[jj][ii];
 
 
     for (j = 0; j < 4; j++)
@@ -1035,7 +1032,7 @@ static int compare_pic_by_poc_desc( const void *arg1, const void *arg2 )
 */
 
 static
-void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY, 
+void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY,
                  imgpel ***outputUV, int img_width, int img_height)
 {
     int x, y;
@@ -1055,7 +1052,7 @@ void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY,
 /*!
 ************************************************************************
 * \brief
-*    Copies the last reference frame for concealing reference frame loss. 
+*    Copies the last reference frame for concealing reference frame loss.
 ************************************************************************
 */
 
@@ -1069,7 +1066,7 @@ get_last_ref_pic_from_dpb()
     {
         if (dpb.fs[i]->is_used==3)
         {
-            if (((dpb.fs[i]->frame->used_for_reference) && 
+            if (((dpb.fs[i]->frame->used_for_reference) &&
                 (!dpb.fs[i]->frame->is_long_term)) /*||  ((dpb.fs[i]->frame->used_for_reference==0)
                                                    && (dpb.fs[i]->frame->slice_type == P_SLICE))*/ )
             {
@@ -1084,8 +1081,8 @@ get_last_ref_pic_from_dpb()
 /*!
 ************************************************************************
 * \brief
-* Conceals the lost reference or non reference frame by either frame copy 
-* or motion vector copy concealment. 
+* Conceals the lost reference or non reference frame by either frame copy
+* or motion vector copy concealment.
 *
 ************************************************************************
 */
@@ -1127,13 +1124,13 @@ static void copy_to_conceal(StorablePicture *src, StorablePicture *dst, ImagePar
 
     // Conceals the missing frame by frame copy concealment
     if (img->conceal_mode==1)
-    {     
+    {
         // We need these initializations for using deblocking filter for frame copy
         // concealment as well.
         dst->PicWidthInMbs = src->PicWidthInMbs;
         dst->PicSizeInMbs = src->PicSizeInMbs;
 
-        CopyImgData(src->imgY, src->imgUV, 
+        CopyImgData(src->imgY, src->imgUV,
             dst->imgY, dst->imgUV,
             img->width, img->height);
 
@@ -1170,7 +1167,7 @@ static void copy_to_conceal(StorablePicture *src, StorablePicture *dst, ImagePar
         {
             mm = i*BLOCK_SIZE;
             for(j=0;j<mb_width*4;j++)
-            {                       
+            {
                 nn = j*BLOCK_SIZE;
 
                 mv[0] = src->mv[LIST_0][i][j][0] / scale;
@@ -1275,7 +1272,7 @@ void conceal_lost_frames(ImageParameters *img)
 
     if(img->IDR_concealment_flag == 1)
     {
-        // Conceals an IDR frame loss. Uses the reference frame in the previous 
+        // Conceals an IDR frame loss. Uses the reference frame in the previous
         // GOP for concealment.
         UnusedShortTermFrameNum = 0;
         img->last_ref_pic_poc = -img->poc_gap;
@@ -1368,8 +1365,8 @@ void update_ref_list_for_concealment()
 /*!
 ************************************************************************
 * \brief
-*    Initialize the list based on the B frame or non reference 'p' frame 
-*    to be concealed. The function initialize listX[0] and list 1 depending 
+*    Initialize the list based on the B frame or non reference 'p' frame
+*    to be concealed. The function initialize listX[0] and list 1 depending
 *    on current picture type
 *
 ************************************************************************
@@ -1404,7 +1401,7 @@ void init_lists_for_non_reference_loss(int currSliceType, PictureStructure currP
     if (currSliceType == P_SLICE)
     {
         // Calculate FrameNumWrap and PicNum
-        if (currPicStructure == FRAME)  
+        if (currPicStructure == FRAME)
         {
             for(i=0;i<dpb.used_size; i++)
             {
@@ -1421,7 +1418,7 @@ void init_lists_for_non_reference_loss(int currSliceType, PictureStructure currP
 
     if (currSliceType == B_SLICE)
     {
-        if (currPicStructure == FRAME)  
+        if (currPicStructure == FRAME)
         {
             //      for(i=0;i<dpb.ref_frames_in_buffer; i++)
             for(i=0;i<dpb.used_size; i++)
@@ -1503,8 +1500,8 @@ void init_lists_for_non_reference_loss(int currSliceType, PictureStructure currP
 /*!
 ************************************************************************
 * \brief
-* Get from the dpb the picture corresponding to a POC.  The POC varies 
-* depending on whether it is a frame copy or motion vector copy concealment. 
+* Get from the dpb the picture corresponding to a POC.  The POC varies
+* depending on whether it is a frame copy or motion vector copy concealment.
 * The frame corresponding to the POC is returned.
 *
 ************************************************************************
@@ -1661,7 +1658,7 @@ void delete_list( struct concealment_node *ptr )
         concealment_head = NULL;
         concealment_end = NULL;
     }
-    else 
+    else
     {
         temp = concealment_head;
 
@@ -1681,9 +1678,9 @@ void delete_list( struct concealment_node *ptr )
 ************************************************************************
 * \brief
 * Stores the missing non reference frames in the concealment buffer. The
-* detection is based on the POC difference in the sorted POC array. A missing 
-* non reference frame is detected when the dpb is full. A singly linked list 
-* is maintained for storing the missing non reference frames. 
+* detection is based on the POC difference in the sorted POC array. A missing
+* non reference frame is detected when the dpb is full. A singly linked list
+* is maintained for storing the missing non reference frames.
 *
 ************************************************************************
 */
@@ -1748,7 +1745,7 @@ void conceal_non_ref_pics(int diff)
 ************************************************************************
 * \brief
 * Perform Sliding window decoded reference picture marking process. It
-* maintains the POC s stored in the dpb at a specific instance.   
+* maintains the POC s stored in the dpb at a specific instance.
 *
 ************************************************************************
 */
@@ -1771,8 +1768,8 @@ void sliding_window_poc_management(StorablePicture *p)
 ************************************************************************
 * \brief
 * Outputs the non reference frames. The POCs in the concealment buffer are
-* sorted in ascending order and outputted when the lowest POC in the 
-* concealment buffer is lower than the lowest in the dpb. The linked list 
+* sorted in ascending order and outputted when the lowest POC in the
+* concealment buffer is lower than the lowest in the dpb. The linked list
 * entry corresponding to the outputted POC is immediately deleted.
 *
 ************************************************************************
@@ -1812,9 +1809,9 @@ void write_lost_ref_after_idr(int pos)
 
     if(last_out_fs->frame == NULL)
     {
-        last_out_fs->frame = alloc_storable_picture (FRAME, img->width, img->height, 
+        last_out_fs->frame = alloc_storable_picture (FRAME, img->width, img->height,
             img->width_cr, img->height_cr);
-        last_out_fs->is_used = 3;                        
+        last_out_fs->is_used = 3;
     }
 
     if(img->conceal_mode == 2)

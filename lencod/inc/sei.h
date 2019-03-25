@@ -64,7 +64,7 @@ typedef struct
   byte* data;
 } sei_struct;
 
-//!< sei_message[0]: this struct is to store the sei message packtized independently 
+//!< sei_message[0]: this struct is to store the sei message packtized independently
 //!< sei_message[1]: this struct is to store the sei message packtized together with slice data
 extern sei_struct sei_message[2];
 
@@ -186,7 +186,7 @@ void FinalizeSceneInformation();
 //! PanScanRect Information
 typedef struct
 {
-  int pan_scan_rect_id; 
+  int pan_scan_rect_id;
   int pan_scan_rect_left_offset;
   int pan_scan_rect_right_offset;
   int pan_scan_rect_top_offset;

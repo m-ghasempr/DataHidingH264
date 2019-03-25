@@ -24,7 +24,7 @@ static int *IntraMBs;
 static int WalkAround = 0;
 static int NumberOfMBs = 0;
 static int NumberIntraPerPicture;
- 
+
 /*!
  ************************************************************************
  * \brief
@@ -48,17 +48,17 @@ void RandomIntraInit(int xsize, int ysize, int refresh)
   NumberOfMBs = xsize * ysize;
   NumberIntraPerPicture = refresh;
 
-  if (refresh != 0) 
-  { 
+  if (refresh != 0)
+  {
     RefreshPattern = malloc (sizeof (int) * NumberOfMBs);
     if (RefreshPattern == NULL) no_mem_exit("RandomIntraInit: RefreshPattern");
-    
+
     IntraMBs = malloc (sizeof (int) * refresh);
     if (IntraMBs == NULL) no_mem_exit("RandomIntraInit: IntraMBs");
-    
+
     for (i= 0; i<NumberOfMBs; i++)
       RefreshPattern[i] = -1;
-    
+
     for (i=0; i<NumberOfMBs; i++)
     {
       do
@@ -87,7 +87,7 @@ void RandomIntraInit(int xsize, int ysize, int refresh)
  * \par Input
  *    MacroblockNumberInScanOrder
  * \par Output
- *    1 if an MB should be forced to Intra, according the the 
+ *    1 if an MB should be forced to Intra, according the the
  *      RefreshPattern
  *    0 otherwise
  *
@@ -111,8 +111,8 @@ int RandomIntra (int mb)
  *    RandomIntraNewPicture: Selects new set of MBs for forced Intra
  *
  * \par
- *    This function should be called exactly once per picture, and 
- *    requires a finished initialization 
+ *    This function should be called exactly once per picture, and
+ *    requires a finished initialization
  *
  ************************************************************************
  */

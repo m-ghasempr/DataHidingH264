@@ -39,7 +39,7 @@ int NALUCount=0;
  *     0 if there is nothing any more to read (EOF)
  *    -1 in case of any error
  *
- *  \note Side-effect: Returns length of start-code in bytes. 
+ *  \note Side-effect: Returns length of start-code in bytes.
  *
  * \note
  *   GetAnnexbNALU expects start codes at byte aligned positions in the file
@@ -53,11 +53,11 @@ int GetAnnexbNALU (NALU_t *nalu)
   int StartCodeFound, rewind;
   unsigned char *Buf;
   int LeadingZero8BitsCount=0, TrailingZero8Bits=0;
-    
+
   if ((Buf = (unsigned char*)calloc (nalu->max_size , sizeof(char))) == NULL) no_mem_exit("GetAnnexbNALU: Buf");
 
   while(!feof(bits) && (Buf[pos++]=fgetc(bits))==0);
-  
+
   if(feof(bits))
   {
     if(pos==0)
@@ -120,7 +120,7 @@ int GetAnnexbNALU (NALU_t *nalu)
       while(Buf[pos-2-TrailingZero8Bits]==0)
         TrailingZero8Bits++;
       nalu->len = (pos-1)-nalu->startcodeprefix_len-LeadingZero8BitsCount-TrailingZero8Bits;
-      memcpy (nalu->buf, &Buf[LeadingZero8BitsCount+nalu->startcodeprefix_len], nalu->len);     
+      memcpy (nalu->buf, &Buf[LeadingZero8BitsCount+nalu->startcodeprefix_len], nalu->len);
       nalu->forbidden_bit = (nalu->buf[0]>>7) & 1;
       nalu->nal_reference_idc = (nalu->buf[0]>>5) & 3;
       nalu->nal_unit_type = (nalu->buf[0]) & 0x1f;
@@ -144,7 +144,7 @@ int GetAnnexbNALU (NALU_t *nalu)
   }
 
   //Count the trailing_zero_8bits
-  if(info3==1)	//if the detected start code is 00 00 01, trailing_zero_8bits is sure not to be present
+  if(info3==1)  //if the detected start code is 00 00 01, trailing_zero_8bits is sure not to be present
   {
     while(Buf[pos-5-TrailingZero8Bits]==0)
       TrailingZero8Bits++;
@@ -185,9 +185,9 @@ int GetAnnexbNALU (NALU_t *nalu)
     nalu->startcodeprefix_len == 4?"long":"short", nalu->len, nalu->forbidden_bit, nalu->nal_reference_idc, nalu->nal_unit_type);
   fflush (p_trace);
 #endif
-  
+
   free(Buf);
- 
+
   return (pos+rewind);
 }
 
@@ -273,7 +273,7 @@ void CheckZeroByteNonVCL(NALU_t *nalu, int * ret)
   {
     if(LastAccessUnitExists)
     {
-      LastAccessUnitExists=0;		//deliver the last access unit to decoder
+      LastAccessUnitExists=0;    //deliver the last access unit to decoder
       NALUCount=0;
     }
   }
@@ -302,15 +302,15 @@ void CheckZeroByteVCL(NALU_t *nalu, int * ret)
     NALUCount=0;
   }
   NALUCount++;
-  //the first VCL NAL unit that is the first NAL unit after last VCL NAL unit indicates 
-  //the start of a new access unit and hence the first NAL unit of the new access unit.						(sounds like a tongue twister :-)
+  //the first VCL NAL unit that is the first NAL unit after last VCL NAL unit indicates
+  //the start of a new access unit and hence the first NAL unit of the new access unit.           (sounds like a tongue twister :-)
   if(NALUCount==1)
     CheckZeroByte=1;
   LastAccessUnitExists=1;
   if(CheckZeroByte && nalu->startcodeprefix_len==3)
   {
-	  printf("warning: zero_byte shall exist\n");
-	  //because it is not a very serious problem, we may not indicate an error by setting ret to -1
-	  //*ret=-1;
+    printf("warning: zero_byte shall exist\n");
+    //because it is not a very serious problem, we may not indicate an error by setting ret to -1
+    //*ret=-1;
   }
 }

@@ -26,7 +26,7 @@
 #ifndef _GLOBAL_H_
 #define _GLOBAL_H_
 
-#include <stdio.h>                              //!< for FILE
+#include <stdio.h>
 #include <stdarg.h>
 
 #include <time.h>
@@ -37,20 +37,15 @@
 #include "parsetcommon.h"
 
 
-typedef unsigned char   byte;                   //!<  8 bit unsigned
-typedef int             int32;
-typedef unsigned int    u_int32;
-
-//typedef unsigned short imgpel;
-typedef unsigned char  imgpel;                //!<  Pixel type definition
+typedef unsigned char  byte;                     //!<  8 bit unsigned
+typedef unsigned short imgpel;                  //!<  Pixel type definition (16 bit for FRExt)
+//typedef unsigned char  imgpel;                //!<  Pixel type definition (8 bit without FRExt)
 
 pic_parameter_set_rbsp_t *active_pps;
 seq_parameter_set_rbsp_t *active_sps;
 
-// global picture format dependend buffers, mem allocation in decod.c ******************
-int  **refFrArr;                                //!< Array for reference frames of each block
-
-imgpel **imgY_ref;                                //!< reference frame find snr
+// global picture format dependent buffers, memory allocation in decod.c
+imgpel **imgY_ref;                              //!< reference frame find snr
 imgpel ***imgUV_ref;
 
 int **PicPos;
@@ -97,16 +92,10 @@ typedef enum
 typedef enum
 {
   PAR_OF_ANNEXB,   //!< Current TML description
-  PAR_OF_RTP,   //!< RTP Packet Output format
-//  PAR_OF_IFF    //!< Interim File Format
+  PAR_OF_RTP       //!< RTP Packet Output format
 } PAR_OF_TYPE;
 
-//! Boolean Type
-/*typedef enum {
-  FALSE,
-  TRUE
-} Boolean;
-*/
+
 //! definition of H.264 syntax elements
 typedef enum {
   SE_HEADER,
@@ -186,7 +175,7 @@ typedef enum {
 
 typedef enum
 {
-  IS_LUMA = 0,  
+  IS_LUMA = 0,
   IS_CHROMA = 1
 } Component_Type;
 
@@ -212,7 +201,7 @@ typedef DecodingEnvironment *DecodingEnvironmentPtr;
 //! struct for context management
 typedef struct
 {
-  unsigned short state;         // index into state-table CP  
+  unsigned short state;         // index into state-table CP
   unsigned char  MPS;           // Least Probable Symbol 0/1 CP
 } BiContextType;
 
@@ -258,7 +247,7 @@ typedef struct
 typedef struct
 {
   BiContextType  ipr_contexts [NUM_IPR_CTX];
-  BiContextType  cipr_contexts[NUM_CIPR_CTX]; 
+  BiContextType  cipr_contexts[NUM_CIPR_CTX];
   BiContextType  cbp_contexts [3][NUM_CBP_CTX];
   BiContextType  bcbp_contexts[NUM_BLOCK_TYPES][NUM_BCBP_CTX];
   BiContextType  map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
@@ -324,7 +313,7 @@ typedef struct macroblock
 
   int           slice_nr;
   int           delta_quant;          //!< for rate control
-  
+
   struct macroblock   *mb_available_up;   //!< pointer to neighboring MB (CABAC)
   struct macroblock   *mb_available_left; //!< pointer to neighboring MB (CABAC)
 
@@ -401,7 +390,7 @@ typedef struct
   DataPartition       *partArr;      //!< array of partitions
   MotionInfoContexts  *mot_ctx;      //!< pointer to struct of context models for use in CABAC
   TextureInfoContexts *tex_ctx;      //!< pointer to struct of context models for use in CABAC
-  
+
   int                 ref_pic_list_reordering_flag_l0;
   int                 *reordering_of_pic_nums_idc_l0;
   int                 *abs_diff_pic_num_minus1_l0;
@@ -455,8 +444,8 @@ typedef struct img_par
   imgpel mpr[16][16];                         //!< predicted block
   int mvscale[6][MAX_REFERENCE_PICTURES];
   int m7[16][16];                             //!< final 4x4 block. Extended to 16x16 for ABT
-  int cof[4][12][4][4];                       //!< correction coefficients from predicted   
-  int cofu[16];                                                                             
+  int cof[4][12][4][4];                       //!< correction coefficients from predicted
+  int cofu[16];
   byte **ipredmode;                            //!< prediction type [90][74]
   int *quad;
   int ***nz_coeff;
@@ -489,7 +478,7 @@ typedef struct img_par
 
   int slice_group_change_cycle;
 
-  int redundant_pic_cnt; 
+  int redundant_pic_cnt;
 
   int explicit_B_prediction;
 
@@ -503,7 +492,7 @@ typedef struct img_par
   unsigned int frame_num;   //frame_num for this frame
   unsigned int field_pic_flag;
   unsigned int bottom_field_flag;
-  
+
   //the following is for slice header syntax elements of poc
   // for poc mode 0.
   unsigned int pic_order_cnt_lsb;
@@ -570,8 +559,8 @@ typedef struct img_par
   unsigned int dc_pred_value_chroma;          //!< chroma value for DC prediction (depends on chroma pel bit depth)
   int max_imgpel_value;                       //!< max value that one luma picture element (pixel) can take (depends on pic_unit_bitdepth)
   int max_imgpel_value_uv;                    //!< max value that one chroma picture element (pixel) can take (depends on pic_unit_bitdepth)
-  int Transform8x8Mode;        
-  int profile_idc;              
+  int Transform8x8Mode;
+  int profile_idc;
   int yuv_format;
   int lossless_qpprime_flag;
   int num_blk8x8_uv;
@@ -608,7 +597,7 @@ typedef struct img_par
   int conceal_slice_type;
 
   // random access point decoding
-  int recovery_point;           
+  int recovery_point;
   int recovery_point_found;
   int recovery_frame_cnt;
   int recovery_frame_num;
@@ -708,13 +697,13 @@ FILE *p_trace;
 #endif
 
 // Redundant slices
-int previous_frame_num;          //!< frame number of previous slice
-int ref_flag[17];                //!< 0: i-th previous frame is incorrect 
+unsigned int previous_frame_num;          //!< frame number of previous slice
+int ref_flag[17];                //!< 0: i-th previous frame is incorrect
                                  //!< non-zero: i-th previous frame is correct
 int Is_primary_correct;          //!< if primary frame is correct, 0: incorrect
 int Is_redundant_correct;        //!< if redundant frame is correct, 0:incorrect
 int redundant_slice_ref_idx;     //!< reference index of redundant slice
-void Error_tracking(void);       
+void Error_tracking(void);
 
 // prototypes
 void init_conf(struct inp_par *inp, char *config_filename);

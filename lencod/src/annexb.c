@@ -23,7 +23,7 @@ static FILE *f = NULL;    // the output file
 
 /*!
  ********************************************************************************************
- * \brief 
+ * \brief
  *    Writes a NALU to the Annex B Byte Stream
  *
  * \return
@@ -40,7 +40,7 @@ int WriteAnnexbNALU (NALU_t *n)
   assert (f != NULL);
   assert (n->startcodeprefix_len == 3 || n->startcodeprefix_len == 4);
 
-// printf ("WriteAnnexbNALU: writing %d bytes w/ startcode_len %d\n", n->len+1, n->startcodeprefix_len); 
+// printf ("WriteAnnexbNALU: writing %d bytes w/ startcode_len %d\n", n->len+1, n->startcodeprefix_len);
   if (n->startcodeprefix_len > 3)
   {
     putc (0, f);
@@ -74,8 +74,8 @@ int WriteAnnexbNALU (NALU_t *n)
 
 /*!
  ********************************************************************************************
- * \brief 
- *    Opens the output file for the bytestream    
+ * \brief
+ *    Opens the output file for the bytestream
  *
  * \param Filename
  *    The filename of the file to be opened
@@ -97,7 +97,7 @@ void OpenAnnexbFile (char *Filename)
 
 /*!
  ********************************************************************************************
- * \brief 
+ * \brief
  *    Closes the output bit stream file
  *
  * \return

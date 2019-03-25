@@ -53,7 +53,7 @@
       D-10587 Berlin, Germany
 
       Jani Lainema                    <jani.lainema@nokia.com>
-      Ragip Kurceren                  <ragip.kurceren@nokia.com>      
+      Ragip Kurceren                  <ragip.kurceren@nokia.com>
       Nokia Inc. / Nokia Research Center
       6000 Connection Drive
       Irving, TX 75039, USA
@@ -76,7 +76,7 @@
       30167 Hannover
 
       Thomas Stockhammer              <stockhammer@ei.tum.de>
-      Tobias Oelbaum (TO)             <drehvial@gmx.net>      
+      Tobias Oelbaum (TO)             <drehvial@gmx.net>
       Institute for Communications Engineering
       Munich University of Technology
       80290 Munich
@@ -94,7 +94,7 @@
       Karsten Suehring                <suehring@hhi.de>
       Heiko Schwarz                   <hschwarz@hhi.de>
       Detlev Marpe                    <marpe@hhi.de>
-      Guido Heising                   <heising@hhi.de>      
+      Guido Heising                   <heising@hhi.de>
       Heinrich-Hertz-Institute
       Einsteinufer 37
       10587 Berlin
@@ -116,7 +116,7 @@
       Beijing China 100080
 
       Mathias Wien                    <wien@ient.rwth-aachen.de>
-      Achim Dahlhoff                  <dahlhoff@ient.rwth-aachen.de>      
+      Achim Dahlhoff                  <dahlhoff@ient.rwth-aachen.de>
       Institut und Lehrstuhl für Nachrichtentechnik
       RWTH Aachen University
       52072 Aachen
@@ -145,7 +145,7 @@
       Dzung Hoang                     <dzung.hoang@xilient.com>
       Xilient Inc.
       10181 Bubb Rd.
-      Cupertino, CA 95014     
+      Cupertino, CA 95014
 
       Barry Haskell
       Apple Computer, Inc.            <bhaskell@apple.com>
@@ -162,31 +162,31 @@
       Thomson
       2 Independence Way
       Princeton, NJ 08540
-      
+
       Siwei Ma                        <swma@jdl.ac.cn>
       Institute of Computing Technology
-      Chinese Academy of Sciences 
+      Chinese Academy of Sciences
       Kexueyuan South Road 6
       Haidian District
       Beijing, China
-      
+
       Zhibo Chen                      <chenzhibo@tsinghua.org.cn>
       JianFeng Xu                     <fenax@video.mdc.tsinghua.edu.cn>
       Wenfang Fu                      <fwf@video.mdc.tsinghua.edu.cn>
       Dept.of E&E, Tsinghua Univ
-      Haidian District 
+      Haidian District
       Beijing China, 100084
-        
+
       Alexis Michael Tourapis         <alexismt@ieee.org><atour@dolby.com>
       Athanasios Leontaris            <aleon@dolby.com>
       Dolby Laboratories Inc.
       3601 West Alameda Ave.
       Burbank, CA 91505
-  
+
       Xiaoquan Yi                     <xyi@engr.scu.edu>
       Jun Zhang                       <jzhang2@engr.scu.edu>
       Dept. of C.E. Santa Clara Univ.
-      500 El Camino Real 
+      500 El Camino Real
       Santa Clara, CA 95053
 
    \endverbatim

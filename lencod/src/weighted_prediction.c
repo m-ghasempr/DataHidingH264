@@ -34,7 +34,7 @@ static SubImageContainer ref_qpic_sub;
 void estimate_weighting_factor_P_slice(int select_offset)
 {
   int i, j, n;
-  
+
   double dc_org = 0.0;
   int index;
   int comp;
@@ -43,19 +43,19 @@ void estimate_weighting_factor_P_slice(int select_offset)
   int default_weight[3];
 
   int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
-  int weight[2][MAX_REFERENCE_PICTURES][3]; 
-  int offset[2][MAX_REFERENCE_PICTURES][3];       
+  int weight[2][MAX_REFERENCE_PICTURES][3];
+  int offset[2][MAX_REFERENCE_PICTURES][3];
   int clist;
-  
+
   imgpel **tmpPtr;
-  
+
   luma_log_weight_denom = 5;
   chroma_log_weight_denom = 5;
   wp_luma_round = 1 << (luma_log_weight_denom - 1);
   wp_chroma_round = 1 << (chroma_log_weight_denom - 1);
   default_weight[0] = 1<<luma_log_weight_denom;
   default_weight[1] = default_weight[2] = 1<<chroma_log_weight_denom;
-  
+
   /* set all values to defaults */
   for (i = 0; i < 2 + list_offset; i++)
   {
@@ -70,24 +70,24 @@ void estimate_weighting_factor_P_slice(int select_offset)
       }
     }
   }
-  
+
   for (i = 0; i < img->height; i++)
   {
     for (j = 0; j < img->width; j++)
     {
       dc_org += (double) imgY_org[i][j];
     }
-  } 
-    
+  }
+
   for (clist=0; clist<2 + list_offset; clist++)
   {
     for (n = 0; n < listXsize[clist]; n++)
     {
       dc_ref[n] = 0.0;
-      
+
       ref_pic_sub.luma       = listX[clist][n]->imgY_sub;
       tmpPtr = ref_pic_sub.luma[0][0];
-      
+
       // Y
       for (j = IMG_PAD_SIZE; j < img->height + IMG_PAD_SIZE; j++)
       {
@@ -96,7 +96,7 @@ void estimate_weighting_factor_P_slice(int select_offset)
           dc_ref[n] += (double) tmpPtr[j][i];
         }
       }
-      
+
       if (select_offset==0.0)
       {
         if (dc_ref[n] != 0)
@@ -107,19 +107,19 @@ void estimate_weighting_factor_P_slice(int select_offset)
           weight[clist][n][0] = default_weight[0];
       }
       else
-      {        
+      {
         offset[clist][n][0] = (int) ((dc_org-dc_ref[n])/(img->size)+0.5);
         offset[clist][n][0] = (offset[clist][n][0]<-128) ? -128: (offset[clist][n][0]>127) ? 127:offset[clist][n][0];
         weight[clist][n][0] = default_weight[0];
       }
-      
-      
+
+
       /* for now always use default weight for chroma weight */
       weight[clist][n][1] = default_weight[1];
-      weight[clist][n][2] = default_weight[2];      
+      weight[clist][n][2] = default_weight[2];
     }
   }
-  
+
   for (clist=0; clist<2 + list_offset; clist++)
   {
     for (index = 0; index < listXsize[clist]; index++)
@@ -132,7 +132,7 @@ void estimate_weighting_factor_P_slice(int select_offset)
       }
     }
   }
-  
+
 }
 
 /*!
@@ -144,25 +144,25 @@ void estimate_weighting_factor_P_slice(int select_offset)
 void estimate_weighting_factor_B_slice()
 {
   int i, j, n;
-  
+
   int tx,DistScaleFactor;
   double dc_org = 0.0;
   int index;
   int comp;
   double dc_ref[6][MAX_REFERENCE_PICTURES];
-  
+
   int log_weight_denom;
 
   int default_weight[3];
   int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
-  int weight[6][MAX_REFERENCE_PICTURES][3]; 
-  int offset[6][MAX_REFERENCE_PICTURES][3];       
-  int im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3]; 
-  int im_offset[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3]; 
+  int weight[6][MAX_REFERENCE_PICTURES][3];
+  int offset[6][MAX_REFERENCE_PICTURES][3];
+  int im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
+  int im_offset[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
   int clist;
   int wf_weight, wf_offset;
   imgpel **tmpPtr;
-  
+
   if (active_pps->weighted_bipred_idc == 2) //! implicit mode
   {
     luma_log_weight_denom = 5;
@@ -181,7 +181,7 @@ void estimate_weighting_factor_B_slice()
   default_weight[0] = 1<<luma_log_weight_denom;
   default_weight[1] = 1<<chroma_log_weight_denom;
   default_weight[2] = 1<<chroma_log_weight_denom;
-  
+
   /* set all values to defaults */
   for (i = 0; i < 2 + list_offset; i++)
   {
@@ -196,7 +196,7 @@ void estimate_weighting_factor_B_slice()
       }
     }
   }
-  
+
   for (i = 0; i < listXsize[LIST_0]; i++)
   {
     for (j = 0; j < listXsize[LIST_1]; j++)
@@ -206,7 +206,7 @@ void estimate_weighting_factor_B_slice()
       tb = iClip3(-128,127,(enc_picture->poc - listX[LIST_0][i]->poc));
       for (comp = 0; comp < 3; comp++)
       {
-        // implicit weights          
+        // implicit weights
         if (td == 0)
         {
           im_weight[1][i][j][comp] = default_weight[comp];
@@ -215,16 +215,16 @@ void estimate_weighting_factor_B_slice()
           im_offset[0][i][j][comp] = 0;
         }
         else
-        {            
+        {
           tx = (16384 + iabs(td/2))/td;
           DistScaleFactor = iClip3(-1024, 1023, (tx*tb + 32 )>>6);
           im_weight[1][i][j][comp] = DistScaleFactor>>2;
           if (im_weight[1][i][j][comp] < -64 || im_weight[1][i][j][comp] >128)
             im_weight[1][i][j][comp] = default_weight[comp];
-          im_weight[0][i][j][comp] = 64 - im_weight[1][i][j][comp];            
+          im_weight[0][i][j][comp] = 64 - im_weight[1][i][j][comp];
           im_offset[1][i][j][comp] = 0;
           im_offset[0][i][j][comp] = 0;
-        }        
+        }
       }
       /*
       printf ("%d imp weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n",enc_picture->poc, i, j,  im_weight[0][i][j][0], im_weight[1][i][j][0],
@@ -233,24 +233,24 @@ void estimate_weighting_factor_B_slice()
       */
     }
   }
-  
-  
+
+
   if (active_pps->weighted_bipred_idc == 2) //! implicit mode
   {
-    
+
     for (i = 0; i < listXsize[LIST_0]; i++)
     {
       for (j = 0; j < listXsize[LIST_1]; j++)
       {
         for (comp = 0; comp < 3; comp++)
         {
-          log_weight_denom = (comp == 0) ? luma_log_weight_denom : chroma_log_weight_denom;         
+          log_weight_denom = (comp == 0) ? luma_log_weight_denom : chroma_log_weight_denom;
           wbp_weight[1][i][j][comp] = im_weight[1][i][j][comp] ;
           wbp_weight[0][i][j][comp] = im_weight[0][i][j][comp];
         }
       }
     }
-    
+
     for (clist=0; clist<2 + list_offset; clist++)
     {
       for (index = 0; index < listXsize[clist]; index++)
@@ -273,13 +273,13 @@ void estimate_weighting_factor_B_slice()
         dc_org += (double) imgY_org[i][j];
       }
     }
-    
+
     for (clist=0; clist<2 + list_offset; clist++)
     {
       for (n = 0; n < listXsize[clist]; n++)
       {
         dc_ref[clist][n] = 0;
-        
+
         ref_qpic_sub.luma      = listX[clist][n]->imgY_sub;
         tmpPtr = ref_qpic_sub.luma[0][0];
         // Y
@@ -294,7 +294,7 @@ void estimate_weighting_factor_B_slice()
           wf_weight = (int) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
         else
           wf_weight = default_weight[0];  // only used when reference picture is black
-        
+
         //wf_weight = iClip3(-64, 64, wf_weight);
 
         if ( (wf_weight<-128) || (wf_weight>127) )
@@ -302,19 +302,19 @@ void estimate_weighting_factor_B_slice()
           wf_weight = default_weight[0];
         }
         wf_offset = 0;
-                
-        //    printf("dc_org = %d, dc_ref = %d, weight[%d] = %d\n",dc_org, dc_ref[n],n,weight[n][0]);        
-        
+
+        //    printf("dc_org = %d, dc_ref = %d, weight[%d] = %d\n",dc_org, dc_ref[n],n,weight[n][0]);
+
         weight[clist][n][0] = wf_weight;
         weight[clist][n][1] = default_weight[1];
         weight[clist][n][2] = default_weight[2];
         offset[clist][n][0] = 0;
         offset[clist][n][1] = 0;
-        offset[clist][n][2] = 0;        
-        
+        offset[clist][n][2] = 0;
+
       }
     }
-    
+
     if (active_pps->weighted_bipred_idc == 1)
     {
       for (clist=0; clist<2 + list_offset; clist++)
@@ -331,7 +331,7 @@ void estimate_weighting_factor_B_slice()
       }
     }
     else
-    {    
+    {
       for (clist=0; clist<2 + list_offset; clist++)
       {
         for (index = 0; index < listXsize[clist]; index++)
@@ -361,11 +361,11 @@ void estimate_weighting_factor_B_slice()
           DistScaleFactor ,tx,tx,tx);
         */
       }
-    }    
+    }
   }
 }
-    
-    
+
+
 /*!
 ************************************************************************
 * \brief
@@ -376,29 +376,29 @@ void estimate_weighting_factor_B_slice()
 int test_wp_P_slice(int select_offset)
 {
   int i, j, n;
-  
+
   double dc_org = 0.0;
   int index;
   int comp;
   double dc_ref[MAX_REFERENCE_PICTURES];
-  
+
   int default_weight;
   int default_weight_chroma;
   int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
-  int weight[2][MAX_REFERENCE_PICTURES][3]; 
-  int offset[2][MAX_REFERENCE_PICTURES][3];       
+  int weight[2][MAX_REFERENCE_PICTURES][3];
+  int offset[2][MAX_REFERENCE_PICTURES][3];
   int clist;
-  int perform_wp = 0;      
+  int perform_wp = 0;
   imgpel **tmpPtr;
-  
-  
+
+
   luma_log_weight_denom = 5;
   chroma_log_weight_denom = 5;
   wp_luma_round = 1 << (luma_log_weight_denom - 1);
   wp_chroma_round = 1 << (chroma_log_weight_denom - 1);
   default_weight = 1<<luma_log_weight_denom;
   default_weight_chroma = 1<<chroma_log_weight_denom;
-  
+
   /* set all values to defaults */
   for (i = 0; i < 2 + list_offset; i++)
   {
@@ -413,15 +413,15 @@ int test_wp_P_slice(int select_offset)
       }
     }
   }
-  
+
   for (i = 0; i < img->height; i++)
   {
     for (j = 0; j < img->width; j++)
     {
       dc_org += (double) imgY_org[i][j];
     }
-  } 
-    
+  }
+
   for (clist=0; clist<2 + list_offset; clist++)
   {
     for (n = 0; n < listXsize[clist]; n++)
@@ -438,7 +438,7 @@ int test_wp_P_slice(int select_offset)
           dc_ref[n] += (double) tmpPtr[j][i];
         }
       }
-      
+
       if (select_offset==0)
       {
         if (dc_ref[n] != 0.0)
@@ -449,29 +449,29 @@ int test_wp_P_slice(int select_offset)
           weight[clist][n][0] = 32;
       }
       else
-      {        
+      {
         offset[clist][n][0] = (int) ((dc_org-dc_ref[n])/(img->size)+0.5);
         offset[clist][n][0] = (offset[clist][n][0]<-128) ? -128: (offset[clist][n][0]>127) ? 127:offset[clist][n][0];
         weight[clist][n][0] = default_weight;
-      }      
-      
+      }
+
       /* for now always use default weight for chroma weight */
       weight[clist][n][1] = default_weight_chroma;
       weight[clist][n][2] = default_weight_chroma;
-                  
+
     }
   }
-  
+
   for (clist=0; clist<2 + list_offset; clist++)
   {
     for (index = 0; index < listXsize[clist]; index++)
     {
       for (comp=0; comp < 3; comp ++)
       {
-        int offset_test = input->RDPSliceBTest && active_sps->profile_idc != 66 
-          ? iabs(offset[clist][index][comp]) > 2 
+        int offset_test = input->RDPSliceBTest && active_sps->profile_idc != 66
+          ? iabs(offset[clist][index][comp]) > 2
           : offset[clist][index][comp] != 0;
-        
+
         if (weight[clist][index][comp] != default_weight ||  offset_test)
         {
           perform_wp = 1;
@@ -482,7 +482,7 @@ int test_wp_P_slice(int select_offset)
     }
     if (perform_wp == 1) break;
   }
-  
+
   return perform_wp;
 }
 
@@ -496,27 +496,27 @@ int test_wp_P_slice(int select_offset)
 int test_wp_B_slice(int select_method)
 {
   int i, j, n;
-  
+
   int tx,DistScaleFactor;
   double dc_org = 0.0;
   int index;
   int comp;
   double dc_ref[6][MAX_REFERENCE_PICTURES];
-  
+
   int log_weight_denom;
 
   int default_weight[3];
-  // this needs to be fixed. 
+  // this needs to be fixed.
   int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
-  int weight[6][MAX_REFERENCE_PICTURES][3]; 
-  int offset[6][MAX_REFERENCE_PICTURES][3];       
-  int im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3]; 
-  int im_offset[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3]; 
+  int weight[6][MAX_REFERENCE_PICTURES][3];
+  int offset[6][MAX_REFERENCE_PICTURES][3];
+  int im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
+  int im_offset[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
   int clist;
   int wf_weight, wf_offset;
-  int perform_wp = 0;      
+  int perform_wp = 0;
   imgpel **tmpPtr;
-  
+
   if (select_method == 1) //! implicit mode
   {
     luma_log_weight_denom = 5;
@@ -533,7 +533,7 @@ int test_wp_B_slice(int select_method)
   default_weight[0] = 1<<luma_log_weight_denom;
   default_weight[1] = 1<<chroma_log_weight_denom;
   default_weight[2] = 1<<chroma_log_weight_denom;
-  
+
   /* set all values to defaults */
   for (i = 0; i < 2 + list_offset; i++)
   {
@@ -548,7 +548,7 @@ int test_wp_B_slice(int select_method)
       }
     }
   }
-  
+
   for (i = 0; i < listXsize[LIST_0]; i++)
   {
     for (j = 0; j < listXsize[LIST_1]; j++)
@@ -558,7 +558,7 @@ int test_wp_B_slice(int select_method)
       tb = iClip3(-128,127,(enc_picture->poc - listX[LIST_0][i]->poc));
       for (comp = 0; comp < 3; comp++)
       {
-        // implicit weights          
+        // implicit weights
         if (td == 0)
         {
           im_weight[1][i][j][comp] = default_weight[comp];
@@ -567,21 +567,21 @@ int test_wp_B_slice(int select_method)
           im_offset[0][i][j][comp] = 0;
         }
         else
-        {            
+        {
           tx = (16384 + iabs(td/2))/td;
           DistScaleFactor = iClip3(-1024, 1023, (tx*tb + 32 )>>6);
           im_weight[1][i][j][comp] = DistScaleFactor>>2;
           if (im_weight[1][i][j][comp] < -64 || im_weight[1][i][j][comp] >128)
             im_weight[1][i][j][comp] = 32;
-          im_weight[0][i][j][comp] = 64 - im_weight[1][i][j][comp];            
+          im_weight[0][i][j][comp] = 64 - im_weight[1][i][j][comp];
           im_offset[1][i][j][comp] = 0;
           im_offset[0][i][j][comp] = 0;
-        }        
+        }
       }
     }
   }
-  
-  
+
+
   if (select_method == 1) //! implicit mode
   {
     for (i = 0; i < listXsize[LIST_0]; i++)
@@ -590,13 +590,13 @@ int test_wp_B_slice(int select_method)
       {
         for (comp = 0; comp < 3; comp++)
         {
-          log_weight_denom = (comp == 0) ? luma_log_weight_denom : chroma_log_weight_denom;         
+          log_weight_denom = (comp == 0) ? luma_log_weight_denom : chroma_log_weight_denom;
           wbp_weight[1][i][j][comp] = im_weight[1][i][j][comp] ;
           wbp_weight[0][i][j][comp] = im_weight[0][i][j][comp];
         }
       }
     }
-    
+
     for (clist=0; clist<2 + list_offset; clist++)
     {
       for (index = 0; index < listXsize[clist]; index++)
@@ -619,7 +619,7 @@ int test_wp_B_slice(int select_method)
         dc_org += (double) imgY_org[i][j];
       }
     }
-    
+
     for (clist=0; clist<2 + list_offset; clist++)
     {
       for (n = 0; n < listXsize[clist]; n++)
@@ -647,18 +647,18 @@ int test_wp_B_slice(int select_method)
           wf_weight = default_weight[0];
         }
         wf_offset = 0;
-        
-               
+
+
         weight[clist][n][0] = wf_weight;
         weight[clist][n][1] = default_weight[1];
         weight[clist][n][2] = default_weight[2];
         offset[clist][n][0] = 0;
         offset[clist][n][1] = 0;
         offset[clist][n][2] = 0;
-       
+
       }
     }
-    
+
     if (select_method == 0) //! explicit mode
     {
       for (clist=0; clist<2 + list_offset; clist++)
@@ -674,7 +674,7 @@ int test_wp_B_slice(int select_method)
       }
     }
     else
-    {    
+    {
       for (clist=0; clist<2 + list_offset; clist++)
       {
         for (index = 0; index < listXsize[clist]; index++)
@@ -733,5 +733,5 @@ int test_wp_B_slice(int select_method)
   }
   return perform_wp;
 }
-    
-    
+
+

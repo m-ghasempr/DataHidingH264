@@ -91,7 +91,7 @@ static void LevelCheck(void);
 void JMHelpExit (void)
 {
   fprintf( stderr, "\n   lencod [-h] [-d defenc.cfg] {[-f curenc1.cfg]...[-f curencN.cfg]}"
-    " {[-p EncParam1=EncValue1]..[-p EncParamM=EncValueM]}\n\n"    
+    " {[-p EncParam1=EncValue1]..[-p EncParamM=EncValueM]}\n\n"
     "## Parameters\n\n"
 
     "## Options\n"
@@ -102,16 +102,16 @@ void JMHelpExit (void)
     "         Multiple files could be used that set different parameters\n"
     "   -p :  Set parameter <EncParamM> to <EncValueM>.\n"
     "         See default encoder.cfg file for description of all parameters.\n\n"
-    
+
     "## Supported video file formats\n"
     "   RAW:  .yuv -> YUV 4:2:0\n\n"
-    
+
     "## Examples of usage:\n"
     "   lencod\n"
     "   lencod  -h\n"
     "   lencod  -d default.cfg\n"
     "   lencod  -f curenc1.cfg\n"
-    "   lencod  -f curenc1.cfg -p InputFile=\"e:\\data\\container_qcif_30.yuv\" -p SourceWidth=176 -p SourceHeight=144\n"  
+    "   lencod  -f curenc1.cfg -p InputFile=\"e:\\data\\container_qcif_30.yuv\" -p SourceWidth=176 -p SourceHeight=144\n"
     "   lencod  -f curenc1.cfg -p FramesToBeEncoded=30 -p QPISlice=28 -p QPPSlice=28 -p QPBSlice=30\n");
 
   exit(-1);
@@ -177,7 +177,7 @@ void Configure (int ac, char *av[])
     {
       JMHelpExit();
     }
-    
+
     if (0 == strncmp (av[CLcount], "-f", 2))  // A file parameter?
     {
       content = GetConfigFileContent (av[CLcount+1]);
@@ -499,7 +499,7 @@ static int TestEncoderParams(int bitdepth_qp_scale)
           snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should be in [%d, %d] range.", Map[i].TokenName, (int) Map[i].min_limit,(int)Map[i].max_limit );
           error (errortext, 400);
         }
-        
+
       }
       else if (Map[i].Type == 2)
       {
@@ -507,8 +507,8 @@ static int TestEncoderParams(int bitdepth_qp_scale)
         {
           snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should be in [%.2f, %.2f] range.", Map[i].TokenName,Map[i].min_limit ,Map[i].max_limit );
           error (errortext, 400);
-        }        
-      }            
+        }
+      }
     }
     else if (Map[i].param_limits == 2)
     {
@@ -519,7 +519,6 @@ static int TestEncoderParams(int bitdepth_qp_scale)
           snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should not be smaller than %d.", Map[i].TokenName, (int) Map[i].min_limit);
           error (errortext, 400);
         }
-        
       }
       else if (Map[i].Type == 2)
       {
@@ -527,7 +526,7 @@ static int TestEncoderParams(int bitdepth_qp_scale)
         {
           snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should not be smaller than %2.f.", Map[i].TokenName,Map[i].min_limit);
           error (errortext, 400);
-        }        
+        }
       }
     }
     else if (Map[i].param_limits == 3) // Only used for QPs
@@ -539,10 +538,9 @@ static int TestEncoderParams(int bitdepth_qp_scale)
           snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should be in [%d, %d] range.", Map[i].TokenName, (int) (Map[i].min_limit - bitdepth_qp_scale),(int)Map[i].max_limit );
           error (errortext, 400);
         }
-        
       }
     }
- 
+
     i++;
   }
   return -1;
@@ -608,7 +606,7 @@ unsigned CeilLog2( unsigned uiVal)
 static void PatchInp (void)
 {
   int bitdepth_qp_scale = 6*(input->BitDepthLuma - 8);
-  
+
   // These variables are added for FMO
   FILE * sgfile=NULL;
   int i,j;
@@ -658,7 +656,7 @@ static void PatchInp (void)
 
   for (j = 0; j<8;j++)
   {
-    for (i = 0; i<2; i++) 
+    for (i = 0; i<2; i++)
     {
       input->blc_size[j][i] = input->part_size[j][i] * BLOCK_SIZE;
     }
@@ -669,19 +667,19 @@ static void PatchInp (void)
 
   if (input->Log2MaxFNumMinus4 == -1)
     log2_max_frame_num_minus4 = iClip3(0,12, (int) (CeilLog2(input->no_frames * storedBplus1) - 4));
-  else 
+  else
     log2_max_frame_num_minus4 = input->Log2MaxFNumMinus4;
-  
+
   if (log2_max_frame_num_minus4 == 0 && input->num_ref_frames == 16)
   {
     snprintf(errortext, ET_SIZE, " NumberReferenceFrames=%d and Log2MaxFNumMinus4=%d may lead to an invalid value of frame_num.", input->num_ref_frames, input-> Log2MaxFNumMinus4);
     error (errortext, 500);
-  } 
+  }
 
   // set proper log2_max_pic_order_cnt_lsb_minus4.
   if (input->Log2MaxPOCLsbMinus4 == - 1)
     log2_max_pic_order_cnt_lsb_minus4 = iClip3(0,12, (int) (CeilLog2( 2*input->no_frames * (input->jumpd + 1)) - 4));
-  else 
+  else
     log2_max_pic_order_cnt_lsb_minus4 = input->Log2MaxPOCLsbMinus4;
 
   if (((1<<(log2_max_pic_order_cnt_lsb_minus4 + 3)) < input->jumpd * 4) && input->Log2MaxPOCLsbMinus4 != -1)
@@ -715,7 +713,7 @@ static void PatchInp (void)
       snprintf(errortext, ET_SIZE, "Incorrect value %d for IntraBottom. Use 0 (disable) or 1 (enable).", input->IntraBottom);
       error (errortext, 400);
     }
-  } 
+  }
   // Cabac/UVLC consistency check
   if (input->symbol_mode != UVLC && input->symbol_mode != CABAC)
   {
@@ -811,7 +809,7 @@ static void PatchInp (void)
   // Following codes are to read slice group configuration from SliceGroupConfigFileName for slice group type 0,2 or 6
   if( (input->num_slice_groups_minus1!=0)&&
     ((input->slice_group_map_type == 0) || (input->slice_group_map_type == 2) || (input->slice_group_map_type == 6)) )
-  { 
+  {
     if (strlen (input->SliceGroupConfigFileName) > 0 && (sgfile=fopen(input->SliceGroupConfigFileName,"r"))==NULL)
     {
       snprintf(errortext, ET_SIZE, "Error open file %s", input->SliceGroupConfigFileName);
@@ -819,29 +817,28 @@ static void PatchInp (void)
     }
     else
     {
-      if (input->slice_group_map_type == 0) 
+      if (input->slice_group_map_type == 0)
       {
         input->run_length_minus1=(int *)malloc(sizeof(int)*(input->num_slice_groups_minus1+1));
-        if (NULL==input->run_length_minus1) 
+        if (NULL==input->run_length_minus1)
           no_mem_exit("PatchInp: input->run_length_minus1");
-        
+
         // each line contains one 'run_length_minus1' value
         for(i=0;i<=input->num_slice_groups_minus1;i++)
         {
           fscanf(sgfile,"%d",(input->run_length_minus1+i));
           fscanf(sgfile,"%*[^\n]");
-          
         }
       }
       else if (input->slice_group_map_type == 2)
       {
         input->top_left=(int *)malloc(sizeof(int)*input->num_slice_groups_minus1);
         input->bottom_right=(int *)malloc(sizeof(int)*input->num_slice_groups_minus1);
-        if (NULL==input->top_left) 
+        if (NULL==input->top_left)
           no_mem_exit("PatchInp: input->top_left");
-        if (NULL==input->bottom_right) 
+        if (NULL==input->bottom_right)
           no_mem_exit("PatchInp: input->bottom_right");
-        
+
         // every two lines contain 'top_left' and 'bottom_right' value
         for(i=0;i<input->num_slice_groups_minus1;i++)
         {
@@ -850,7 +847,6 @@ static void PatchInp (void)
           fscanf(sgfile,"%d",(input->bottom_right+i));
           fscanf(sgfile,"%*[^\n]");
         }
-        
       }
       else if (input->slice_group_map_type == 6)
       {
@@ -860,11 +856,11 @@ static void PatchInp (void)
         mb_width= (input->img_width+img->auto_crop_right)>>4;
         mb_height= (input->img_height+img->auto_crop_bottom)>>4;
         mapunit_height=mb_height/(2-frame_mb_only);
-        
+
         input->slice_group_id=(byte * ) malloc(sizeof(byte)*mapunit_height*mb_width);
-        if (NULL==input->slice_group_id) 
+        if (NULL==input->slice_group_id)
           no_mem_exit("PatchInp: input->slice_group_id");
-        
+
         // each line contains slice_group_id for one Macroblock
         for (i=0;i<mapunit_height*mb_width;i++)
         {
@@ -881,14 +877,14 @@ static void PatchInp (void)
       fclose(sgfile);
     }
   }
-  
-  
+
+
   if (input->ReferenceReorder && (input->PicInterlace || input->MbInterlace))
   {
     snprintf(errortext, ET_SIZE, "ReferenceReorder Not supported with Interlace encoding methods\n");
     error (errortext, 400);
   }
-  
+
   if (input->PocMemoryManagement && (input->PicInterlace || input->MbInterlace))
   {
     snprintf(errortext, ET_SIZE, "PocMemoryManagement not supported with Interlace encoding methods\n");
@@ -903,13 +899,13 @@ static void PatchInp (void)
   }
 
   // frame/field consistency check
-  if (input->MbInterlace != FRAME_CODING && input->MbInterlace != ADAPTIVE_CODING && input->MbInterlace != FIELD_CODING && input->MbInterlace != SUPER_MB_CODING)
+  if (input->MbInterlace != FRAME_CODING && input->MbInterlace != ADAPTIVE_CODING && input->MbInterlace != FIELD_CODING && input->MbInterlace != FRAME_MB_PAIR_CODING)
   {
-    snprintf (errortext, ET_SIZE, "Unsupported MbInterlace=%d, use frame based coding=0 or field based coding=1 or adaptive=2 or super MB only=3",input->MbInterlace);
+    snprintf (errortext, ET_SIZE, "Unsupported MbInterlace=%d, use frame based coding=0 or field based coding=1 or adaptive=2 or frame MB pair only=3",input->MbInterlace);
     error (errortext, 400);
   }
-   
- 
+
+
   if ((!input->rdopt)&&(input->MbInterlace))
   {
     snprintf(errortext, ET_SIZE, "MB AFF is not compatible with non-rd-optimized coding.");
@@ -929,7 +925,7 @@ static void PatchInp (void)
     error (errortext, 500);
   }
 
-  if ( (input->MEErrorMetric[Q_PEL] == ERROR_SATD && input->MEErrorMetric[H_PEL] == ERROR_SAD && input->MEErrorMetric[F_PEL] == ERROR_SAD) 
+  if ( (input->MEErrorMetric[Q_PEL] == ERROR_SATD && input->MEErrorMetric[H_PEL] == ERROR_SAD && input->MEErrorMetric[F_PEL] == ERROR_SAD)
     && input->SearchMode > FAST_FULL_SEARCH && input->SearchMode < EPZS)
   {
     snprintf(errortext, ET_SIZE, "MEDistortionQPel=2, MEDistortionHPel=0, MEDistortionFPel=0 is not allowed when SearchMode is set to 1 or 2.");
@@ -979,10 +975,10 @@ static void PatchInp (void)
   //! the number of slice groups is forced to be 1 for slice group type 3-5
   if(input->num_slice_groups_minus1 > 0)
   {
-    if( (input->slice_group_map_type >= 3) && (input->slice_group_map_type<=5) ) 
+    if( (input->slice_group_map_type >= 3) && (input->slice_group_map_type<=5) )
       input->num_slice_groups_minus1 = 1;
   }
-  
+
   // Rate control
   if(input->RCEnable)
   {
@@ -1003,7 +999,7 @@ static void PatchInp (void)
   {
     error("Stored B pictures combined with IDR pictures only supported in Picture Order Count type 0\n",-1000);
   }
-  
+
   if( !input->direct_spatial_mv_pred_flag && input->num_ref_frames<2 && input->successive_Bframe >0)
     error("temporal direct needs at least 2 ref frames\n",-1000);
 
@@ -1035,7 +1031,7 @@ static void PatchInp (void)
     snprintf(errortext, ET_SIZE, "\nFRExt Profile(YUV Format) Error!\nYUV444 can be used only with ProfileIDC %d.\n",FREXT_Hi444);
     error (errortext, 500);
   }
-  
+
   if (input->successive_Bframe && ((input->BiPredMotionEstimation) && (input->search_range < input->BiPredMESearchRange)))
   {
     snprintf(errortext, ET_SIZE, "\nBiPredMESearchRange must be smaller or equal SearchRange.");
@@ -1053,13 +1049,13 @@ static void PatchInp (void)
     input->ChromaMEEnable = 0;
   }
 
-  if (input->EnableOpenGOP && input->PicInterlace) 
+  if (input->EnableOpenGOP && input->PicInterlace)
   {
     snprintf(errortext, ET_SIZE, "Open GOP currently not supported for Field coded pictures.");
     error (errortext, 500);
   }
-  
-  if (input->EnableOpenGOP) 
+
+  if (input->EnableOpenGOP)
     input->ReferenceReorder = 1;
 
   if (input->redundant_pic_flag)
@@ -1090,7 +1086,7 @@ static void PatchInp (void)
       error (errortext, 500);
     }
   }
-  
+
   if (input->num_ref_frames == 1 && input->successive_Bframe)
   {
     fprintf( stderr, "\nWarning: B slices used but only one reference allocated within reference buffer.\n");
@@ -1123,11 +1119,11 @@ void PatchInputNoFrames(void)
 static void ProfileCheck(void)
 {
   if((input->ProfileIDC != 66 ) &&
-     (input->ProfileIDC != 77 ) && 
-     (input->ProfileIDC != 88 ) && 
-     (input->ProfileIDC != FREXT_HP    ) && 
-     (input->ProfileIDC != FREXT_Hi10P ) && 
-     (input->ProfileIDC != FREXT_Hi422 ) && 
+     (input->ProfileIDC != 77 ) &&
+     (input->ProfileIDC != 88 ) &&
+     (input->ProfileIDC != FREXT_HP    ) &&
+     (input->ProfileIDC != FREXT_Hi10P ) &&
+     (input->ProfileIDC != FREXT_Hi422 ) &&
      (input->ProfileIDC != FREXT_Hi444 ))
   {
     snprintf(errortext, ET_SIZE, "Profile must be baseline(66)/main(77)/extended(88) or FRExt (%d to %d).", FREXT_HP,FREXT_Hi444);
@@ -1139,7 +1135,7 @@ static void ProfileCheck(void)
     snprintf(errortext, ET_SIZE, "Data partitioning and CABAC is not supported in any profile.");
     error (errortext, 500);
   }
-  
+
   if (input->redundant_pic_flag)
   {
     if (input->ProfileIDC != 66)
@@ -1226,11 +1222,10 @@ static void ProfileCheck(void)
       error (errortext, 500);
     }
   }
-  
 }
 
 static void LevelCheck(void)
-{  
+{
   if ( (input->LevelIDC>=30) && (input->directInferenceFlag==0))
   {
     fprintf( stderr, "\nWarning: LevelIDC 3.0 and above require direct_8x8_inference to be set to 1. Please check your settings.\n");

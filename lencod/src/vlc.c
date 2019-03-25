@@ -31,8 +31,25 @@
 #define SYMTRACESTRING(s) // do nothing
 #endif
 
+//! gives codeword number from CBP value, both for intra and inter
+static const unsigned char NCBP[2][48][2]=
+{
+  {  // 0      1        2       3       4       5       6       7       8       9      10      11
+    { 1, 0},{10, 1},{11, 2},{ 6, 5},{12, 3},{ 7, 6},{14,14},{ 2,10},{13, 4},{15,15},{ 8, 7},{ 3,11},
+    { 9, 8},{ 4,12},{ 5,13},{ 0, 9},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},
+    { 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},
+    { 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0}
+  },
+  {
+    { 3, 0},{29, 2},{30, 3},{17, 7},{31, 4},{18, 8},{37,17},{ 8,13},{32, 5},{38,18},{19, 9},{ 9,14},
+    {20,10},{10,15},{11,16},{ 2,11},{16, 1},{33,32},{34,33},{21,36},{35,34},{22,37},{39,44},{ 4,40},
+    {36,35},{40,45},{23,38},{ 5,41},{24,39},{ 6,42},{ 7,43},{ 1,19},{41, 6},{42,24},{43,25},{25,20},
+    {44,26},{26,21},{46,46},{12,28},{45,27},{47,47},{27,22},{13,29},{28,23},{14,30},{15,31},{ 0,12}
+  }
+};
 
-/*! 
+
+/*!
  *************************************************************************************
  * \brief
  *    ue_v, writes an ue(v) syntax element, returns the length in bits
@@ -77,7 +94,7 @@ int ue_v (char *tracestring, int value, Bitstream *bitstream)
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    se_v, writes an se(v) syntax element, returns the length in bits
@@ -107,7 +124,7 @@ int se_v (char *tracestring, int value, Bitstream *bitstream)
   sym->value2 = 0;
 
   assert (bitstream->streamBuffer != NULL);
-  
+
   se_linfo(sym->value1,sym->value2,&(sym->len),&(sym->inf));
   symbol2uvlc(sym);
 
@@ -122,10 +139,10 @@ int se_v (char *tracestring, int value, Bitstream *bitstream)
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
- *    u_1, writes a flag (u(1) syntax element, returns the length in bits, 
+ *    u_1, writes a flag (u(1) syntax element, returns the length in bits,
  *    always 1
  *
  * \param tracestring
@@ -157,7 +174,7 @@ Boolean u_1 (char *tracestring, int value, Bitstream *bitstream)
   assert (bitstream->streamBuffer != NULL);
 
   writeUVLC2buffer(sym, bitstream);
-  
+
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
   trace2out (sym);
@@ -167,10 +184,10 @@ Boolean u_1 (char *tracestring, int value, Bitstream *bitstream)
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
- *    u_v, writes a n bit fixed length syntax element, returns the length in bits, 
+ *    u_v, writes a n bit fixed length syntax element, returns the length in bits,
  *
  * \param n
  *    length in bits
@@ -182,7 +199,7 @@ Boolean u_1 (char *tracestring, int value, Bitstream *bitstream)
  *    the target bitstream the value should be coded into
  *
  * \return
- *    Number of bits used by the coded syntax element 
+ *    Number of bits used by the coded syntax element
  *
  * \ note
  *    This function writes always the bit buffer for the progressive scan flag, and
@@ -204,7 +221,7 @@ int u_v (int n, char *tracestring, int value, Bitstream *bitstream)
   assert (bitstream->streamBuffer != NULL);
 
   writeUVLC2buffer(sym, bitstream);
-  
+
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
   trace2out (sym);
@@ -271,7 +288,7 @@ void se_linfo(int se, int dummy, int *len,int *info)
   n=iabs(se) << 1;
 
   //  n+1 is the number in the code table.  Based on this we find length and info
-  
+
   nn=n/2;
   for (i=0; i < 16 && nn != 0; i++)
   {
@@ -292,7 +309,6 @@ void se_linfo(int se, int dummy, int *len,int *info)
  */
 void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
 {
-  extern const unsigned char NCBP[2][48][2];
   ue_linfo(NCBP[img->yuv_format?1:0][cbp][0], dummy, len, info);
 }
 
@@ -307,7 +323,6 @@ void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
  */
 void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
 {
-  extern const unsigned char NCBP[2][48][2];
   ue_linfo(NCBP[img->yuv_format?1:0][cbp][1], dummy, len, info);
 }
 
@@ -433,71 +448,6 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
 /*!
  ************************************************************************
  * \brief
- *    Double scan coefficients
- * \par Input:
- *    level and run for coefficients
- * \par Output:
- *    length and info
- * \note
- *    see ITU document for bit assignment
- ************************************************************************
- */
-void levrun_linfo_intra(int level,int run,int *len,int *info)
-{
-  const byte LEVRUN[8]=
-  {
-    9,3,1,1,1,0,0,0
-  };
-
-  const byte NTAB[9][5] =
-  {
-    { 1, 3, 7,15,17},
-    { 5,19, 0, 0, 0},
-    { 9,21, 0, 0, 0},
-    {11, 0, 0, 0, 0},
-    {13, 0, 0, 0, 0},
-    {23, 0, 0, 0, 0},
-    {25, 0, 0, 0, 0},
-    {27, 0, 0, 0, 0},
-    {29, 0, 0, 0, 0},
-  };
-
-  int levabs,i,n,sign,nn;
-
-  if (level == 0)     //  check for EOB
-  {
-    *len=1;
-    return;
-  }
-  if (level <= 0)
-    sign=1;
-  else
-    sign=0;
-
-  levabs=iabs(level);
-  if (levabs <= LEVRUN[run])
-  {
-    n=NTAB[levabs-1][run]+1;
-  }
-  else
-  {
-    n=(levabs-LEVRUN[run])*16 + 16 + run*2;
-  }
-
-  nn=n/2;
-
-  for (i=0; i < 16 && nn != 0; i++)
-  {
-    nn /= 2;
-  }
-  *len= 2*i + 1;
-  *info=n-(1 << i)+sign;
-}
-
-
-/*!
- ************************************************************************
- * \brief
  *    Makes code word and passes it back
  *    A code word has the following format: 0 0 0 ... 1 Xn ...X2 X1 X0.
  *
@@ -509,35 +459,84 @@ void levrun_linfo_intra(int level,int run,int *len,int *info)
  // NOTE this function is called with sym->inf > (1<<(sym->len/2)).  The upper bits of inf are junk
 int symbol2uvlc(SyntaxElement *sym)
 {
-  int suffix_len=sym->len/2;  
+  int suffix_len=sym->len/2;
   assert (suffix_len<32);
   sym->bitpattern = (1<<suffix_len)|(sym->inf&((1<<suffix_len)-1));
   return 0;
 }
 
-
 /*!
- ************************************************************************
- * \brief
- *    generates UVLC code and passes the codeword to the buffer
- ************************************************************************
- */
-int writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
+************************************************************************
+* \brief
+*    generates UVLC code and passes the codeword to the buffer
+************************************************************************
+*/
+void writeSE_UVLC(SyntaxElement *se, DataPartition *dp)
 {
-  se->mapping(se->value1,se->value2,&(se->len),&(se->inf));
+  ue_linfo (se->value1,se->value2,&(se->len),&(se->inf));
   symbol2uvlc(se);
 
-  writeUVLC2buffer(se, this_dataPart->bitstream);
+  writeUVLC2buffer(se, dp->bitstream);
 
   if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
+    dp->bitstream->write_flag = 1;
 
 #if TRACE
-  if(se->type <= 1)
+  if(dp->bitstream->trace_enabled)
     trace2out (se);
 #endif
+}
 
-  return (se->len);
+/*!
+************************************************************************
+* \brief
+*    generates UVLC code and passes the codeword to the buffer
+************************************************************************
+*/
+void writeSE_SVLC(SyntaxElement *se, DataPartition *dp)
+{
+  se_linfo (se->value1,se->value2,&(se->len),&(se->inf));
+  symbol2uvlc(se);
+
+  writeUVLC2buffer(se, dp->bitstream);
+
+  if(se->type != SE_HEADER)
+    dp->bitstream->write_flag = 1;
+
+#if TRACE
+  if(dp->bitstream->trace_enabled)
+    trace2out (se);
+#endif
+}
+
+/*!
+************************************************************************
+* \brief
+*    generates UVLC code and passes the codeword to the buffer
+************************************************************************
+*/
+void writeCBP_VLC(SyntaxElement *se, DataPartition *dp)
+{
+  Macroblock*     currMB    = &img->mb_data[img->current_mb_nr];
+  if (IS_OLDINTRA (currMB) || currMB->mb_type == SI4MB ||  currMB->mb_type == I8MB)
+  {
+    cbp_linfo_intra (se->value1,se->value2,&(se->len),&(se->inf));
+  }
+  else
+  {
+    cbp_linfo_inter (se->value1,se->value2,&(se->len),&(se->inf));
+  }
+  symbol2uvlc(se);
+
+  writeUVLC2buffer(se, dp->bitstream);
+
+  if(se->type != SE_HEADER)
+    dp->bitstream->write_flag = 1;
+
+#if TRACE
+  if(dp->bitstream->trace_enabled)
+    trace2out (se);
+#endif
 }
 
 
@@ -547,7 +546,7 @@ int writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
  *    generates code and passes the codeword to the buffer
  ************************************************************************
  */
-int writeSyntaxElement_Intra4x4PredictionMode(SyntaxElement *se, DataPartition *this_dataPart)
+void writeIntraPredMode_CAVLC(SyntaxElement *se, DataPartition *dp)
 {
 
   if (se->value1 == -1)
@@ -555,24 +554,24 @@ int writeSyntaxElement_Intra4x4PredictionMode(SyntaxElement *se, DataPartition *
     se->len = 1;
     se->inf = 1;
   }
-  else 
+  else
   {
-    se->len = 4;  
+    se->len = 4;
     se->inf = se->value1;
   }
 
   se->bitpattern = se->inf;
-  writeUVLC2buffer(se, this_dataPart->bitstream);
+  writeUVLC2buffer(se, dp->bitstream);
 
   if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
+    dp->bitstream->write_flag = 1;
 
 #if TRACE
-  if(se->type <= 1)
+  if(dp->bitstream->trace_enabled)
     trace2out (se);
 #endif
 
-  return (se->len);
+  return;
 }
 
 
@@ -644,7 +643,6 @@ void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
  */
 int writeSyntaxElement2Buf_Fixed(SyntaxElement *se, Bitstream* this_streamBuffer )
 {
-
   writeUVLC2buffer(se, this_streamBuffer );
 
 #if TRACE
@@ -652,6 +650,80 @@ int writeSyntaxElement2Buf_Fixed(SyntaxElement *se, Bitstream* this_streamBuffer
     trace2out (se);
 #endif
   return (se->len);
+}
+
+/*!
+************************************************************************
+* \brief
+*    generates UVLC code and passes the codeword to the buffer
+* \author
+*  Tian Dong
+************************************************************************
+*/
+void writeSE_Flag(SyntaxElement *se, DataPartition *dp )
+{
+  se->len        = 1;
+  se->bitpattern = (se->value1 & 1);
+
+  writeUVLC2buffer(se, dp->bitstream );
+
+#if TRACE
+  if(dp->bitstream->trace_enabled)
+    trace2out (se);
+#endif
+}
+
+/*!
+************************************************************************
+* \brief
+*    generates UVLC code and passes the codeword to the buffer
+* \author
+*  Tian Dong
+************************************************************************
+*/
+void writeSE_invFlag(SyntaxElement *se, DataPartition *dp )
+{
+  se->len        = 1;
+  se->bitpattern = 1-(se->value1 & 1);
+
+  writeUVLC2buffer(se, dp->bitstream );
+
+#if TRACE
+  if(dp->bitstream->trace_enabled)
+    trace2out (se);
+#endif
+}
+
+/*!
+************************************************************************
+* \brief
+*    generates UVLC code and passes the codeword to the buffer
+* \author
+*  Tian Dong
+************************************************************************
+*/
+void writeSE_Dummy(SyntaxElement *se, DataPartition *dp )
+{
+  se->len = 0;
+}
+
+
+/*!
+************************************************************************
+* \brief
+*    generates UVLC code and passes the codeword to the buffer
+* \author
+*  Tian Dong
+************************************************************************
+*/
+void writeSE_Fix(SyntaxElement *se, DataPartition *dp )
+{
+  writeUVLC2buffer(se, dp->bitstream );
+
+#if TRACE
+  if(dp->bitstream->trace_enabled)
+    trace2out (se);
+#endif
 }
 
 
@@ -689,20 +761,20 @@ int symbol2vlc(SyntaxElement *sym)
  *    generates VLC code and passes the codeword to the buffer
  ************************************************************************
  */
-int writeSyntaxElement_VLC(SyntaxElement *se, DataPartition *this_dataPart)
+int writeSyntaxElement_VLC(SyntaxElement *se, DataPartition *dp)
 {
 
   se->inf = se->value1;
   se->len = se->value2;
   symbol2vlc(se);
 
-  writeUVLC2buffer(se, this_dataPart->bitstream);
+  writeUVLC2buffer(se, dp->bitstream);
 
   if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
+    dp->bitstream->write_flag = 1;
 
 #if TRACE
-  if (se->type <= 1)
+  if(dp->bitstream->trace_enabled)
     trace2out (se);
 #endif
 
@@ -717,23 +789,23 @@ int writeSyntaxElement_VLC(SyntaxElement *se, DataPartition *this_dataPart)
  ************************************************************************
  */
 
-int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *this_dataPart)
+int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *dp)
 {
-  static const int lentab[3][4][17] = 
+  static const int lentab[3][4][17] =
   {
     {   // 0702
       { 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
       { 0, 2, 6, 8, 9,10,11,13,13,14,14,15,15,15,16,16,16},
       { 0, 0, 3, 7, 8, 9,10,11,13,13,14,14,15,15,16,16,16},
       { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16},
-    },                                                 
-    {                                                  
+    },
+    {
       { 2, 6, 6, 7, 8, 8, 9,11,11,12,12,12,13,13,13,14,14},
       { 0, 2, 5, 6, 6, 7, 8, 9,11,11,12,12,13,13,14,14,14},
       { 0, 0, 3, 6, 6, 7, 8, 9,11,11,12,12,13,13,13,14,14},
       { 0, 0, 0, 4, 4, 5, 6, 6, 7, 9,11,11,12,13,13,13,14},
-    },                                                 
-    {                                                  
+    },
+    {
       { 4, 6, 6, 6, 7, 7, 7, 7, 8, 8, 9, 9, 9,10,10,10,10},
       { 0, 4, 5, 5, 5, 5, 6, 6, 7, 8, 8, 9, 9, 9,10,10,10},
       { 0, 0, 4, 5, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9,10,10,10},
@@ -742,22 +814,22 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *th
 
   };
 
-  static const int codtab[3][4][17] = 
+  static const int codtab[3][4][17] =
   {
     {
-      { 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7,4}, 
-      { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10,6}, 
-      { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9,5}, 
+      { 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7,4},
+      { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10,6},
+      { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9,5},
       { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12,8},
     },
     {
-      { 3,11, 7, 7, 7, 4, 7,15,11,15,11, 8,15,11, 7, 9,7}, 
-      { 0, 2, 7,10, 6, 6, 6, 6,14,10,14,10,14,10,11, 8,6}, 
-      { 0, 0, 3, 9, 5, 5, 5, 5,13, 9,13, 9,13, 9, 6,10,5}, 
+      { 3,11, 7, 7, 7, 4, 7,15,11,15,11, 8,15,11, 7, 9,7},
+      { 0, 2, 7,10, 6, 6, 6, 6,14,10,14,10,14,10,11, 8,6},
+      { 0, 0, 3, 9, 5, 5, 5, 5,13, 9,13, 9,13, 9, 6,10,5},
       { 0, 0, 0, 5, 4, 6, 8, 4, 4, 4,12, 8,12,12, 8, 1,4},
     },
     {
-      {15,15,11, 8,15,11, 9, 8,15,11,15,11, 8,13, 9, 5,1}, 
+      {15,15,11, 8,15,11, 9, 8,15,11,15,11, 8,13, 9, 5,1},
       { 0,14,15,12,10, 8,14,10,14,14,10,14,10, 7,12, 8,4},
       { 0, 0,13,14,11, 9,13, 9,13,10,13, 9,13, 9,11, 7,3},
       { 0, 0, 0,12,11,10, 9, 8,13,12,12,12, 8,12,10, 6,2},
@@ -791,20 +863,20 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *th
 
   if (se->len == 0)
   {
-    printf("ERROR: (numcoeff,trailingones) not valid: vlc=%d (%d, %d)\n", 
+    printf("ERROR: (numcoeff,trailingones) not valid: vlc=%d (%d, %d)\n",
       vlcnum, se->value1, se->value2);
     exit(-1);
   }
 
   symbol2vlc(se);
 
-  writeUVLC2buffer(se, this_dataPart->bitstream);
+  writeUVLC2buffer(se, dp->bitstream);
 
   if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
+    dp->bitstream->write_flag = 1;
 
 #if TRACE
-  if (se->type <= 1)
+  if(dp->bitstream->trace_enabled)
     trace2out (se);
 #endif
 
@@ -818,19 +890,19 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *th
  *    write VLC for NumCoeff and TrailingOnes for Chroma DC
  ************************************************************************
  */
-int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataPartition *this_dataPart)
+int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataPartition *dp)
 {
-  static const int lentab[3][4][17] = 
+  static const int lentab[3][4][17] =
   {
     //YUV420
    {{ 2, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { 0, 1, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    { 0, 0, 3, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 1, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 3, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 0, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
     //YUV422
    {{ 1, 7, 7, 9, 9,10,11,12,13, 0, 0, 0, 0, 0, 0, 0, 0},
-    { 0, 2, 7, 7, 9,10,11,12,12, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    { 0, 0, 3, 7, 7, 9,10,11,12, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 2, 7, 7, 9,10,11,12,12, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 3, 7, 7, 9,10,11,12, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 0, 5, 6, 7, 7,10,11, 0, 0, 0, 0, 0, 0, 0, 0}},
     //YUV444
    {{ 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
@@ -839,7 +911,7 @@ int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataParti
     { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16}}
   };
 
-  static const int codtab[3][4][17] = 
+  static const int codtab[3][4][17] =
   {
     //YUV420
    {{ 1, 7, 4, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -852,11 +924,11 @@ int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataParti
     { 0, 0, 1,11,10, 4, 5, 5, 4, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 0, 1, 1, 9, 8, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0}},
     //YUV444
-   {{ 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7, 4}, 
-    { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10, 6}, 
-    { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9, 5}, 
+   {{ 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7, 4},
+    { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10, 6},
+    { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9, 5},
     { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12, 8}}
-  
+
   };
   int yuv = img->yuv_format - 1;
 
@@ -867,20 +939,20 @@ int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataParti
 
   if (se->len == 0)
   {
-    printf("ERROR: (numcoeff,trailingones) not valid: (%d, %d)\n", 
+    printf("ERROR: (numcoeff,trailingones) not valid: (%d, %d)\n",
       se->value1, se->value2);
     exit(-1);
   }
 
   symbol2vlc(se);
 
-  writeUVLC2buffer(se, this_dataPart->bitstream);
+  writeUVLC2buffer(se, dp->bitstream);
 
   if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
+    dp->bitstream->write_flag = 1;
 
 #if TRACE
-  if (se->type <= 1)
+  if(dp->bitstream->trace_enabled)
     trace2out (se);
 #endif
 
@@ -894,28 +966,28 @@ int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataParti
  *    write VLC for TotalZeros
  ************************************************************************
  */
-int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPart)
+int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *dp)
 {
-  static const int lentab[TOTRUN_NUM][16] = 
+  static const int lentab[TOTRUN_NUM][16] =
   {
-    { 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},  
-    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},  
-    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},  
-    { 5,3,4,4,3,3,3,4,3,4,5,5,5},  
-    { 4,4,4,3,3,3,3,3,4,5,4,5},  
-    { 6,5,3,3,3,3,3,3,4,3,6},  
-    { 6,5,3,3,3,2,3,4,3,6},  
-    { 6,4,5,3,2,2,3,3,6},  
-    { 6,6,4,2,2,3,2,5},  
-    { 5,5,3,2,2,2,4},  
-    { 4,4,3,3,1,3},  
-    { 4,4,2,1,3},  
-    { 3,3,1,2},  
-    { 2,2,1},  
-    { 1,1},  
+    { 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},
+    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},
+    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},
+    { 5,3,4,4,3,3,3,4,3,4,5,5,5},
+    { 4,4,4,3,3,3,3,3,4,5,4,5},
+    { 6,5,3,3,3,3,3,3,4,3,6},
+    { 6,5,3,3,3,2,3,4,3,6},
+    { 6,4,5,3,2,2,3,3,6},
+    { 6,6,4,2,2,3,2,5},
+    { 5,5,3,2,2,2,4},
+    { 4,4,3,3,1,3},
+    { 4,4,2,1,3},
+    { 3,3,1,2},
+    { 2,2,1},
+    { 1,1},
   };
 
-  static const int codtab[TOTRUN_NUM][16] = 
+  static const int codtab[TOTRUN_NUM][16] =
   {
     {1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
     {7,6,5,4,3,5,4,3,2,3,2,3,2,1,0},
@@ -931,7 +1003,7 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPar
     {0,1,1,1,1},
     {0,1,1,1},
     {0,1,1},
-    {0,1},  
+    {0,1},
   };
   int vlcnum;
 
@@ -949,13 +1021,13 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPar
 
   symbol2vlc(se);
 
-  writeUVLC2buffer(se, this_dataPart->bitstream);
+  writeUVLC2buffer(se, dp->bitstream);
 
   if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
+    dp->bitstream->write_flag = 1;
 
 #if TRACE
-  if (se->type <= 1)
+  if(dp->bitstream->trace_enabled)
     trace2out (se);
 #endif
 
@@ -969,9 +1041,9 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPar
  *    write VLC for TotalZeros for Chroma DC
  ************************************************************************
  */
-int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this_dataPart)
+int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *dp)
 {
-  static const int lentab[3][TOTRUN_NUM][16] = 
+  static const int lentab[3][TOTRUN_NUM][16] =
   {
     //YUV420
    {{ 1,2,3,3},
@@ -983,27 +1055,27 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this
     { 3,3,2,2,3,3},
     { 3,2,2,2,3},
     { 2,2,2,2},
-    { 2,2,1},   
+    { 2,2,1},
     { 1,1}},
     //YUV444
-   {{ 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},  
-    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},  
-    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},  
-    { 5,3,4,4,3,3,3,4,3,4,5,5,5},  
-    { 4,4,4,3,3,3,3,3,4,5,4,5},  
-    { 6,5,3,3,3,3,3,3,4,3,6},  
-    { 6,5,3,3,3,2,3,4,3,6},  
-    { 6,4,5,3,2,2,3,3,6},  
-    { 6,6,4,2,2,3,2,5},  
-    { 5,5,3,2,2,2,4},  
-    { 4,4,3,3,1,3},  
-    { 4,4,2,1,3},  
-    { 3,3,1,2},  
-    { 2,2,1},  
-    { 1,1}}  
+   {{ 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},
+    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},
+    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},
+    { 5,3,4,4,3,3,3,4,3,4,5,5,5},
+    { 4,4,4,3,3,3,3,3,4,5,4,5},
+    { 6,5,3,3,3,3,3,3,4,3,6},
+    { 6,5,3,3,3,2,3,4,3,6},
+    { 6,4,5,3,2,2,3,3,6},
+    { 6,6,4,2,2,3,2,5},
+    { 5,5,3,2,2,2,4},
+    { 4,4,3,3,1,3},
+    { 4,4,2,1,3},
+    { 3,3,1,2},
+    { 2,2,1},
+    { 1,1}}
   };
 
-  static const int codtab[3][TOTRUN_NUM][16] = 
+  static const int codtab[3][TOTRUN_NUM][16] =
   {
     //YUV420
    {{ 1,1,1,0},
@@ -1015,7 +1087,7 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this
     { 0,1,1,2,6,7},
     { 6,0,1,2,7},
     { 0,1,2,3},
-    { 0,1,1},   
+    { 0,1,1},
     { 0,1}},
     //YUV444
    {{1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
@@ -1032,11 +1104,11 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this
     {0,1,1,1,1},
     {0,1,1,1},
     {0,1,1},
-    {0,1}}  
+    {0,1}}
   };
   int vlcnum;
   int yuv = img->yuv_format - 1;
-  
+
   vlcnum = se->len;
 
   // se->value1 : TotalZeros
@@ -1051,13 +1123,13 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this
 
   symbol2vlc(se);
 
-  writeUVLC2buffer(se, this_dataPart->bitstream);
+  writeUVLC2buffer(se, dp->bitstream);
 
   if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
+    dp->bitstream->write_flag = 1;
 
 #if TRACE
-  if (se->type <= 1)
+  if(dp->bitstream->trace_enabled)
     trace2out (se);
 #endif
 
@@ -1071,9 +1143,9 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this
  *    write VLC for Run Before Next Coefficient, VLC0
  ************************************************************************
  */
-int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart)
+int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *dp)
 {
-  static const int lentab[TOTRUN_NUM][16] = 
+  static const int lentab[TOTRUN_NUM][16] =
   {
     {1,1},
     {1,2,2},
@@ -1084,7 +1156,7 @@ int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart)
     {3,3,3,3,3,3,3,4,5,6,7,8,9,10,11},
   };
 
-  static const int codtab[TOTRUN_NUM][16] = 
+  static const int codtab[TOTRUN_NUM][16] =
   {
     {1,0},
     {1,1,0},
@@ -1110,13 +1182,13 @@ int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart)
 
   symbol2vlc(se);
 
-  writeUVLC2buffer(se, this_dataPart->bitstream);
+  writeUVLC2buffer(se, dp->bitstream);
 
   if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
+    dp->bitstream->write_flag = 1;
 
 #if TRACE
-  if (se->type <= 1)
+  if(dp->bitstream->trace_enabled)
     trace2out (se);
 #endif
 
@@ -1130,12 +1202,12 @@ int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart)
  *    write VLC for Coeff Level (VLC1)
  ************************************************************************
  */
-int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPart, int profile_idc)
+int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *dp, int profile_idc)
 {
-  int level = se->value1; 
+  int level = se->value1;
   int levabs = iabs(level);
   int sign = (level < 0 ? 1 : 0);
-  
+
   if (levabs < 8)
   {
     se->len = levabs * 2 + sign - 1;
@@ -1150,7 +1222,7 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPar
   }
   else
   {
-    int iLength = 28, numPrefix = 15; 
+    int iLength = 28, numPrefix = 15;
     int iCodeword, addbit, offset;
     int levabsm16 = levabs-16;
 
@@ -1186,13 +1258,13 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPar
 
   symbol2vlc(se);
 
-  writeUVLC2buffer(se, this_dataPart->bitstream);
+  writeUVLC2buffer(se, dp->bitstream);
 
   if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
+    dp->bitstream->write_flag = 1;
 
 #if TRACE
-  if (se->type <= 1)
+  if(dp->bitstream->trace_enabled)
     trace2out (se);
 #endif
 
@@ -1206,7 +1278,7 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPar
  *    write VLC for Coeff Level
  ************************************************************************
  */
-int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *this_dataPart, int profile_idc)
+int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *dp, int profile_idc)
 {
   int addbit, offset;
   int iCodeword;
@@ -1215,7 +1287,7 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
   int level = se->value1;
 
   int levabs = iabs(level);
-  int sign = (level < 0 ? 1 : 0);  
+  int sign = (level < 0 ? 1 : 0);
 
   int shift = vlc-1;
   int escape = (15<<shift)+1;
@@ -1257,7 +1329,7 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
     {
       //error( "level_prefix must be <= 15 except in High Profile\n",  1000 );
       se->len = 0x0000FFFF; // This can be some other big number
-      se->inf = iCodeword;  
+      se->inf = iCodeword;
       return (se->len);
     }
   }
@@ -1266,13 +1338,13 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
 
   symbol2vlc(se);
 
-  writeUVLC2buffer(se, this_dataPart->bitstream);
+  writeUVLC2buffer(se, dp->bitstream);
 
   if(se->type != SE_HEADER)
-    this_dataPart->bitstream->write_flag = 1;
+    dp->bitstream->write_flag = 1;
 
 #if TRACE
-  if (se->type <= 1)
+  if(dp->bitstream->trace_enabled)
     trace2out (se);
 #endif
 
@@ -1287,9 +1359,11 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
  ************************************************************************
  */
 #if TRACE
+int bitcounter = 0;
+
 void trace2out(SyntaxElement *sym)
 {
-  static int bitcounter = 0;
+  static
   int i, chars;
 
   if (p_trace != NULL)
@@ -1309,7 +1383,7 @@ void trace2out(SyntaxElement *sym)
       for(i=0 ; i<15-sym->len ; i++)
         fputc(' ', p_trace);
     }
-    
+
     // print bit pattern
     bitcounter += sym->len;
     for(i=1 ; i<=sym->len ; i++)
@@ -1323,6 +1397,27 @@ void trace2out(SyntaxElement *sym)
   }
   fflush (p_trace);
 }
+
+void trace2out_cabac(SyntaxElement *sym)
+{
+  int chars;
+
+  if (p_trace != NULL)
+  {
+    putc('@', p_trace);
+    chars = fprintf(p_trace, "%i", bitcounter);
+    while(chars++ < 6)
+      putc(' ',p_trace);
+
+    chars += fprintf(p_trace, "%s", sym->tracestring);
+    while(chars++ < 70)
+      putc(' ',p_trace);
+
+    fprintf(p_trace, " (%3d) \n",sym->value1);
+  }
+  fflush (p_trace);
+  bitcounter += sym->len;
+}
 #endif
 
 
@@ -1330,7 +1425,7 @@ void trace2out(SyntaxElement *sym)
  ************************************************************************
  * \brief
  *    puts the less than 8 bits in the byte buffer of the Bitstream into
- *    the streamBuffer.  
+ *    the streamBuffer.
  *
  * \param
  *   currStream: the Bitstream the alignment should be established

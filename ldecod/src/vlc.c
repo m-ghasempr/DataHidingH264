@@ -27,7 +27,7 @@
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
-#define SYMTRACESTRING(s) strncpy(sym->tracestring,s,TRACESTRING_SIZE)
+#define SYMTRACESTRING(s) strncpy(symbol.tracestring,s,TRACESTRING_SIZE)
 #else
 #define SYMTRACESTRING(s) // do nothing
 #endif
@@ -72,10 +72,10 @@ const byte NTAB3[2][2][2] =
   {{2,0},{1,1}},
 };
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
- *    ue_v, reads an ue(v) syntax element, the length in bits is stored in 
+ *    ue_v, reads an ue(v) syntax element, the length in bits is stored in
  *    the global UsedBits variable
  *
  * \param tracestring
@@ -91,22 +91,22 @@ const byte NTAB3[2][2][2] =
  */
 int ue_v (char *tracestring, Bitstream *bitstream)
 {
-  SyntaxElement symbol, *sym=&symbol;
+  SyntaxElement symbol;
 
   assert (bitstream->streamBuffer != NULL);
-  sym->type = SE_HEADER;
-  sym->mapping = linfo_ue;   // Mapping rule
+  symbol.type = SE_HEADER;
+  symbol.mapping = linfo_ue;   // Mapping rule
   SYMTRACESTRING(tracestring);
-  readSyntaxElement_VLC (sym, bitstream);
-  UsedBits+=sym->len;
-  return sym->value1;
+  readSyntaxElement_VLC (&symbol, bitstream);
+  UsedBits+=symbol.len;
+  return symbol.value1;
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
- *    ue_v, reads an se(v) syntax element, the length in bits is stored in 
+ *    ue_v, reads an se(v) syntax element, the length in bits is stored in
  *    the global UsedBits variable
  *
  * \param tracestring
@@ -134,10 +134,10 @@ int se_v (char *tracestring, Bitstream *bitstream)
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
- *    ue_v, reads an u(v) syntax element, the length in bits is stored in 
+ *    ue_v, reads an u(v) syntax element, the length in bits is stored in
  *    the global UsedBits variable
  *
  * \param LenInBits
@@ -169,11 +169,11 @@ int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
   return symbol.inf;
 }
 
-                
-/*! 
+
+/*!
  *************************************************************************************
  * \brief
- *    ue_v, reads an u(1) syntax element, the length in bits is stored in 
+ *    ue_v, reads an u(1) syntax element, the length in bits is stored in
  *    the global UsedBits variable
  *
  * \param tracestring
@@ -476,7 +476,7 @@ int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
 
   int cnt=0;
 
-  
+
   byteoffset= totbitoffset>>3;
   bitoffset= 7-(totbitoffset&0x07);
 
@@ -487,7 +487,7 @@ int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
 
   // read one bit
   ctr_bit = (buffer[byteoffset] & (0x01<<bitoffset));
-  
+
   // a stop bit has to be one
   if (ctr_bit==0) return TRUE;
 
@@ -533,7 +533,7 @@ int uvlc_startcode_follows(struct img_par *img, int dummy)
  *    containing VLC-coded data bits
  * \param totbitoffset
  *    bit offset from start of partition
- * \param  info 
+ * \param  info
  *    returns the value of the symbol
  * \param bytecount
  *    buffer length
@@ -560,7 +560,7 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
   while (ctr_bit==0)
   {                 // find leading 1 bit
     len++;
-    bitoffset-=1;           
+    bitoffset-=1;
     bitcounter++;
     if (bitoffset<0)
     {                 // finish with current byte ?
@@ -602,7 +602,7 @@ extern void tracebits2(const char *trace_str,  int len,  int info) ;
  ************************************************************************
  */
 
-int code_from_bitstream_2d(SyntaxElement *sym,  
+int code_from_bitstream_2d(SyntaxElement *sym,
                            DataPartition *dP,
                            const int *lentab,
                            const int *codtab,
@@ -639,7 +639,7 @@ int code_from_bitstream_2d(SyntaxElement *sym,
     lentab += tabwidth;
     codtab += tabwidth;
   }
-  
+
   return -1;  // failed to find code
 
 found_code:
@@ -653,7 +653,7 @@ found_code:
 /*!
  ************************************************************************
  * \brief
- *    read FLC codeword from UVLC-partition 
+ *    read FLC codeword from UVLC-partition
  ************************************************************************
  */
 int readSyntaxElement_FLC(SyntaxElement *sym, Bitstream *currStream)
@@ -680,7 +680,7 @@ int readSyntaxElement_FLC(SyntaxElement *sym, Bitstream *currStream)
 /*!
  ************************************************************************
  * \brief
- *    read NumCoeff/TrailingOnes codeword from UVLC-partition 
+ *    read NumCoeff/TrailingOnes codeword from UVLC-partition
  ************************************************************************
  */
 
@@ -695,21 +695,21 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *d
   int vlcnum, retval;
   int code;
 
-  static const int lentab[3][4][17] = 
+  static const int lentab[3][4][17] =
   {
     {   // 0702
       { 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
       { 0, 2, 6, 8, 9,10,11,13,13,14,14,15,15,15,16,16,16},
       { 0, 0, 3, 7, 8, 9,10,11,13,13,14,14,15,15,16,16,16},
       { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16},
-    },                                                 
-    {                                                  
+    },
+    {
       { 2, 6, 6, 7, 8, 8, 9,11,11,12,12,12,13,13,13,14,14},
       { 0, 2, 5, 6, 6, 7, 8, 9,11,11,12,12,13,13,14,14,14},
       { 0, 0, 3, 6, 6, 7, 8, 9,11,11,12,12,13,13,13,14,14},
       { 0, 0, 0, 4, 4, 5, 6, 6, 7, 9,11,11,12,13,13,13,14},
-    },                                                 
-    {                                                  
+    },
+    {
       { 4, 6, 6, 6, 7, 7, 7, 7, 8, 8, 9, 9, 9,10,10,10,10},
       { 0, 4, 5, 5, 5, 5, 6, 6, 7, 8, 8, 9, 9, 9,10,10,10},
       { 0, 0, 4, 5, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9,10,10,10},
@@ -718,22 +718,22 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *d
 
   };
 
-  static const int codtab[3][4][17] = 
+  static const int codtab[3][4][17] =
   {
     {
-      { 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7,4}, 
-      { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10,6}, 
-      { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9,5}, 
+      { 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7,4},
+      { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10,6},
+      { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9,5},
       { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12,8},
     },
     {
-      { 3,11, 7, 7, 7, 4, 7,15,11,15,11, 8,15,11, 7, 9,7}, 
-      { 0, 2, 7,10, 6, 6, 6, 6,14,10,14,10,14,10,11, 8,6}, 
-      { 0, 0, 3, 9, 5, 5, 5, 5,13, 9,13, 9,13, 9, 6,10,5}, 
+      { 3,11, 7, 7, 7, 4, 7,15,11,15,11, 8,15,11, 7, 9,7},
+      { 0, 2, 7,10, 6, 6, 6, 6,14,10,14,10,14,10,11, 8,6},
+      { 0, 0, 3, 9, 5, 5, 5, 5,13, 9,13, 9,13, 9, 6,10,5},
       { 0, 0, 0, 5, 4, 6, 8, 4, 4, 4,12, 8,12,12, 8, 1,4},
     },
     {
-      {15,15,11, 8,15,11, 9, 8,15,11,15,11, 8,13, 9, 5,1}, 
+      {15,15,11, 8,15,11, 9, 8,15,11,15,11, 8,13, 9, 5,1},
       { 0,14,15,12,10, 8,14,10,14,14,10,14,10, 7,12, 8,4},
       { 0, 0,13,14,11, 9,13, 9,13,10,13, 9,13, 9,11, 7,3},
       { 0, 0, 0,12,11,10, 9, 8,13,12,12,12, 8,12,10, 6,2},
@@ -779,7 +779,7 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *d
   }
 
 #if TRACE
-  snprintf(sym->tracestring, 
+  snprintf(sym->tracestring,
     TRACESTRING_SIZE, "%s # c & tr.1s vlc=%d #c=%d #t1=%d",
            type, vlcnum, sym->value1, sym->value2);
   tracebits2(sym->tracestring, sym->len, code);
@@ -801,17 +801,17 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPart
   int retval;
   int code;
 
-  static const int lentab[3][4][17] = 
+  static const int lentab[3][4][17] =
   {
     //YUV420
    {{ 2, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    { 0, 1, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    { 0, 0, 3, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 1, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 3, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 0, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
     //YUV422
    {{ 1, 7, 7, 9, 9,10,11,12,13, 0, 0, 0, 0, 0, 0, 0, 0},
-    { 0, 2, 7, 7, 9,10,11,12,12, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    { 0, 0, 3, 7, 7, 9,10,11,12, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    { 0, 2, 7, 7, 9,10,11,12,12, 0, 0, 0, 0, 0, 0, 0, 0},
+    { 0, 0, 3, 7, 7, 9,10,11,12, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 0, 5, 6, 7, 7,10,11, 0, 0, 0, 0, 0, 0, 0, 0}},
     //YUV444
    {{ 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
@@ -820,7 +820,7 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPart
     { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16}}
   };
 
-  static const int codtab[3][4][17] = 
+  static const int codtab[3][4][17] =
   {
     //YUV420
    {{ 1, 7, 4, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -833,11 +833,11 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPart
     { 0, 0, 1,11,10, 4, 5, 5, 4, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 0, 1, 1, 9, 8, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0}},
     //YUV444
-   {{ 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7, 4}, 
-    { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10, 6}, 
-    { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9, 5}, 
+   {{ 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7, 4},
+    { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10, 6},
+    { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9, 5},
     { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12, 8}}
-  
+
   };
   int yuv = active_sps->chroma_format_idc - 1;
 
@@ -854,7 +854,7 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPart
 
 
 #if TRACE
-    snprintf(sym->tracestring, 
+    snprintf(sym->tracestring,
       TRACESTRING_SIZE, "ChrDC # c & tr.1s  #c=%d #t1=%d",
               sym->value1, sym->value2);
     tracebits2(sym->tracestring, sym->len, code);
@@ -870,7 +870,7 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPart
 /*!
  ************************************************************************
  * \brief
- *    read Level VLC0 codeword from UVLC-partition 
+ *    read Level VLC0 codeword from UVLC-partition
  ************************************************************************
  */
 int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP)
@@ -936,39 +936,39 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP)
 /*!
  ************************************************************************
  * \brief
- *    read Level VLC codeword from UVLC-partition 
+ *    read Level VLC codeword from UVLC-partition
  ************************************************************************
  */
-int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartition *dP)  
+int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartition *dP)
 {
-  
+
   Bitstream   *currStream = dP->bitstream;
   int frame_bitoffset = currStream->frame_bitoffset;
   byte *buf = currStream->streamBuffer;
   int BitstreamLengthInBytes = currStream->bitstream_length;
-  
+
   int levabs, sign;
   int len = 0;
   int code, sb;
-  
+
   int numPrefix;
   int shift = vlc-1;
   int escape = (15<<shift)+1;
   int addbit, offset;
-  
+
   // read pre zeros
   numPrefix = 0;
   while (!ShowBits(buf, frame_bitoffset+numPrefix, BitstreamLengthInBytes, 1))
     numPrefix++;
-  
-  
+
+
   len = numPrefix+1;
   code = 1;
-  
+
   if (numPrefix < 15)
   {
     levabs = (numPrefix<<shift) + 1;
-    
+
     // read (vlc-1) bits -> suffix
     if (vlc-1)
     {
@@ -977,7 +977,7 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartiti
       levabs += sb;
       len += (vlc-1);
     }
-    
+
     // read 1 bit -> sign
     sign = ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, 1);
     code = (code << 1)| sign;
@@ -999,23 +999,23 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartiti
     code = (code << 1)| sign;
     len++;
   }
-  
+
   sym->inf = (sign)?-levabs:levabs;
   sym->len = len;
-  
+
   currStream->frame_bitoffset = frame_bitoffset+len;
-  
+
 #if TRACE
   tracebits2(sym->tracestring, sym->len, code);
 #endif
-  
+
   return 0;
 }
 
 /*!
  ************************************************************************
  * \brief
- *    read Total Zeros codeword from UVLC-partition 
+ *    read Total Zeros codeword from UVLC-partition
  ************************************************************************
  */
 int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP)
@@ -1023,27 +1023,27 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP)
   int retval;
   int code;
 
-  static const int lentab[TOTRUN_NUM][16] = 
+  static const int lentab[TOTRUN_NUM][16] =
   {
-    
-    { 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},  
-    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},  
-    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},  
-    { 5,3,4,4,3,3,3,4,3,4,5,5,5},  
-    { 4,4,4,3,3,3,3,3,4,5,4,5},  
-    { 6,5,3,3,3,3,3,3,4,3,6},  
-    { 6,5,3,3,3,2,3,4,3,6},  
-    { 6,4,5,3,2,2,3,3,6},  
-    { 6,6,4,2,2,3,2,5},  
-    { 5,5,3,2,2,2,4},  
-    { 4,4,3,3,1,3},  
-    { 4,4,2,1,3},  
-    { 3,3,1,2},  
-    { 2,2,1},  
-    { 1,1},  
+
+    { 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},
+    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},
+    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},
+    { 5,3,4,4,3,3,3,4,3,4,5,5,5},
+    { 4,4,4,3,3,3,3,3,4,5,4,5},
+    { 6,5,3,3,3,3,3,3,4,3,6},
+    { 6,5,3,3,3,2,3,4,3,6},
+    { 6,4,5,3,2,2,3,3,6},
+    { 6,6,4,2,2,3,2,5},
+    { 5,5,3,2,2,2,4},
+    { 4,4,3,3,1,3},
+    { 4,4,2,1,3},
+    { 3,3,1,2},
+    { 2,2,1},
+    { 1,1},
   };
 
-  static const int codtab[TOTRUN_NUM][16] = 
+  static const int codtab[TOTRUN_NUM][16] =
   {
     {1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
     {7,6,5,4,3,5,4,3,2,3,2,3,2,1,0},
@@ -1059,7 +1059,7 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP)
     {0,1,1,1,1},
     {0,1,1,1},
     {0,1,1},
-    {0,1},  
+    {0,1},
   };
 
   int vlcnum = sym->value1;
@@ -1082,12 +1082,12 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP)
 #endif
 
   return retval;
-}    
+}
 
 /*!
  ************************************************************************
  * \brief
- *    read Total Zeros Chroma DC codeword from UVLC-partition 
+ *    read Total Zeros Chroma DC codeword from UVLC-partition
  ************************************************************************
  */
 int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
@@ -1095,7 +1095,7 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
   int retval;
   int code;
 
-  static const int lentab[3][TOTRUN_NUM][16] = 
+  static const int lentab[3][TOTRUN_NUM][16] =
   {
     //YUV420
    {{ 1,2,3,3},
@@ -1107,27 +1107,27 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
     { 3,3,2,2,3,3},
     { 3,2,2,2,3},
     { 2,2,2,2},
-    { 2,2,1},   
+    { 2,2,1},
     { 1,1}},
     //YUV444
-   {{ 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},  
-    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},  
-    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},  
-    { 5,3,4,4,3,3,3,4,3,4,5,5,5},  
-    { 4,4,4,3,3,3,3,3,4,5,4,5},  
-    { 6,5,3,3,3,3,3,3,4,3,6},  
-    { 6,5,3,3,3,2,3,4,3,6},  
-    { 6,4,5,3,2,2,3,3,6},  
-    { 6,6,4,2,2,3,2,5},  
-    { 5,5,3,2,2,2,4},  
-    { 4,4,3,3,1,3},  
-    { 4,4,2,1,3},  
-    { 3,3,1,2},  
-    { 2,2,1},  
-    { 1,1}}  
+   {{ 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},
+    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},
+    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},
+    { 5,3,4,4,3,3,3,4,3,4,5,5,5},
+    { 4,4,4,3,3,3,3,3,4,5,4,5},
+    { 6,5,3,3,3,3,3,3,4,3,6},
+    { 6,5,3,3,3,2,3,4,3,6},
+    { 6,4,5,3,2,2,3,3,6},
+    { 6,6,4,2,2,3,2,5},
+    { 5,5,3,2,2,2,4},
+    { 4,4,3,3,1,3},
+    { 4,4,2,1,3},
+    { 3,3,1,2},
+    { 2,2,1},
+    { 1,1}}
   };
 
-  static const int codtab[3][TOTRUN_NUM][16] = 
+  static const int codtab[3][TOTRUN_NUM][16] =
   {
     //YUV420
    {{ 1,1,1,0},
@@ -1139,7 +1139,7 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
     { 0,1,1,2,6,7},
     { 6,0,1,2,7},
     { 0,1,2,3},
-    { 0,1,1},   
+    { 0,1,1},
     { 0,1}},
     //YUV444
    {{1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
@@ -1156,7 +1156,7 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
     {0,1,1,1,1},
     {0,1,1,1},
     {0,1,1},
-    {0,1}}  
+    {0,1}}
   };
   int yuv = active_sps->chroma_format_idc - 1;
 
@@ -1180,13 +1180,13 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
 #endif
 
   return retval;
-}    
+}
 
 
 /*!
  ************************************************************************
  * \brief
- *    read  Run codeword from UVLC-partition 
+ *    read  Run codeword from UVLC-partition
  ************************************************************************
  */
 int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
@@ -1194,7 +1194,7 @@ int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
   int retval;
   int code;
 
-  static const int lentab[TOTRUN_NUM][16] = 
+  static const int lentab[TOTRUN_NUM][16] =
   {
     {1,1},
     {1,2,2},
@@ -1205,7 +1205,7 @@ int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
     {3,3,3,3,3,3,3,4,5,6,7,8,9,10,11},
   };
 
-  static const int codtab[TOTRUN_NUM][16] = 
+  static const int codtab[TOTRUN_NUM][16] =
   {
     {1,0},
     {1,1,0},
@@ -1235,7 +1235,7 @@ int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
 #endif
 
   return retval;
-}    
+}
 
 
 /*!
@@ -1256,7 +1256,7 @@ int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
  *
  ************************************************************************
  */
-int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount, 
+int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
              int numbits)
 {
 
@@ -1289,7 +1289,7 @@ int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
 
   *info = inf;
   return bitcounter;           // return absolute offset in bit from start of frame
-}     
+}
 
 /*!
  ************************************************************************
@@ -1334,7 +1334,7 @@ int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits)
   }
 
   return inf;           // return absolute offset in bit from start of frame
-}     
+}
 
 
 /*!

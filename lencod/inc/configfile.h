@@ -63,7 +63,7 @@ Mapping Map[] = {
     {"Log2MaxFNumMinus4",        &configinput.Log2MaxFNumMinus4,            0,   0.0,                       1, -1.0,             12.0              },
     {"Log2MaxPOCLsbMinus4",      &configinput.Log2MaxPOCLsbMinus4,          0,   2.0,                       1, -1.0,             12.0              },
     {"GenerateMultiplePPS",      &configinput.GenerateMultiplePPS,          0,   0.0,                       1,  0.0,              1.0              },
-    {"Generate_SEIVUI",          &configinput.Generate_SEIVUI,              0,   0.0,                       1,  0.0,              1.0              },    
+    {"Generate_SEIVUI",          &configinput.Generate_SEIVUI,              0,   0.0,                       1,  0.0,              1.0              },
     {"SEIMessageText",           &configinput.SEIMessageText,               1,   0.0,                       0,  0.0,              0.0              },
     {"ResendPPS",                &configinput.ResendPPS,                    0,   0.0,                       1,  0.0,              1.0              },
     {"SourceWidth",              &configinput.img_width,                    0,   176.0,                     2, 16.0,              0.0              },
@@ -83,7 +83,7 @@ Mapping Map[] = {
     {"PReplaceBSlice",           &configinput.PReplaceBSlice,               0,   0.0,                       1,  0.0,              1.0              },
     {"BRefPicQPOffset",          &configinput.qpBRSOffset,                  0,   0.0,                       0,-51.0,             51.0              },
     {"DirectModeType",           &configinput.direct_spatial_mv_pred_flag,  0,   0.0,                       1,  0.0,              1.0              },
-    {"DirectInferenceFlag",      &configinput.directInferenceFlag,          0,   0.0,                       1,  0.0,              1.0              },
+    {"DirectInferenceFlag",      &configinput.directInferenceFlag,          0,   1.0,                       1,  0.0,              1.0              },
     {"SPPicturePeriodicity",     &configinput.sp_periodicity,               0,   0.0,                       2,  0.0,              0.0              },
     {"QPSPSlice",                &configinput.qpsp,                         0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP  },
     {"QPSP2Slice",               &configinput.qpsp_pred,                    0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP  },
@@ -92,7 +92,7 @@ Mapping Map[] = {
     {"SP_output_name",           &configinput.sp_output_filename,           1,   0.0,                       0,  0.0,              0.0              },
     {"SP2_FRAMES",               &configinput.sp2_frame_indicator,          0,   0.0,                       1,  0.0,              1.0              },
     {"SP2_input_name1",          &configinput.sp2_input_filename1,          1,   0.0,                       0,  0.0,              0.0              },
-    {"SP2_input_name2",          &configinput.sp2_input_filename2,          1,   0.0,                       0,  0.0,              0.0              }, 
+    {"SP2_input_name2",          &configinput.sp2_input_filename2,          1,   0.0,                       0,  0.0,              0.0              },
     {"SymbolMode",               &configinput.symbol_mode,                  0,   0.0,                       1,  (double) UVLC,    (double) CABAC   },
     {"OutFileMode",              &configinput.of_mode,                      0,   0.0,                       1,  0.0,              1.0              },
     {"PartitionMode",            &configinput.partition_mode,               0,   0.0,                       1,  0.0,              1.0              },
@@ -148,25 +148,24 @@ Mapping Map[] = {
     {"NumberFramesInEnhancementLayerSubSequence", &configinput.NumFramesInELSubSeq, 0,   0.0,               2,  0.0,              0.0              },
     {"NumberOfFrameInSecondIGOP",&configinput.NumFrameIn2ndIGOP,            0,   0.0,                       2,  0.0,              0.0              },
     {"RandomIntraMBRefresh",     &configinput.RandomIntraMBRefresh,         0,   0.0,                       2,  0.0,              0.0              },
-		
-		
+
     {"WeightedPrediction",       &configinput.WeightedPrediction,           0,   0.0,                       1,  0.0,              1.0              },
     {"WeightedBiprediction",     &configinput.WeightedBiprediction,         0,   0.0,                       1,  0.0,              2.0              },
     {"UseWeightedReferenceME",   &configinput.UseWeightedReferenceME,       0,   0.0,                       1,  0.0,              1.0              },
     {"RDPictureDecision",        &configinput.RDPictureDecision,            0,   0.0,                       1,  0.0,              1.0              },
-    {"RDPictureIntra",           &configinput.RDPictureIntra,               0,   0.0,                       1,  0.0,              1.0              },    
-    {"RDPSliceWeightOnly",       &configinput.RDPSliceWeightOnly,           0,   1.0,                       1,  0.0,              1.0              },    
+    {"RDPictureIntra",           &configinput.RDPictureIntra,               0,   0.0,                       1,  0.0,              1.0              },
+    {"RDPSliceWeightOnly",       &configinput.RDPSliceWeightOnly,           0,   1.0,                       1,  0.0,              1.0              },
     {"RDPSliceBTest",            &configinput.RDPSliceBTest,                0,   0.0,                       1,  0.0,              1.0              },
-    {"RDBSliceWeightOnly",       &configinput.RDBSliceWeightOnly,           0,   0.0,                       1,  0.0,              1.0              },    
+    {"RDBSliceWeightOnly",       &configinput.RDBSliceWeightOnly,           0,   0.0,                       1,  0.0,              1.0              },
 
-    {"SkipIntraInInterSlices",   &configinput.SkipIntraInInterSlices,       0,   0.0,                       1,  0.0,              1.0              },    
+    {"SkipIntraInInterSlices",   &configinput.SkipIntraInInterSlices,       0,   0.0,                       1,  0.0,              1.0              },
     {"BReferencePictures",       &configinput.BRefPictures,                 0,   0.0,                       1,  0.0,              2.0              },
     {"HierarchicalCoding",       &configinput.HierarchicalCoding,           0,   0.0,                       1,  0.0,              3.0              },
     {"HierarchyLevelQPEnable",   &configinput.HierarchyLevelQPEnable,       0,   0.0,                       1,  0.0,              1.0              },
     {"ExplicitHierarchyFormat",  &configinput.ExplicitHierarchyFormat,      1,   0.0,                       0,  0.0,              0.0              },
     {"ReferenceReorder",         &configinput.ReferenceReorder,             0,   0.0,                       1,  0.0,              1.0              },
     {"PocMemoryManagement",      &configinput.PocMemoryManagement,          0,   0.0,                       1,  0.0,              1.0              },
-    
+
     //Bipredicting Motion Estimation parameters
     {"BiPredMotionEstimation",   &configinput.BiPredMotionEstimation,       0,   0.0,                       1,  0.0,              1.0              },
     {"BiPredMERefinements",      &configinput.BiPredMERefinements,          0,   0.0,                       1,  0.0,              5.0              },
@@ -182,11 +181,11 @@ Mapping Map[] = {
     {"SparePicturePercentageThr",&configinput.SPPercentageThreshold,        0,   0.0,                       2,  0.0,            100.0              },
 
     {"num_slice_groups_minus1",  &configinput.num_slice_groups_minus1,      0,   0.0,                       1,  0.0,  (double)MAXSLICEGROUPIDS - 1 },
-    {"slice_group_map_type",     &configinput.slice_group_map_type,         0,   0.0,                       1,  0.0,              6.0              },               
+    {"slice_group_map_type",     &configinput.slice_group_map_type,         0,   0.0,                       1,  0.0,              6.0              },
     {"slice_group_change_direction_flag", &configinput.slice_group_change_direction_flag, 0,   0.0,         1,  0.0,              2.0              },
     {"slice_group_change_rate_minus1",    &configinput.slice_group_change_rate_minus1,    0,   0.0,         2,  0.0,              1.0              },
     {"SliceGroupConfigFileName", &configinput.SliceGroupConfigFileName,     1,   0.0,                       0,  0.0,              0.0              },
-		
+
     {"UseRedundantPicture",      &configinput.redundant_pic_flag,           0,   0.0,                       1,  0.0,              1.0              },
     {"NumRedundantHierarchy",    &configinput.NumRedundantHierarchy,        0,   0.0,                       1,  0.0,              4.0              },
     {"PrimaryGOPLength",         &configinput.PrimaryGOPLength,             0,   1.0,                       1,  1.0,              16.0             },
@@ -245,7 +244,7 @@ Mapping Map[] = {
     {"EPZSSubPelMEBiPred",       &configinput.EPZSSubPelMEBiPred,           0,   1.0,                       1,  0.0,              1.0              },
     {"EPZSSubPelGrid",           &configinput.EPZSSubPelGrid,               0,   0.0,                       1,  0.0,              1.0              },
     {"EPZSSubPelThresScale",     &configinput.EPZSSubPelThresScale,         0,   2.0,                       0,  0.0,              0.0              },
-    
+
     // Chroma QP Offset
     {"ChromaQPOffset",           &configinput.chroma_qp_index_offset,       0,   0.0,                       1,-51.0,             51.0              },
 
@@ -256,7 +255,7 @@ Mapping Map[] = {
     {"RGBInput",                 &configinput.rgb_input_flag,               0,   0.0,                       1,  0.0,              1.0              },
     {"CbQPOffset",               &configinput.cb_qp_index_offset,           0,   0.0,                       1,-51.0,             51.0              },
     {"CrQPOffset",               &configinput.cr_qp_index_offset,           0,   0.0,                       1,-51.0,             51.0              },
-   
+
     // Lossless Coding
     {"QPPrimeYZeroTransformBypassFlag", &configinput.lossless_qpprime_y_zero_flag,      0,   0.0,           1,  0.0,              1.0              },
 
@@ -269,7 +268,7 @@ Mapping Map[] = {
     {"FixedLambdaSIslice",       &configinput.FixedLambda[4],               2,   0.1,                       2,  0.0,              0.0              },
     {"FixedLambdaRefBslice",     &configinput.FixedLambda[5],               2,   0.1,                       2,  0.0,              0.0              },
 
-	{"LambdaWeightPslice",       &configinput.LambdaWeight[0],              2,   0.68,                      2,  0.0,              0.0              },
+    {"LambdaWeightPslice",       &configinput.LambdaWeight[0],              2,   0.68,                      2,  0.0,              0.0              },
     {"LambdaWeightBslice",       &configinput.LambdaWeight[1],              2,   2.00,                      2,  0.0,              0.0              },
     {"LambdaWeightIslice",       &configinput.LambdaWeight[2],              2,   0.65,                      2,  0.0,              0.0              },
     {"LambdaWeightSPslice",      &configinput.LambdaWeight[3],              2,   1.50,                      2,  0.0,              0.0              },

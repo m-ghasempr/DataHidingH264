@@ -45,7 +45,7 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartiti
 int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP);
 int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP);
 int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP);
-int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount, 
+int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
              int numbits);
 int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits);
 

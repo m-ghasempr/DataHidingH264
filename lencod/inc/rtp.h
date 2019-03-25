@@ -26,16 +26,16 @@
 #define H264SSRC 0x12345678               //!< SSRC, chosen to simplify debugging
 #define RTP_TR_TIMESTAMP_MULT 1000        //!< should be something like 27 Mhz / 29.97 Hz
 
-typedef struct 
+typedef struct
 {
   unsigned int v;          //!< Version, 2 bits, MUST be 0x2
   unsigned int p;          //!< Padding bit, Padding MUST NOT be used
   unsigned int x;          //!< Extension, MUST be zero */
-  unsigned int cc;         /*!< CSRC count, normally 0 in the absence 
+  unsigned int cc;         /*!< CSRC count, normally 0 in the absence
                                 of RTP mixers */
   unsigned int m;          //!< Marker bit
   unsigned int pt;         //!< 7 bits, Payload Type, dynamically established
-  unsigned int seq;        /*!< RTP sequence number, incremented by one for 
+  unsigned int seq;        /*!< RTP sequence number, incremented by one for
                                 each sent packet */
   unsigned int timestamp;  //!< timestamp, 27 MHz for H.264
   unsigned int ssrc;       //!< Synchronization Source, chosen randomly
@@ -51,7 +51,7 @@ int  DecomposeRTPpacket (RTPpacket_t *p);
 int  WriteRTPPacket (RTPpacket_t *p, FILE *f);
 void DumpRTPHeader (RTPpacket_t *p);
 void RTPUpdateTimestamp (int tr);
-int  RTPWriteBits (int Marker, int PacketType, void * bitstream, 
+int  RTPWriteBits (int Marker, int PacketType, void * bitstream,
                    int BitStreamLenInByte, FILE *out);
 
 Boolean isAggregationPacket();

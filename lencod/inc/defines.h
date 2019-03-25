@@ -7,7 +7,7 @@
  *    Header file containing some useful global definitions
  *
  * \author
- *    Detlev Marpe 
+ *    Detlev Marpe
  *    Copyright (C) 2000 HEINRICH HERTZ INSTITUTE All Rights Reserved.
  *
  * \date
@@ -31,7 +31,7 @@ typedef unsigned char byte;    //!< byte type definition
 
 #define RC_MAX_TEMPORAL_LEVELS   5
 
-//#define BEST_NZ_COEFF	1		// yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
+//#define BEST_NZ_COEFF 1   // yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
 
 //FREXT Profile IDC definitions
 #define FREXT_HP        100      //!< YUV 4:2:0/8 "High"
@@ -65,7 +65,6 @@ typedef unsigned char byte;    //!< byte type definition
 #define CHROMA_DC_4x4   9
 #define NUM_BLOCK_TYPES 10
 
-
 #define _FULL_SEARCH_RANGE_
 #define _ADAPT_LAST_GROUP_
 #define _CHANGE_QP_
@@ -84,7 +83,6 @@ typedef unsigned char byte;    //!< byte type definition
 #define IMG_PAD_SIZE_TIMES4    80 //!< Number of pixels padded around the reference frame in subpel units(>=16)
 
 #define MAX_VALUE       999999   //!< used for start value for some variables
-
 #define INVALIDINDEX  (-135792468)
 
 #define P8x8    8
@@ -134,11 +132,11 @@ typedef unsigned char byte;    //!< byte type definition
 #define MB_BLOCK_SHIFT  4
 
 // These variables relate to the subpel accuracy supported by the software (1/4)
-#define BLOCK_SIZE_SP      16  // BLOCK_SIZE << 2 
+#define BLOCK_SIZE_SP      16  // BLOCK_SIZE << 2
 #define BLOCK_SIZE8x8_SP   32  // BLOCK_SIZE8x8 << 2
 
 // number of intra prediction modes
-#define NO_INTRA_PMODE  9        
+#define NO_INTRA_PMODE  9
 
 // 4x4 intra prediction modes
 #define VERT_PRED             0
@@ -193,7 +191,7 @@ typedef unsigned char byte;    //!< byte type definition
 #define DQ_ROUND        (1<<(DQ_BITS-1))
 
 #define Q_BITS_8        16
-#define DQ_BITS_8       6 
+#define DQ_BITS_8       6
 #define DQ_ROUND_8      (1<<(DQ_BITS_8-1))
 
 // Context Adaptive Lagrange Multiplier (CALM)

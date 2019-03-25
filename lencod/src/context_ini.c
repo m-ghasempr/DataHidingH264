@@ -63,7 +63,7 @@ void create_context_memory ()
 {
   int i, j, k;
   int num_mb    = img->FrameSizeInMbs; // number of macroblocks for frame
- 
+
   num_mb_per_slice  = (input->slice_mode==1 ? input->slice_argument : num_mb);
   number_of_slices  = (num_mb + num_mb_per_slice - 1) / num_mb_per_slice;
 
@@ -214,7 +214,7 @@ void init_contexts ()
   BIARI_CTX_INIT1 (   NUM_DELTA_QP_CTX,  mc->delta_qp_contexts,    INIT_DELTA_QP,   img->model_number);
   BIARI_CTX_INIT1 (   NUM_MB_AFF_CTX,    mc->mb_aff_contexts,      INIT_MB_AFF,     img->model_number);
   BIARI_CTX_INIT1 (   NUM_TRANSFORM_SIZE_CTX,  mc->transform_size_contexts,    INIT_TRANSFORM_SIZE,   img->model_number);
-  
+
   //--- texture coding contexts ---
   BIARI_CTX_INIT1 (                 NUM_IPR_CTX,  tc->ipr_contexts,     INIT_IPR,       img->model_number);
   BIARI_CTX_INIT1 (                 NUM_CIPR_CTX, tc->cipr_contexts,    INIT_CIPR,      img->model_number);

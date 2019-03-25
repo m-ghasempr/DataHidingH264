@@ -31,8 +31,7 @@ typedef struct {
   MotionInfoContexts   *mot_ctx;
   TextureInfoContexts  *tex_ctx;
 
-  // syntax element number and bitcounters
-  int                   currSEnr;
+  // bit counter
   int                   bitcounter[MAX_BITCOUNTER_MB];
 
   // elements of current macroblock

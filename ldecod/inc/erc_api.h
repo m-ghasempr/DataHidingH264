@@ -27,12 +27,12 @@
 * Defines
 */
 
-/* If the average motion vector of the correctly received macroblocks is less than the 
+/* If the average motion vector of the correctly received macroblocks is less than the
 threshold, concealByCopy is used, otherwise concealByTrial is used. */
-#define MVPERMB_THR 8 
+#define MVPERMB_THR 8
 
 /* used to determine the size of the allocated memory for a temporal Region (MB) */
-#define DEF_REGION_SIZE 384  /* 8*8*6 */ 
+#define DEF_REGION_SIZE 384  /* 8*8*6 */
 
 #define ERC_BLOCK_OK                3
 #define ERC_BLOCK_CONCEALED         2
@@ -85,29 +85,29 @@ typedef struct ercVariables_s
   int   nOfMBs;
   /* Number of segments (slices) in frame */
   int     nOfSegments;
-  
+
   /*  Array for conditions of Y blocks */
   int     *yCondition;
   /*  Array for conditions of U blocks */
   int     *uCondition;
   /*  Array for conditions of V blocks */
   int     *vCondition;
-  
+
   /* Array for Slice level information */
   ercSegment_t *segments;
   int     currSegment;
-  
+
   /* Conditions of the MBs of the previous frame */
   int   *prevFrameYCondition;
-  
+
   /* Flag telling if the current segment was found to be corrupted */
   int   currSegmentCorrupted;
   /* Counter for corrupted segments per picture */
   int   nOfCorruptedSegments;
-  
+
   /* State variables for error detector and concealer */
   int   concealment;
-  
+
 } ercVariables_t;
 
 /*
@@ -116,19 +116,19 @@ typedef struct ercVariables_s
 
 void ercInit(int pic_sizex, int pic_sizey, int flag);
 ercVariables_t *ercOpen( void );
-void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 picSizeX );
+void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int picSizeX );
 void ercClose( ercVariables_t *errorVar );
 void ercSetErrorConcealment( ercVariables_t *errorVar, int value );
 
-void ercStartSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t *errorVar );
-void ercStopSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t *errorVar );
-void ercMarkCurrSegmentLost(int32 picSizeX, ercVariables_t *errorVar );
-void ercMarkCurrSegmentOK(int32 picSizeX, ercVariables_t *errorVar );
-void ercMarkCurrMBConcealed( int currMBNum, int comp, int32 picSizeX, ercVariables_t *errorVar );
+void ercStartSegment( int currMBNum, int segment, unsigned int bitPos, ercVariables_t *errorVar );
+void ercStopSegment( int currMBNum, int segment, unsigned int bitPos, ercVariables_t *errorVar );
+void ercMarkCurrSegmentLost(int picSizeX, ercVariables_t *errorVar );
+void ercMarkCurrSegmentOK(int picSizeX, ercVariables_t *errorVar );
+void ercMarkCurrMBConcealed( int currMBNum, int comp, int picSizeX, ercVariables_t *errorVar );
 
-int ercConcealIntraFrame( frame *recfr, int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar );
-int ercConcealInterFrame( frame *recfr, objectBuffer_t *object_list, 
-                         int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar, int chroma_format_idc );
+int ercConcealIntraFrame( frame *recfr, int picSizeX, int picSizeY, ercVariables_t *errorVar );
+int ercConcealInterFrame( frame *recfr, objectBuffer_t *object_list,
+                          int picSizeX, int picSizeY, ercVariables_t *errorVar, int chroma_format_idc );
 
 
 /* Thomson APIs for concealing entire frame loss */

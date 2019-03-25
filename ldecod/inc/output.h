@@ -6,7 +6,7 @@
  * \brief
  *    Picture writing routine headers
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Karsten Suehring        <suehring@hhi.de>
  ***************************************************************************************
  */

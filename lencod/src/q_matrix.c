@@ -380,7 +380,7 @@ void allocate_QMatrix ()
   get_mem4Dint(&LevelScale4x4Luma,      2, 6, 4, 4);
   get_mem5Dint(&LevelScale4x4Chroma, 2, 2, 6, 4, 4);
   get_mem4Dint(&LevelScale8x8Luma,      2, 6, 8, 8);
-  
+
   get_mem4Dint(&InvLevelScale4x4Luma,      2, 6, 4, 4);
   get_mem5Dint(&InvLevelScale4x4Chroma, 2, 2, 6, 4, 4);
   get_mem4Dint(&InvLevelScale8x8Luma,      2, 6, 8, 8);
@@ -400,7 +400,7 @@ void free_QMatrix ()
   free_mem4Dint(LevelScale4x4Luma,      2, 6);
   free_mem5Dint(LevelScale4x4Chroma, 2, 2, 6);
   free_mem4Dint(LevelScale8x8Luma,      2, 6);
-  
+
   free_mem4Dint(InvLevelScale4x4Luma,      2, 6);
   free_mem5Dint(InvLevelScale4x4Chroma, 2, 2, 6);
   free_mem4Dint(InvLevelScale8x8Luma,      2, 6);
@@ -434,7 +434,7 @@ void Init_QMatrix (void)
 
     memset(UseDefaultScalingMatrix4x4Flag, 0, 6 * sizeof(short));
     UseDefaultScalingMatrix8x8Flag[0]=UseDefaultScalingMatrix8x8Flag[1]=0;
-  
+
     free(content);
   }
 }
@@ -591,22 +591,22 @@ void CalculateQuant8Param()
   int i, j, k, temp;
   int present[2];
   int no_q_matrix=FALSE;
-  
+
   if(!active_sps->seq_scaling_matrix_present_flag && !active_pps->pic_scaling_matrix_present_flag) //set to default matrix
     no_q_matrix=TRUE;
   else
   {
     memset(present, 0, sizeof(int)*2);
-    
+
     if(active_sps->seq_scaling_matrix_present_flag)
       for(i=0; i<2; i++)
         present[i] = active_sps->seq_scaling_list_present_flag[i+6];
-      
+
       if(active_pps->pic_scaling_matrix_present_flag)
         for(i=0; i<2; i++)
           present[i] |= active_pps->pic_scaling_list_present_flag[i+6];
   }
-  
+
   if(no_q_matrix==TRUE)
   {
     for(k=0; k<6; k++)
@@ -615,7 +615,7 @@ void CalculateQuant8Param()
         {
           LevelScale8x8Luma[1][k][j][i]         = quant_coef8[k][j][i];
           InvLevelScale8x8Luma[1][k][j][i]      = dequant_coef8[k][j][i]<<4;
-          
+
           LevelScale8x8Luma[0][k][j][i]         = quant_coef8[k][j][i];
           InvLevelScale8x8Luma[0][k][j][i]      = dequant_coef8[k][j][i]<<4;
         }
@@ -637,7 +637,7 @@ void CalculateQuant8Param()
             LevelScale8x8Luma[1][k][j][i]    = (quant_coef8[k][j][i]<<4)/ScalingList8x8[0][temp];
             InvLevelScale8x8Luma[1][k][j][i] = dequant_coef8[k][j][i]*ScalingList8x8[0][temp];
           }
-          
+
           if((!present[1]) || UseDefaultScalingMatrix8x8Flag[1])
           {
             LevelScale8x8Luma[0][k][j][i]    = (quant_coef8[k][j][i]<<4)/Quant8_inter_default[temp];

@@ -20,7 +20,7 @@
  *     - Thomas Wedi                     <wedi@tnt.uni-hannover.de>
  *     - Ragip Kurceren                  <ragip.kurceren@nokia.com>
  *     - Antti Hallapuro                 <antti.hallapuro@nokia.com>
- *     - Alexis Michael Tourapis         <alexismt@ieee.org> 
+ *     - Alexis Michael Tourapis         <alexismt@ieee.org>
  *     - Athanasios Leontaris            <aleon@dolby.com>
  *************************************************************************************
  */
@@ -137,14 +137,13 @@ void MbAffPostProc(void)
 
         for (uv=0; uv<2; uv++)
         {
-          for (y=0; y<(2*img->mb_cr_size_y);y++)    
+          for (y=0; y<(2*img->mb_cr_size_y);y++)
             memcpy(&temp[y],&imgUV[uv][y0+y][x0], img->mb_cr_size_x * sizeof(imgpel));
-          
+
           for (y=0; y<img->mb_cr_size_y;y++)
           {
             memcpy(&imgUV[uv][y0+(2*y)][x0],temp[y], img->mb_cr_size_x * sizeof(imgpel));
             memcpy(&imgUV[uv][y0+(2*y + 1)][x0],temp[y+ img->mb_cr_size_y], img->mb_cr_size_x * sizeof(imgpel));
-            
           }
         }
       }
@@ -190,8 +189,8 @@ void code_a_picture(Picture *pic)
   int intra_refresh = input->intra_period == 0 ? (IMG_NUMBER == 0) : ((IMG_NUMBER%input->intra_period) == 0);
 
   img->currentPicture = pic;
-  
-  img->currentPicture->idr_flag = ((!IMG_NUMBER) && (!(img->structure==BOTTOM_FIELD))) 
+
+  img->currentPicture->idr_flag = ((!IMG_NUMBER) && (!(img->structure==BOTTOM_FIELD)))
     || (input->idr_enable && intra_refresh && (img->type == I_SLICE || img->type==SI_SLICE)&& (!(img->structure==BOTTOM_FIELD)));
 
   pic->no_slices = 0;
@@ -277,7 +276,7 @@ int encode_one_frame (void)
   float dis_fld = 0.0, dis_fld_y = 0.0, dis_fld_u = 0.0, dis_fld_v = 0.0;
 
   //Rate control
-  int pic_type, bits = 0; 
+  int pic_type, bits = 0;
 
   me_time=0;
   img->rd_pass = 0;
@@ -288,7 +287,7 @@ int encode_one_frame (void)
   ftime (&tstruct1);            // start time ms
   time (&ltime1);               // start time s
 
-  //Rate control 
+  //Rate control
   img->write_macroblock = 0;
 /*
   //Shankar Regunathan (Oct 2002)
@@ -308,7 +307,7 @@ int encode_one_frame (void)
     stats->bit_ctr_parametersets += stats->bit_ctr_parametersets_n;
   }
 
-  put_buffer_frame ();      // sets the pointers to the frame structures 
+  put_buffer_frame ();      // sets the pointers to the frame structures
                             // (and not to one of the field structures)
   init_frame ();
   FrameNumberInFile = CalculateFrameNumber();
@@ -331,7 +330,7 @@ int encode_one_frame (void)
   snr->frame_ctr++;
 
   if(img->type == SP_SLICE)
-  { 
+  {
     if(input->sp2_frame_indicator)
     { // switching SP frame encoding
       sp2_frame_indicator=1;
@@ -369,7 +368,7 @@ int encode_one_frame (void)
     //Rate control
     if(input->RCEnable)
     {
-      /*update the number of MBs in the basic unit for MB adaptive 
+      /*update the number of MBs in the basic unit for MB adaptive
       f/f coding*/
       if( (input->MbInterlace) && (input->basicunit < img->FrameSizeInMbs) && (img->type == P_SLICE || input->RCUpdateMode == RC_MODE_1) && (IMG_NUMBER) )
         img->BasicUnit = input->basicunit << 1;
@@ -379,20 +378,20 @@ int encode_one_frame (void)
       if ( input->RDPictureDecision )
       {
         // store rate allocation quadratic...
-        copy_rc_jvt( quadratic_RC_init, quadratic_RC );   
+        copy_rc_jvt( quadratic_RC_init, quadratic_RC );
         // ...and generic model
         copy_rc_generic( generic_RC_init, generic_RC );
       }
 
-      rc_init_pict(quadratic_RC, 1,0,1, 1.0F); 
+      rc_init_pict(quadratic_RC, 1,0,1, 1.0F);
       img->qp  = updateQP(quadratic_RC, 0);
-      
+
       pic_type = img->type;
       QP =0;
 
       if( active_sps->frame_mbs_only_flag)
-      generic_RC->TopFieldFlag=0;
-    }    
+        generic_RC->TopFieldFlag=0;
+    }
 
     if (input->GenerateMultiplePPS)
       active_pps = PicParSet[0];
@@ -404,7 +403,7 @@ int encode_one_frame (void)
       rdPictureCoding();
     }
     tmpFrameQP = img->SumFrameQP; // call it here since rdPictureCoding buffers it and may modify it
-    
+
     if(img->type==SP_SLICE && si_frame_indicator==0 && input->si_frame_indicator)
     {
       // once the picture has been encoded as a primary SP frame encode as an SI frame
@@ -419,7 +418,7 @@ int encode_one_frame (void)
     // For field coding, turn MB level field/frame coding flag off
     if (input->MbInterlace)
       mb_adaptive = 0;
-    
+
     if (input->PicInterlace == ADAPTIVE_CODING)
     {
       //Rate control
@@ -430,12 +429,12 @@ int encode_one_frame (void)
 
       img->field_picture = 1;  // we encode fields
       field_picture (top_pic, bottom_pic);
-      
+
       //! Note: the distortion for a field coded picture is stored in the top field
       //! the distortion values in the bottom field are dummies
       dis_fld = top_pic->distortion_y + top_pic->distortion_u + top_pic->distortion_v;
       dis_frm = frame_pic_1->distortion_y + frame_pic_1->distortion_u + frame_pic_1->distortion_v;
-      
+
       if(img->rd_pass==0)
         img->fld_flag = picture_structure_decision (frame_pic_1, top_pic, bottom_pic);
       else if(img->rd_pass==1)
@@ -453,7 +452,7 @@ int encode_one_frame (void)
         generic_RC->FieldFrame = !(img->fld_flag) ? 1 : 0;
       }
     }
-    else   
+    else
       img->fld_flag = 0;
     img->SumFrameQP = tmpFrameQP;
   }
@@ -480,7 +479,7 @@ int encode_one_frame (void)
   else                          //frame mode
   {
     frame_mode_buffer (bits_frm, dis_frm_y, dis_frm_u, dis_frm_v);
-    
+
     if (input->RDPictureDecision && img->rd_pass == 2)
       writeout_picture (frame_pic_3);
     else if (input->RDPictureDecision && img->rd_pass == 1)
@@ -496,11 +495,11 @@ int encode_one_frame (void)
   }
 
   if (frame_pic_si)
-    free_slice_list(frame_pic_si);  
+    free_slice_list(frame_pic_si);
   if (frame_pic_3)
-    free_slice_list(frame_pic_3);  
+    free_slice_list(frame_pic_3);
   if (frame_pic_2)
-    free_slice_list(frame_pic_2);  
+    free_slice_list(frame_pic_2);
   if (frame_pic_1)
     free_slice_list(frame_pic_1);
   if (top_pic)
@@ -633,7 +632,7 @@ int encode_one_frame (void)
           free_storable_picture(enc_frame_picture2);
           free_storable_picture(enc_frame_picture3);
         }
-        else     
+        else
         {
           // key picture will be stored in dpb after redundant picture is coded
           if(key_frame==0)
@@ -657,7 +656,7 @@ int encode_one_frame (void)
   total_frame_buffer++;
 #endif
 
-  // POC200301: Verify that POC coding type 2 is not used if more than one consecutive 
+  // POC200301: Verify that POC coding type 2 is not used if more than one consecutive
   // non-reference frame is requested or if decoding order is different from output order
   if (img->pic_order_cnt_type == 2)
   {
@@ -683,7 +682,7 @@ int encode_one_frame (void)
         bits=(int) (stats->bit_ctr - stats->bit_ctr_n);
       else
       {
-        bits = (int)(stats->bit_ctr - (quadratic_RC->Pprev_bits)); // used for rate control update 
+        bits = (int)(stats->bit_ctr - (quadratic_RC->Pprev_bits)); // used for rate control update
         quadratic_RC->Pprev_bits = stats->bit_ctr;
       }
     }
@@ -704,12 +703,12 @@ int encode_one_frame (void)
       break;
     default:      // P
       stats->bit_ctr_P += stats->bit_ctr - stats->bit_ctr_n;
-      ReportP(tmp_time,me_time);      
+      ReportP(tmp_time,me_time);
     }
-  }  
+  }
 
   if (input->Verbose == 0)
-  { 
+  {
     //for (i = 0; i <= (img->number & 0x0F); i++)
     //printf(".");
     //printf("                              \r");
@@ -721,7 +720,7 @@ int encode_one_frame (void)
   stats->bit_ctr_n = stats->bit_ctr;
 
   //Rate control
-  if(input->RCEnable) 
+  if(input->RCEnable)
   {
     rc_update_pict(quadratic_RC, bits);
 
@@ -769,7 +768,7 @@ static int writeout_picture(Picture *pic)
     for (partition=0; partition<currSlice->max_part_nr; partition++)
     {
       currStream = (currSlice->partArr[partition]).bitstream;
-      assert (currStream->bits_to_go == 8);    //! should always be the case, the 
+      assert (currStream->bits_to_go == 8);    //! should always be the case, the
                                                //! byte alignment is done in terminate_slice
 
       // write only if the partition has content
@@ -777,7 +776,7 @@ static int writeout_picture(Picture *pic)
         writeUnit (currStream,partition);
     }           // partition loop
   }           // slice loop
-  return 0;   
+  return 0;
 }
 
 
@@ -789,17 +788,17 @@ void copy_params(void)
 
   if (active_sps->frame_cropping_flag)
   {
-    enc_picture->frame_cropping_rect_left_offset=active_sps->frame_cropping_rect_left_offset; 
-    enc_picture->frame_cropping_rect_right_offset=active_sps->frame_cropping_rect_right_offset; 
-    enc_picture->frame_cropping_rect_top_offset=active_sps->frame_cropping_rect_top_offset; 
-    enc_picture->frame_cropping_rect_bottom_offset=active_sps->frame_cropping_rect_bottom_offset; 
+    enc_picture->frame_cropping_rect_left_offset=active_sps->frame_cropping_rect_left_offset;
+    enc_picture->frame_cropping_rect_right_offset=active_sps->frame_cropping_rect_right_offset;
+    enc_picture->frame_cropping_rect_top_offset=active_sps->frame_cropping_rect_top_offset;
+    enc_picture->frame_cropping_rect_bottom_offset=active_sps->frame_cropping_rect_bottom_offset;
   }
   else
   {
-    enc_picture->frame_cropping_rect_left_offset=0; 
-    enc_picture->frame_cropping_rect_right_offset=0; 
-    enc_picture->frame_cropping_rect_top_offset=0; 
-    enc_picture->frame_cropping_rect_bottom_offset=0; 
+    enc_picture->frame_cropping_rect_left_offset=0;
+    enc_picture->frame_cropping_rect_right_offset=0;
+    enc_picture->frame_cropping_rect_top_offset=0;
+    enc_picture->frame_cropping_rect_bottom_offset=0;
   }
 }
 
@@ -821,13 +820,13 @@ void frame_picture (Picture *frame, int rd_pass)
     img->ThisPOC=enc_frame_picture3->poc=img->framepoc;
     enc_frame_picture3->top_poc    = img->toppoc;
     enc_frame_picture3->bottom_poc = img->bottompoc;
-    
+
     enc_frame_picture3->frame_poc = img->framepoc;
-    
+
     enc_frame_picture3->pic_num = img->frame_num;
     enc_frame_picture3->frame_num = img->frame_num;
     enc_frame_picture3->coded_frame = 1;
-    
+
     enc_frame_picture3->MbaffFrameFlag = img->MbaffFrameFlag = (input->MbInterlace != FRAME_CODING);
     get_mb_block_pos = img->MbaffFrameFlag ? get_mb_block_pos_mbaff : get_mb_block_pos_normal;
     getNeighbour = img->MbaffFrameFlag ? getAffNeighbour : getNonAffNeighbour;
@@ -841,13 +840,13 @@ void frame_picture (Picture *frame, int rd_pass)
     img->ThisPOC=enc_frame_picture2->poc=img->framepoc;
     enc_frame_picture2->top_poc    = img->toppoc;
     enc_frame_picture2->bottom_poc = img->bottompoc;
-    
+
     enc_frame_picture2->frame_poc = img->framepoc;
-    
+
     enc_frame_picture2->pic_num = img->frame_num;
     enc_frame_picture2->frame_num = img->frame_num;
     enc_frame_picture2->coded_frame = 1;
-    
+
     enc_frame_picture2->MbaffFrameFlag = img->MbaffFrameFlag = (input->MbInterlace != FRAME_CODING);
     get_mb_block_pos = img->MbaffFrameFlag ? get_mb_block_pos_mbaff : get_mb_block_pos_normal;
     getNeighbour = img->MbaffFrameFlag ? getAffNeighbour : getNonAffNeighbour;
@@ -861,13 +860,13 @@ void frame_picture (Picture *frame, int rd_pass)
     img->ThisPOC=enc_frame_picture->poc=img->framepoc;
     enc_frame_picture->top_poc    = img->toppoc;
     enc_frame_picture->bottom_poc = img->bottompoc;
-    
+
     enc_frame_picture->frame_poc = img->framepoc;
-    
+
     enc_frame_picture->pic_num = img->frame_num;
     enc_frame_picture->frame_num = img->frame_num;
     enc_frame_picture->coded_frame = 1;
-    
+
     enc_frame_picture->MbaffFrameFlag = img->MbaffFrameFlag = (input->MbInterlace != FRAME_CODING);
     get_mb_block_pos = img->MbaffFrameFlag ? get_mb_block_pos_mbaff : get_mb_block_pos_normal;
     getNeighbour = img->MbaffFrameFlag ? getAffNeighbour : getNonAffNeighbour;
@@ -884,10 +883,10 @@ void frame_picture (Picture *frame, int rd_pass)
   code_a_picture(frame);
 
   frame->bits_per_picture = 8 * ((((img->currentSlice)->partArr[0]).bitstream)->byte_pos);
-  
+
   if (img->structure==FRAME)
   {
-    find_distortion ();      
+    find_distortion ();
     frame->distortion_y = snr->snr_y;
     frame->distortion_u = snr->snr_u;
     frame->distortion_v = snr->snr_v;
@@ -904,10 +903,10 @@ void frame_picture (Picture *frame, int rd_pass)
 void field_picture (Picture *top, Picture *bottom)
 {
   //Rate control
-  int old_pic_type;              // picture type of top field used for rate control    
+  int old_pic_type;              // picture type of top field used for rate control
   int TopFieldBits;
   img->SumFrameQP = 0;
-  
+
   //Rate control
   old_pic_type = img->type;
 
@@ -915,12 +914,12 @@ void field_picture (Picture *top, Picture *bottom)
   stats->em_prev_bits = &stats->em_prev_bits_fld;
   img->number *= 2;
   img->buf_cycle *= 2;
-  img->height = (input->img_height+img->auto_crop_bottom) / 2; 
+  img->height = (input->img_height+img->auto_crop_bottom) / 2;
   img->height_cr = img->height_cr_frame / 2;
   img->fld_flag = 1;
   img->PicSizeInMbs = img->FrameSizeInMbs/2;
   // Top field
-  
+
   enc_top_picture  = alloc_storable_picture ((PictureStructure) img->structure, img->width, img->height, img->width_cr, img->height_cr);
   enc_top_picture->poc=img->toppoc;
   enc_top_picture->frame_poc = img->toppoc;
@@ -931,7 +930,7 @@ void field_picture (Picture *top, Picture *bottom)
   get_mb_block_pos = get_mb_block_pos_normal;
   getNeighbour = getNonAffNeighbour;
   img->ThisPOC = img->toppoc;
-  
+
   img->structure = TOP_FIELD;
   enc_picture = enc_top_picture;
   copy_params();
@@ -950,18 +949,18 @@ void field_picture (Picture *top, Picture *bottom)
     img->BasicUnit=input->basicunit;
 
     if(input->PicInterlace==FIELD_CODING)
-      rc_init_pict(quadratic_RC, 0,1,1, 1.0F); 
+      rc_init_pict(quadratic_RC, 0,1,1, 1.0F);
     else
       rc_init_pict(quadratic_RC, 0,1,0, 1.0F);
 
-    img->qp  = updateQP(quadratic_RC, 1); 
+    img->qp  = updateQP(quadratic_RC, 1);
 
     generic_RC->TopFieldFlag=1;
-  }  
+  }
 
   code_a_picture(top_pic);
   enc_picture->structure = (PictureStructure) 1;
-    
+
   store_picture_in_dpb(enc_top_picture);
 
   top->bits_per_picture = 8 * ((((img->currentSlice)->partArr[0]).bitstream)->byte_pos);
@@ -1001,10 +1000,10 @@ void field_picture (Picture *top, Picture *bottom)
   if(input->RCEnable)
   {
     quadratic_RC->bits_topfield = TopFieldBits;
-    rc_init_pict(quadratic_RC, 0,0,0, 1.0F); 
-    img->qp  = updateQP(quadratic_RC, 0); 
+    rc_init_pict(quadratic_RC, 0,0,0, 1.0F);
+    img->qp  = updateQP(quadratic_RC, 0);
     generic_RC->TopFieldFlag = 0;
-  }  
+  }
 
   enc_picture->structure = (PictureStructure) 2;
   code_a_picture(bottom_pic);
@@ -1059,7 +1058,7 @@ static int picture_structure_decision (Picture *frame, Picture *top, Picture *bo
   int bit_frame, bit_field;
 
   lambda_picture = 0.68 * pow (2, img->bitdepth_lambda_scale + ((img->qp - SHIFT_QP) / 3.0)) * (bframe ? 1 : 1);
-  
+
   snr_frame = frame->distortion_y + frame->distortion_u + frame->distortion_v;
   //! all distrortions of a field picture are accumulated in the top field
   snr_field = top->distortion_y + top->distortion_u + top->distortion_v;
@@ -1100,12 +1099,12 @@ static void frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame
     img->height = img->height / 2;
     img->height_cr = img->height_cr / 2;
     img->number *= 2;
-    
+
     put_buffer_top ();
-     
+
     img->number++;
     put_buffer_bot ();
-    
+
     img->number /= 2;         // reset the img->number to field
     img->height = (input->img_height+img->auto_crop_bottom);
     img->height_cr = img->height_cr_frame;
@@ -1114,7 +1113,7 @@ static void frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame
     snr->snr_u = snr_frame_u;
     snr->snr_v = snr_frame_v;
     put_buffer_frame ();
-    
+
   }
 }
 
@@ -1141,7 +1140,7 @@ static void init_frame (void)
 {
   int i;
   int prevP_no, nextP_no;
-  
+
   last_P_no = last_P_no_frm;
 
   img->current_mb_nr = 0;
@@ -1149,48 +1148,48 @@ static void init_frame (void)
   stats->bit_slice = 0;
 
   img->mb_y = img->mb_x = 0;
-  img->block_y = img->pix_y = img->pix_c_y = 0; 
+  img->block_y = img->pix_y = img->pix_c_y = 0;
   img->block_x = img->pix_x = img->block_c_x = img->pix_c_x = 0;
 
-  // The 'slice_nr' of each macroblock is set to -1 here, to guarantee the correct encoding 
-  // with FMO (if no FMO, encoding is correct without following assignment), 
+  // The 'slice_nr' of each macroblock is set to -1 here, to guarantee the correct encoding
+  // with FMO (if no FMO, encoding is correct without following assignment),
   // for which MBs may not be encoded with scan order
   for(i=0;i< ((int) (img->FrameSizeInMbs));i++)
     img->mb_data[i].slice_nr=-1;
-	
+
   if (img->b_frame_to_code == 0)
   {
     img->tr = start_tr_in_this_IGOP + IMG_NUMBER * (input->jumpd + 1);
-    
+
     img->imgtr_last_P_frm = img->imgtr_next_P_frm;
     img->imgtr_next_P_frm = img->tr;
-    
+
 #ifdef _ADAPT_LAST_GROUP_
     if (input->last_frame && img->number + 1 == input->no_frames)
       img->tr = input->last_frame;
 #endif
-    
+
     if (IMG_NUMBER != 0 && input->successive_Bframe != 0)     // B pictures to encode
       nextP_tr_frm = img->tr;
-    
+
     //Rate control
     if(!input->RCEnable)                  // without using rate control
     {
       if (img->type == I_SLICE)
       {
 #ifdef _CHANGE_QP_
-	//QP oscillation for secondary SP frames
+        //QP oscillation for secondary SP frames
         if ((input->qp2start > 0 && img->tr >= input->qp2start && input->sp2_frame_indicator==0)||
           ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ) && (input->sp2_frame_indicator==1)))
           img->qp = input->qp02;
         else
-#endif 
+#endif
           img->qp = input->qp0;   // set quant. parameter for I-frame
       }
       else
       {
 #ifdef _CHANGE_QP_
-	//QP oscillation for secondary SP frames
+        //QP oscillation for secondary SP frames
         if ((input->qp2start > 0 && img->tr >= input->qp2start && input->sp2_frame_indicator==0)||
           ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ) && (input->sp2_frame_indicator==1)))
           img->qp = input->qpN2 + (img->nal_reference_idc ? 0 : input->DispPQPOffset);
@@ -1201,21 +1200,21 @@ static void init_frame (void)
         if (img->type == SP_SLICE)
         {
           if ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ))
-          { 
-            img->qp = input->qpN2-(input->qpN-input->qpsp); 
+          {
+            img->qp = input->qpN2-(input->qpN-input->qpsp);
             img->qpsp = input->qpN2-(input->qpN-input->qpsp_pred);
-          }	                     
+          }
           else
           {
             img->qp = input->qpsp;
             img->qpsp = input->qpsp_pred;
           }
-        }   
+        }
       }
     }
 
     img->mb_y_intra = img->mb_y_upd;  //  img->mb_y_intra indicates which GOB to intra code for this frame
-    
+
     if (input->intra_upd > 0) // if error robustness, find next GOB to update
     {
       img->mb_y_upd = (IMG_NUMBER / input->intra_upd) % (img->height / MB_BLOCK_SIZE);
@@ -1226,19 +1225,19 @@ static void init_frame (void)
     img->p_interval = input->jumpd + 1;
     prevP_no = start_tr_in_this_IGOP + (IMG_NUMBER - 1) * img->p_interval;
     nextP_no = start_tr_in_this_IGOP + (IMG_NUMBER) * img->p_interval;
-    
+
 #ifdef _ADAPT_LAST_GROUP_
     last_P_no[0] = prevP_no;
     for (i = 1; i < img->buf_cycle; i++)
       last_P_no[i] = last_P_no[i - 1] - img->p_interval;
-    
+
     if (input->last_frame && img->number + 1 == input->no_frames)
     {
       nextP_no = input->last_frame;
       img->p_interval = nextP_no - prevP_no;
     }
 #endif
-    
+
     img->b_interval =
       ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
 
@@ -1247,17 +1246,17 @@ static void init_frame (void)
 
     if (input->HierarchicalCoding)
       img->tr = prevP_no + (int) (img->b_interval  * (double) (1 + gop_structure[img->b_frame_to_code - 1].display_no));      // from prev_P
-    else      
+    else
       img->tr = prevP_no + (int) (img->b_interval * (double) img->b_frame_to_code);      // from prev_P
-    
+
 
     if (img->tr >= nextP_no)
       img->tr = nextP_no - 1;
     //Rate control
-    if(!input->RCEnable && input->HierarchicalCoding == 0)                  // without using rate control   
-    {    
+    if(!input->RCEnable && input->HierarchicalCoding == 0)                  // without using rate control
+    {
 #ifdef _CHANGE_QP_
-	//QP oscillation for secondary SP frames
+      //QP oscillation for secondary SP frames
       if ((input->qp2start > 0 && img->tr >= input->qp2start && input->sp2_frame_indicator==0)||
         ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ) && (input->sp2_frame_indicator==1)))
       {
@@ -1272,7 +1271,7 @@ static void init_frame (void)
       if (img->nal_reference_idc)
       {
 #ifdef _CHANGE_QP_
-	//QP oscillation for secondary SP frames
+        //QP oscillation for secondary SP frames
         if ((input->qp2start > 0 && img->tr >= input->qp2start && input->sp2_frame_indicator==0)||
           ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ) && (input->sp2_frame_indicator==1)))
         {
@@ -1285,7 +1284,7 @@ static void init_frame (void)
         }
       }
     }
-    else if (!input->RCEnable && input->HierarchicalCoding !=0)  
+    else if (!input->RCEnable && input->HierarchicalCoding !=0)
     {
       // Note that _CHANGE_QP_ does not anymore work for gop_structure. Needs to be fixed
       img->qp =  gop_structure[img->b_frame_to_code - 1].slice_qp;
@@ -1334,38 +1333,38 @@ static void init_field (void)
   if (!img->b_frame_to_code)
   {
     img->tr = img->number * (input->jumpd + 2) + img->fld_type;
-    
+
     if (!img->fld_type)
     {
       img->imgtr_last_P_fld = img->imgtr_next_P_fld;
       img->imgtr_next_P_fld = img->tr;
     }
-    
+
 #ifdef _ADAPT_LAST_GROUP_
     if (input->last_frame && img->number + 1 == input->no_frames)
       img->tr = input->last_frame;
 #endif
     if (img->number != 0 && input->successive_Bframe != 0)    // B pictures to encode
       nextP_tr_fld = img->tr;
-    
+
       //Rate control
     if(!input->RCEnable)                  // without using rate control
     {
       if (img->type == I_SLICE)
       {
 #ifdef _CHANGE_QP_
-	//QP oscillation for secondary SP frames
+        //QP oscillation for secondary SP frames
         if ((input->qp2start > 0 && img->tr >= input->qp2start && input->sp2_frame_indicator==0)||
           ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ) && (input->sp2_frame_indicator==1)))
           img->qp = input->qp02;
         else
-#endif 
+#endif
           img->qp = input->qp0;   // set quant. parameter for I-frame
       }
       else
       {
 #ifdef _CHANGE_QP_
-	//QP oscillation for secondary SP frames
+        //QP oscillation for secondary SP frames
         if ((input->qp2start > 0 && img->tr >= input->qp2start && input->sp2_frame_indicator==0)||
           ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ) && (input->sp2_frame_indicator==1)))
           img->qp = input->qpN2 + (img->nal_reference_idc ? 0 : input->DispPQPOffset);
@@ -1376,9 +1375,9 @@ static void init_field (void)
         {
           if ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ))
           {
-            img->qp = input->qpN2-(input->qpN-input->qpsp); 
+            img->qp = input->qpN2-(input->qpN-input->qpsp);
             img->qpsp = input->qpN2-(input->qpN-input->qpsp_pred);
-          }	                     
+          }
           else
           {
             img->qp = input->qpsp;
@@ -1421,7 +1420,7 @@ static void init_field (void)
         last_P_no[2 * i + 1] = last_P_no[2 * i - 1] - img->p_interval;
       }
     }
-    
+
     if (input->last_frame && img->number + 1 == input->no_frames)
     {
       nextP_no = input->last_frame;
@@ -1430,23 +1429,23 @@ static void init_field (void)
 #endif
     img->b_interval =
       ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
-    
+
     if (input->HierarchicalCoding == 3)
       img->b_interval = 1.0;
-    
+
     if (input->HierarchicalCoding)
       img->tr = prevP_no + (int) ((img->b_interval + 1.0) * (double) (1 + gop_structure[img->b_frame_to_code - 1].display_no));      // from prev_P
-    else      
+    else
       img->tr = prevP_no + (int) ((img->b_interval + 1.0) * (double) img->b_frame_to_code);      // from prev_P
-    
-    
+
+
     if (img->tr >= nextP_no)
       img->tr = nextP_no - 1; // ?????
     //Rate control
     if(!input->RCEnable && input->HierarchicalCoding == 0)                  // without using rate control
     {
 #ifdef _CHANGE_QP_
-	//QP oscillation for secondary SP frames
+      //QP oscillation for secondary SP frames
       if ((input->qp2start > 0 && img->tr >= input->qp2start && input->sp2_frame_indicator==0)||
         ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ) && (input->sp2_frame_indicator==1)))
       {
@@ -1458,7 +1457,7 @@ static void init_field (void)
       if (img->nal_reference_idc)
       {
 #ifdef _CHANGE_QP_
-	//QP oscillation for secondary SP frames
+        //QP oscillation for secondary SP frames
         if ((input->qp2start > 0 && img->tr >= input->qp2start && input->sp2_frame_indicator==0)||
           ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ) && (input->sp2_frame_indicator==1)))
         {
@@ -1467,11 +1466,11 @@ static void init_field (void)
         else
 #endif
           img->qp = iClip3(-img->bitdepth_luma_qp_scale,51,input->qpB + input->qpBRSOffset);
-        
+
       }
     }
     else if (!input->RCEnable && input->HierarchicalCoding != 0)
-    {          
+    {
       img->qp =  gop_structure[img->b_frame_to_code - 1].slice_qp;
     }
   }
@@ -1497,9 +1496,9 @@ static void init_field (void)
  *    in this module
  ************************************************************************/
 void UnifiedOneForthPix (StorablePicture *s)
-{  
+{
   int ypadded_size = s->size_y + 2 * IMG_PAD_SIZE;
-  int xpadded_size = s->size_x + 2 * IMG_PAD_SIZE;  
+  int xpadded_size = s->size_x + 2 * IMG_PAD_SIZE;
 
   // don't upsample twice
   if (s->imgY_sub)
@@ -1512,17 +1511,17 @@ void UnifiedOneForthPix (StorablePicture *s)
   if ( input->ChromaMCBuffer )
   {
     // UV components
-    if ( img->yuv_format != YUV400 ) 
+    if ( img->yuv_format != YUV400 )
     {
-      if ( img->yuv_format == YUV420 ) 
+      if ( img->yuv_format == YUV420 )
       {
         get_mem5Dpel (&(s->imgUV_sub), 2, 8, 8, ypadded_size/2, xpadded_size/2);
       }
-      else if ( img->yuv_format == YUV422 ) 
+      else if ( img->yuv_format == YUV422 )
       {
         get_mem5Dpel (&(s->imgUV_sub), 2, 4, 8, ypadded_size, xpadded_size/2);
       }
-      else 
+      else
       { // YUV444
         get_mem5Dpel (&(s->imgUV_sub), 2, 4, 4, ypadded_size, xpadded_size);
       }
@@ -1553,14 +1552,14 @@ static void find_snr (void)
   unsigned int max_pix_value_sqd_uv = img->max_imgpel_value_uv * img->max_imgpel_value_uv;
 
   //  Calculate  PSNR for Y, U and V.
-  
+
   //     Luma.
   impix = input->img_height * input->img_width;
   impix_cr = input->img_height_cr * input->img_width_cr;
 
   if (img->fld_flag != 0)
   {
-      
+
     diff_y = 0;
     for (i = 0; i < input->img_width; ++i)
     {
@@ -1569,13 +1568,13 @@ static void find_snr (void)
         diff_y += img->quad[imgY_org[j][i] - imgY_com[j][i]];
       }
     }
-    
+
     if (img->yuv_format != YUV400)
     {
       //     Chroma.
       diff_u = 0;
       diff_v = 0;
-      
+
       for (i = 0; i < input->img_width_cr; i++)
       {
         for (j = 0; j < input->img_height_cr; j++)
@@ -1587,14 +1586,14 @@ static void find_snr (void)
     }
   }
   else
-  { 
+  {
     imgY_org  = imgY_org_frm;
     imgUV_org = imgUV_org_frm;
 
     if(input->PicInterlace==ADAPTIVE_CODING)
     {
       enc_picture = enc_frame_picture;
-    }  
+    }
 
     diff_y = 0;
     for (i = 0; i < input->img_width; ++i)
@@ -1604,13 +1603,13 @@ static void find_snr (void)
         diff_y += img->quad[imgY_org[j][i] - enc_picture->imgY[j][i]];
       }
     }
-    
+
     if (img->yuv_format != YUV400)
     {
       //     Chroma.
       diff_u = 0;
       diff_v = 0;
-      
+
       for (i = 0; i < input->img_width_cr; i++)
       {
         for (j = 0; j < input->img_height_cr; j++)
@@ -1631,7 +1630,7 @@ static void find_snr (void)
   if (diff_u == 0)
     diff_u = 1;
   if (diff_v == 0)
-    diff_v = 1; 
+    diff_v = 1;
 #endif
 
   //  Collecting SNR statistics
@@ -1649,7 +1648,7 @@ static void find_snr (void)
       snr->snr_v = 0.0;
     }
   }
-  
+
 
   if (img->number == 0)
   {
@@ -1680,9 +1679,9 @@ static void find_snr (void)
     snr->snr_va = (float) (snr->snr_va * total_frames + snr->snr_v) / (total_frames + 1); // average snr v croma for all frames inc. first
     snr->msse_y = (float) (snr->msse_y * total_frames + snr->sse_y) / (total_frames + 1); // average sse luma for all frames inc. first
     snr->msse_u = (float) (snr->msse_u * total_frames + snr->sse_u) / (total_frames + 1); // average sse u croma for all frames inc. first
-    snr->msse_v = (float) (snr->msse_v * total_frames + snr->sse_v) / (total_frames + 1); // average sse v croma for all frames inc. first  
+    snr->msse_v = (float) (snr->msse_v * total_frames + snr->sse_v) / (total_frames + 1); // average sse v croma for all frames inc. first
   }
-  
+
   snr->snr_yt[img->type] = (float) (snr->snr_yt[img->type] * (frame_ctr[img->type] - 1) + snr->snr_y) / ( frame_ctr[img->type] );  // average luma snr for img->type coded frames
   snr->snr_ut[img->type] = (float) (snr->snr_ut[img->type] * (frame_ctr[img->type] - 1) + snr->snr_u) / ( frame_ctr[img->type] );  // average chroma u snr for img->type coded frames
   snr->snr_vt[img->type] = (float) (snr->snr_vt[img->type] * (frame_ctr[img->type] - 1) + snr->snr_v) / ( frame_ctr[img->type] );  // average chroma v snr for img->type coded frames
@@ -1699,15 +1698,15 @@ static void find_distortion (void)
   int i, j;
   int64 diff_y, diff_u, diff_v;
   int impix;
-  
+
   //  Calculate  PSNR for Y, U and V.
-  
+
   //     Luma.
   impix = input->img_height * input->img_width;
-  
+
   if (img->structure!=FRAME)
   {
-    
+
     diff_y = 0;
     for (i = 0; i < input->img_width; ++i)
     {
@@ -1716,10 +1715,10 @@ static void find_distortion (void)
         diff_y += img->quad[imgY_org[j][i] - imgY_com[j][i]];
       }
     }
-    
+
     diff_u = 0;
     diff_v = 0;
-    
+
     if (img->yuv_format != YUV400)
     {
       //     Chroma.
@@ -1737,7 +1736,7 @@ static void find_distortion (void)
   {
     imgY_org  = imgY_org_frm;
     imgUV_org = imgUV_org_frm;
-    
+
     diff_y = 0;
     for (i = 0; i < input->img_width; ++i)
     {
@@ -1746,10 +1745,10 @@ static void find_distortion (void)
         diff_y += img->quad[imgY_org[j][i] - enc_picture->imgY[j][i]];
       }
     }
-    
+
     diff_u = 0;
     diff_v = 0;
-    
+
     if (img->yuv_format != YUV400)
     {
       //     Chroma.
@@ -1769,7 +1768,7 @@ static void find_distortion (void)
   snr->snr_v = (float) diff_v;
 }
 
-  
+
   /*!
  ************************************************************************
  * \brief
@@ -1782,7 +1781,7 @@ Boolean dummy_slice_too_big (int bits_slice)
 }
 
 
-/*! 
+/*!
 ***************************************************************************
 // For MB level field/frame coding
 ***************************************************************************
@@ -1801,10 +1800,10 @@ void copy_rdopt_data (int bot_block)
   int list_offset = currMB->list_offset;
 
   mode                = rdopt->mode;
-  currMB->mb_type     = rdopt->mb_type;   // copy mb_type 
-  currMB->cbp         = rdopt->cbp;   // copy cbp
-  currMB->cbp_blk     = rdopt->cbp_blk;   // copy cbp_blk
-  currMB->bi_pred_me  = rdopt->bi_pred_me;   // copy biprediction
+  currMB->mb_type     = rdopt->mb_type;    // copy mb_type
+  currMB->cbp         = rdopt->cbp;        // copy cbp
+  currMB->cbp_blk     = rdopt->cbp_blk;    // copy cbp_blk
+  currMB->bi_pred_me  = rdopt->bi_pred_me; // copy biprediction
   img->i16offset      = rdopt->i16offset;
 
   currMB->prev_qp=rdopt->prev_qp;
@@ -1823,7 +1822,7 @@ void copy_rdopt_data (int bot_block)
       for (k = 0; k < 2; k++)
         memcpy(img->cofAC[i][j][k],rdopt->cofAC[i][j][k], 65 * sizeof(int));
   }
-  
+
   for (i = 0; i < 3; i++)
   {
     for (k = 0; k < 2; k++)
@@ -1835,9 +1834,9 @@ void copy_rdopt_data (int bot_block)
     block_y = img->block_y + j;
     memcpy(&enc_picture->ref_idx[LIST_0][block_y][img->block_x], rdopt->refar[LIST_0][j], BLOCK_MULTIPLE * sizeof(char));
     for (i = 0; i < BLOCK_MULTIPLE; i++)
-      enc_picture->ref_pic_id [LIST_0][block_y][img->block_x + i] = 
+      enc_picture->ref_pic_id [LIST_0][block_y][img->block_x + i] =
       enc_picture->ref_pic_num[LIST_0 + list_offset][(short)enc_picture->ref_idx[LIST_0][block_y][img->block_x+i]];
-  } 
+  }
   if (bframe)
   {
     for (j = 0; j < BLOCK_MULTIPLE; j++)
@@ -1845,7 +1844,7 @@ void copy_rdopt_data (int bot_block)
       block_y = img->block_y + j;
       memcpy(&enc_picture->ref_idx[LIST_1][block_y][img->block_x], rdopt->refar[LIST_1][j], BLOCK_MULTIPLE * sizeof(char));
       for (i = 0; i < BLOCK_MULTIPLE; i++)
-        enc_picture->ref_pic_id [LIST_1][block_y][img->block_x + i] = 
+        enc_picture->ref_pic_id [LIST_1][block_y][img->block_x + i] =
         enc_picture->ref_pic_num[LIST_1 + list_offset][(short)enc_picture->ref_idx[LIST_1][block_y][img->block_x+i]];
     }
   }
@@ -1853,7 +1852,7 @@ void copy_rdopt_data (int bot_block)
   //===== reconstruction values =====
   for (j = 0; j < MB_BLOCK_SIZE; j++)
     memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x],rdopt->rec_mbY[j], MB_BLOCK_SIZE * sizeof(imgpel));
-  
+
   if (img->yuv_format != YUV400)
   {
     for (j = 0; j < img->mb_cr_size_y; j++)
@@ -1867,7 +1866,7 @@ void copy_rdopt_data (int bot_block)
   memcpy(currMB->b8pdir,rdopt->b8pdir, 4 * sizeof(int));
 
   currMB->luma_transform_size_8x8_flag = rdopt->luma_transform_size_8x8_flag;
-  
+
   //==== intra prediction modes ====
   if (mode == P8x8)
   {
@@ -1894,7 +1893,7 @@ void copy_rdopt_data (int bot_block)
   {
     // motion vectors
     copy_motion_vectors_MB ();
-    
+
     if (!IS_INTRA(currMB))
     {
       for (j = 0; j < 4; j++)
@@ -1938,13 +1937,13 @@ void copy_rdopt_data (int bot_block)
           memset(enc_picture->mv[LIST_1][j+img->block_y][img->block_x], 0, 2 * BLOCK_MULTIPLE * sizeof(short));
       }
     }
-  }  
+  }
 }                             // end of copy_rdopt_data
-  
+
 static void copy_motion_vectors_MB (void)
 {
   int i,j,k,l;
- 
+
   for (i = 0; i < 4; i++)
   {
     for (j = 0; j < 4; j++)
@@ -1961,7 +1960,7 @@ static void copy_motion_vectors_MB (void)
 
           img->pred_mv[j][i][LIST_0][k][l][0] = rdopt->pred_mv[j][i][LIST_0][k][l][0];
           img->pred_mv[j][i][LIST_0][k][l][1] = rdopt->pred_mv[j][i][LIST_0][k][l][1];
-          
+
           img->pred_mv[j][i][LIST_1][k][l][0] = rdopt->pred_mv[j][i][LIST_1][k][l][0];
           img->pred_mv[j][i][LIST_1][k][l][1] = rdopt->pred_mv[j][i][LIST_1][k][l][1];
         }
@@ -1969,7 +1968,7 @@ static void copy_motion_vectors_MB (void)
     }
   }
 }
-  
+
 
 static void ReportNALNonVLCBits(time_t tmp_time, time_t me_time)
 {
@@ -1986,9 +1985,9 @@ static void ReportFirstframe(time_t tmp_time, time_t me_time)
   if (input->Verbose == 1)
   {
     printf ("%04d(IDR)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 
+      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
       img->AverageFrameQP, snr->snr_y, snr->snr_u, snr->snr_v, (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc); 
+      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
   }
   else if (input->Verbose == 2)
   {
@@ -2001,17 +2000,17 @@ static void ReportFirstframe(time_t tmp_time, time_t me_time)
   if(input->RCEnable)
   {
     if((!input->PicInterlace) && (!input->MbInterlace))
-      bits = (int) (stats->bit_ctr - stats->bit_ctr_n); // used for rate control update 
+      bits = (int) (stats->bit_ctr - stats->bit_ctr_n); // used for rate control update
     else
     {
-      bits = (int)(stats->bit_ctr - quadratic_RC->Iprev_bits); // used for rate control update 
+      bits = (int)(stats->bit_ctr - quadratic_RC->Iprev_bits); // used for rate control update
       quadratic_RC->Iprev_bits = stats->bit_ctr;
     }
   }
 
   stats->bit_ctr_I = stats->bit_ctr;
   stats->bit_ctr = 0;
-  
+
 }
 
 
@@ -2021,12 +2020,12 @@ static void ReportIntra(time_t tmp_time, time_t me_time)
   {
    if (img->currentPicture->idr_flag == 1)
       printf ("%04d(IDR)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 
+      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
       img->AverageFrameQP, snr->snr_y, snr->snr_u, snr->snr_v, (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc); 
+      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
     else
       printf ("%04d(I)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 
+      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
       img->AverageFrameQP, snr->snr_y, snr->snr_u, snr->snr_v, (int)tmp_time, (int)me_time,
       img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
   }
@@ -2036,7 +2035,7 @@ static void ReportIntra(time_t tmp_time, time_t me_time)
       printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
       frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 0,
       img->AverageFrameQP, snr->snr_y, snr->snr_u, snr->snr_v, (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc); 
+      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
     else
       printf ("%04d(I)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
       frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 0,
@@ -2050,15 +2049,15 @@ static void ReportSP(time_t tmp_time, time_t me_time)
   if (input->Verbose == 1)
   {
     printf ("%04d(SP) %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),  
+      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
       img->AverageFrameQP, snr->snr_y, snr->snr_u, snr->snr_v, (int)tmp_time, (int)me_time,
       img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
   }
   else if (input->Verbose == 2)
   {
-    
+
     printf ("%04d(SP) %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_pred_flag, 
+      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_pred_flag,
       img->AverageFrameQP, snr->snr_y, snr->snr_u, snr->snr_v, (int)tmp_time, (int)me_time,
       img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
   }
@@ -2084,13 +2083,13 @@ static void ReportB(time_t tmp_time, time_t me_time)
 
 
 static void ReportP(time_t tmp_time, time_t me_time)
-{            
+{
   if (input->Verbose == 1)
   {
     if(input->redundant_pic_flag==0)
     {
       printf ("%04d(P)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-        frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 
+        frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
         img->AverageFrameQP, snr->snr_y, snr->snr_u, snr->snr_v, (int)tmp_time, (int)me_time,
         img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
     }
@@ -2099,14 +2098,14 @@ static void ReportP(time_t tmp_time, time_t me_time)
       if(!redundant_coding)
       {
         printf ("%04d(P)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-          frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 
+          frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
           img->AverageFrameQP, snr->snr_y, snr->snr_u, snr->snr_v, (int)tmp_time, (int)me_time,
           img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
       }
       else
       { // report a redundant picture.
         printf ("    (R)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-          (int) (stats->bit_ctr - stats->bit_ctr_n), 
+          (int) (stats->bit_ctr - stats->bit_ctr_n),
           img->AverageFrameQP, snr->snr_y, snr->snr_u, snr->snr_v, (int)tmp_time, (int)me_time,
           img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
       }
@@ -2115,7 +2114,7 @@ static void ReportP(time_t tmp_time, time_t me_time)
   else if (input->Verbose == 2)
   {
     printf ("%04d(P)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_pred_flag, 
+      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_pred_flag,
       img->AverageFrameQP, snr->snr_y, snr->snr_u, snr->snr_v, (int)tmp_time, (int)me_time,
       img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active, img->rd_pass, img->nal_reference_idc);
   }
@@ -2149,7 +2148,7 @@ static void PaddAutoCropBorders (int org_size_x, int org_size_y, int img_size_x,
                                  int org_size_x_cr, int org_size_y_cr, int img_size_x_cr, int img_size_y_cr)
 {
   int x, y;
-  
+
   //padding right border
   for (y=0; y<org_size_y; y++)
     for (x=org_size_x; x<img_size_x; x++)
@@ -2170,7 +2169,7 @@ static void PaddAutoCropBorders (int org_size_x, int org_size_y, int img_size_x,
         imgUV_org_frm [0][y][x] = imgUV_org_frm [0][y][x-1];
         imgUV_org_frm [1][y][x] = imgUV_org_frm [1][y][x-1];
       }
-     
+
     //padding bottom border
     for (y=org_size_y_cr; y<img_size_y_cr; y++)
       for (x=0; x<img_size_x_cr; x++)
@@ -2199,7 +2198,7 @@ static int CalculateFrameNumber(void)
   {
     if (input->HierarchicalCoding)
       frame_no = start_tr_in_this_IGOP + (IMG_NUMBER - 1) * (input->jumpd + 1) + (int) (img->b_interval * (double) (1 + gop_structure[img->b_frame_to_code - 1].display_no));
-    else      
+    else
       frame_no = start_tr_in_this_IGOP + (IMG_NUMBER - 1) * (input->jumpd + 1) + (int) (img->b_interval * (double) img->b_frame_to_code);
   }
   else
@@ -2325,7 +2324,7 @@ void buf2img ( imgpel** imgX,           //!< Pointer to image plane
 static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int xs_cr, int ys_cr)
 {
   unsigned int symbol_size_in_bytes = img->pic_unit_size_on_disk/8;
-  
+
   const int imgsize_y = xs*ys;
   const int imgsize_uv = xs_cr*ys_cr;
 
@@ -2349,14 +2348,14 @@ static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int
   }
 
   // skip starting frames
-  if (lseek (p_in, framesize_in_bytes * input->start_frame, SEEK_CUR) == -1) 
+  if (lseek (p_in, framesize_in_bytes * input->start_frame, SEEK_CUR) == -1)
   {
     snprintf(errortext, ET_SIZE, "ReadOneFrame: cannot advance file pointer in p_in beyond frame %d\n", input->start_frame);
     error (errortext,-1);
-  } 
+  }
 
-  // seek to current frame 
-  if (lseek (p_in, framesize_in_bytes * FrameNoInFile, SEEK_CUR) == -1) 
+  // seek to current frame
+  if (lseek (p_in, framesize_in_bytes * FrameNoInFile, SEEK_CUR) == -1)
   {
     snprintf(errortext, ET_SIZE, "ReadOneFrame: cannot advance file pointer in p_in beyond frame %d\n", input->start_frame + FrameNoInFile);
     error (errortext,-1);
@@ -2385,9 +2384,9 @@ static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int
       {
         for (i=0; i < xs; i++)
         {
-          imgY_org_frm[j][i]= (imgpel) (imgY_org_frm[j][i] & ((1<<img->bitdepth_luma ) - 1));      
+          imgY_org_frm[j][i]= (imgpel) (imgY_org_frm[j][i] & ((1<<img->bitdepth_luma ) - 1));
         }
-      }      
+      }
     }
 #endif
     if (img->yuv_format != YUV400)
@@ -2399,10 +2398,10 @@ static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int
         exit (-1);
       }
       buf2img(imgUV_org_frm[0], buf, xs_cr, ys_cr, symbol_size_in_bytes);
-      
+
       if(rgb_input)
         lseek (p_in, -framesize_in_bytes, SEEK_CUR);
-      
+
       if (read(p_in, buf, bytes_uv) != bytes_uv)
       {
         printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF?, exiting", bytes_y);
@@ -2414,13 +2413,13 @@ static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int
 #ifdef _DEBUG_BITDEPTH_
       {
         int i,j;
-        
+
         for (j=0; j < ys_cr; j++)
         {
           for (i=0; i < xs_cr; i++)
           {
-            imgUV_org_frm[0][j][i]=(imgpel) (imgUV_org_frm[0][j][i] & ((1<<img->bitdepth_chroma ) - 1));      
-            imgUV_org_frm[1][j][i]=(imgpel) (imgUV_org_frm[1][j][i] & ((1<<img->bitdepth_chroma ) - 1));      
+            imgUV_org_frm[0][j][i]=(imgpel) (imgUV_org_frm[0][j][i] & ((1<<img->bitdepth_chroma ) - 1));
+            imgUV_org_frm[1][j][i]=(imgpel) (imgUV_org_frm[1][j][i] & ((1<<img->bitdepth_chroma ) - 1));
           }
         }
       }
@@ -2436,26 +2435,26 @@ static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int
     exit (-1);
   }
   free (buf);
-  
+
 }
 
 
 /*!
  ************************************************************************
  * \brief
- *    point to frame coding variables 
+ *    point to frame coding variables
  ************************************************************************
  */
 static void put_buffer_frame(void)
 {
   imgY_org  = imgY_org_frm;
-  imgUV_org = imgUV_org_frm;  
+  imgUV_org = imgUV_org_frm;
 }
 
 /*!
  ************************************************************************
  * \brief
- *    point to top field coding variables 
+ *    point to top field coding variables
  ************************************************************************
  */
 static void put_buffer_top(void)
@@ -2469,7 +2468,7 @@ static void put_buffer_top(void)
 /*!
  ************************************************************************
  * \brief
- *    point to bottom field coding variables 
+ *    point to bottom field coding variables
  ************************************************************************
  */
 static void put_buffer_bot(void)
@@ -2515,7 +2514,7 @@ static void writeUnit(Bitstream* currStream, int partition)
     {
       nalu->nal_unit_type = NALU_TYPE_DPA +  partition;
     }
-    
+
     if (img->nal_reference_idc !=0)
     {
       nalu->nal_reference_idc = NALU_PRIORITY_HIGH;
@@ -2544,17 +2543,17 @@ static void writeUnit(Bitstream* currStream, int partition)
     {
       nalu->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
     }
-  }      
+  }
   nalu->forbidden_bit = 0;
   stats->bit_ctr += WriteNALU (nalu);
 
   FreeNALU(nalu);
 }
-              
+
 /*!
  ************************************************************************
  * \brief
- *    performs multi-pass encoding of same picture using different 
+ *    performs multi-pass encoding of same picture using different
  *    coding conditions
  ************************************************************************
  */
@@ -2567,6 +2566,13 @@ static void rdPictureCoding(void)
   int skip_encode = 0;
   pic_parameter_set_rbsp_t *sec_pps;
   int tmpFrameQP = img->SumFrameQP;
+
+  if ( input->RCEnable )
+  {
+    // save the current RC model as preliminary best
+    copy_rc_jvt( quadratic_RC_best, quadratic_RC );
+    copy_rc_generic( generic_RC_best, generic_RC );
+  }
 
   if (img->type!=I_SLICE && input->GenerateMultiplePPS)
   {
@@ -2589,17 +2595,17 @@ static void rdPictureCoding(void)
       active_pps = PicParSet[2];
     }
   }
-  else        
+  else
   {
     if (!img->AdaptiveRounding)
       img->qp-=1;
   }
-  
+
   sec_pps = active_pps;
   second_qp = img->qp;
-  
+
   img->write_macroblock = 0;
-  
+
   if (skip_encode)
   {
     img->rd_pass = 0;
@@ -2609,14 +2615,11 @@ static void rdPictureCoding(void)
   {
     if(input->RCEnable)
     {
-      // save the currnet RC model as preliminary best
-      copy_rc_jvt( quadratic_RC_best, quadratic_RC );
-      copy_rc_generic( generic_RC_best, generic_RC );
       // re-store the initial RC model
       copy_rc_jvt( quadratic_RC, quadratic_RC_init );
       copy_rc_generic( generic_RC, generic_RC_init );
 
-      rc_init_pict(quadratic_RC, 1,0,1, 0.85F);
+      rc_init_pict(quadratic_RC, 1,0,1, input->GenerateMultiplePPS ? 1.0F : 0.85F );
 
       img->qp  = updateQP(quadratic_RC, 0);
     }
@@ -2624,16 +2627,16 @@ static void rdPictureCoding(void)
     frame_picture (frame_pic_2,1);
     img->rd_pass=picture_coding_decision(frame_pic_1, frame_pic_2, rd_qp);
   }
-  //      update_rd_picture_contexts (img->rd_pass); 
+  //      update_rd_picture_contexts (img->rd_pass);
   if (img->rd_pass==0)
   {
     enc_picture=enc_frame_picture;
     if (img->type!=I_SLICE && input->GenerateMultiplePPS)
-    { 
+    {
       img->qp=rd_qp;
       active_pps = PicParSet[0];
     }
-    else       
+    else
     {
       img->qp=rd_qp;
     }
@@ -2652,14 +2655,14 @@ static void rdPictureCoding(void)
       copy_rc_generic( generic_RC_best, generic_RC );
     }
   }
-  // Final Encoding pass - note that we should 
+  // Final Encoding pass - note that we should
   // make this more flexible in a later version.
-  
+
   if (img->type!=I_SLICE )
   {
     skip_encode = 0;
     img->qp    = rd_qp;
-    
+
     if (img->type == P_SLICE && (intras * 100 )/img->FrameSizeInMbs >=75)
     {
       img->type=I_SLICE;
@@ -2667,7 +2670,7 @@ static void rdPictureCoding(void)
     }
     else if (img->type==P_SLICE)
     {
-      if (input->GenerateMultiplePPS) 
+      if (input->GenerateMultiplePPS)
       {
         if (test_wp_P_slice(1) == 1)
         {
@@ -2676,7 +2679,7 @@ static void rdPictureCoding(void)
         else if (input->RDPSliceBTest && active_sps->profile_idc != 66)
         {
           img->type = B_SLICE;
-          active_pps = PicParSet[0];        
+          active_pps = PicParSet[0];
         }
         else
         {
@@ -2697,19 +2700,19 @@ static void rdPictureCoding(void)
       {
         skip_encode = input->RDBSliceWeightOnly;
         img->qp = rd_qp + (img->nal_reference_idc ? - 1 : 1);
-      }      
+      }
     }
   }
-  else 
+  else
   {
     active_pps = PicParSet[0];
     if (!img->AdaptiveRounding)
       img->qp    = (rd_qp + 1);
   }
-  
-  
+
+
   img->write_macroblock = 0;
-  
+
   if (skip_encode)
   {
     enc_frame_picture3 = NULL;
@@ -2723,13 +2726,13 @@ static void rdPictureCoding(void)
       copy_rc_jvt( quadratic_RC, quadratic_RC_init );
       copy_rc_generic( generic_RC, generic_RC_init );
 
-      rc_init_pict(quadratic_RC, 1,0,1, 1.15F); 
+      rc_init_pict(quadratic_RC, 1,0,1, input->GenerateMultiplePPS ? 1.0F : 1.15F );
 
       img->qp = updateQP(quadratic_RC, 0);
     }
 
     frame_picture (frame_pic_3,2);
-    
+
     if (img->rd_pass==0)
       img->rd_pass  = 2*picture_coding_decision(frame_pic_1, frame_pic_3, rd_qp);
     else
@@ -2744,7 +2747,7 @@ static void rdPictureCoding(void)
       tmpFrameQP = img->SumFrameQP;
   }
 
-  //update_rd_picture_contexts (img->rd_pass); 
+  //update_rd_picture_contexts (img->rd_pass);
   if (img->rd_pass==0)
   {
     enc_picture = enc_frame_picture;
@@ -2768,7 +2771,7 @@ static void rdPictureCoding(void)
   }
   img->SumFrameQP = tmpFrameQP;
 }
- 
+
 /*!
 *************************************************************************************
 * Brief
@@ -2779,7 +2782,7 @@ void output_SP_coefficients()
 {
   int i,k;
   FILE *SP_coeff_file;
-  if(number_sp2_frames==0) 
+  if(number_sp2_frames==0)
   {
     if ((SP_coeff_file = fopen(input->sp_output_filename,"wb")) == NULL)
     {
@@ -2796,7 +2799,7 @@ void output_SP_coefficients()
       exit (-1);
     }
   }
-  
+
   for(i=0;i<img->height;i++)
   {
     fwrite(lrec[i],sizeof(int),img->width,SP_coeff_file);
@@ -2828,7 +2831,7 @@ void read_SP_coefficients()
     {
       printf ("Fatal: cannot open SP input file '%s', exit (-1)\n", input->sp2_input_filename2);
       exit (-1);
-    }   
+    }
   }
   else
   {
@@ -2836,37 +2839,37 @@ void read_SP_coefficients()
     {
       printf ("Fatal: cannot open SP input file '%s', exit (-1)\n", input->sp2_input_filename1);
       exit (-1);
-    }   
+    }
   }
 
   if (0 != fseek (SP_coeff_file, img->size * 3/2*number_sp2_frames*sizeof(int), SEEK_SET))
   {
     printf ("Fatal: cannot seek in SP input file, exit (-1)\n");
     exit (-1);
-  }     
+  }
   number_sp2_frames++;
 
-  for(i=0;i<img->height;i++) 
+  for(i=0;i<img->height;i++)
   {
     if(img->width!=(int)fread(lrec[i],sizeof(int),img->width,SP_coeff_file))
-    { 
+    {
       printf ("Fatal: cannot read in SP input file, exit (-1)\n");
       exit (-1);
-    } 
+    }
   }
-    
+
   for(k=0;k<2;k++)
   {
-    for(i=0;i<img->height_cr;i++) 
+    for(i=0;i<img->height_cr;i++)
     {
       if(img->width_cr!=(int)fread(lrec_uv[k][i],sizeof(int),img->width_cr,SP_coeff_file))
-      { 
+      {
         printf ("Fatal: cannot read in SP input file, exit (-1)\n");
         exit (-1);
-      } 
+      }
     }
   }
   fclose(SP_coeff_file);
 }
- 
+
 

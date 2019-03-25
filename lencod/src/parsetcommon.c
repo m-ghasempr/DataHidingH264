@@ -7,7 +7,7 @@
  *    Picture and Sequence Parameter set generation and handling
  *  \date 25 November 2002
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Stephan Wenger        <stewe@cs.tu-berlin.de>
  *
  **************************************************************************************
@@ -19,7 +19,7 @@
 #include "global.h"
 #include "memalloc.h"
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Allocates memory for a pps
@@ -38,8 +38,8 @@ pic_parameter_set_rbsp_t *AllocPPS ()
    return p;
  }
 
- 
-/*! 
+
+/*!
  *************************************************************************************
  * \brief
  *    Allocates memory for am sps
@@ -57,8 +57,8 @@ seq_parameter_set_rbsp_t *AllocSPS ()
    return p;
  }
 
- 
-/*! 
+
+/*!
  *************************************************************************************
  * \brief
  *    Frees a pps
@@ -70,17 +70,17 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  *    none
  *************************************************************************************
  */
- 
+
  void FreePPS (pic_parameter_set_rbsp_t *pps)
  {
    assert (pps != NULL);
-   if (pps->slice_group_id != NULL) 
+   if (pps->slice_group_id != NULL)
      free (pps->slice_group_id);
    free (pps);
  }
 
- 
- /*! 
+
+ /*!
  *************************************************************************************
  * \brief
  *    Frees a sps
@@ -92,9 +92,9 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  *    none
  *************************************************************************************
  */
- 
+
  void FreeSPS (seq_parameter_set_rbsp_t *sps)
  {
    assert (sps != NULL);
-   free (sps); 
+   free (sps);
  }

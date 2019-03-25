@@ -16,7 +16,7 @@
 #define _EXPLICIT_GOP_H_
 
 // GOP Hierarchy
-void init_gop_structure(void); 
+void init_gop_structure(void);
 void interpret_gop_structure(void);
 void create_hierarchy(void);
 void clear_gop_structure(void);

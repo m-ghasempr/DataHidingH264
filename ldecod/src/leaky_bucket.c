@@ -4,7 +4,7 @@
  * \file  leaky_bucket.c
  *
  * \brief
- *   Calculate if decoder leaky bucket parameters meets HRD constraints specified by encoder. 
+ *   Calculate if decoder leaky bucket parameters meets HRD constraints specified by encoder.
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
@@ -31,7 +31,7 @@
  *     File should be opened to read in binary format.
  * \author
  *    Shankar Regunathan                   shanre@microsoft.com
- *  \date 
+ *  \date
  *      December 06, 2001.
  ***********************************************************************
  */
@@ -51,7 +51,7 @@ unsigned long GetBigDoubleWord(FILE *fp)
  * \brief
  *   Calculates if decoder leaky bucket parameters meets HRD constraints specified by encoder.
  * \param inp
- *    Structure which contains decoder leaky bucket parameters.   
+ *    Structure which contains decoder leaky bucket parameters.
  * \return
  *    None
  * \par SideEffects
@@ -61,7 +61,7 @@ unsigned long GetBigDoubleWord(FILE *fp)
  *     the correct number of entries.
  * \author
  *    Shankar Regunathan                   shanre@microsoft.com
- *  \date 
+ *  \date
  *      December 06, 2001.
  ***********************************************************************
  */
@@ -75,7 +75,7 @@ void calc_buffer(struct inp_par *inp)
   float dnr, frac1, frac2;
   unsigned long R_decoder, B_decoder, F_decoder;
   FILE *outf;
-        
+
   if ((outf=fopen(inp->LeakyBucketParamFile,"rb"))==NULL)
     {
     snprintf(errortext, ET_SIZE, "Error open file %s \n",inp->LeakyBucketParamFile);
@@ -88,7 +88,7 @@ void calc_buffer(struct inp_par *inp)
   Bmin = calloc(sizeof(unsigned long), NumberLeakyBuckets);
   Fmin = calloc(sizeof(unsigned long), NumberLeakyBuckets);
 
-  for(iBucket =0; iBucket < NumberLeakyBuckets; iBucket++) 
+  for(iBucket =0; iBucket < NumberLeakyBuckets; iBucket++)
   {
     Rmin[iBucket] = GetBigDoubleWord(outf);
     Bmin[iBucket] = GetBigDoubleWord(outf);
@@ -101,7 +101,7 @@ void calc_buffer(struct inp_par *inp)
   F_decoder = inp->F_decoder;
   B_decoder = inp->B_decoder;
 
-  for( iBucket =0; iBucket < NumberLeakyBuckets; iBucket++) 
+  for( iBucket =0; iBucket < NumberLeakyBuckets; iBucket++)
   {
     if(R_decoder < Rmin[iBucket])
       break;
@@ -122,14 +122,14 @@ void calc_buffer(struct inp_par *inp)
     }
     printf(" Min.buffer %8.2f Decoder buffer size %ld \n Minimum Delay %8.2f DecoderDelay %ld \n", B_interp, B_decoder, F_interp, F_decoder);
     if(B_decoder > B_interp && F_decoder > F_interp)
-      printf(" HRD Compliant \n"); 
+      printf(" HRD Compliant \n");
     else
       printf(" HRD Non Compliant \n");
   }
   else { // (iBucket = 0)
     printf(" Decoder Rate is too small; HRD cannot be verified \n");
   }
-  
+
   free(Rmin);
   free(Bmin);
   free(Fmin);

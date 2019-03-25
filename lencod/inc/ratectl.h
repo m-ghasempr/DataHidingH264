@@ -11,7 +11,7 @@
  *    14 Jan 2003
  *
  * \brief
- *    Headerfile for rate control 
+ *    Headerfile for rate control
  **************************************************************************
  */
 
@@ -26,12 +26,12 @@ typedef struct {
   int FieldFrame;
   int NoGranularFieldRC;
   // bits stats
-  int NumberofHeaderBits; 
+  int NumberofHeaderBits;
   int NumberofTextureBits;
   int NumberofBasicUnitHeaderBits;
-  int NumberofBasicUnitTextureBits;  
+  int NumberofBasicUnitTextureBits;
   // frame stats
-  int NumberofCodedBFrame; 
+  int NumberofCodedBFrame;
   int NumberofCodedPFrame;
   int NumberofGOP;
   int TotalQpforPPicture;
@@ -52,7 +52,7 @@ typedef struct {
   int   NIslice;
 } rc_generic;
 
-// macroblock activity 
+// macroblock activity
 int    diffy[16][16];
 int    qp_mbaff[2][2], qp_mbaff[2][2];
 int    delta_qp_mbaff[2][2], delta_qp_mbaff[2][2];

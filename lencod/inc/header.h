@@ -16,7 +16,6 @@ int Partition_BC_Header();
 
 int  writeERPS(SyntaxElement *sym, DataPartition *partition);
 // int  SequenceHeader(FILE *outf);
-void write_terminating_bit (short);
 
 #endif
 

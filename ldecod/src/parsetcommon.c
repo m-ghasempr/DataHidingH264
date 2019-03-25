@@ -7,7 +7,7 @@
  *    Picture and Sequence Parameter set generation and handling
  *  \date 25 November 2002
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Stephan Wenger        <stewe@cs.tu-berlin.de>
  *
  **************************************************************************************
@@ -18,7 +18,7 @@
 
 #include "parsetcommon.h"
 #include "memalloc.h"
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Allocates memory for a picture paramater set
@@ -27,7 +27,7 @@
  *    pointer to a pps
  *************************************************************************************
  */
- 
+
 pic_parameter_set_rbsp_t *AllocPPS ()
  {
    pic_parameter_set_rbsp_t *p;
@@ -39,8 +39,8 @@ pic_parameter_set_rbsp_t *AllocPPS ()
    return p;
  }
 
- 
-/*! 
+
+/*!
  *************************************************************************************
  * \brief
  *    Allocates memory for am sequence paramater set
@@ -49,7 +49,7 @@ pic_parameter_set_rbsp_t *AllocPPS ()
  *    pointer to a sps
  *************************************************************************************
  */
- 
+
 seq_parameter_set_rbsp_t *AllocSPS ()
  {
    seq_parameter_set_rbsp_t *p;
@@ -59,8 +59,8 @@ seq_parameter_set_rbsp_t *AllocSPS ()
    return p;
  }
 
- 
-/*! 
+
+/*!
  *************************************************************************************
  * \brief
  *    Frees a picture parameter set
@@ -69,7 +69,7 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  *   Picture parameter set to be freed
  *************************************************************************************
  */
- 
+
  void FreePPS (pic_parameter_set_rbsp_t *pps)
  {
    assert (pps != NULL);
@@ -77,8 +77,8 @@ seq_parameter_set_rbsp_t *AllocSPS ()
    free (pps);
  }
 
- 
- /*! 
+
+ /*!
  *************************************************************************************
  * \brief
  *    Frees a sps
@@ -87,19 +87,19 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  *   Sequence parameter set to be freed
  *************************************************************************************
  */
- 
+
  void FreeSPS (seq_parameter_set_rbsp_t *sps)
  {
    assert (sps != NULL);
-   free (sps); 
+   free (sps);
  }
- 
- 
+
+
 int sps_is_equal(seq_parameter_set_rbsp_t *sps1, seq_parameter_set_rbsp_t *sps2)
 {
   unsigned i;
   int equal = 1;
-  
+
   if ((!sps1->Valid) || (!sps2->Valid))
     return 0;
 
@@ -136,11 +136,11 @@ int sps_is_equal(seq_parameter_set_rbsp_t *sps1, seq_parameter_set_rbsp_t *sps2)
   equal &= (sps1->pic_width_in_mbs_minus1 == sps2->pic_width_in_mbs_minus1);
   equal &= (sps1->pic_height_in_map_units_minus1 == sps2->pic_height_in_map_units_minus1);
   equal &= (sps1->frame_mbs_only_flag == sps2->frame_mbs_only_flag);
-  
+
   if (!equal) return equal;
-  if( !sps1->frame_mbs_only_flag ) 
+  if( !sps1->frame_mbs_only_flag )
     equal &= (sps1->mb_adaptive_frame_field_flag == sps2->mb_adaptive_frame_field_flag);
- 
+
   equal &= (sps1->direct_8x8_inference_flag == sps2->direct_8x8_inference_flag);
   equal &= (sps1->frame_cropping_flag == sps2->frame_cropping_flag);
   if (!equal) return equal;
@@ -171,7 +171,7 @@ int pps_is_equal(pic_parameter_set_rbsp_t *pps1, pic_parameter_set_rbsp_t *pps2)
   equal &= (pps1->num_slice_groups_minus1 == pps2->num_slice_groups_minus1);
 
   if (!equal) return equal;
-  
+
   if (pps1->num_slice_groups_minus1>0)
   {
       equal &= (pps1->slice_group_map_type == pps2->slice_group_map_type);

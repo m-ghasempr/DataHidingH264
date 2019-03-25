@@ -7,7 +7,7 @@
  *    Picture and Sequence Parameter set generation and handling
  *  \date 25 November 2002
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Stephan Wenger        <stewe@cs.tu-berlin.de>
  *
  **************************************************************************************
@@ -18,7 +18,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/timeb.h>
- 
+
 #include "global.h"
 
 #include "contributors.h"
@@ -47,7 +47,7 @@ static const byte ZZ_SCAN8[64] =
 };
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    generates a sequence and picture parameter set and stores these in global
@@ -61,7 +61,7 @@ static const byte ZZ_SCAN8[64] =
 void GenerateParameterSets (void)
 {
   int i;
-  seq_parameter_set_rbsp_t *sps = NULL; 
+  seq_parameter_set_rbsp_t *sps = NULL;
 
   sps = AllocSPS();
 
@@ -97,19 +97,19 @@ void GenerateParameterSets (void)
   {
     PicParSet[0] = AllocPPS();
     if (sps->profile_idc >= FREXT_HP)
-      GeneratePictureParameterSet( PicParSet[0], sps, 0, input->WeightedPrediction, input->WeightedBiprediction, 
+      GeneratePictureParameterSet( PicParSet[0], sps, 0, input->WeightedPrediction, input->WeightedBiprediction,
                                    input->cb_qp_index_offset, input->cr_qp_index_offset);
     else
       GeneratePictureParameterSet( PicParSet[0], sps, 0, input->WeightedPrediction, input->WeightedBiprediction,
                                    input->chroma_qp_index_offset, 0);
-    
+
   }
 
   active_sps = sps;
   active_pps = PicParSet[0];
 }
 
-/*! 
+/*!
 *************************************************************************************
 * \brief
 *    frees global parameter sets active_sps and active_pps
@@ -133,7 +133,7 @@ void FreeParameterSets (void)
   FreeSPS (active_sps);
 }
 
-/*! 
+/*!
 *************************************************************************************
 * \brief
 *    int GenerateSeq_parameter_set_NALU (void);
@@ -163,7 +163,7 @@ NALU_t *GenerateSeq_parameter_set_NALU (void)
 }
 
 
-/*! 
+/*!
 *************************************************************************************
 * \brief
 *    NALU_t *GeneratePic_parameter_set_NALU (int PPS_id);
@@ -215,7 +215,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   int SubWidthC  [4]= { 1, 2, 2, 1};
   int SubHeightC [4]= { 1, 2, 1, 1};
 
-  int frext_profile = ((IdentifyProfile()==FREXT_HP) || 
+  int frext_profile = ((IdentifyProfile()==FREXT_HP) ||
                       (IdentifyProfile()==FREXT_Hi10P) ||
                       (IdentifyProfile()==FREXT_Hi422) ||
                       (IdentifyProfile()==FREXT_Hi444));
@@ -233,7 +233,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   sps->constrained_set0_flag = FALSE;
   sps->constrained_set1_flag = FALSE;
   sps->constrained_set2_flag = FALSE;
-  
+
   if ( (sps->level_idc == 9) && (sps->profile_idc < FREXT_HP) ) // Level 1.b
   {
     sps->constrained_set3_flag = TRUE;
@@ -251,7 +251,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   sps->bit_depth_luma_minus8   = input->BitDepthLuma - 8;
   sps->bit_depth_chroma_minus8 = input->BitDepthChroma - 8;
   img->lossless_qpprime_flag = input->lossless_qpprime_y_zero_flag & (sps->profile_idc==FREXT_Hi444);
-  
+
   //! POC stuff:
   //! The following values are hard-coded in init_poc().  Apparently,
   //! the poc implementation covers only a subset of the poc functionality.
@@ -259,7 +259,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   //! also to be reflected here
   sps->log2_max_frame_num_minus4 = log2_max_frame_num_minus4;
   sps->log2_max_pic_order_cnt_lsb_minus4 = log2_max_pic_order_cnt_lsb_minus4;
-  
+
   sps->pic_order_cnt_type = input->pic_order_cnt_type;
   sps->num_ref_frames_in_pic_order_cnt_cycle = img->num_ref_frames_in_pic_order_cnt_cycle;
   sps->delta_pic_order_always_zero_flag = img->delta_pic_order_always_zero_flag;
@@ -287,7 +287,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   // a couple of flags, simple
   sps->mb_adaptive_frame_field_flag = (Boolean) (FRAME_CODING != input->MbInterlace);
   sps->direct_8x8_inference_flag = (Boolean) input->directInferenceFlag;
-  
+
   // Sequence VUI not implemented, signalled as not present
   sps->vui_parameters_present_flag = (Boolean) ((input->rgb_input_flag && input->yuv_format==3)|| input->Generate_SEIVUI);
 
@@ -300,12 +300,12 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
     PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
     PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
     FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * PicHeightInMapUnits;
-    
+
     width = PicWidthInMbs * MB_BLOCK_SIZE;
     height = FrameHeightInMbs * MB_BLOCK_SIZE;
-    
-    Co_located = alloc_colocated (width, height,sps->mb_adaptive_frame_field_flag);    
-    
+
+    Co_located = alloc_colocated (width, height,sps->mb_adaptive_frame_field_flag);
+
   }
 
   // Fidelity Range Extensions stuff
@@ -360,13 +360,13 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
 /*!
  ************************************************************************
  * \brief
- *    GeneratePictureParameterSet: 
+ *    GeneratePictureParameterSet:
  *    Generates a Picture Parameter Set structure
  *
  * \par
  *    Regarding the QP
- *    The previous software versions coded the absolute QP only in the 
- *    slice header.  This is kept, and the offset in the PPS is coded 
+ *    The previous software versions coded the absolute QP only in the
+ *    slice header.  This is kept, and the offset in the PPS is coded
  *    even if we could save bits by intelligently using this field.
  *
  ************************************************************************
@@ -383,13 +383,13 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
 {
   unsigned i;
 
-  int frext_profile = ((IdentifyProfile()==FREXT_HP) || 
+  int frext_profile = ((IdentifyProfile()==FREXT_HP) ||
                       (IdentifyProfile()==FREXT_Hi10P) ||
                       (IdentifyProfile()==FREXT_Hi422) ||
                       (IdentifyProfile()==FREXT_Hi444));
 
   // *************************************************************************
-  // Picture Parameter Set 
+  // Picture Parameter Set
   // *************************************************************************
 
   pps->seq_parameter_set_id = sps->seq_parameter_set_id;
@@ -431,7 +431,7 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   // Begin FMO stuff
   pps->num_slice_groups_minus1 = input->num_slice_groups_minus1;
 
-	
+
   //! Following set the parameter for different slice group types
   if (pps->num_slice_groups_minus1 > 0)
   {
@@ -441,13 +441,11 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
     switch (input->slice_group_map_type)
     {
     case 0:
-			
       pps->slice_group_map_type = 0;
       for(i=0; i<=pps->num_slice_groups_minus1; i++)
       {
         pps->run_length_minus1[i]=input->run_length_minus1[i];
       }
-			
       break;
     case 1:
       pps->slice_group_map_type = 1;
@@ -458,26 +456,25 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
       for(i=0; i<pps->num_slice_groups_minus1; i++)
       {
         pps->top_left[i] = input->top_left[i];
-        pps->bottom_right[i] = input->bottom_right[i];      
+        pps->bottom_right[i] = input->bottom_right[i];
       }
      break;
     case 3:
     case 4:
     case 5:
       pps->slice_group_map_type = input->slice_group_map_type;
-			
       pps->slice_group_change_direction_flag = (Boolean) input->slice_group_change_direction_flag;
       pps->slice_group_change_rate_minus1 = input->slice_group_change_rate_minus1;
       break;
     case 6:
-      pps->slice_group_map_type = 6;   
-      pps->pic_size_in_map_units_minus1 = 
-				(((input->img_height+img->auto_crop_bottom)/MB_BLOCK_SIZE)/(2-sps->frame_mbs_only_flag))
-				*((input->img_width+img->auto_crop_right)/MB_BLOCK_SIZE) -1;
-			
+      pps->slice_group_map_type = 6;
+      pps->pic_size_in_map_units_minus1 =
+        (((input->img_height+img->auto_crop_bottom)/MB_BLOCK_SIZE)/(2-sps->frame_mbs_only_flag))
+        *((input->img_width+img->auto_crop_right)/MB_BLOCK_SIZE) -1;
+
       for (i=0;i<=pps->pic_size_in_map_units_minus1; i++)
         pps->slice_group_id[i] = input->slice_group_id[i];
-			
+
       break;
     default:
       printf ("Parset.c: slice_group_map_type invalid, default\n");
@@ -488,14 +485,14 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
 
   pps->num_ref_idx_l0_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
   pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
-  
+
   pps->weighted_pred_flag = (Boolean) WeightedPrediction;
   pps->weighted_bipred_idc = WeightedBiprediction;
 
   pps->pic_init_qp_minus26 = 0;         // hard coded to zero, QP lives in the slice header
   pps->pic_init_qs_minus26 = 0;
 
-  pps->chroma_qp_index_offset = cb_qp_index_offset; 
+  pps->chroma_qp_index_offset = cb_qp_index_offset;
   if (frext_profile)
   {
     pps->cb_qp_index_offset     = cb_qp_index_offset;
@@ -506,12 +503,12 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
 
   pps->deblocking_filter_control_present_flag = (Boolean) input->LFSendParameters;
   pps->constrained_intra_pred_flag = (Boolean) input->UseConstrainedIntraPred;
-  
+
   // if redundant slice is in use.
   pps->redundant_pic_cnt_present_flag = (Boolean) input->redundant_pic_flag;
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    syntax for scaling list matrix values
@@ -566,7 +563,7 @@ int Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingL
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp);
@@ -611,7 +608,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
   len+=ue_v ("SPS: seq_parameter_set_id",                    sps->seq_parameter_set_id,                      bitstream);
 
   // Fidelity Range Extensions stuff
-  if((sps->profile_idc==FREXT_HP) || 
+  if((sps->profile_idc==FREXT_HP) ||
      (sps->profile_idc==FREXT_Hi10P) ||
      (sps->profile_idc==FREXT_Hi422) ||
      (sps->profile_idc==FREXT_Hi444))
@@ -682,16 +679,16 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
     len+=GenerateVUISequenceParameters(bitstream);    // currently a dummy, asserting
 
   SODBtoRBSP(bitstream);     // copies the last couple of bits into the byte buffer
-  
+
   LenInBytes=bitstream->byte_pos;
 
   free (bitstream);
-  
+
   return LenInBytes;
 }
 
 
-/*! 
+/*!
  ***********************************************************************************************
  * \brief
  *    int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *sps, char *rbsp);
@@ -709,7 +706,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
  *    an exit (-1)
  ************************************************************************************************
  */
- 
+
 int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
 {
   Bitstream *bitstream;
@@ -750,11 +747,11 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
       }
     else if (pps->slice_group_map_type == 3 ||
              pps->slice_group_map_type == 4 ||
-             pps->slice_group_map_type == 5) 
+             pps->slice_group_map_type == 5)
     {
       len+=u_1  ("PPS: slice_group_change_direction_flag",         pps->slice_group_change_direction_flag,         bitstream);
       len+=ue_v ("PPS: slice_group_change_rate_minus1",            pps->slice_group_change_rate_minus1,            bitstream);
-    } 
+    }
     else if (pps->slice_group_map_type == 6)
     {
       if (pps->num_slice_groups_minus1>=4)
@@ -765,7 +762,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
         NumberBitsPerSliceGroupId=1;
       else
         NumberBitsPerSliceGroupId=0;
-        
+
       len+=ue_v ("PPS: pic_size_in_map_units_minus1",                       pps->pic_size_in_map_units_minus1,             bitstream);
       for(i=0; i<=pps->pic_size_in_map_units_minus1; i++)
         len+= u_v  (NumberBitsPerSliceGroupId, "PPS: >slice_group_id[i]",   pps->slice_group_id[i],                        bitstream);
@@ -781,7 +778,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
   len+=se_v ("PPS: pic_init_qs_minus26",                      pps->pic_init_qs_minus26,                       bitstream);
 
   profile_idc = IdentifyProfile();
-  if((profile_idc==FREXT_HP) || 
+  if((profile_idc==FREXT_HP) ||
      (profile_idc==FREXT_Hi10P) ||
      (profile_idc==FREXT_Hi422) ||
      (profile_idc==FREXT_Hi444))
@@ -794,13 +791,13 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
   len+=u_1  ("PPS: redundant_pic_cnt_present_flag",           pps->redundant_pic_cnt_present_flag,            bitstream);
 
   // Fidelity Range Extensions stuff
-  if((profile_idc==FREXT_HP) || 
+  if((profile_idc==FREXT_HP) ||
      (profile_idc==FREXT_Hi10P) ||
      (profile_idc==FREXT_Hi422) ||
      (profile_idc==FREXT_Hi444))
   {
     len+=u_1  ("PPS: transform_8x8_mode_flag",                pps->transform_8x8_mode_flag,                   bitstream);
-    
+
     len+=u_1  ("PPS: pic_scaling_matrix_present_flag",        pps->pic_scaling_matrix_present_flag,           bitstream);
 
     if(pps->pic_scaling_matrix_present_flag)
@@ -822,7 +819,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
   }
 
   SODBtoRBSP(bitstream);     // copies the last couple of bits into the byte buffer
-  
+
   LenInBytes=bitstream->byte_pos;
 
   // Get rid of the helper structures
@@ -833,7 +830,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
 
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Returns the Profile
@@ -856,7 +853,7 @@ int IdentifyProfile(void)
   return input->ProfileIDC;
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Returns the Level
@@ -865,7 +862,7 @@ int IdentifyProfile(void)
  *    Level according to Annex A
  *
  * \note
- *    This function is currently a dummy, but should calculate the level out of 
+ *    This function is currently a dummy, but should calculate the level out of
  *    the config file parameters (primarily the picture size)
  *************************************************************************************
  */
@@ -875,7 +872,7 @@ int IdentifyLevel(void)
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Function body for VUI Parameter generation (to be done)
@@ -912,14 +909,14 @@ static int GenerateVUISequenceParameters(Bitstream *bitstream)
     return len;
   }
   else if (input->Generate_SEIVUI)
-   {
+  {
       int bitstream_restriction_flag = 0;
       int timing_info_present_flag = 0;
       int aspect_ratio_info_present_flag = 0;
       len+=u_1 ("VUI: aspect_ratio_info_present_flag", 0, bitstream);
       if (aspect_ratio_info_present_flag)
       {
-        len+=u_v (8,"VUI: aspect_ratio_idc", 1, bitstream);    
+        len+=u_v (8,"VUI: aspect_ratio_idc", 1, bitstream);
       }
       len+=u_1 ("VUI: overscan_info_present_flag", 0, bitstream);
       len+=u_1 ("VUI: video_signal_type_present_flag", 0, bitstream);
@@ -928,8 +925,8 @@ static int GenerateVUISequenceParameters(Bitstream *bitstream)
             // timing parameters
       if (timing_info_present_flag)
       {
-        len+=u_v (32,"VUI: num_units_in_tick", 416667, bitstream);    
-        len+=u_v (32,"VUI: time_scale", 20000000, bitstream);    
+        len+=u_v (32,"VUI: num_units_in_tick", 416667, bitstream);
+        len+=u_v (32,"VUI: time_scale", 20000000, bitstream);
         len+=u_1 ("VUI: fixed_frame_rate_flag", 1, bitstream);
       }
       // end of timing parameters
@@ -941,15 +938,15 @@ static int GenerateVUISequenceParameters(Bitstream *bitstream)
       if (bitstream_restriction_flag)
       {
         len+=u_1 ("VUI: motion_vectors_over_pic_boundaries_flag", 1, bitstream);
-        len+=ue_v ("VUI: max_bytes_per_pic_denom", 0, bitstream);    
-        len+=ue_v ("VUI: max_bits_per_mb_denom", 0, bitstream);    
-        len+=ue_v ("VUI: log2_max_mv_length_horizontal", 11, bitstream);    
-        len+=ue_v ("VUI: log2_max_mv_length_vertical", 11, bitstream);    
-        len+=ue_v ("VUI: num_reorder_frames", 3, bitstream);          	
-        len+=ue_v ("VUI: max_dec_frame_buffering", 4, bitstream);          	
+        len+=ue_v ("VUI: max_bytes_per_pic_denom", 0, bitstream);
+        len+=ue_v ("VUI: max_bits_per_mb_denom", 0, bitstream);
+        len+=ue_v ("VUI: log2_max_mv_length_horizontal", 11, bitstream);
+        len+=ue_v ("VUI: log2_max_mv_length_vertical", 11, bitstream);
+        len+=ue_v ("VUI: num_reorder_frames", 3, bitstream);
+        len+=ue_v ("VUI: max_dec_frame_buffering", 4, bitstream);
       }
     }
-  else 
+  else
   {
     printf ("Sequence Parameter VUI not yet implemented, this should never happen, exit\n");
     exit (-1);
@@ -958,7 +955,7 @@ static int GenerateVUISequenceParameters(Bitstream *bitstream)
   return 1;
 }
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Function body for SEI message NALU generation
@@ -983,7 +980,7 @@ NALU_t *GenerateSEImessage_NALU()
 }
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    int GenerateSEImessage_rbsp (int, bufferingperiod_information_struct*, char*)
@@ -1011,11 +1008,11 @@ int GenerateSEImessage_rbsp (int id, byte *rbsp)
   {
     char sei_message[500];
     char uuid_message[9] = "RandomMSG"; // This is supposed to be Random
-    unsigned int i, message_size = strlen(input->SEIMessageText);       
+    unsigned int i, message_size = strlen(input->SEIMessageText);
     struct TIMEB tstruct;
-    ftime( &tstruct);    // start time ms  
+    ftime( &tstruct);    // start time ms
 
-    if (message_size == 0) 
+    if (message_size == 0)
     {
       message_size = 13;
       strncpy(sei_message,"Empty Message",message_size);
@@ -1038,7 +1035,7 @@ int GenerateSEImessage_rbsp (int id, byte *rbsp)
     len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) (uuid_message[0] << 24) + (uuid_message[1] << 16)  + (uuid_message[2] << 8) + (uuid_message[3] << 0), bitstream);
     len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) (uuid_message[4] << 24) + (uuid_message[5] << 16)  + (uuid_message[6] << 8) + (uuid_message[7] << 0), bitstream);
     for (i = 0; i < strlen(sei_message); i++)
-      len+=u_v (8,"SEI: user_data_payload_byte",sei_message[i], bitstream); 
+      len+=u_v (8,"SEI: user_data_payload_byte",sei_message[i], bitstream);
 
     len+=u_v (8,"SEI: user_data_payload_byte",   0, bitstream);
   }

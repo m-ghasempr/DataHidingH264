@@ -49,7 +49,7 @@ Boolean seiHasSubseq_characteristics=FALSE;
  ************************************************************************
  */
 
-//! sei_message[0]: this struct is to store the sei message packetized independently 
+//! sei_message[0]: this struct is to store the sei message packetized independently
 //! sei_message[1]: this struct is to store the sei message packetized together with slice data
 sei_struct sei_message[2];
 
@@ -70,7 +70,7 @@ void InitSEIMessages()
   InitSubseqChar();
   if (input->NumFramesInELSubSeq != 0)
     InitSubseqLayerInfo();
-  InitSceneInformation(); // JVT-D099
+  InitSceneInformation();
   // init panscanrect sei message
   InitPanScanRectInfo();
   // init user_data_unregistered
@@ -84,14 +84,13 @@ void InitSEIMessages()
 void CloseSEIMessages()
 {
   int i;
-  
+
   if (input->NumFramesInELSubSeq != 0)
     CloseSubseqLayerInfo();
 
   CloseSubseqChar();
   CloseSparePicture();
-  CloseSceneInformation(); // JVT-D099
-  //Shankar Regunathan Oct 2002
+  CloseSceneInformation();
   ClosePanScanRectInfo();
   CloseUser_data_unregistered();
   CloseUser_data_registered_itu_t_t35();
@@ -106,7 +105,7 @@ void CloseSEIMessages()
 
 Boolean HaveAggregationSEI()
 {
-  if (sei_message[AGGREGATION_SEI].available && img->type != B_SLICE) 
+  if (sei_message[AGGREGATION_SEI].available && img->type != B_SLICE)
     return TRUE;
   if (seiHasSubseqInfo)
     return TRUE;
@@ -125,7 +124,7 @@ Boolean HaveAggregationSEI()
   if (seiHasRecoveryPoint_info)
     return TRUE;
   return FALSE;
-//  return input->SparePictureOption && ( seiHasSpare_picture || seiHasSubseq_information || 
+//  return input->SparePictureOption && ( seiHasSpare_picture || seiHasSubseq_information ||
 //    seiHasSubseq_layer_characteristics || seiHasSubseq_characteristics );
 }
 
@@ -138,7 +137,7 @@ Boolean HaveAggregationSEI()
  *    1, if this is a aggregation packet
  *  \param payload
  *    a pointer that point to the sei payload. Note that the bitstream
- *    should have be byte aligned already. 
+ *    should have be byte aligned already.
  *  \param payload_size
  *    the size of the sei payload
  *  \param payload_type
@@ -205,7 +204,7 @@ void finalize_sei_message(int id)
  *    0, if this is the normal packet \n
  *    1, if this is a aggregation packet
  *  \par Output
- *    the content of the sei message is cleared and ready for storing new 
+ *    the content of the sei message is cleared and ready for storing new
  *      messages
  ************************************************************************
  */
@@ -279,7 +278,7 @@ void AppendTmpbits2Buf( Bitstream* dest, Bitstream* source )
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  *  \functions on spare pictures
  *  \brief
- *     implementation of Spare Pictures related functions based on 
+ *     implementation of Spare Pictures related functions based on
  *      JVT-D100
  *  \author
  *      Dong Tian                 <tian@cs.tut.fi>
@@ -288,9 +287,8 @@ void AppendTmpbits2Buf( Bitstream* dest, Bitstream* source )
 
 // global variables for spare pictures
 
-// Tian Dong (Sept 2002)
-// In current implementation, Sept 2002, the spare picture info is 
-// paketized together with the immediately following frame. Thus we 
+// In current implementation, Sept 2002, the spare picture info is
+// paketized together with the immediately following frame. Thus we
 // define one set of global variables to save the info.
 Boolean seiHasSparePicture = FALSE;
 spare_picture_struct seiSparePicturePayload;
@@ -306,9 +304,9 @@ void InitSparePicture()
   if ( seiSparePicturePayload.data != NULL ) CloseSparePicture();
 
   seiSparePicturePayload.data = malloc( sizeof(Bitstream) );
-  if ( seiSparePicturePayload.data == NULL ) no_mem_exit("InitSparePicture: seiSparePicturePayload.data"); 
+  if ( seiSparePicturePayload.data == NULL ) no_mem_exit("InitSparePicture: seiSparePicturePayload.data");
   seiSparePicturePayload.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
-  if ( seiSparePicturePayload.data->streamBuffer == NULL ) no_mem_exit("InitSparePicture: seiSparePicturePayload.data->streamBuffer"); 
+  if ( seiSparePicturePayload.data->streamBuffer == NULL ) no_mem_exit("InitSparePicture: seiSparePicturePayload.data->streamBuffer");
   memset( seiSparePicturePayload.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
   seiSparePicturePayload.num_spare_pics = 0;
   seiSparePicturePayload.target_frame_num = 0;
@@ -326,10 +324,10 @@ void InitSparePicture()
  */
 void CloseSparePicture()
 {
-  if (seiSparePicturePayload.data->streamBuffer) 
+  if (seiSparePicturePayload.data->streamBuffer)
     free(seiSparePicturePayload.data->streamBuffer);
   seiSparePicturePayload.data->streamBuffer = NULL;
-  if (seiSparePicturePayload.data) 
+  if (seiSparePicturePayload.data)
     free(seiSparePicturePayload.data);
   seiSparePicturePayload.data = NULL;
   seiSparePicturePayload.num_spare_pics = 0;
@@ -375,7 +373,7 @@ void CalculateSparePicture()
 
   // basic check
   if (fb->picbuf_short[0]->used==0 || fb->picbuf_short[1]->used==0)
-  { 
+  {
 #ifdef WRITE_MAP_IMAGE
     fp = fopen( map_file_name, "wb" );
     assert( fp != NULL );
@@ -395,7 +393,7 @@ void CalculateSparePicture()
   }
   seiHasSparePicture = TRUE;
 
-  // set the global bitstream memory. 
+  // set the global bitstream memory.
   InitSparePicture();
   seiSparePicturePayload.target_frame_num = img->number % MAX_FN;
   // init the local bitstream memory.
@@ -495,7 +493,7 @@ void CalculateSparePicture()
     }
 #endif
 
-    // Finnally, write the current spare picture information to 
+    // Finnally, write the current spare picture information to
     // the global variable: seiSparePicturePayload
     ComposeSparePictureMessage(delta_spare_frame_num, ref_area_indicator, tmpBitstream);
     seiSparePicturePayload.num_spare_pics++;
@@ -524,8 +522,8 @@ void CalculateSparePicture()
  *  \param tmpBitstream
  *      pointer to a buffer to save the payload
  *  \par Output
- *      bitstream: the composed spare picture payload are 
- *        ready to put into the sei_message. 
+ *      bitstream: the composed spare picture payload are
+ *        ready to put into the sei_message.
  ************************************************************************
  */
 void ComposeSparePictureMessage(int delta_spare_frame_num, int ref_area_indicator, Bitstream *tmpBitstream)
@@ -947,7 +945,7 @@ void InitSubseqLayerInfo()
 /*!
  ************************************************************************
  *  \brief
- *      
+ *
  ************************************************************************
  */
 void CloseSubseqLayerInfo()
@@ -1177,8 +1175,8 @@ void FinalizeSceneInformation()
   seiSceneInformation.payloadSize = dest->byte_pos;
 }
 
-// HasSceneInformation: To include a scene information SEI into the next slice/DP, 
-//      set HasSceneInformation to be TRUE when calling this function. Otherwise, 
+// HasSceneInformation: To include a scene information SEI into the next slice/DP,
+//      set HasSceneInformation to be TRUE when calling this function. Otherwise,
 //      set HasSceneInformation to be FALSE.
 void UpdateSceneInformation(Boolean HasSceneInformation, int sceneID, int sceneTransType, int secondSceneID)
 {
@@ -1457,11 +1455,11 @@ void UpdateUser_data_registered_itu_t_t35()
 
   country_code = 82; // Country_code for India
 
-  if(country_code < 0xFF) 
+  if(country_code < 0xFF)
   {
     seiUser_data_registered_itu_t_t35.itu_t_t35_country_code = country_code;
   }
-  else 
+  else
   {
     seiUser_data_registered_itu_t_t35.itu_t_t35_country_code = 0xFF;
     seiUser_data_registered_itu_t_t35.itu_t_t35_country_code_extension_byte = country_code - 0xFF;
@@ -1624,7 +1622,7 @@ void FinalizeRandomAccess()
     (bitstream->byte_buf) <<= 1;
     bitstream->byte_buf |= 1;
     bitstream->bits_to_go--;
-    if ( bitstream->bits_to_go != 0 ) 
+    if ( bitstream->bits_to_go != 0 )
       (bitstream->byte_buf) <<= (bitstream->bits_to_go);
     bitstream->bits_to_go = 8;
     bitstream->streamBuffer[bitstream->byte_pos++]=bitstream->byte_buf;

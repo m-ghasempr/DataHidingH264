@@ -1,3 +1,13 @@
+Changes in Version JM 12.1 (since JM 12.0)
+------------------------------------------
+- encoder: fix example configuration files (KS/AT)
+- encoder: make direct_8x8_inference_flag=1 default (KS)
+- decoder: fix compilation with trace enabled (KS)
+- encoder/decoder: fix for shift_right_round functions on 64-bit machines (AT)
+- encoder/decoder: predict_nnz functions (YDh)
+- encoder/decoder: cleanups (KS/AT)
+
+
 Changes in Version JM 12.0 (since JM 11.0)
 ------------------------------------------
 
@@ -842,7 +852,7 @@ Changes for Version JM 4.0c to JM 4.0b
 New features
 * New Macroblock modes for SP-frames [JVT-B055] (RK)
   Note: some problems related to decoding of SI-frames
-	are reported and have to be fixed
+  are reported and have to be fixed
  
 
 
@@ -1125,18 +1135,18 @@ AF      Arild Fuldseth          arild.fuldseth@tandberg.no
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AL      Athanasios Leontaris    athanasios.leontaris@dolby.com
 AJ      Anthony Joch            anthony@ubvideo.com
-AM	Alan MacDonald		newslists@warpzillion.com
+AM      Alan MacDonald          newslists@warpzillion.com
 AS      Albert Simpson          ASimpson@amphion.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
 AW      Armand Wemelsfelder     wemel@planet.nl
 BH      Barry Haskell           bhaskell@apple.com
-BJ	Byeungwoo Jeon		bjeon@yurim.skku.ac.kr
-BL	Brandon Lin		brandon@ubvideo.com
-BY	Bill Yi			bill.xyi@gmail.com
+BJ      Byeungwoo Jeon          bjeon@yurim.skku.ac.kr
+BL      Brandon Lin             brandon@ubvideo.com
+BY      Bill Yi                 bill.xyi@gmail.com
 CG      Cristina Gomila         GomilaC@tce.com
-CK	Christopher Kotchey	ckotchey@us.ibm.com
-CS	Christian Schmidt	schmidt@ece.ucsb.edu
-CZ	Chunbo Zhu		cbzhu@mail.ustc.edu.cn
+CK      Christopher Kotchey     ckotchey@us.ibm.com
+CS      Christian Schmidt       schmidt@ece.ucsb.edu
+CZ      Chunbo Zhu              cbzhu@mail.ustc.edu.cn
 DC      Doug Chin               dougchin@sandvideo.com
 DD      Dmitriy Demin           Dmitriy.Demin@Sun.COM
 DH      Dzung Hoang             dzung.hoang@conexant.com
@@ -1144,7 +1154,7 @@ DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi
 DW      Dong Wang               Dong.Wang@bristol.ac.uk
-ES	Eric Setton		esetton@stanford.edu
+ES      Eric Setton             esetton@stanford.edu
 FB      Frank Bossen            bossen@docomolabs-usa.com
 GB      Gabi Blaetterman        blaetter@hhi.de
 GC      Guy Cote                guy@videolocus.com
@@ -1152,69 +1162,69 @@ GrC     Greg Conklin            gregc@real.com
 GS      Gary Sullivan           garysull@microsoft.com
 FW      Feng Wu                 fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
-HZ	Huipin Zhang		hzhang@mobilygen.com
+HZ      Huipin Zhang            hzhang@mobilygen.com
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 IM      Iole Moccagatta         imoccaga@lsil.com
-IP	Isabelle Perroux	isabelle.perroux@allegrodvt.com
+IP      Isabelle Perroux        isabelle.perroux@allegrodvt.com
 JA      James Au                james@ubvideo.com
 JB      Jill Boyce              BoyceJ@tce.com
 JC      John Cox                jc@sj.co.uk
 JK      Jeong Kwon Kim          kjk@mcubeworks.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
 JS      Joonho Song             jhsong@varovision.com
-JSa     Jose Sanches		jose.sanches@st.com
+JSa     Jose Sanches            jose.sanches@st.com
 JX      Jian Feng Xu            fenax@video.mdc.tsinghua.edu.cn
 JXi     Jun Xin                 jxin@merl.com
-JZ	Jun Zhang		j_zhang1999@yahoo.com
+JZ      Jun Zhang               j_zhang1999@yahoo.com
 KL      Karl Lillevold          Karll@real.com
 KP      Krit Panusopone         KPanusopone@gi.com
 KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LW      Limin Wang              liwang@gi.com
 LWi     Lowell Winger           lwinger@videolocus.com
-LP	Luca Pezzoni		luca.pezzoni@st.com
-MA	Mauricio Alvarez	alvarez@ac.upc.edu
+LP      Luca Pezzoni            luca.pezzoni@st.com
+MA      Mauricio Alvarez        alvarez@ac.upc.edu
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
 ML      Maxim Lobasso           lobasso@hotmail.com
 MN      Mike Nilsson            mike.nilsson@bt.com
-MT	Mario Trentini		mario_trentini@realmagic.fr
+MT      Mario Trentini          mario_trentini@realmagic.fr
 MW      Mathias Wien            wien@ient.rwth-aachen.de
-MWa	Michael Walter		eiMichaelWalter@web.de
+MWa     Michael Walter          eiMichaelWalter@web.de
 OD      Olivier Deygas          olivier.deygas@st.com
 PK      Petr Kadlec             Kadlec@FTW.at
 PL      Peter List              Peter.List@t-systems.de
 PN      Pavel Novotny           pnovotny@lsil.com
 PP      Purvin Pandit           purvin.pandit@thomson.net
 PW      Ping Wu                 pwu@tandbergtv.com
-RB	Roman Barsky		romanb@dsp.co.il
+RB      Roman Barsky            romanb@dsp.co.il
 RG      Rajeev Gandhi           rajeev@motorola.com
 RK      Ragip Kurceren          ragip.kurceren@nokia.com
 RS      Rickard Sjoberg         Rickard.Sjoberg@era.ericsson.se
 RaS     Raghavan Subramaniyan   Raghavan.S@motorola.com
 RV      Rajesh Kumar S Venkata  v-rajesh.kumar@st.com
-SB      Saurav Bandyopadhyay	skb3@buffalo.edu
-SF	Simon Fenney		simon.fenney@powervr.com
+SB      Saurav Bandyopadhyay    skb3@buffalo.edu
+SF      Simon Fenney            simon.fenney@powervr.com
 SG      Steve Gordon            sgordon@broadcom.com
-SH	Sven Heithecker		heithecker@ida.ing.tu-bs.de
-SK	Shafi Ullah Khan	shafi@sarayusoftech.com
-SL	Stephan Lachowsky	stephan@mobilygen.com
-SKa	Shinya Kadono		kadono.shinya@jp.panasonic.com
+SH      Sven Heithecker         heithecker@ida.ing.tu-bs.de
+SK      Shafi Ullah Khan        shafi@sarayusoftech.com
+SL      Stephan Lachowsky       stephan@mobilygen.com
+SKa     Shinya Kadono           kadono.shinya@jp.panasonic.com
 SM      Siwei Ma                swma@jdl.ac.cn
-SM	Sebastian Manciulea	sebastian@splash.ro
-SMy	Stefaan Mys		stefaan.mys@ugent.be
-SN	Satoshi Nakagawa	nakagawa@okilab.net
+SM      Sebastian Manciulea     sebastian@splash.ro
+SMy     Stefaan Mys             stefaan.mys@ugent.be
+SN      Satoshi Nakagawa        nakagawa@okilab.net
 SR      Shankar Regunathan      shanre@microsoft.com
-SeS	Sergey A. Sablin	sergey@elecard.net.ru
-SSu	Shijun Sun		ssun@sharplabs.com
+SeS     Sergey A. Sablin        sergey@elecard.net.ru
+SSu     Shijun Sun              ssun@sharplabs.com
 SW      Stephan Wenger          stewe@stewe.org
 SY      Steve Yao               steveyao@sandvideo.com
 SZ      Steve Zeng              stevezeng@rogers.com
 TH      Till Hallbach           halbach@tele.ntnu.no
-THi	Tobias Hinz		hinz@hhi.de
+THi     Tobias Hinz             hinz@hhi.de
 TK      Thomas Kunlin           thomas.kunlin@st.com
 TO      Tobias Oelbaum          drehvial@gmx.net
-TP	Tom Pycke		tom.pycke@ugent.be
+TP      Tom Pycke               tom.pycke@ugent.be
 TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp
 TSh     Tamar Shoham            Tamar.Shoham@comverse.com
 TSt     Thomas Stockhammer      stockhammer@lnt.ei.tum.de
@@ -1223,22 +1233,23 @@ TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 TWa     Toby Walker             tobyw@usrl.sony.com
 VG      Valeri George           valeri.george@hhi.fraunhofer.de
 VV      Viktor Varsa            viktor.varsa@nokia.com
-WC	Woong Il Choi		creata@ece.skku.ac.kr
-WF	Wenfang Fu		fwf@video.mdc.tsinghua.edu.cn
-WK	Woo-Shik Kim		wskim@sait.samsung.co.kr
-WZ      Weimin Zeng		wzeng@wischip.com
-XI	Xin			xin@apple.com
+WC      Woong Il Choi           creata@ece.skku.ac.kr
+WF      Wenfang Fu              fwf@video.mdc.tsinghua.edu.cn
+WK      Woo-Shik Kim            wskim@sait.samsung.co.kr
+WZ      Weimin Zeng             wzeng@wischip.com
+XI      Xin                     xin@apple.com
 XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com   
-XX	Xiaozhong Xu		xxz@video.mdc.tsinghua.edu.cn
+XX      Xiaozhong Xu            xxz@video.mdc.tsinghua.edu.cn
 XY      Xiaoquan Yi             xyi@scu.edu
-YC	Yi-Jen Chiu		yi-jen.chiu@intel.com
+YC      Yi-Jen Chiu             yi-jen.chiu@intel.com
 YD      Yunyang Dai             ydai@dolby.com
-YH	Yu-Wen Huang		YW_Huang@mtk.com.tw
+YDh     Yves Dhondt              yves.dhondt@ugent.be
+YH      Yu-Wen Huang            YW_Huang@mtk.com.tw
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             ye-kui.wang@nokia.com
 YX      Yanjun Xu               yxu@sarnoff.com
-ZH	Zhou Heng		zhou_heng@yahoo.com
+ZH      Zhou Heng               zhou_heng@yahoo.com
 ZL      Li Zhang                zhangli@jdl.ac.cn
 ZX      Z. Xue                  jon_xz@yahoo.com
 ZY      Zheng Yanzhao           yzzheng@singnet.com

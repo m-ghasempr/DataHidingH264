@@ -4,8 +4,8 @@
  *    img_chroma.h
  *
  * \author
- *    Athanasios Leontaris           <aleon@dolby.com>   
- *    Alexis Michael Tourapis        <alexis.tourapis@dolby.com>   
+ *    Athanasios Leontaris           <aleon@dolby.com>
+ *    Alexis Michael Tourapis        <alexis.tourapis@dolby.com>
  *
  * \date
  *    4. October 2006

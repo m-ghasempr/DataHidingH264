@@ -204,7 +204,7 @@ void write_out_picture(StorablePicture *p, int p_out)
   if (p->non_existing)
     return;
   if (p_out == -1)
-	  return;
+    return;
 
   if (p->frame_cropping_flag)
   {
@@ -271,7 +271,7 @@ void write_out_picture(StorablePicture *p, int p_out)
   }
 
   free(buf);
-    
+
 //  fsync(p_out);
 }
 
@@ -353,7 +353,7 @@ void write_unpaired_field(FrameStore* fs, int p_out)
     fs->top_field->chroma_format_idc = p->chroma_format_idc;
     clear_picture(fs->top_field);
     fs ->top_field->frame_cropping_flag = fs->bottom_field->frame_cropping_flag;
-    if(fs ->top_field->frame_cropping_flag) 
+    if(fs ->top_field->frame_cropping_flag)
     {
       fs ->top_field->frame_cropping_rect_top_offset = fs->bottom_field->frame_cropping_rect_top_offset;
       fs ->top_field->frame_cropping_rect_bottom_offset = fs->bottom_field->frame_cropping_rect_bottom_offset;
@@ -366,7 +366,7 @@ void write_unpaired_field(FrameStore* fs, int p_out)
 
   fs->is_used=3;
 }
-  
+
 /*!
  ************************************************************************
  * \brief
@@ -420,7 +420,7 @@ void write_stored_frame( FrameStore *fs,int p_out)
 /*!
  ************************************************************************
  * \brief
- *    Directly output a picture without storing it in the DPB. Fields 
+ *    Directly output a picture without storing it in the DPB. Fields
  *    are buffered before they are written to the file.
  * \param p
  *    Picture for output
@@ -475,7 +475,7 @@ void direct_output(StorablePicture *p, int p_out)
 /*!
 ************************************************************************
 * \brief
-*    For adaptive frame/field coding remove dangling top field from direct 
+*    For adaptive frame/field coding remove dangling top field from direct
 *    output frame version instead.
 * \param p
 *    Picture for output

@@ -28,11 +28,11 @@ const int QP2QUANT[40]=
 };
 
 // Vertical MV Limits (integer/halfpel/quarterpel)
-// Currently only Integer Pel restrictions are used, 
-// since the way values are specified 
+// Currently only Integer Pel restrictions are used,
+// since the way values are specified
 // (i.e. mvlowbound = (levelmvlowbound + 1) and the way
 // Subpel ME is performed, subpel will always be within range.
- 
+
 const int LEVELMVLIMIT[17][6] =
 {
   {  -63,  63,  -128,  127,  -256,  255},

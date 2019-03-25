@@ -7,7 +7,7 @@
  *    Headerfile containing some useful global definitions
  *
  * \author
- *    Detlev Marpe  
+ *    Detlev Marpe
  *    Copyright (C) 2000 HEINRICH HERTZ INSTITUTE All Rights Reserved.
  *
  * \date

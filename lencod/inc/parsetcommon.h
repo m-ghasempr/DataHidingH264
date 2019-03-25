@@ -8,7 +8,7 @@
  *    This code reflects JVT version xxx
  *  \date 25 November 2002
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Stephan Wenger        <stewe@cs.tu-berlin.de>
  ***************************************************************************************
  */
@@ -122,9 +122,9 @@ typedef struct
       Boolean   slice_group_change_direction_flag;            // u(1)
       unsigned int  slice_group_change_rate_minus1;               // ue(v)
     // else if( slice_group_map_type = = 6 )
-      unsigned int  pic_size_in_map_units_minus1;	                // ue(v)
+      unsigned int  pic_size_in_map_units_minus1;                 // ue(v)
       byte      *slice_group_id;                              // complete MBAmap u(v)
-			
+
   int       num_ref_idx_l0_active_minus1;                     // ue(v)
   int       num_ref_idx_l1_active_minus1;                     // ue(v)
   Boolean   weighted_pred_flag;                               // u(1)
@@ -164,7 +164,7 @@ typedef struct
   unsigned int  bit_depth_chroma_minus8;                          // ue(v)
   unsigned int  log2_max_frame_num_minus4;                        // ue(v)
   unsigned int pic_order_cnt_type;
-  // if( pic_order_cnt_type == 0 ) 
+  // if( pic_order_cnt_type == 0 )
   unsigned int log2_max_pic_order_cnt_lsb_minus4;                 // ue(v)
   // else if( pic_order_cnt_type == 1 )
     Boolean delta_pic_order_always_zero_flag;               // u(1)
@@ -178,7 +178,7 @@ typedef struct
   unsigned int  pic_width_in_mbs_minus1;                          // ue(v)
   unsigned int  pic_height_in_map_units_minus1;                   // ue(v)
   Boolean   frame_mbs_only_flag;                              // u(1)
-  // if( !frame_mbs_only_flag ) 
+  // if( !frame_mbs_only_flag )
     Boolean   mb_adaptive_frame_field_flag;                   // u(1)
   Boolean   direct_8x8_inference_flag;                        // u(1)
   Boolean   frame_cropping_flag;                              // u(1)

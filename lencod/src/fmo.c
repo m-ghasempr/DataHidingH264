@@ -11,8 +11,8 @@
  *
  * \author
  *    Stephan Wenger   stewe@cs.tu-berlin.de
- *    Dong Wang (modify)	Dong.Wang@bristol.ac.uk
- * 
+ *    Dong Wang        Dong.Wang@bristol.ac.uk
+ *
  *****************************************************************************/
 
 /*!
@@ -20,23 +20,23 @@
  *   Notes by Dong Wang (April 25 2004)
  *
  *  Source codes are modified to support 7 slice group types (fmo modes).
- *  The functions for generating map are very similar to that in decoder, but have 
- *  a little difference. 
+ *  The functions for generating map are very similar to that in decoder, but have
+ *  a little difference.
  *
  *  The MB map is calculated at the beginning of coding of each picture (frame or field).
  *
- *  'slice_group_change_cycle' in structure 'ImageParameters' is the syntax in the slice 
+ *  'slice_group_change_cycle' in structure 'ImageParameters' is the syntax in the slice
  *  header. It's set to be 1 before the initialization of FMO in function code_a_picture().
  *  It can be changed every time if needed.
  *
- **************************************************************************** 
+ ****************************************************************************
  */
 
 /*!
  *****************************************************************************
  *  How does a MBAmap look like?
  *
- *  An MBAmap is a one-diemnsional array of ints.  Each int 
+ *  An MBAmap is a one-diemnsional array of ints.  Each int
  *  represents an MB in scan order.  A zero or positive value represents
  *  a slice group ID.  Negative values are reserved for future extensions.
  *  The numbering range for the SliceGroupIDs is 0..7 as per JVT-C167.
@@ -62,8 +62,8 @@
 
 static int FirstMBInSlice[MAXSLICEGROUPIDS];
 
-byte *MBAmap = NULL;   
-byte *MapUnitToSliceGroupMap = NULL; 
+byte *MBAmap = NULL;
+byte *MapUnitToSliceGroupMap = NULL;
 unsigned int PicSizeInMapUnits;
 
 
@@ -95,8 +95,8 @@ static int FmoGenerateMBAmap (ImageParameters * img, seq_parameter_set_rbsp_t* s
 static int FmoGenerateMapUnitToSliceGroupMap (ImageParameters * img, pic_parameter_set_rbsp_t * pps)
 {
   PicSizeInMapUnits = img->PicHeightInMapUnits * img->PicWidthInMbs;
-  
-  
+
+
   if (pps->slice_group_map_type == 6)
   {
     if ((pps->pic_size_in_map_units_minus1+1) != PicSizeInMapUnits)
@@ -104,23 +104,23 @@ static int FmoGenerateMapUnitToSliceGroupMap (ImageParameters * img, pic_paramet
       error ("wrong pps->pic_size_in_map_units_minus1 for used SPS and FMO type 6", 500);
     }
   }
-  
+
   // allocate memory for MapUnitToSliceGroupMap
   if (MapUnitToSliceGroupMap)
     free (MapUnitToSliceGroupMap);
-  
+
   if ((MapUnitToSliceGroupMap = malloc ((PicSizeInMapUnits) * sizeof (byte))) == NULL)
   {
     printf ("cannot allocated %d bytes for MapUnitToSliceGroupMap, exit\n", (int) ( PicSizeInMapUnits * sizeof (byte)));
     exit (-1);
   }
-  
+
   if (pps->num_slice_groups_minus1 == 0)    // only one slice group
   {
     memset (MapUnitToSliceGroupMap, 0,  PicSizeInMapUnits * sizeof (byte));
     return 0;
   }
-  
+
   switch (pps->slice_group_map_type)
   {
   case 0:
@@ -167,18 +167,18 @@ static int FmoGenerateMapUnitToSliceGroupMap (ImageParameters * img, pic_paramet
 static int FmoGenerateMBAmap (ImageParameters * img, seq_parameter_set_rbsp_t* sps)
 {
   unsigned i;
-  
+
   // allocate memory for MBAmap
   if (MBAmap)
     free (MBAmap);
-  
-  
+
+
   if ((MBAmap = malloc ((img->PicSizeInMbs) * sizeof (byte))) == NULL)
   {
     printf ("cannot allocated %d bytes for MBAmap, exit\n", (int) ((img->PicSizeInMbs) * sizeof (byte)));
     exit (-1);
   }
-  
+
   if ((sps->frame_mbs_only_flag) || img->field_picture)
   {
     for (i=0; i<img->PicSizeInMbs; i++)
@@ -220,25 +220,25 @@ static int FmoGenerateMBAmap (ImageParameters * img, seq_parameter_set_rbsp_t* s
  */
 int FmoInit(ImageParameters * img, pic_parameter_set_rbsp_t * pps, seq_parameter_set_rbsp_t * sps)
 {
-  
+
 #ifdef PRINT_FMO_MAPS
   unsigned i,j;
   int bottom;
 #endif
-  
+
   int k;
   for (k=0;k<MAXSLICEGROUPIDS;k++)
     FirstMBInSlice[k] = -1;
-  
-  
-  
+
+
+
   FmoGenerateMapUnitToSliceGroupMap(img, pps);
   FmoGenerateMBAmap(img, sps);
-  
+
 #ifdef PRINT_FMO_MAPS
   printf("\n");
   printf("FMO Map (Units):\n");
-  
+
   for (j=0; j<img->PicHeightInMapUnits; j++)
   {
     for (i=0; i<img->PicWidthInMbs; i++)
@@ -248,10 +248,10 @@ int FmoInit(ImageParameters * img, pic_parameter_set_rbsp_t * pps, seq_parameter
     printf("\n");
   }
   printf("\n");
-  
+
   if(sps->mb_adaptive_frame_field_flag==0)
   {
-    printf("FMO Map (Mb):\n");	
+    printf("FMO Map (Mb):\n");
     for (j=0; j<(img->PicSizeInMbs/img->PicWidthInMbs); j++)
     {
       for (i=0; i<img->PicWidthInMbs; i++)
@@ -262,9 +262,9 @@ int FmoInit(ImageParameters * img, pic_parameter_set_rbsp_t * pps, seq_parameter
     }
     printf("\n");
   }
-  else 
+  else
   {
-    printf("FMO Map (Mb in scan order for MBAFF):\n");	
+    printf("FMO Map (Mb in scan order for MBAFF):\n");
     for (j=0; j<(img->PicSizeInMbs/img->PicWidthInMbs); j++)
     {
       for (i=0; i<img->PicWidthInMbs; i++)
@@ -273,14 +273,14 @@ int FmoInit(ImageParameters * img, pic_parameter_set_rbsp_t * pps, seq_parameter
         printf("%d ",MBAmap[(j-bottom)*img->PicWidthInMbs+i*2+bottom]);
       }
       printf("\n");
-      
+
     }
     printf("\n");
-    
+
   }
-  
+
 #endif
-  
+
   return 0;
 }
 
@@ -301,9 +301,9 @@ void FmoUninit()
   if (MapUnitToSliceGroupMap)
   {
     free (MapUnitToSliceGroupMap);
-    MapUnitToSliceGroupMap = NULL; 
+    MapUnitToSliceGroupMap = NULL;
   }
-  
+
 }
 
 
@@ -324,8 +324,8 @@ static void FmoGenerateType0MapUnitMap (ImageParameters * img, pic_parameter_set
   unsigned i = 0;
   do
   {
-    for( iGroup = 0; 
-    (iGroup <= pps->num_slice_groups_minus1) && (i < PicSizeInMapUnits); 
+    for( iGroup = 0;
+    (iGroup <= pps->num_slice_groups_minus1) && (i < PicSizeInMapUnits);
     i += pps->run_length_minus1[iGroup++] + 1)
     {
       for( j = 0; j <= pps->run_length_minus1[ iGroup ] && i + j < PicSizeInMapUnits; j++ )
@@ -335,7 +335,7 @@ static void FmoGenerateType0MapUnitMap (ImageParameters * img, pic_parameter_set
   while( i < PicSizeInMapUnits );
 }
 
-  
+
 /*!
  ************************************************************************
  * \brief
@@ -373,11 +373,11 @@ static void FmoGenerateType2MapUnitMap (ImageParameters * img, pic_parameter_set
   int iGroup;
   unsigned i, x, y;
   unsigned yTopLeft, xTopLeft, yBottomRight, xBottomRight;
-  
+
   for( i = 0; i < PicSizeInMapUnits; i++ )
     MapUnitToSliceGroupMap[ i ] = pps->num_slice_groups_minus1;
-  
-  for( iGroup = pps->num_slice_groups_minus1 - 1 ; iGroup >= 0; iGroup-- ) 
+
+  for( iGroup = pps->num_slice_groups_minus1 - 1 ; iGroup >= 0; iGroup-- )
   {
     yTopLeft = pps->top_left[ iGroup ] / img->PicWidthInMbs;
     xTopLeft = pps->top_left[ iGroup ] % img->PicWidthInMbs;
@@ -407,38 +407,38 @@ static void FmoGenerateType3MapUnitMap (ImageParameters * img, pic_parameter_set
   int leftBound, topBound, rightBound, bottomBound;
   int x, y, xDir, yDir;
   int mapUnitVacant;
-  
+
   unsigned mapUnitsInSliceGroup0 = imin((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
-  
+
   for( i = 0; i < PicSizeInMapUnits; i++ )
     MapUnitToSliceGroupMap[ i ] = 2;
-  
+
   x = ( img->PicWidthInMbs - pps->slice_group_change_direction_flag ) / 2;
   y = ( img->PicHeightInMapUnits - pps->slice_group_change_direction_flag ) / 2;
-  
+
   leftBound   = x;
   topBound    = y;
   rightBound  = x;
   bottomBound = y;
-  
+
   xDir =  pps->slice_group_change_direction_flag - 1;
   yDir =  pps->slice_group_change_direction_flag;
-  
-  for( k = 0; k < PicSizeInMapUnits; k += mapUnitVacant ) 
+
+  for( k = 0; k < PicSizeInMapUnits; k += mapUnitVacant )
   {
     mapUnitVacant = ( MapUnitToSliceGroupMap[ y * img->PicWidthInMbs + x ]  ==  2 );
     if( mapUnitVacant )
       MapUnitToSliceGroupMap[ y * img->PicWidthInMbs + x ] = ( k >= mapUnitsInSliceGroup0 );
-    
-    if( xDir  ==  -1  &&  x  ==  leftBound ) 
+
+    if( xDir  ==  -1  &&  x  ==  leftBound )
     {
       leftBound = imax( leftBound - 1, 0 );
       x = leftBound;
       xDir = 0;
       yDir = 2 * pps->slice_group_change_direction_flag - 1;
     }
-    else 
-      if( xDir  ==  1  &&  x  ==  rightBound ) 
+    else
+      if( xDir  ==  1  &&  x  ==  rightBound )
       {
         rightBound = imin( rightBound + 1, (int)img->PicWidthInMbs - 1 );
         x = rightBound;
@@ -446,15 +446,15 @@ static void FmoGenerateType3MapUnitMap (ImageParameters * img, pic_parameter_set
         yDir = 1 - 2 * pps->slice_group_change_direction_flag;
       }
       else
-        if( yDir  ==  -1  &&  y  ==  topBound ) 
+        if( yDir  ==  -1  &&  y  ==  topBound )
         {
           topBound = imax( topBound - 1, 0 );
           y = topBound;
           xDir = 1 - 2 * pps->slice_group_change_direction_flag;
           yDir = 0;
         }
-        else 
-          if( yDir  ==  1  &&  y  ==  bottomBound ) 
+        else
+          if( yDir  ==  1  &&  y  ==  bottomBound )
           {
             bottomBound = imin( bottomBound + 1, (int)img->PicHeightInMapUnits - 1 );
             y = bottomBound;
@@ -467,7 +467,7 @@ static void FmoGenerateType3MapUnitMap (ImageParameters * img, pic_parameter_set
             y = y + yDir;
           }
   }
-  
+
 }
 
 /*!
@@ -483,18 +483,18 @@ static void FmoGenerateType3MapUnitMap (ImageParameters * img, pic_parameter_set
  */
 static void FmoGenerateType4MapUnitMap (ImageParameters * img, pic_parameter_set_rbsp_t * pps )
 {
-  
+
   unsigned mapUnitsInSliceGroup0 = imin((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
   unsigned sizeOfUpperLeftGroup = pps->slice_group_change_direction_flag ? ( PicSizeInMapUnits - mapUnitsInSliceGroup0 ) : mapUnitsInSliceGroup0;
-  
+
   unsigned i;
-  
+
   for( i = 0; i < PicSizeInMapUnits; i++ )
     if( i < sizeOfUpperLeftGroup )
       MapUnitToSliceGroupMap[ i ] = pps->slice_group_change_direction_flag;
     else
       MapUnitToSliceGroupMap[ i ] = 1 - pps->slice_group_change_direction_flag;
-    
+
 }
 
 /*!
@@ -510,19 +510,19 @@ static void FmoGenerateType4MapUnitMap (ImageParameters * img, pic_parameter_set
 */
 static void FmoGenerateType5MapUnitMap (ImageParameters * img, pic_parameter_set_rbsp_t * pps )
 {
-  
+
   unsigned mapUnitsInSliceGroup0 = imin((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
   unsigned sizeOfUpperLeftGroup = pps->slice_group_change_direction_flag ? ( PicSizeInMapUnits - mapUnitsInSliceGroup0 ) : mapUnitsInSliceGroup0;
-  
+
   unsigned i,j, k = 0;
-  
+
   for( j = 0; j < img->PicWidthInMbs; j++ )
     for( i = 0; i < img->PicHeightInMapUnits; i++ )
       if( k++ < sizeOfUpperLeftGroup )
         MapUnitToSliceGroupMap[ i * img->PicWidthInMbs + j ] = pps->slice_group_change_direction_flag;
       else
         MapUnitToSliceGroupMap[ i * img->PicWidthInMbs + j ] = 1 - pps->slice_group_change_direction_flag;
-      
+
 }
 
 /*!
@@ -557,9 +557,9 @@ static void FmoGenerateType6MapUnitMap (ImageParameters * img, pic_parameter_set
 int FmoStartPicture ()
 {
   int i;
-  
+
   assert (MBAmap != NULL);
-  
+
   for (i=0; i<MAXSLICEGROUPIDS; i++)
     FirstMBInSlice[i] = FmoGetFirstMBOfSliceGroup (i);
   return 0;
@@ -612,12 +612,12 @@ int FmoMB2SliceGroup ( int mb)
  */
 int FmoGetNextMBNr (int CurrentMbNr)
 {
-  
-  int  SliceGroupID = FmoMB2SliceGroup (CurrentMbNr); 
-  
+
+  int  SliceGroupID = FmoMB2SliceGroup (CurrentMbNr);
+
   while (++CurrentMbNr<(int)img->PicSizeInMbs &&  MBAmap[CurrentMbNr] != SliceGroupID)
     ;
-  
+
   if (CurrentMbNr >= (int)img->PicSizeInMbs)
     return -1;    // No further MB in this slice (could be end of picture)
   else
@@ -637,12 +637,12 @@ int FmoGetNextMBNr (int CurrentMbNr)
  */
 int FmoGetPreviousMBNr (int CurrentMbNr)
 {
-  
-  int  SliceGroupID = FmoMB2SliceGroup (CurrentMbNr); 
+
+  int  SliceGroupID = FmoMB2SliceGroup (CurrentMbNr);
   CurrentMbNr--;
   while (CurrentMbNr>=0 &&  MBAmap[CurrentMbNr] != SliceGroupID)
     CurrentMbNr--;
-  
+
   if (CurrentMbNr < 0)
     return -1;    // No previous MB in this slice
   else
@@ -653,7 +653,7 @@ int FmoGetPreviousMBNr (int CurrentMbNr)
 /*!
  ************************************************************************
  * \brief
- *    FmoGetFirstMBOfSliceGroup: Returns the MB-Nr (in scan order) of the 
+ *    FmoGetFirstMBOfSliceGroup: Returns the MB-Nr (in scan order) of the
  *    next first MB of the Slice group, -1 if no such MB exists
  *
  * \par Input:
@@ -676,7 +676,7 @@ int FmoGetFirstMBOfSliceGroup (int SliceGroupID)
 /*!
  ************************************************************************
  * \brief
- *    FmoGetLastCodedMBOfSlice: Returns the MB-Nr (in scan order) of 
+ *    FmoGetLastCodedMBOfSlice: Returns the MB-Nr (in scan order) of
  *    the last MB of the slice group
  *
  * \par Input:
@@ -690,7 +690,7 @@ int FmoGetLastCodedMBOfSliceGroup (int SliceGroupID)
 {
   int i;
   int LastMB = -1;
-  
+
   for (i=0; i<(int)img->PicSizeInMbs; i++)
     if (FmoMB2SliceGroup (i) == SliceGroupID)
       LastMB = i;
@@ -703,7 +703,7 @@ void FmoSetLastMacroblockInSlice ( int mb)
   // called by terminate_slice(), writes the last processed MB into the
   // FirstMBInSlice[MAXSLICEGROUPIDS] array.  FmoGetFirstMacroblockInSlice()
   // uses this info to identify the first uncoded MB in each slice group
-  
+
   int currSliceGroup = FmoMB2SliceGroup (mb);
   assert (mb >= 0);
   mb = FmoGetNextMBNr (mb);   // The next (still uncoded) MB, or -1 if SG is finished

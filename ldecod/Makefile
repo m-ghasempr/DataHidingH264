@@ -1,5 +1,5 @@
 ###
-###     Makefile for H.26L encoder
+###     Makefile for H.264 decoder
 ###
 ###             generated for UNIX/LINUX environments
 ###             by H. Schwarz

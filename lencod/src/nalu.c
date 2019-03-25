@@ -18,7 +18,7 @@
 #include "global.h"
 #include "nalu.h"
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Converts an RBSP to a NALU
@@ -43,7 +43,7 @@
  *************************************************************************************
  */
 
-int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_type, int nal_reference_idc, 
+int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_type, int nal_reference_idc,
                 int min_num_bytes, int UseAnnexbLongStartcode)
 {
   int len;

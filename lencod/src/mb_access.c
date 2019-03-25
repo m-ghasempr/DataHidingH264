@@ -33,7 +33,7 @@ int mb_is_available(int mbAddr, int currMbAddr)
     if (img->mb_data[mbAddr].slice_nr != img->mb_data[currMbAddr].slice_nr)
       return 0;
   }
-  
+
   return 1;
 }
 
@@ -61,7 +61,7 @@ void CheckAvailabilityOfNeighbors(void)
     currMB->mbAddrB = 2 * (cur_mb_pair - img->PicWidthInMbs);
     currMB->mbAddrC = 2 * (cur_mb_pair - img->PicWidthInMbs + 1);
     currMB->mbAddrD = 2 * (cur_mb_pair - img->PicWidthInMbs - 1);
-    
+
     currMB->mbAvailA = mb_is_available(currMB->mbAddrA, mb_nr) && ((PicPos[cur_mb_pair    ][0])!=0);
     currMB->mbAvailB = mb_is_available(currMB->mbAddrB, mb_nr);
     currMB->mbAvailC = mb_is_available(currMB->mbAddrC, mb_nr) && ((PicPos[cur_mb_pair + 1][0])!=0);
@@ -100,7 +100,7 @@ void get_mb_block_pos_normal (int mb_addr, int *x, int*y)
 /*!
  ************************************************************************
  * \brief
- *    returns the x and y macroblock coordinates for a given MbAddress 
+ *    returns the x and y macroblock coordinates for a given MbAddress
  *    for mbaff type slices
  ************************************************************************
  */
@@ -119,7 +119,7 @@ void get_mb_block_pos_mbaff (int mb_addr, int *x, int*y)
 void get_mb_pos (int mb_addr, int *x, int*y, int is_chroma)
 {
   get_mb_block_pos(mb_addr, x, y);
-  
+
   (*x) *= img->mb_size[is_chroma][0];
   (*y) *= img->mb_size[is_chroma][1];
 }
@@ -184,7 +184,7 @@ void getNonAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int is_chroma, 
     pix->mb_addr  = currMb->mbAddrC;
     pix->available = currMb->mbAvailC;
   }
-  else 
+  else
   {
     pix->available = FALSE;
   }
@@ -351,7 +351,7 @@ void getAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int is_chroma, Pix
                  yM = yN;
               }
               else
-              {               
+              {
                 (pix->mb_addr)+= ((yN & 0x01) != 0);
                 yM = (yN + maxH) >> 1;
               }
@@ -436,7 +436,7 @@ void getAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int is_chroma, Pix
               if (!(img->DeblockCall == 1 && (img->mb_data[currMb->mbAddrB]).mb_field))
                 pix->mb_addr  += 1;
             }
-            
+
             pix->available = currMb->mbAvailB;
             yM = yN;
           }

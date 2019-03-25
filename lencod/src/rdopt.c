@@ -32,12 +32,15 @@
 #include "intrarefresh.h"
 #include "image.h"
 #include "transform8x8.h"
-#include "cabac.h"   
+#include "cabac.h"
 #include "vlc.h"
 #include "me_umhex.h"
 #include "ratectl.h"            // head file for rate control
 #include "mode_decision.h"
 #include "fmo.h"
+#include "macroblock.h"
+#include "symbol.h"
+
 
 imgpel pred[16][16];
 
@@ -67,12 +70,15 @@ imgpel   rec_mbY[16][16], rec_mbU[16][16], rec_mbV[16][16];    // reconstruction
 
 int lrec_rec[16][16],lrec_rec_U[16][16],lrec_rec_V[16][16]; // store the transf. and quantized coefficients for SP frames
 
+static int diff[16];
+static int diff4x4[64];
+static int diff8x8[64];
 RD_8x8DATA tr4x4, tr8x8;
 
 int   **bestInterFAdjust4x4=NULL, **bestIntraFAdjust4x4=NULL;
 int   **bestInterFAdjust8x8=NULL, **bestIntraFAdjust8x8=NULL;
 int   ***bestInterFAdjust4x4Cr=NULL, ***bestIntraFAdjust4x4Cr=NULL;
-int   **fadjust8x8=NULL, **fadjust4x4=NULL, ***fadjust4x4Cr=NULL, ***fadjust8x8Cr=NULL;    
+int   **fadjust8x8=NULL, **fadjust4x4=NULL, ***fadjust4x4Cr=NULL, ***fadjust8x8Cr=NULL;
 
 int   ****cofAC=NULL, ****cofAC8x8=NULL;        // [8x8block][4x4block][level/run][scan_pos]
 int   ***cofDC=NULL;                       // [yuv][level/run][scan_pos]
@@ -132,12 +138,12 @@ void clear_rdopt ()
   free_mem_ACcoeff (cofAC);
   free_mem_ACcoeff (cofAC8x8);
   free_mem_ACcoeff (cofAC4x4intern);
-  
+
   if (input->Transform8x8Mode)
   {
     free_mem_ACcoeff (cofAC_8x8ts);
   }
-  
+
   if (input->AdaptiveRounding)
   {
     free_mem2Dint(bestInterFAdjust4x4);
@@ -172,30 +178,30 @@ void clear_rdopt ()
 void init_rdopt ()
 {
   rdopt = NULL;
-  
+
   get_mem_DCcoeff (&cofDC);
   get_mem_ACcoeff (&cofAC);
   get_mem_ACcoeff (&cofAC8x8);
   get_mem_ACcoeff (&cofAC4x4intern);
   cofAC4x4 = cofAC4x4intern[0][0];
-  
+
   if (input->Transform8x8Mode)
   {
     get_mem_ACcoeff (&cofAC_8x8ts);
   }
-  
+
   switch (input->rdopt)
   {
-  case 0: 
+  case 0:
     encode_one_macroblock = encode_one_macroblock_low;
     break;
-  case 1: 
+  case 1:
     encode_one_macroblock = encode_one_macroblock_high;
     break;
-  case 2: 
+  case 2:
     encode_one_macroblock = encode_one_macroblock_highfast;
     break;
-  case 3: 
+  case 3:
     encode_one_macroblock = encode_one_macroblock_highloss;
     break;
   default:
@@ -266,13 +272,13 @@ void UpdatePixelMap()
         if (refresh_map[my][mx])
         {
           for (y=my*8; y<j; y++)
-            for (x=mx*8; x<i; x++)  
+            for (x=mx*8; x<i; x++)
               pixel_map[y][x] = 1;
         }
         else
         {
           for (y=my*8; y<j; y++)
-            for (x=mx*8; x<i; x++)  
+            for (x=mx*8; x<i; x++)
             {
               pixel_map[y][x] = imin(pixel_map[y][x] + 1, input->num_ref_frames+1);
             }
@@ -280,7 +286,6 @@ void UpdatePixelMap()
      }
   }
 }
-
 
 /*!
  *************************************************************************************
@@ -306,12 +311,12 @@ int CheckReliabilityOfRef (int block, int list_idx, int ref, int mode)
   int maxold_x  = img->width-1;
   int maxold_y  = img->height-1;
   int ref_frame = ref+1;
-  
+
   int by0 = (mode>=4?2*(block >> 1):mode==2?2*block:0);
   int by1 = by0 + (mode>=4||mode==2?2:4);
   int bx0 = (mode>=4?2*(block & 0x01):mode==3?2*block:0);
   int bx1 = bx0 + (mode>=4||mode==3?2:4);
-  
+
   for (block_y=by0; block_y<by1; block_y++)
   {
     for (block_x=bx0; block_x<bx1; block_x++)
@@ -320,17 +325,17 @@ int CheckReliabilityOfRef (int block, int list_idx, int ref, int mode)
       y_pos += (img->block_y + block_y) * BLOCK_SIZE * 4;
       x_pos  = img->all_mv[block_y][block_x][list_idx][ref][mode][0];
       x_pos += (img->block_x + block_x) * BLOCK_SIZE * 4;
-      
+
       /* Here we specify which pixels of the reference frame influence
       the reference values and check their reliability. This is
-      based on the function Get_Reference_Pixel */      
+      based on the function Get_Reference_Pixel */
 
       dy = y_pos & 3;
-      dx = x_pos & 3;      
+      dx = x_pos & 3;
 
       y_pos = (y_pos-dy) >> 2;
       x_pos = (x_pos-dx) >> 2;
-      
+
       if (dy==0 && dx==0) //full-pel
       {
         for (y=y_pos ; y < y_pos + BLOCK_SIZE ; y++)
@@ -354,7 +359,7 @@ int CheckReliabilityOfRef (int block, int list_idx, int ref, int mode)
               }
             }
           }
-        }        
+        }
         else if (dx == 0)
         {
           for (y = y_pos ; y < y_pos + BLOCK_SIZE ; y++)
@@ -406,18 +411,18 @@ int CheckReliabilityOfRef (int block, int list_idx, int ref, int mode)
             {
               pres_y = dy == 1 ? y : y + 1;
               pres_y = iClip3(0,maxold_y,pres_y);
-              
-              for(xx=-2;xx<4;xx++) 
+
+              for(xx=-2;xx<4;xx++)
               {
                 pres_x = iClip3(0,maxold_x,xx + x);
                 if (pixel_map[pres_y][pres_x] < ref_frame)
                   return 0;
               }
-              
+
               pres_x = dx == 1 ? x : x + 1;
               pres_x = iClip3(0,maxold_x,pres_x);
-              
-              for(yy=-2;yy<4;yy++) 
+
+              for(yy=-2;yy<4;yy++)
               {
                 pres_y = iClip3(0,maxold_y, yy + y);
                 if (pixel_map[pres_y][pres_x] < ref_frame)
@@ -425,7 +430,7 @@ int CheckReliabilityOfRef (int block, int list_idx, int ref, int mode)
               }
             }
           }
-        }        
+        }
       }
     }
   }
@@ -457,16 +462,15 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   int     pic_pix_y   = img->pix_y+block_y;
   int     pic_opix_y  = img->opix_y+block_y;
   imgpel  **imgY      = enc_picture->imgY;
-  
+
   Slice          *currSlice    =  img->currentSlice;
-  Macroblock     *currMB       = &img->mb_data[img->current_mb_nr];
-  SyntaxElement  *currSE       = &img->MB_SyntaxElements[currMB->currSEnr];
+  SyntaxElement  se;
   const int      *partMap      = assignSE2partition[input->partition_mode];
   DataPartition  *dataPart;
-  
+
   //===== perform DCT, Q, IQ, IDCT, Reconstruction =====
   dummy = 0;
-  
+
   if(img->type!=SP_SLICE)
     *nonzero = dct_luma (block_x, block_y, &dummy, 1);
   else if(!si_frame_indicator && !sp2_frame_indicator)
@@ -474,7 +478,7 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
     *nonzero = dct_luma_sp(block_x, block_y, &dummy);
   }
   else
-  {   
+  {
     *nonzero = dct_luma_sp2(block_x, block_y, &dummy);
   }
 
@@ -486,29 +490,20 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
       distortion += img->quad [imgY_org[pic_opix_y+y][x] - imgY[pic_pix_y+y][x]];
     }
   }
-  
+
   //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO UVLC) =====
-  currSE->value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
-  
+  se.value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
+
   //--- set position and type ---
-  currSE->context = 4*b8 + b4;
-  currSE->type    = SE_INTRAPREDMODE;
-  
+  se.context = 4*b8 + b4;
+  se.type    = SE_INTRAPREDMODE;
+
   //--- choose data partition ---
   dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
   //--- encode and update rate ---
-  if (input->symbol_mode == UVLC)    
-    writeSyntaxElement_Intra4x4PredictionMode(currSE, dataPart);
-  else
-  {
-    currSE->writing = writeIntraPredMode_CABAC;
-    dataPart->writeSyntaxElement (currSE, dataPart);
-  }
-  
-  rate = currSE->len;
-  currSE++;
-  currMB->currSEnr++;
-  
+  writeIntraPredMode (&se, dataPart);
+  rate = se.len;
+
   //===== RATE for LUMINANCE COEFFICIENTS =====
   if (input->symbol_mode == UVLC)
   {
@@ -520,7 +515,7 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   }
   //reset_coding_state (cs_cm);
   rdcost = (double)distortion + lambda*(double)rate;
-  
+
   return rdcost;
 }
 
@@ -535,29 +530,28 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
 {
   int     ipmode, best_ipmode = 0, i, j, k, y, cost, dummy;
   int     c_nz, nonzero = 0;
-  int     diff[16];
   imgpel  rec4x4[4][4];
   double  rdcost;
-  int     block_x     = 8*(b8 & 0x01)+4*(b4 & 0x01);
-  int     block_y     = 8*(b8 >> 1)+4*(b4 >> 1);
-  int     pic_pix_x   = img->pix_x+block_x;
-  int     pic_pix_y   = img->pix_y+block_y;
-  int     pic_opix_x   = img->opix_x+block_x;
-  int     pic_opix_y   = img->opix_y+block_y;
+  int     block_x     = 8 * (b8 & 0x01) + 4 * (b4 & 0x01);
+  int     block_y     = 8 * (b8 >> 1)   + 4 * (b4 >> 1);
+  int     pic_pix_x   = img->pix_x  + block_x;
+  int     pic_pix_y   = img->pix_y  + block_y;
+  int     pic_opix_x  = img->opix_x + block_x;
+  int     pic_opix_y  = img->opix_y + block_y;
   int     pic_block_x = pic_pix_x >> 2;
   int     pic_block_y = pic_pix_y >> 2;
   double  min_rdcost  = 1e30;
-  
+
   int left_available, up_available, all_available;
-  
+
   char   upMode;
   char   leftMode;
   int     mostProbableMode;
-  
+
   PixelPos left_block;
   PixelPos top_block;
-  
-  int  lrec4x4[4][4]; 
+
+  int  lrec4x4[4][4];
   int  fixedcost = (int) floor(4 * lambda );
 
 #ifdef BEST_NZ_COEFF
@@ -569,46 +563,46 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
   if (b8==0 && b4==0)
    cbp_bits = 0;
 #endif
-  
+
   getLuma4x4Neighbour(img->current_mb_nr, block_x - 1, block_y,   &left_block);
   getLuma4x4Neighbour(img->current_mb_nr, block_x,     block_y-1, &top_block);
-  
+
   // constrained intra pred
   if (input->UseConstrainedIntraPred)
   {
     left_block.available = left_block.available ? img->intra_block[left_block.mb_addr] : 0;
     top_block.available  = top_block.available  ? img->intra_block[top_block.mb_addr]  : 0;
   }
-  
+
   upMode            =  top_block.available ? img->ipredmode[top_block.pos_y ][top_block.pos_x ] : -1;
   leftMode          = left_block.available ? img->ipredmode[left_block.pos_y][left_block.pos_x] : -1;
-  
+
   mostProbableMode  = (upMode < 0 || leftMode < 0) ? DC_PRED : upMode < leftMode ? upMode : leftMode;
-  
+
   *min_cost = INT_MAX;
-  
+
   //===== INTRA PREDICTION FOR 4x4 BLOCK =====
   intrapred_luma (pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
-  
+
   //===== LOOP OVER ALL 4x4 INTRA PREDICTION MODES =====
   for (ipmode=0; ipmode<NO_INTRA_PMODE; ipmode++)
   {
     int available_mode =  (ipmode==DC_PRED) ||
       ((ipmode==VERT_PRED||ipmode==VERT_LEFT_PRED||ipmode==DIAG_DOWN_LEFT_PRED) && up_available ) ||
       ((ipmode==HOR_PRED||ipmode==HOR_UP_PRED) && left_available ) ||(all_available);
-    
+
     if (input->IntraDisableInterOnly==0 || img->type != I_SLICE)
     {
       if (input->Intra4x4ParDisable && (ipmode==VERT_PRED||ipmode==HOR_PRED))
-        continue;      
-      
+        continue;
+
       if (input->Intra4x4DiagDisable && (ipmode==DIAG_DOWN_LEFT_PRED||ipmode==DIAG_DOWN_RIGHT_PRED))
-        continue;      
-      
+        continue;
+
       if (input->Intra4x4DirDisable && ipmode>=VERT_RIGHT_PRED)
         continue;
     }
-    
+
     if( available_mode)
     {
       if (!input->rdopt)
@@ -621,7 +615,6 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
             diff[k] = imgY_org[jj][pic_opix_x+i] - img->mprr[ipmode][j][i];
           }
         }
-        //cost  = (ipmode == mostProbableMode) ? 0 : (int)floor(4 * lambda );
         cost  = (ipmode == mostProbableMode) ? 0 : fixedcost;
         cost += distortion4x4 (diff);
         if (cost < *min_cost)
@@ -660,7 +653,7 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
             memcpy(rec4x4[y],&enc_picture->imgY[pic_pix_y+y][pic_pix_x], BLOCK_SIZE * sizeof(imgpel));
             if(img->type==SP_SLICE &&(!si_frame_indicator && !sp2_frame_indicator))
               memcpy(lrec4x4[y],&lrec[pic_pix_y+y][pic_pix_x], BLOCK_SIZE * sizeof(int));// stores the mode coefficients
-          } 
+          }
           //--- flag if dct-coefficients must be coded ---
           nonzero = c_nz;
 
@@ -670,7 +663,7 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
 #ifdef BEST_NZ_COEFF
           best_nz_coeff = img->nz_coeff [img->current_mb_nr][block_x4][block_y4];
           best_coded_block_flag = (int)((img->mb_data[img->current_mb_nr].cbp_bits>>bit_pos)&(int64)(1));
-#endif            
+#endif
           //store_coding_state (cs_ib4);
           if (img->AdaptiveRounding)
           {
@@ -685,7 +678,7 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
       }
     }
   }
-  
+
 #ifdef BEST_NZ_COEFF
   img->nz_coeff [img->current_mb_nr][block_x4][block_y4] = best_nz_coeff;
   cbp_bits &= (~(int64)(1<<bit_pos));
@@ -693,9 +686,9 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
 #endif
   //===== set intra mode prediction =====
   img->ipredmode[pic_block_y][pic_block_x] = (char) best_ipmode;
-  img->mb_data[img->current_mb_nr].intra_pred_modes[4*b8+b4] = 
+  img->mb_data[img->current_mb_nr].intra_pred_modes[4*b8+b4] =
     (char) (mostProbableMode == best_ipmode ? -1 : (best_ipmode < mostProbableMode ? best_ipmode : best_ipmode-1));
-  
+
   if (!input->rdopt)
   {
     // get prediction and prediction error
@@ -716,8 +709,8 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
     for (j=0; j<2; j++)
     {
       memcpy (img->cofAC[b8][b4][j],cofAC4x4[j], 18 * sizeof(int));
-    } 
-    
+    }
+
     //===== restore reconstruction and prediction (needed if single coeffs are removed) =====
     for (y=0; y<BLOCK_SIZE; y++)
     {
@@ -726,14 +719,14 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
       if(img->type==SP_SLICE &&(!si_frame_indicator && !sp2_frame_indicator))
         memcpy (&lrec[pic_pix_y+y][pic_pix_x],lrec4x4[y], BLOCK_SIZE * sizeof(int));//restore coefficients when encoding primary SP frame
     }
-    
+
     if (img->AdaptiveRounding)
     {
       for (j=0; j<BLOCK_SIZE; j++)
-        memcpy (&img->fadjust4x4[1][block_y+j][block_x],&fadjust4x4[block_y+j][block_x], BLOCK_SIZE * sizeof(int));      
+        memcpy (&img->fadjust4x4[1][block_y+j][block_x],&fadjust4x4[block_y+j][block_x], BLOCK_SIZE * sizeof(int));
     }
-    
-  }  
+
+  }
   return nonzero;
 }
 
@@ -748,9 +741,9 @@ int Mode_Decision_for_8x8IntraBlocks(int b8,double lambda,int *cost)
 {
   int  nonzero=0, b4;
   int  cost4x4;
-  
+
   *cost = (int)floor(6.0 * lambda + 0.4999);
-  
+
   for (b4=0; b4<4; b4++)
   {
     if (Mode_Decision_for_4x4IntraBlocks (b8, b4, lambda, &cost4x4))
@@ -762,7 +755,7 @@ int Mode_Decision_for_8x8IntraBlocks(int b8,double lambda,int *cost)
 #ifdef RESET_STATE
   //reset_coding_state (cs_cm);
 #endif
-  
+
   return nonzero;
 }
 
@@ -775,7 +768,7 @@ int Mode_Decision_for_8x8IntraBlocks(int b8,double lambda,int *cost)
 int Mode_Decision_for_Intra4x4Macroblock (double lambda,  int* cost)
 {
   int  cbp=0, b8, cost8x8;
-  
+
   for (*cost=0, b8=0; b8<4; b8++)
   {
     if (Mode_Decision_for_8x8IntraBlocks (b8, lambda, &cost8x8))
@@ -784,7 +777,7 @@ int Mode_Decision_for_Intra4x4Macroblock (double lambda,  int* cost)
     }
     *cost += cost8x8;
   }
-  
+
   return cbp;
 }
 
@@ -817,27 +810,27 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
   int  bframe  = (img->type==B_SLICE);
   int  direct  = (bframe && mode==0);
   int  b8value = B8Mode2Value (mode, pdir);
-  
+
   Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
-  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
+  SyntaxElement se;
   Slice         *currSlice = img->currentSlice;
   DataPartition *dataPart;
   const int     *partMap   = assignSE2partition[input->partition_mode];
-  
+
   EncodingEnvironmentPtr eep_dp;
-  
+
   //=====
   //=====  GET COEFFICIENTS, RECONSTRUCTIONS, CBP
   //=====
   currMB->bi_pred_me=0;
-  
+
   if (direct)
   {
     if (direct_pdir[img->block_y+j0][img->block_x+i0]<0) // mode not allowed
       return (1e20);
     else
-      *cnt_nonz = LumaResidualCoding8x8 (&cbp, cbp_blk, block, direct_pdir[img->block_y+j0][img->block_x+i0], 0, 0, 
-      (short)imax(0,direct_ref_idx[LIST_0][img->block_y+j0][img->block_x+i0]), 
+      *cnt_nonz = LumaResidualCoding8x8 (&cbp, cbp_blk, block, direct_pdir[img->block_y+j0][img->block_x+i0], 0, 0,
+      (short)imax(0,direct_ref_idx[LIST_0][img->block_y+j0][img->block_x+i0]),
       direct_ref_idx[LIST_1][img->block_y+j0][img->block_x+i0]);
   }
   else
@@ -846,23 +839,23 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
     {
       int weight_sum = (active_pps->weighted_bipred_idc == 1)? wbp_weight[0][l0_ref][l1_ref][0] + wbp_weight[1][l0_ref][l1_ref][0] : 0;
       if (weight_sum < -128 ||  weight_sum > 127)
-      {        
+      {
         return (1e20);
       }
     }
 
     fw_mode   = (pdir==0||pdir==2 ? mode : 0);
-    bw_mode   = (pdir==1||pdir==2 ? mode : 0);    
+    bw_mode   = (pdir==1||pdir==2 ? mode : 0);
     *cnt_nonz = LumaResidualCoding8x8 (&cbp, cbp_blk, block, pdir, fw_mode, bw_mode, l0_ref, l1_ref);
   }
-  
+
   //===== get residue =====
   if (input->rdopt==3 && img->type!=B_SLICE)
   {
     // We need the reconstructed prediction residue for the simulated decoders.
     compute_residue_b8block (block, -1);
   }
-  
+
   //=====
   //=====   GET DISTORTION
   //=====
@@ -887,7 +880,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
         distortion += img->quad [imgY_org[img->opix_y+j][i] - enc_picture->imgY[img->pix_y+j][i]];
       }
   }
-  
+
   //=====
   //=====   GET RATE
   //=====
@@ -897,18 +890,15 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
     ue_linfo (b8value, dummy, &mrate, &dummy);
     rate += mrate;
   }
-  else  
+  else
   {
-    currSE->value1  = b8value;
-    currSE->writing = writeB8_typeInfo_CABAC;
-    currSE->type    = SE_MBTYPE;
-    dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-    dataPart->writeSyntaxElement (currSE, dataPart);
-    rate += currSE->len;
-    currSE++;
-    currMB->currSEnr++;
+    se.value1  = b8value;
+    se.type    = SE_MBTYPE;
+    dataPart = &(currSlice->partArr[partMap[se.type]]);
+    writeB8_typeInfo(&se, dataPart);
+    rate += se.len;
   }
-  
+
   //----- motion information -----
   if (!direct)
   {
@@ -921,7 +911,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
         rate  += writeReferenceFrame (mode, i0, j0, 0, l1_ref);
       }
     }
-    
+
     if (pdir==0 || pdir==2)
     {
       rate  += writeMotionVector8x8 (i0, j0, i0+2, j0+2, l0_ref,LIST_0, mode);
@@ -931,24 +921,24 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
       rate  += writeMotionVector8x8 (i0, j0, i0+2, j0+2, l1_ref, LIST_1, mode);
     }
   }
-  
+
   //----- coded block pattern (for CABAC only) -----
   if (input->symbol_mode == CABAC)
   {
-    dataPart = &(currSlice->partArr[partMap[SE_CBP_INTER]]);
+    dataPart = &(currSlice->partArr[partMap[SE_CBP]]);
     eep_dp   = &(dataPart->ee_cabac);
     mrate    = arienco_bits_written (eep_dp);
     writeCBP_BIT_CABAC (block, ((*cnt_nonz>0)?1:0), cbp8x8, currMB, 1, eep_dp);
     mrate    = arienco_bits_written (eep_dp) - mrate;
     rate    += mrate;
   }
-  
+
   //----- luminance coefficients -----
   if (*cnt_nonz)
   {
     rate += writeLumaCoeff8x8 (block, mode, currMB->luma_transform_size_8x8_flag);
   }
-  
+
   return (double)distortion + lambda * (double)rate;
 }
 
@@ -977,12 +967,12 @@ void SetModesAndRefframeForBlocks (int mode)
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   int  bframe  = (img->type==B_SLICE);
   int  block_x, block_y;
-  int  cur_ref[2];  
-  
+  int  cur_ref[2];
+
   //--- macroblock type ---
-  currMB->mb_type = mode;    
-  currMB->bi_pred_me= (mode == 1 ? img->bi_pred_me[mode] : 0);  
-  
+  currMB->mb_type = mode;
+  currMB->bi_pred_me= (mode == 1 ? img->bi_pred_me[mode] : 0);
+
   //--- block 8x8 mode and prediction direction ---
   switch (mode)
   {
@@ -1012,7 +1002,7 @@ void SetModesAndRefframeForBlocks (int mode)
   case I4MB:
     for(i=0;i<4;i++)
     {
-      currMB->b8mode[i] = IBLOCK; 
+      currMB->b8mode[i] = IBLOCK;
       currMB->b8pdir[i] = -1;
     }
     break;
@@ -1044,7 +1034,7 @@ void SetModesAndRefframeForBlocks (int mode)
     printf ("Unsupported mode in SetModesAndRefframeForBlocks!\n");
     exit (1);
   }
-  
+
 #define IS_FW ((best8x8pdir[mode][k]==0 || best8x8pdir[mode][k]==2) && (mode!=P8x8 || best8x8mode[k]!=0 || !bframe))
 #define IS_BW ((best8x8pdir[mode][k]==1 || best8x8pdir[mode][k]==2) && (mode!=P8x8 || best8x8mode[k]!=0))
   //--- reference frame arrays ---
@@ -1095,7 +1085,7 @@ void SetModesAndRefframeForBlocks (int mode)
           block_x = img->block_x + i;
           k = 2*(j >> 1) + (i >> 1);
           l = 2*(j & 0x01) + (i & 0x01);
-          
+
           if(mode == P8x8 && best8x8mode[k]==0)
           {
             enc_picture->ref_idx[LIST_0][block_y][block_x] = direct_ref_idx[LIST_0][block_y][block_x];
@@ -1129,7 +1119,7 @@ void SetModesAndRefframeForBlocks (int mode)
       }
     }
   }
-  
+
   if (bframe)
   {
 
@@ -1138,27 +1128,27 @@ void SetModesAndRefframeForBlocks (int mode)
       {
         cur_ref[LIST_0] = (int) enc_picture->ref_idx[LIST_0][j][i];
         cur_ref[LIST_1] = (int) enc_picture->ref_idx[LIST_1][j][i];
-        
-        enc_picture->ref_pic_id [LIST_0][j][i] = (cur_ref[LIST_0]>=0 
+
+        enc_picture->ref_pic_id [LIST_0][j][i] = (cur_ref[LIST_0]>=0
           ? enc_picture->ref_pic_num[LIST_0 + currMB->list_offset][cur_ref[LIST_0]]
           : -1);
-        enc_picture->ref_pic_id [LIST_1][j][i] = (cur_ref[LIST_1]>=0 
+        enc_picture->ref_pic_id [LIST_1][j][i] = (cur_ref[LIST_1]>=0
           ? enc_picture->ref_pic_num[LIST_1 + currMB->list_offset][cur_ref[LIST_1]]
           : -1);
       }
   }
   else
-  {  
+  {
     for (j = img->block_y; j < img->block_y + 4; j++)
       for (i = img->block_x; i < img->block_x + 4;i++)
       {
         cur_ref[LIST_0] = (int) enc_picture->ref_idx[LIST_0][j][i];
-        enc_picture->ref_pic_id [LIST_0][j][i] = (cur_ref[LIST_0]>=0 
+        enc_picture->ref_pic_id [LIST_0][j][i] = (cur_ref[LIST_0]>=0
           ? enc_picture->ref_pic_num[LIST_0 + currMB->list_offset][cur_ref[LIST_0]]
           : -1);
       }
   }
-  
+
 #undef IS_FW
 #undef IS_BW
 }
@@ -1173,9 +1163,9 @@ void SetModesAndRefframeForBlocks (int mode)
 void Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode)
 {
   intrapred_luma_16x16 ();   /* make intra pred for all 4 new modes */
-  
+
   find_sad_16x16 (i16mode);   /* get best new intra mode */
-  
+
   currMB->cbp = dct_luma_16x16 (*i16mode);
 }
 
@@ -1195,18 +1185,18 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
   //============= MIXED TRANSFORM SIZES FOR 8x8 PARTITION ==============
   //--------------------------------------------------------------------
   int l;
-  int bframe = img->type==B_SLICE; 
+  int bframe = img->type==B_SLICE;
 
   if (currMB->luma_transform_size_8x8_flag)
   {
-   
+
     //============= set mode and ref. frames ==============
     for(i = 0;i<4;i++)
     {
       currMB->b8mode[i]   = tr8x8.part8x8mode[i];
       currMB->b8pdir[i]   = tr8x8.part8x8pdir[i];
     }
-    
+
     if (bframe)
     {
       for (j = 0;j<4;j++)
@@ -1236,12 +1226,12 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
       {
         cur_ref[LIST_0] = (int) enc_picture->ref_idx[LIST_0][j][i];
 
-        enc_picture->ref_pic_id [LIST_0][j][i] =(cur_ref[LIST_0]>=0 
+        enc_picture->ref_pic_id [LIST_0][j][i] =(cur_ref[LIST_0]>=0
         ? enc_picture->ref_pic_num[LIST_0 + currMB->list_offset][cur_ref[LIST_0]]
         : -1);
       }
     }
-   
+
     if (bframe)
     {
       for (j = img->block_y; j < img->block_y + BLOCK_MULTIPLE; j++)
@@ -1250,32 +1240,32 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
         {
           cur_ref[LIST_1] = (int) enc_picture->ref_idx[LIST_1][j][i];
 
-          enc_picture->ref_pic_id [LIST_1][j][i] = (cur_ref[LIST_1]>=0 
+          enc_picture->ref_pic_id [LIST_1][j][i] = (cur_ref[LIST_1]>=0
             ? enc_picture->ref_pic_num[LIST_1 + currMB->list_offset][cur_ref[LIST_1]]
             : -1);
         }
-        
+
       }
     }
-    
+
     //====== set the mv's for 8x8 partition with transform size 8x8 ======
     //save the mv data for 4x4 transform
-    
+
     StoreMV8x8(1);
     //set new mv data for 8x8 transform
     RestoreMV8x8(0);
-    
+
     //============= get pre-calculated data ==============
     //restore coefficients from 8x8 transform
-    
+
     for (block = 0; block<4; block++)
     {
       for (k = 0; k<4; k++)
         for (j = 0; j<2; j++)
-          memcpy (img->cofAC[block][k][j],cofAC_8x8ts[block][k][j], 65 * sizeof(int));                            
-    }     
-    //restore reconstruction 
-    if (cnt_nonz8_8x8ts <= _LUMA_8x8_COEFF_COST_ && 
+          memcpy (img->cofAC[block][k][j],cofAC_8x8ts[block][k][j], 65 * sizeof(int));
+    }
+    //restore reconstruction
+    if (cnt_nonz8_8x8ts <= _LUMA_8x8_COEFF_COST_ &&
       ((img->qp_scaled)!=0 || img->lossless_qpprime_flag==0) &&
       (img->type!=SP_SLICE))// modif ES added last condition (we probably never go there so is the next modification useful ? check)
     {
@@ -1294,9 +1284,9 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
       currMB->cbp_blk = cbp_blk8_8x8ts;
       for (j = 0; j < MB_BLOCK_SIZE; j++)
       {
-        memcpy (&enc_picture->imgY[img->pix_y+j][img->pix_x],tr8x8.rec_mbY8x8[j], MB_BLOCK_SIZE * sizeof(imgpel));   
+        memcpy (&enc_picture->imgY[img->pix_y+j][img->pix_x],tr8x8.rec_mbY8x8[j], MB_BLOCK_SIZE * sizeof(imgpel));
         if(img->type==SP_SLICE &&(!si_frame_indicator && !sp2_frame_indicator))
-          memcpy (&lrec[img->pix_y+j][img->pix_x],tr8x8.lrec[j], MB_BLOCK_SIZE * sizeof(int)); 
+          memcpy (&lrec[img->pix_y+j][img->pix_x],tr8x8.lrec[j], MB_BLOCK_SIZE * sizeof(int));
       }
     }
   }
@@ -1309,9 +1299,9 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
     {
       for (k = 0; k<4; k++)
         for (j = 0; j<2; j++)
-          memcpy (img->cofAC[block][k][j],cofAC8x8[block][k][j], 65 * sizeof(int));            
+          memcpy (img->cofAC[block][k][j],cofAC8x8[block][k][j], 65 * sizeof(int));
     }
-    
+
     if (cnt_nonz_8x8<=5 && img->type!=SP_SLICE &&
       ((img->qp_scaled)!=0 || img->lossless_qpprime_flag==0))
     {
@@ -1319,7 +1309,7 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
       currMB->cbp_blk = 0;
       for (j = 0; j < MB_BLOCK_SIZE; j++)
       {
-        memcpy (&enc_picture->imgY[img->pix_y+j][img->pix_x],tr4x4.mpr8x8[j], MB_BLOCK_SIZE * sizeof(imgpel));            
+        memcpy (&enc_picture->imgY[img->pix_y+j][img->pix_x],tr4x4.mpr8x8[j], MB_BLOCK_SIZE * sizeof(imgpel));
         if(img->type ==SP_SLICE &&(!si_frame_indicator && !sp2_frame_indicator))
           memcpy (&lrec[img->pix_y+j][img->pix_x],tr4x4.lrec[j], MB_BLOCK_SIZE * sizeof(int)); // restore coeff. SP frame
       }
@@ -1330,7 +1320,7 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
       currMB->cbp_blk = cbp_blk8x8;
       for (j = 0; j < MB_BLOCK_SIZE; j++)
       {
-        memcpy (&enc_picture->imgY[img->pix_y+j][img->pix_x],tr4x4.rec_mbY8x8[j], MB_BLOCK_SIZE * sizeof(imgpel));            
+        memcpy (&enc_picture->imgY[img->pix_y+j][img->pix_x],tr4x4.rec_mbY8x8[j], MB_BLOCK_SIZE * sizeof(imgpel));
         if(img->type==SP_SLICE &&(!si_frame_indicator && !sp2_frame_indicator))
           memcpy (&lrec[img->pix_y+j][img->pix_x],tr4x4.lrec[j], MB_BLOCK_SIZE * sizeof(int));
       }
@@ -1352,7 +1342,7 @@ void SetMotionVectorsMB (Macroblock* currMB, int bframe)
   short ******pred_mv = img->pred_mv;
   int  bw_ref;
   int jdiv, jmod;
-  
+
   if (!bframe)
   {
     for (j = 0; j<4; j++)
@@ -1364,13 +1354,13 @@ void SetMotionVectorsMB (Macroblock* currMB, int bframe)
       {
         mode8 = currMB->b8mode[k=2*jdiv+(i>>1)];
         l     = 2*jmod + (i & 0x01);
-        
+
         bx   = img->block_x+i;
-          
+
         pdir8 = currMB->b8pdir[k];
         ref    = enc_picture->ref_idx[LIST_0][by][bx];
-        
-        if (pdir8>=0) 
+
+        if (pdir8>=0)
         {
           enc_picture->mv[LIST_0][by][bx][0] = all_mv [j][i][LIST_0][ ref][mode8][0];
           enc_picture->mv[LIST_0][by][bx][1] = all_mv [j][i][LIST_0][ ref][mode8][1];
@@ -1394,20 +1384,20 @@ else
     {
       mode8 = currMB->b8mode[k=2*jdiv+(i>>1)];
       l     = 2*jmod + (i & 0x01);
-      
+
       bx    = img->block_x+i;
-      
+
       pdir8 = currMB->b8pdir[k];
       ref    = enc_picture->ref_idx[LIST_0][by][bx];
       bw_ref = enc_picture->ref_idx[LIST_1][by][bx];
-      
+
       if (currMB->bi_pred_me && (pdir8 == 2) && currMB->mb_type==1)
       {
         all_mv  = currMB->bi_pred_me == 1 ? img->bipred_mv1 : img->bipred_mv2;
         ref = 0;
         bw_ref = 0;
       }
-            
+
       if (pdir8==-1) // intra
       {
         enc_picture->mv[LIST_0][by][bx][0] = 0;
@@ -1426,7 +1416,7 @@ else
       else if (pdir8==1) // list 1
       {
         enc_picture->mv[LIST_0][by][bx][0] = 0;
-        enc_picture->mv[LIST_0][by][bx][1] = 0;          
+        enc_picture->mv[LIST_0][by][bx][1] = 0;
         enc_picture->ref_idx[LIST_0][by][bx] = -1;
         enc_picture->mv[LIST_1][by][bx][0] = all_mv [j][i][LIST_1][bw_ref][mode8][0];
         enc_picture->mv[LIST_1][by][bx][1] = all_mv [j][i][LIST_1][bw_ref][mode8][1];
@@ -1434,18 +1424,18 @@ else
       else if (pdir8==2) // bipredictive
       {
         enc_picture->mv[LIST_0][by][bx][0] = all_mv [j][i][LIST_0][ ref][mode8][0];
-        enc_picture->mv[LIST_0][by][bx][1] = all_mv [j][i][LIST_0][ ref][mode8][1];                   
+        enc_picture->mv[LIST_0][by][bx][1] = all_mv [j][i][LIST_0][ ref][mode8][1];
         enc_picture->mv[LIST_1][by][bx][0] = all_mv [j][i][LIST_1][bw_ref][mode8][0];
         enc_picture->mv[LIST_1][by][bx][1] = all_mv [j][i][LIST_1][bw_ref][mode8][1];
       }
       else
       {
         error("invalid direction mode", 255);
-      }      
+      }
     }
   }
 }
-  
+
   // copy all the motion vectors into rdopt structure
   // Can simplify this by copying the MV's of the best mode (TBD)
   if(img->MbaffFrameFlag)
@@ -1462,7 +1452,7 @@ else
             {
               rdopt->all_mv [j][i][k][l][m][0]  = all_mv [j][i][k][l][m][0];
               rdopt->pred_mv[j][i][k][l][m][0]  = pred_mv[j][i][k][l][m][0];
-              
+
               rdopt->all_mv [j][i][k][l][m][1]  = all_mv [j][i][k][l][m][1];
               rdopt->pred_mv[j][i][k][l][m][1]  = pred_mv[j][i][k][l][m][1];
             }
@@ -1484,7 +1474,7 @@ else
 int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
                             int      mode,         // <-- modus (0-COPY/DIRECT, 1-16x16, 2-16x8, 3-8x16, 4-8x8(+), 5-Intra4x4, 6-Intra16x16)
                             double*  min_rdcost,   // <-> minimum rate-distortion cost
-                            double*  min_rate,     // --> bitrate of mode which has minimum rate-distortion cost. 
+                            double*  min_rate,     // --> bitrate of mode which has minimum rate-distortion cost.
                             int i16mode )
 {
   int         i, j, k; //, k, ****ip4;
@@ -1499,35 +1489,35 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
   int         tmp_cc;
   int         use_of_cc =  (img->type!=I_SLICE &&  input->symbol_mode!=CABAC);
   int         cc_rate, dummy;
-  
+
   //=====
   //=====  SET REFERENCE FRAMES AND BLOCK MODES
   //=====
   SetModesAndRefframeForBlocks (mode);
-  
+
   //=====
   //=====  GET COEFFICIENTS, RECONSTRUCTIONS, CBP
   //=====
   if (bframe && mode==0)
   {
     int block_x=img->pix_x>>2;
-    int block_y=img->pix_y>>2;    
+    int block_y=img->pix_y>>2;
     for (j = block_y;j< block_y + 4;j++)
       for (i = block_x;i<block_x + 4;i++)
         if (direct_pdir[j][i] < 0)
           return 0;
   }
-  
-  // Test MV limits for Skip Mode. This could be necessary for MBAFF case Frame MBs. 
+
+  // Test MV limits for Skip Mode. This could be necessary for MBAFF case Frame MBs.
   if ((img->MbaffFrameFlag) && (!currMB->mb_field) && (img->type==P_SLICE) && (mode==0) )
   {
-    if ( img->all_mv[0][0][0][0][0][0] < -8192 
-      || img->all_mv[0][0][0][0][0][0] > 8191 
-      || img->all_mv[0][0][0][0][0][1] < LEVELMVLIMIT[img->LevelIndex][4] 
+    if ( img->all_mv[0][0][0][0][0][0] < -8192
+      || img->all_mv[0][0][0][0][0][0] > 8191
+      || img->all_mv[0][0][0][0][0][1] < LEVELMVLIMIT[img->LevelIndex][4]
       || img->all_mv[0][0][0][0][0][1] > LEVELMVLIMIT[img->LevelIndex][5])
       return 0;
   }
-  
+
   if (img->AdaptiveRounding)
   {
     memset(&(img->fadjust4x4[0][0][0]), 0, MB_PIXELS * sizeof(int));
@@ -1535,12 +1525,12 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
     memset(&(img->fadjust4x4Cr[0][0][0][0]), 0, img->mb_cr_size_y * img->mb_cr_size_x * sizeof(int));
     memset(&(img->fadjust4x4Cr[0][1][0][0]), 0, img->mb_cr_size_y * img->mb_cr_size_x  * sizeof(int));
   }
-  
+
   if (mode<P8x8)
   {
     LumaResidualCoding ();
 
-    if(mode==0 && currMB->cbp!=0 && (img->type != B_SLICE || img->NoResidueDirect==1)) 
+    if(mode==0 && currMB->cbp!=0 && (img->type != B_SLICE || img->NoResidueDirect==1))
       return 0;
     if(mode==0 && currMB->cbp==0 && currMB->luma_transform_size_8x8_flag==1) //for B_skip, luma_transform_size_8x8_flag=0 only
       return 0;
@@ -1567,7 +1557,7 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
     {
       j1 = j + img->opix_y;
       j2 = j + img->pix_y;
-      for (i=img->opix_x; i<img->opix_x+MB_BLOCK_SIZE; i++)        
+      for (i=img->opix_x; i<img->opix_x+MB_BLOCK_SIZE; i++)
         enc_picture->imgY[j2][i] = imgY_org[j1][i];
     }
     if (img->yuv_format != YUV400)
@@ -1583,7 +1573,7 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
           enc_picture->imgUV[1][j2][i] = imgUV_org[1][j1][i];
         }
       }
-    }  
+    }
     for (j=0;j<4;j++)
       for (i=0; i<(4+img->num_blk8x8_uv); i++)
         img->nz_coeff[img->current_mb_nr][j][i] = 16;
@@ -1595,7 +1585,7 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
     // We need the reconstructed prediction residue for the simulated decoders.
     compute_residue_mb (mode==I16MB?i16mode:-1);
   }
-  
+
   //Rate control
   if (input->RCEnable)
   {
@@ -1610,9 +1600,9 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
   if ((img->yuv_format!=YUV400) && (mode != IPCM))
     ChromaResidualCoding (&dummy);
 
-  if (mode==I16MB)     
+  if (mode==I16MB)
     img->i16offset = I16Offset  (currMB->cbp, i16mode);
-  
+
   //=====
   //=====   GET DISTORTION
   //=====
@@ -1652,7 +1642,7 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
     {
       j1 = j + img->opix_y;
       j2 = j + img->pix_y;
-      for (i=img->opix_x; i<img->opix_x+MB_BLOCK_SIZE; i++)        
+      for (i=img->opix_x; i<img->opix_x+MB_BLOCK_SIZE; i++)
         distortion += img->quad [imgY_org[j1][i] - enc_picture->imgY[j2][i]];
     }
 
@@ -1670,12 +1660,12 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
         }
       }
     }
-  }    
+  }
 
   //=====   S T O R E   C O D I N G   S T A T E   =====
   //---------------------------------------------------
   store_coding_state (cs_cm);
-  
+
   //=====
   //=====   GET RATE
   //=====
@@ -1703,7 +1693,7 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
   {
     rate = writeMBLayer (1, &coeff_rate);
   }
-  
+
   //=====   R E S T O R E   C O D I N G   S T A T E   =====
   //-------------------------------------------------------
   reset_coding_state (cs_cm);
@@ -1721,8 +1711,8 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
 #endif
       return 0;
   }
-  
-  
+
+
   if ((img->MbaffFrameFlag) && (mode ? 0: ((img->type == B_SLICE) ? !currMB->cbp:1)))  // AFF and current is skip
   {
     if (img->current_mb_nr & 0x01) //bottom
@@ -1743,7 +1733,7 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
 #ifdef BEST_NZ_COEFF
   for (j=0;j<4;j++)
     for (i=0; i<(4+img->num_blk8x8_uv); i++)
-      gaaiMBAFF_NZCoeff[j][i] = img->nz_coeff[img->current_mb_nr][j][i]; 
+      gaaiMBAFF_NZCoeff[j][i] = img->nz_coeff[img->current_mb_nr][j][i];
 #endif
 
   return 1;
@@ -1762,17 +1752,17 @@ void store_adaptive_rounding_parameters (int mode, Macroblock *currMB)
 
   if (currMB->luma_transform_size_8x8_flag)
   {
-    if ((mode == P8x8))    
-      memcpy(&(bestInterFAdjust8x8[0][0]),&(img->fadjust8x8[2][0][0]),MB_PIXELS * sizeof(int));    
-    else if (is_inter)        
-      memcpy(&(bestInterFAdjust8x8[0][0]),&(img->fadjust8x8[0][0][0]),MB_PIXELS * sizeof(int));    
+    if ((mode == P8x8))
+      memcpy(&(bestInterFAdjust8x8[0][0]),&(img->fadjust8x8[2][0][0]),MB_PIXELS * sizeof(int));
+    else if (is_inter)
+      memcpy(&(bestInterFAdjust8x8[0][0]),&(img->fadjust8x8[0][0][0]),MB_PIXELS * sizeof(int));
     else
-      memcpy(&(bestIntraFAdjust8x8[0][0]),&(img->fadjust8x8[1][0][0]),MB_PIXELS * sizeof(int));    
+      memcpy(&(bestIntraFAdjust8x8[0][0]),&(img->fadjust8x8[1][0][0]),MB_PIXELS * sizeof(int));
   }
   else
   {
     if ((mode == P8x8))
-      memcpy(&(bestInterFAdjust4x4[0][0]),&(img->fadjust4x4[3][0][0]),MB_PIXELS * sizeof(int));    
+      memcpy(&(bestInterFAdjust4x4[0][0]),&(img->fadjust4x4[3][0][0]),MB_PIXELS * sizeof(int));
     else if (is_inter)
       memcpy(&(bestInterFAdjust4x4[0][0]),&(img->fadjust4x4[0][0][0]),MB_PIXELS * sizeof(int));
     else
@@ -1784,35 +1774,35 @@ void store_adaptive_rounding_parameters (int mode, Macroblock *currMB)
     {
       for (j = 0; j < img->mb_cr_size_y; j++)
       {
-        memcpy(bestInterFAdjust4x4Cr[0][j],img->fadjust8x8Cr[0][0][j],img->mb_cr_size_x * sizeof(int)); 
-        memcpy(bestInterFAdjust4x4Cr[1][j],img->fadjust8x8Cr[0][1][j],img->mb_cr_size_x * sizeof(int)); 
+        memcpy(bestInterFAdjust4x4Cr[0][j],img->fadjust8x8Cr[0][0][j],img->mb_cr_size_x * sizeof(int));
+        memcpy(bestInterFAdjust4x4Cr[1][j],img->fadjust8x8Cr[0][1][j],img->mb_cr_size_x * sizeof(int));
       }
     }
     else if (mode == P8x8)
     {
       for (j = 0; j < img->mb_cr_size_y; j++)
       {
-        memcpy(bestInterFAdjust4x4Cr[0][j],img->fadjust4x4Cr[2][0][j],img->mb_cr_size_x * sizeof(int)); 
-        memcpy(bestInterFAdjust4x4Cr[1][j],img->fadjust4x4Cr[2][1][j],img->mb_cr_size_x * sizeof(int)); 
+        memcpy(bestInterFAdjust4x4Cr[0][j],img->fadjust4x4Cr[2][0][j],img->mb_cr_size_x * sizeof(int));
+        memcpy(bestInterFAdjust4x4Cr[1][j],img->fadjust4x4Cr[2][1][j],img->mb_cr_size_x * sizeof(int));
       }
     }
     else if (is_inter)
     {
       for (j = 0; j < img->mb_cr_size_y; j++)
       {
-        memcpy(bestInterFAdjust4x4Cr[0][j],img->fadjust4x4Cr[0][0][j],img->mb_cr_size_x * sizeof(int)); 
-        memcpy(bestInterFAdjust4x4Cr[1][j],img->fadjust4x4Cr[0][1][j],img->mb_cr_size_x * sizeof(int)); 
+        memcpy(bestInterFAdjust4x4Cr[0][j],img->fadjust4x4Cr[0][0][j],img->mb_cr_size_x * sizeof(int));
+        memcpy(bestInterFAdjust4x4Cr[1][j],img->fadjust4x4Cr[0][1][j],img->mb_cr_size_x * sizeof(int));
       }
     }
     else
     {
       for (j = 0; j < img->mb_cr_size_y; j++)
       {
-        memcpy(bestIntraFAdjust4x4Cr[0][j],img->fadjust4x4Cr[1][0][j],img->mb_cr_size_x * sizeof(int)); 
-        memcpy(bestIntraFAdjust4x4Cr[1][j],img->fadjust4x4Cr[1][1][j],img->mb_cr_size_x * sizeof(int)); 
+        memcpy(bestIntraFAdjust4x4Cr[0][j],img->fadjust4x4Cr[1][0][j],img->mb_cr_size_x * sizeof(int));
+        memcpy(bestIntraFAdjust4x4Cr[1][j],img->fadjust4x4Cr[1][1][j],img->mb_cr_size_x * sizeof(int));
       }
     }
-  }  
+  }
 }
 
 /*!
@@ -1826,25 +1816,25 @@ void store_macroblock_parameters (int mode)
   int  i, j, k, ****i4p, ***i3p;
   Macroblock *currMB  = &img->mb_data[img->current_mb_nr];
   int        bframe   = (img->type==B_SLICE);
-  
+
   //--- store best mode ---
   best_mode = mode;
   best_c_imode = currMB->c_ipred_mode;
   best_i16offset = img->i16offset;
-  
+
   // If condition is not really necessary.
-  bi_pred_me = (mode == 1) ? currMB->bi_pred_me : 0;  
-  
+  bi_pred_me = (mode == 1) ? currMB->bi_pred_me : 0;
+
   memcpy(b8mode, currMB->b8mode, BLOCK_MULTIPLE * sizeof(int));
   memcpy(b8pdir, currMB->b8pdir, BLOCK_MULTIPLE * sizeof(int));
   memcpy(b4_intra_pred_modes,currMB->intra_pred_modes, MB_BLOCK_PARTITIONS * sizeof(char));
   memcpy(b8_intra_pred_modes8x8,currMB->intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));
-  
+
   for (j = 0 ; j < BLOCK_MULTIPLE; j++)
   {
     memcpy(&b4_ipredmode[j * BLOCK_MULTIPLE],&img->ipredmode[img->block_y + j][img->block_x],BLOCK_MULTIPLE * sizeof(char));
     memcpy(b8_ipredmode8x8[j],&img->ipredmode8x8[img->block_y + j][img->block_x],BLOCK_MULTIPLE * sizeof(char));
-  }  
+  }
   //--- reconstructed blocks ----
   for (j = 0; j < MB_BLOCK_SIZE; j++)
   {
@@ -1872,13 +1862,13 @@ void store_macroblock_parameters (int mode)
     {
       //store uv coefficients SP frame
       for (j = 0; j<img->mb_cr_size_y; j++)
-      {        
+      {
         memcpy(lrec_rec_U[j],&lrec_uv[0][img->pix_c_y+j][img->pix_c_x], img->mb_cr_size_x * sizeof(int));
         memcpy(lrec_rec_V[j],&lrec_uv[1][img->pix_c_y+j][img->pix_c_x], img->mb_cr_size_x * sizeof(int));
       }
     }
   }
-  
+
   //--- store results of decoders ---
   if (input->rdopt==3 && img->type!=B_SLICE)
   {
@@ -1892,7 +1882,7 @@ void store_macroblock_parameters (int mode)
         }
     }
   }
-  
+
   //--- coeff, cbp, kac ---
   if (mode || bframe)
   {
@@ -1905,11 +1895,11 @@ void store_macroblock_parameters (int mode)
   {
     cbp_blk = cbp = 0;
   }
-  
+
   //--- store transform size ---
   luma_transform_size_8x8_flag = currMB->luma_transform_size_8x8_flag;
-  
-  
+
+
   for (j = 0; j<4; j++)
     memcpy(frefframe[j],&enc_picture->ref_idx[LIST_0][img->block_y+j][img->block_x], BLOCK_MULTIPLE * sizeof(char));
 
@@ -1917,7 +1907,7 @@ void store_macroblock_parameters (int mode)
   {
     for (j = 0; j<4; j++)
       memcpy(brefframe[j],&enc_picture->ref_idx[LIST_1][img->block_y+j][img->block_x], BLOCK_MULTIPLE * sizeof(char));
-    }  
+    }
 }
 
 
@@ -1933,18 +1923,18 @@ void set_stored_macroblock_parameters ()
   imgpel     **imgY  = enc_picture->imgY;
   imgpel    ***imgUV = enc_picture->imgUV;
 
-  int           mode = best_mode;
+  int         mode   = best_mode;
   int         bframe = (img->type==B_SLICE);
   int         i, j, k, ****i4p, ***i3p;
-  int         block_x, block_y;  
-  char    **ipredmodes = img->ipredmode;  
+  int         block_x, block_y;
+  char    **ipredmodes = img->ipredmode;
   short   *cur_mv;
-  
+
   //===== reconstruction values =====
   for (j = 0; j < MB_BLOCK_SIZE; j++)
   {
     memcpy(&imgY[img->pix_y+j][img->pix_x],rec_mbY[j], MB_BLOCK_SIZE * sizeof(imgpel));
-  } 
+  }
   if((img->type==SP_SLICE) &&(si_frame_indicator==0 && sp2_frame_indicator==0 ))
   {
     for (j = 0; j < MB_BLOCK_SIZE; j++)
@@ -1960,7 +1950,7 @@ void set_stored_macroblock_parameters ()
   {
     update_offset_params(mode,luma_transform_size_8x8_flag);
   }
-  
+
   if (img->yuv_format != YUV400)
   {
     for (j = 0; j<img->mb_cr_size_y; j++)
@@ -1998,7 +1988,7 @@ void set_stored_macroblock_parameters ()
       }
     }
   }
-  
+
   //===== coefficients and cbp =====
   i4p=cofAC; cofAC=img->cofAC; img->cofAC=i4p;
   i3p=cofDC; cofDC=img->cofDC; img->cofDC=i3p;
@@ -2006,7 +1996,7 @@ void set_stored_macroblock_parameters ()
   currMB->cbp_blk = cbp_blk;
   //==== macroblock type ====
   currMB->mb_type = mode;
-  
+
   if(img->MbaffFrameFlag)
   {
     rdopt->mode = mode;
@@ -2014,54 +2004,54 @@ void set_stored_macroblock_parameters ()
     rdopt->cbp = cbp;
     rdopt->cbp_blk = cbp_blk;
     rdopt->mb_type  = mode;
-    
-    rdopt->prev_qp=currMB->prev_qp;
-    rdopt->prev_delta_qp=currMB->prev_delta_qp;
-    rdopt->delta_qp = currMB->delta_qp;
-    rdopt->qp=currMB->qp;
-    rdopt->prev_cbp=currMB->prev_cbp;
-    
+
+    rdopt->prev_qp       = currMB->prev_qp;
+    rdopt->prev_delta_qp = currMB->prev_delta_qp;
+    rdopt->delta_qp      = currMB->delta_qp;
+    rdopt->qp            = currMB->qp;
+    rdopt->prev_cbp      = currMB->prev_cbp;
+
     for(i = 0;i<4+img->num_blk8x8_uv;i++)
     {
       for(j = 0;j<4;j++)
         for(k = 0;k<2;k++)
           memcpy(rdopt->cofAC[i][j][k], img->cofAC[i][j][k], 65 * sizeof(int));
-    }     
+    }
     for(i = 0;i<3;i++)
       for(k = 0;k<2;k++)
         memcpy(rdopt->cofDC[i][k], img->cofDC[i][k], 18 * sizeof(int));
   }
-  
+
 
   memcpy(currMB->b8mode,b8mode, BLOCK_MULTIPLE * sizeof(int));
   memcpy(currMB->b8pdir,b8pdir, BLOCK_MULTIPLE * sizeof(int));
   if(img->MbaffFrameFlag)
   {
     memcpy(rdopt->b8mode,b8mode, BLOCK_MULTIPLE * sizeof(int));
-    memcpy(rdopt->b8pdir,b8pdir, BLOCK_MULTIPLE * sizeof(int));    
+    memcpy(rdopt->b8pdir,b8pdir, BLOCK_MULTIPLE * sizeof(int));
   }
-    
-  currMB->bi_pred_me = currMB->mb_type == 1 ? bi_pred_me : 0;  
-  
-  
-  //if P8x8 mode and transform size 4x4 choosen, restore motion vector data for this transform size 
+
+  currMB->bi_pred_me = currMB->mb_type == 1 ? bi_pred_me : 0;
+
+
+  //if P8x8 mode and transform size 4x4 choosen, restore motion vector data for this transform size
   if (mode == P8x8 && !luma_transform_size_8x8_flag && input->Transform8x8Mode)
     RestoreMV8x8(1);
-  
+
   //==== transform size flag ====
   if (((currMB->cbp & 15) == 0) && !(IS_OLDINTRA(currMB) || currMB->mb_type == I8MB))
     currMB->luma_transform_size_8x8_flag = 0;
   else
     currMB->luma_transform_size_8x8_flag = luma_transform_size_8x8_flag;
-  
+
   rdopt->luma_transform_size_8x8_flag  = currMB->luma_transform_size_8x8_flag;
-  
+
   if (input->rdopt==3 && img->type!=B_SLICE)
   {
     //! save the MB Mode of every macroblock
     decs->dec_mb_mode[img->mb_y][img->mb_x] = mode;
   }
-  
+
   //==== reference frames =====
   for (j = 0; j < 4; j++)
   {
@@ -2070,12 +2060,12 @@ void set_stored_macroblock_parameters ()
     {
       block_x = img->block_x + i;
       k = 2*(j >> 1)+(i >> 1);
-      
+
       // backward prediction or intra
       if ((currMB->b8pdir[k] == 1) || IS_INTRA(currMB))
       {
         enc_picture->ref_idx    [LIST_0][block_y][block_x]    = -1;
-        enc_picture->ref_pic_id [LIST_0][block_y][block_x]    = -1;          
+        enc_picture->ref_pic_id [LIST_0][block_y][block_x]    = -1;
         enc_picture->mv         [LIST_0][block_y][block_x][0] = 0;
         enc_picture->mv         [LIST_0][block_y][block_x][1] = 0;
         if(img->MbaffFrameFlag)
@@ -2085,21 +2075,21 @@ void set_stored_macroblock_parameters ()
       {
         if (currMB->bi_pred_me && (currMB->b8pdir[k] == 2) && currMB->mb_type==1)
         {
-          cur_mv = currMB->bi_pred_me == 1 
-            ? img->bipred_mv1[j][i][LIST_0][0][currMB->b8mode[k]] 
+          cur_mv = currMB->bi_pred_me == 1
+            ? img->bipred_mv1[j][i][LIST_0][0][currMB->b8mode[k]]
             : img->bipred_mv2[j][i][LIST_0][0][currMB->b8mode[k]];
-          
-          enc_picture->ref_idx    [LIST_0][block_y][block_x] = 0;                         
+
+          enc_picture->ref_idx    [LIST_0][block_y][block_x] = 0;
           enc_picture->ref_pic_id [LIST_0][block_y][block_x] = enc_picture->ref_pic_num[LIST_0 + currMB->list_offset][0];
           enc_picture->mv         [LIST_0][block_y][block_x][0] = cur_mv[0];
           enc_picture->mv         [LIST_0][block_y][block_x][1] = cur_mv[1];
           if(img->MbaffFrameFlag)
-            rdopt->refar[LIST_0][j][i] = 0;        
+            rdopt->refar[LIST_0][j][i] = 0;
         }
         else
         {
           cur_mv = img->all_mv[j][i][LIST_0][(short)frefframe[j][i]][currMB->b8mode[k]];
-          
+
           enc_picture->ref_idx    [LIST_0][block_y][block_x]    = frefframe[j][i];
           enc_picture->ref_pic_id [LIST_0][block_y][block_x]    = enc_picture->ref_pic_num[LIST_0 + currMB->list_offset][(short)frefframe[j][i]];
           enc_picture->mv         [LIST_0][block_y][block_x][0] = cur_mv[0];
@@ -2108,7 +2098,7 @@ void set_stored_macroblock_parameters ()
             rdopt->refar[LIST_0][j][i] = frefframe[j][i];
         }
       }
-      
+
       // forward prediction or intra
       if ((currMB->b8pdir[k] == 0) || IS_INTRA(currMB))
       {
@@ -2121,14 +2111,14 @@ void set_stored_macroblock_parameters ()
       }
     }
   }
-  
+
   if (bframe)
   {
     for (j=0; j<4; j++)
     {
       block_y = img->block_y + j;
       for (i=0; i<4; i++)
-      {          
+      {
         block_x = img->block_x + i;
         k = 2*(j >> 1)+(i >> 1);
 
@@ -2146,21 +2136,21 @@ void set_stored_macroblock_parameters ()
         {
           if (currMB->bi_pred_me && (currMB->b8pdir[k] == 2) && currMB->mb_type==1)
           {
-            cur_mv = currMB->bi_pred_me == 1 
-              ? img->bipred_mv1[j][i][LIST_1][0][currMB->b8mode[k]] 
+            cur_mv = currMB->bi_pred_me == 1
+              ? img->bipred_mv1[j][i][LIST_1][0][currMB->b8mode[k]]
               : img->bipred_mv2[j][i][LIST_1][0][currMB->b8mode[k]];
-            
-            enc_picture->ref_idx    [LIST_1][block_y][block_x] = 0; 
+
+            enc_picture->ref_idx    [LIST_1][block_y][block_x] = 0;
             enc_picture->ref_pic_id [LIST_1][block_y][block_x] = enc_picture->ref_pic_num[LIST_1 + currMB->list_offset][0];
             enc_picture->mv         [LIST_1][block_y][block_x][0] = cur_mv[0];
-            enc_picture->mv         [LIST_1][block_y][block_x][1] = cur_mv[1];        
+            enc_picture->mv         [LIST_1][block_y][block_x][1] = cur_mv[1];
             if(img->MbaffFrameFlag)
-              rdopt->refar[LIST_1][j][i] = 0;        
+              rdopt->refar[LIST_1][j][i] = 0;
           }
           else
           {
             cur_mv = img->all_mv[j][i][LIST_1][(short)brefframe[j][i]][currMB->b8mode[k]];
-            
+
             enc_picture->ref_idx    [LIST_1][block_y][block_x] = brefframe[j][i];
             enc_picture->ref_pic_id [LIST_1][block_y][block_x] = enc_picture->ref_pic_num[LIST_1 + currMB->list_offset][(short)brefframe[j][i]];
             enc_picture->mv         [LIST_1][block_y][block_x][0] = cur_mv[0];
@@ -2172,15 +2162,15 @@ void set_stored_macroblock_parameters ()
       }
     }
   }
-  
+
   //==== intra prediction modes ====
   currMB->c_ipred_mode = best_c_imode;
   img->i16offset = best_i16offset;
-  
+
   if(currMB->mb_type == I8MB)
   {
-    memcpy(currMB->intra_pred_modes8x8,b8_intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));            
-    memcpy(currMB->intra_pred_modes,b8_intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));            
+    memcpy(currMB->intra_pred_modes8x8,b8_intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));
+    memcpy(currMB->intra_pred_modes,b8_intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));
     for(j = 0; j < BLOCK_MULTIPLE; j++)
     {
       memcpy(&img->ipredmode[img->block_y+j][img->block_x],b8_ipredmode8x8[j], BLOCK_MULTIPLE * sizeof(char));
@@ -2200,17 +2190,17 @@ void set_stored_macroblock_parameters ()
     for(j = 0; j < BLOCK_MULTIPLE; j++)
       memcpy(&img->ipredmode[img->block_y + j][img->block_x],&b4_ipredmode[BLOCK_MULTIPLE * j], BLOCK_MULTIPLE * sizeof(char));
   }
-  
+
   if(img->MbaffFrameFlag)
   {
     rdopt->c_ipred_mode = currMB->c_ipred_mode;
-    rdopt->i16offset = img->i16offset;  
+    rdopt->i16offset = img->i16offset;
     memcpy(rdopt->intra_pred_modes,currMB->intra_pred_modes, MB_BLOCK_PARTITIONS * sizeof(char));
     memcpy(rdopt->intra_pred_modes8x8,currMB->intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));
     for(j = img->block_y; j < img->block_y +BLOCK_MULTIPLE; j++)
       memcpy(&rdopt->ipredmode[j][img->block_x],&ipredmodes[j][img->block_x], BLOCK_MULTIPLE * sizeof(char));
   }
-  
+
   //==== motion vectors =====
   SetMotionVectorsMB (currMB, bframe);
 }
@@ -2235,7 +2225,7 @@ void SetRefAndMotionVectors (int block, int mode, int pdir, int fwref, int bwref
   int     block_x, block_y;
   short   *cur_mv;
   Macroblock  *currMB  = &img->mb_data[img->current_mb_nr];
-  
+
   if (pdir<0)
   {
     for (j = img->block_y + j0; j < img->block_y + j1; j++)
@@ -2252,7 +2242,7 @@ void SetRefAndMotionVectors (int block, int mode, int pdir, int fwref, int bwref
     }
     return;
   }
-  
+
   if (!bslice)
   {
     for (j=j0; j<j1; j++)
@@ -2261,8 +2251,8 @@ void SetRefAndMotionVectors (int block, int mode, int pdir, int fwref, int bwref
       memset(&enc_picture->ref_idx   [LIST_0][block_y][img->block_x + i0], fwref, (input->part_size[pmode][0]) * sizeof(char));
       for (i=i0; i<i1; i++)
       {
-        block_x = img->block_x + i;        
-        cur_mv = img->all_mv[j][i][LIST_0][fwref][mode];                
+        block_x = img->block_x + i;
+        cur_mv = img->all_mv[j][i][LIST_0][fwref][mode];
         enc_picture->mv        [LIST_0][block_y][block_x][0] = cur_mv[0];
         enc_picture->mv        [LIST_0][block_y][block_x][1] = cur_mv[1];
         enc_picture->ref_pic_id[LIST_0][block_y][block_x] = enc_picture->ref_pic_num[LIST_0+currMB->list_offset][fwref];
@@ -2284,28 +2274,28 @@ void SetRefAndMotionVectors (int block, int mode, int pdir, int fwref, int bwref
           fwref = direct_ref_idx[LIST_0][block_y][block_x];
           bwref = direct_ref_idx[LIST_1][block_y][block_x];
         }
-        
+
         if ((pdir==0 || pdir==2))
         {
           if (currMB->bi_pred_me && (pdir == 2) && mode == 1)
           {
-            cur_mv = currMB->bi_pred_me == 1 
+            cur_mv = currMB->bi_pred_me == 1
               ? img->bipred_mv1[j][i][LIST_0][0][mode]
               : img->bipred_mv2[j][i][LIST_0][0][mode];
-            
+
             enc_picture->mv        [LIST_0][block_y][block_x][0] = cur_mv[0];
             enc_picture->mv        [LIST_0][block_y][block_x][1] = cur_mv[1];
-            enc_picture->ref_idx   [LIST_0][block_y][block_x]    = 0;            
+            enc_picture->ref_idx   [LIST_0][block_y][block_x]    = 0;
             enc_picture->ref_pic_id[LIST_0][block_y][block_x]    = enc_picture->ref_pic_num[LIST_0+currMB->list_offset][0];
           }
           else
           {
             cur_mv = img->all_mv[j][i][LIST_0][fwref][mode];
-            
+
             enc_picture->mv        [LIST_0][block_y][block_x][0] = cur_mv[0];
             enc_picture->mv        [LIST_0][block_y][block_x][1] = cur_mv[1];
             enc_picture->ref_idx   [LIST_0][block_y][block_x] = fwref;
-            enc_picture->ref_pic_id[LIST_0][block_y][block_x] = 
+            enc_picture->ref_pic_id[LIST_0][block_y][block_x] =
             enc_picture->ref_pic_num[LIST_0+currMB->list_offset][(short)enc_picture->ref_idx[LIST_0][block_y][block_x]];
           }
         }
@@ -2316,28 +2306,28 @@ void SetRefAndMotionVectors (int block, int mode, int pdir, int fwref, int bwref
           enc_picture->ref_idx   [LIST_0][block_y][block_x]    = -1;
           enc_picture->ref_pic_id[LIST_0][block_y][block_x]    = -1;
         }
-        
+
         if ((pdir==1 || pdir==2))
         {
           if (currMB->bi_pred_me && (pdir == 2) && mode == 1)
           {
-            cur_mv = currMB->bi_pred_me == 1 
+            cur_mv = currMB->bi_pred_me == 1
               ? img->bipred_mv1[j][i][LIST_1][0][mode]
               : img->bipred_mv2[j][i][LIST_1][0][mode];
-            
+
             enc_picture->mv        [LIST_1][block_y][block_x][0] = cur_mv[0];
             enc_picture->mv        [LIST_1][block_y][block_x][1] = cur_mv[1];
-            enc_picture->ref_idx   [LIST_1][block_y][block_x]    = 0;            
+            enc_picture->ref_idx   [LIST_1][block_y][block_x]    = 0;
             enc_picture->ref_pic_id[LIST_1][block_y][block_x]    = enc_picture->ref_pic_num[LIST_1+currMB->list_offset][0];
           }
           else
           {
             cur_mv = img->all_mv[j][i][LIST_1][bwref][mode];
-            
+
             enc_picture->mv        [LIST_1][block_y][block_x][0] = cur_mv[0];
             enc_picture->mv        [LIST_1][block_y][block_x][1] = cur_mv[1];
             enc_picture->ref_idx   [LIST_1][block_y][block_x] = bwref;
-            enc_picture->ref_pic_id[LIST_1][block_y][block_x] = 
+            enc_picture->ref_pic_id[LIST_1][block_y][block_x] =
             enc_picture->ref_pic_num[LIST_1+currMB->list_offset][(short)enc_picture->ref_idx[LIST_1][block_y][block_x]];
           }
         }
@@ -2365,7 +2355,7 @@ int field_flag_inference()
 {
   int mb_field;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-  
+
   if (currMB->mbAvailA)
   {
     mb_field = img->mb_data[currMB->mbAddrA].mb_field;
@@ -2378,7 +2368,7 @@ int field_flag_inference()
     else
       mb_field = 0;
   }
-  
+
   return mb_field;
 }
 
@@ -2420,7 +2410,7 @@ void StoreMVBlock8x8(int dir, int block8x8, int mode, int ref, int bw_ref, int p
   }
   else
   {
-    if (pdir8 == 0) // list0 
+    if (pdir8 == 0) // list0
     {
       lc_pr_mv8x8 = pred_mv8x8[dir][LIST_0];
       for (j=j0; j<jj; j++)
@@ -2432,7 +2422,7 @@ void StoreMVBlock8x8(int dir, int block8x8, int mode, int ref, int bw_ref, int p
           lc_pr_mv8x8[j][i][1] = pred_mv[j][i][LIST_0][ref][mode][1];
         }
     }
-    else if (pdir8 == 1) // list1 
+    else if (pdir8 == 1) // list1
     {
       lc_pr_mv8x8 = pred_mv8x8[dir][LIST_1];
       for (j=j0; j<jj; j++)
@@ -2487,11 +2477,11 @@ void StoreMVBlock8x8(int dir, int block8x8, int mode, int ref, int bw_ref, int p
 void StoreMV8x8(int dir)
 {
   int block8x8;
-  
+
   int bframe = (img->type == B_SLICE);
-  
+
   for (block8x8=0; block8x8<4; block8x8++)
-    StoreMVBlock8x8(dir, block8x8, tr8x8.part8x8mode[block8x8], tr8x8.part8x8fwref[block8x8], 
+    StoreMVBlock8x8(dir, block8x8, tr8x8.part8x8mode[block8x8], tr8x8.part8x8fwref[block8x8],
     tr8x8.part8x8bwref[block8x8], tr8x8.part8x8pdir[block8x8], bframe);
 }
 
@@ -2514,12 +2504,12 @@ void RestoreMVBlock8x8(int dir, int block8x8, RD_8x8DATA tr, int bframe)
   short mode   = tr.part8x8mode [block8x8];
   short ref    = tr.part8x8fwref[block8x8];
   short bw_ref = tr.part8x8bwref[block8x8];
-  
+
   i0 = (block8x8 & 0x01) << 1;
   j0 = (block8x8 >> 1) << 1;
   ii = i0+2;
   jj = j0+2;
-  
+
   if (!bframe)
   {
     if (pdir8>=0) //(mode8!=IBLOCK)&&(mode8!=I16MB))  // && ref != -1)
@@ -2606,11 +2596,11 @@ void RestoreMVBlock8x8(int dir, int block8x8, RD_8x8DATA tr, int bframe)
 void RestoreMV8x8(int dir)
 {
   int block8x8;
-  
+
   int bframe = (img->type == B_SLICE);
-  
+
   for (block8x8=0; block8x8<4; block8x8++)
-    RestoreMVBlock8x8(dir, block8x8, tr8x8, bframe);   
+    RestoreMVBlock8x8(dir, block8x8, tr8x8, bframe);
 }
 
 
@@ -2629,12 +2619,12 @@ void StoreNewMotionVectorsBlock8x8(int dir, int block8x8, int mode, int fw_ref, 
   short (*lc_l0_mv8x8)[4][2] = all_mv8x8[dir][LIST_0];
   short (*lc_l1_mv8x8)[4][2] = all_mv8x8[dir][LIST_1];
   short (*lc_pr_mv8x8)[4][2] = NULL;
-  
+
   i0 = (block8x8 & 0x01) << 1;
   j0 = (block8x8 >> 1) << 1;
   ii = i0+2;
   jj = j0+2;
-  
+
   if (pdir8<0)
   {
     for (j=j0; j<jj; j++)
@@ -2644,7 +2634,7 @@ void StoreNewMotionVectorsBlock8x8(int dir, int block8x8, int mode, int fw_ref, 
     }
     return;
   }
-  
+
   if (!bframe)
   {
 
@@ -2663,9 +2653,9 @@ void StoreNewMotionVectorsBlock8x8(int dir, int block8x8, int mode, int fw_ref, 
     return;
   }
   else
-  {  
+  {
     if ((pdir8==0 || pdir8==2))
-    {      
+    {
       lc_pr_mv8x8 = pred_mv8x8[dir][LIST_0];
 
       for (j=j0; j<jj; j++)
@@ -2684,7 +2674,7 @@ void StoreNewMotionVectorsBlock8x8(int dir, int block8x8, int mode, int fw_ref, 
     }
 
     if ((pdir8==1 || pdir8==2))
-    {      
+    {
       lc_pr_mv8x8 = pred_mv8x8[dir][LIST_1];
 
       for (j=j0; j<jj; j++)
@@ -2715,12 +2705,11 @@ int GetBestTransformP8x8()
   int    block_y, block_x, pic_pix_y, pic_pix_x, i, j, k;
   int    mb_y, mb_x, block8x8;
   int    cost8x8=0, cost4x4=0;
-  int    diff4x4[64], *diff_ptr;
-  int    diff8x8[64];
+  int    *diff_ptr;
   
   if(input->Transform8x8Mode==2) //always allow 8x8 transform
     return 1;
-  
+
   for (block8x8=0; block8x8<4; block8x8++)
   {
     mb_y = (block8x8 >>   1) << 3;
@@ -2730,12 +2719,12 @@ int GetBestTransformP8x8()
     for (block_y=mb_y; block_y<mb_y+8; block_y+=4)
     {
       pic_pix_y = img->opix_y + block_y;
-      
+
       //get cost for transform size 4x4
       for (block_x=mb_x; block_x<mb_x+8; block_x+=4)
       {
         pic_pix_x = img->opix_x + block_x;
-        
+
         //===== get displaced frame difference ======
         diff_ptr=&diff4x4[k];
         for (j=0; j<4; j++)
@@ -2747,13 +2736,13 @@ int GetBestTransformP8x8()
             //8x8 transform size
             diff8x8[k] = imgY_org[pic_pix_y+j][pic_pix_x+i] - tr8x8.mpr8x8[j+block_y][i+block_x];
           }
-        } 
-        
+        }
+
         cost4x4 += distortion4x4 (diff_ptr);
       }
-    }    
+    }
     cost8x8 += distortion8x8 (diff8x8);
-  }  
+  }
   return (cost8x8 < cost4x4);
 }
 
@@ -2770,8 +2759,8 @@ void set_mbaff_parameters()
   int         mode     = best_mode;
   int         bframe   = (img->type==B_SLICE);
   char    **ipredmodes = img->ipredmode;
-  
-  
+
+
   //===== reconstruction values =====
   for (j=0; j < MB_BLOCK_SIZE; j++)
     memcpy(rdopt->rec_mbY[j],&enc_picture->imgY[img->pix_y + j][img->pix_x], MB_BLOCK_SIZE * sizeof(imgpel));
@@ -2784,38 +2773,38 @@ void set_mbaff_parameters()
       memcpy(rdopt->rec_mbV[j],&enc_picture->imgUV[1][img->pix_c_y + j][img->pix_c_x], img->mb_cr_size_x * sizeof(imgpel));
     }
   }
-  
+
   //===== coefficients and cbp =====
   rdopt->mode      = mode;
   rdopt->i16offset = img->i16offset;
   rdopt->cbp       = currMB->cbp;
   rdopt->cbp_blk   = currMB->cbp_blk;
   rdopt->mb_type   = currMB->mb_type;
-  
+
   rdopt->luma_transform_size_8x8_flag = currMB->luma_transform_size_8x8_flag;
-  
+
   if(rdopt->mb_type == 0 && mode != 0)
   {
     mode=0;
     rdopt->mode=0;
   }
-  
+
   for(i=0;i<4+img->num_blk8x8_uv;i++)
   {
     for(j=0;j<4;j++)
       for(k=0;k<2;k++)
         memcpy(rdopt->cofAC[i][j][k], img->cofAC[i][j][k], 65 * sizeof(int));
   }
-  
+
   for(i=0;i<3;i++)
   {
     for(k=0;k<2;k++)
         memcpy(rdopt->cofDC[i][k], img->cofDC[i][k], 18 * sizeof(int));
-  }   
+  }
 
   memcpy(rdopt->b8mode,currMB->b8mode, BLOCK_MULTIPLE * sizeof(int));
   memcpy(rdopt->b8pdir,currMB->b8pdir, BLOCK_MULTIPLE * sizeof(int));
-  
+
   //==== reference frames =====
   if (bframe)
   {
@@ -2830,8 +2819,8 @@ void set_mbaff_parameters()
   {
     for (j = 0; j < BLOCK_MULTIPLE; j++)
       memcpy(rdopt->refar[LIST_0][j],&enc_picture->ref_idx[LIST_0][img->block_y + j][img->block_x] , BLOCK_MULTIPLE * sizeof(char));
-  }      
-  
+  }
+
   memcpy(rdopt->intra_pred_modes,currMB->intra_pred_modes, MB_BLOCK_PARTITIONS * sizeof(char));
   memcpy(rdopt->intra_pred_modes8x8,currMB->intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));
   for (j = img->block_y; j < img->block_y + 4; j++)
@@ -2879,7 +2868,7 @@ void update_offset_params(int mode, int luma_transform_size_8x8_flag)
   int blk_shift = 2 + luma_transform_size_8x8_flag;
   short **offsetList = luma_transform_size_8x8_flag ? OffsetList8x8 : OffsetList4x4;
 
-  int **fAdjust = is_inter 
+  int **fAdjust = is_inter
     ? (luma_transform_size_8x8_flag ? bestInterFAdjust8x8 : bestInterFAdjust4x4)
     : (luma_transform_size_8x8_flag ? bestIntraFAdjust8x8 : bestIntraFAdjust4x4);
 
@@ -2888,18 +2877,18 @@ void update_offset_params(int mode, int luma_transform_size_8x8_flag)
     int j_pos = ((j & blk_mask)<<blk_shift);
     for (i=0; i < MB_BLOCK_SIZE; i++)
     {
-      temp = j_pos + (i & blk_mask);    
+      temp = j_pos + (i & blk_mask);
       offsetList[luma_pos][temp] += fAdjust[j][i];
       offsetList[luma_pos][temp] = iClip3(0,offsetRange,offsetList[luma_pos][temp]);
     }
   }
 
   if (input->AdaptRndChroma)
-  {    
+  {
     int u_pos = AdaptRndCrPos[is_inter][img->type];
     int v_pos = u_pos + 1;
     int jpos;
-    
+
     int ***fAdjustCr = is_inter ? bestInterFAdjust4x4Cr : bestIntraFAdjust4x4Cr;
 
     for (j=0; j < img->mb_cr_size_y; j++)
@@ -2930,7 +2919,7 @@ void assign_enc_picture_params(int mode, char best_pdir, int block, int list_off
       for (j=img->block_y+(block&2); j<img->block_y+(block&2) + BLOCK_MULTIPLE; j++)
       {
         block_x = img->block_x+(block&1)*2;
-       
+
         memset(&enc_picture->ref_idx[LIST_0][j][block_x], -1 ,     BLOCK_MULTIPLE * sizeof(char));
         memset(enc_picture->mv      [LIST_0][j][block_x],  0 , 2 * BLOCK_MULTIPLE * sizeof(short));
         for (i=block_x; i<block_x + BLOCK_MULTIPLE; i++)
@@ -2947,18 +2936,18 @@ void assign_enc_picture_params(int mode, char best_pdir, int block, int list_off
         block_x = img->block_x+(block&1)*2;
         memset(&enc_picture->ref_idx[LIST_0][block_y][block_x], 0, BLOCK_MULTIPLE * sizeof(char));
         for (i=0; i<BLOCK_MULTIPLE; i++)
-        {            
-          cur_mv = img->bi_pred_me[mode] == 1 
-            ? img->bipred_mv1[i][j][LIST_0][0][mode] 
+        {
+          cur_mv = img->bi_pred_me[mode] == 1
+            ? img->bipred_mv1[i][j][LIST_0][0][mode]
             : img->bipred_mv2[i][j][LIST_0][0][mode];
-          
-          enc_picture->ref_pic_id [LIST_0][block_y][block_x + i]    = enc_picture->ref_pic_num[LIST_0 + list_offset][0];  
+
+          enc_picture->ref_pic_id [LIST_0][block_y][block_x + i]    = enc_picture->ref_pic_num[LIST_0 + list_offset][0];
           enc_picture->mv         [LIST_0][block_y][block_x + i][0] = cur_mv[0];
           enc_picture->mv         [LIST_0][block_y][block_x + i][1] = cur_mv[1];
         }
       }
     }
-    else 
+    else
     {
       for (j=0; j<BLOCK_MULTIPLE; j++)
       {
@@ -2966,16 +2955,16 @@ void assign_enc_picture_params(int mode, char best_pdir, int block, int list_off
         block_x = img->block_x+(block&1)*2;
         memset(&enc_picture->ref_idx[LIST_0][block_y][block_x], best_fw_ref , BLOCK_MULTIPLE * sizeof(char));
         for (i=0; i<BLOCK_MULTIPLE; i++)
-        {                                
+        {
           cur_mv = img->all_mv[j][i][LIST_0][best_fw_ref][mode];
 
-          enc_picture->ref_pic_id [LIST_0][block_y][block_x + i]    = enc_picture->ref_pic_num[LIST_0 + list_offset][best_fw_ref];  
+          enc_picture->ref_pic_id [LIST_0][block_y][block_x + i]    = enc_picture->ref_pic_num[LIST_0 + list_offset][best_fw_ref];
           enc_picture->mv         [LIST_0][block_y][block_x + i][0] = cur_mv[0];
           enc_picture->mv         [LIST_0][block_y][block_x + i][1] = cur_mv[1];
-        }          
+        }
       }
     }
-    
+
     if (bframe)
     {
       if (best_pdir==0)
@@ -3001,19 +2990,19 @@ void assign_enc_picture_params(int mode, char best_pdir, int block, int list_off
             block_x = img->block_x+(block&1)*2;
             memset(&enc_picture->ref_idx[LIST_1][block_y][block_x], 0, BLOCK_MULTIPLE * sizeof(char));
             for (i=0; i<BLOCK_MULTIPLE; i++)
-            {                     
-              cur_mv = img->bi_pred_me[mode] == 1 
-                ? img->bipred_mv1[i][j][LIST_1][0][mode] 
+            {
+              cur_mv = img->bi_pred_me[mode] == 1
+                ? img->bipred_mv1[i][j][LIST_1][0][mode]
                 : img->bipred_mv2[i][j][LIST_1][0][mode];
-              
-              enc_picture->ref_pic_id [LIST_1][block_y][block_x + i] = 
+
+              enc_picture->ref_pic_id [LIST_1][block_y][block_x + i] =
                 enc_picture->ref_pic_num[LIST_1 + list_offset][0];
               enc_picture->mv         [LIST_1][block_y][block_x + i][0] = cur_mv[0];
               enc_picture->mv         [LIST_1][block_y][block_x + i][1] = cur_mv[1];
             }
           }
         }
-        else 
+        else
         {
           for (j=0; j<BLOCK_MULTIPLE; j++)
           {
@@ -3021,9 +3010,9 @@ void assign_enc_picture_params(int mode, char best_pdir, int block, int list_off
             block_x = img->block_x+(block&1)*2;
             memset(&enc_picture->ref_idx[LIST_1][block_y][block_x], best_bw_ref, BLOCK_MULTIPLE * sizeof(char));
             for (i=0; i<BLOCK_MULTIPLE; i++)
-            {                     
-             
-              enc_picture->ref_pic_id [LIST_1][block_y][block_x + i] = 
+            {
+
+              enc_picture->ref_pic_id [LIST_1][block_y][block_x + i] =
                 enc_picture->ref_pic_num[LIST_1 + list_offset][best_bw_ref];
               if(best_bw_ref>=0)
               {
@@ -3031,7 +3020,7 @@ void assign_enc_picture_params(int mode, char best_pdir, int block, int list_off
                 enc_picture->mv[LIST_1][block_y][block_x + i][0] = cur_mv[0];
                 enc_picture->mv[LIST_1][block_y][block_x + i][1] = cur_mv[1];
               }
-            }            
+            }
           }
         }
       }
@@ -3053,16 +3042,16 @@ void assign_enc_picture_params(int mode, char best_pdir, int block, int list_off
           enc_picture->mv         [LIST_0][block_y][block_x][1] = 0;
         }
         else
-        {                     
+        {
           cur_mv = img->all_mv[j+block*2][i][LIST_0][best_fw_ref][mode];
 
           enc_picture->ref_idx    [LIST_0][block_y][block_x]    = best_fw_ref;
-          enc_picture->ref_pic_id [LIST_0][block_y][block_x]    = 
+          enc_picture->ref_pic_id [LIST_0][block_y][block_x]    =
             enc_picture->ref_pic_num[LIST_0 + list_offset][best_fw_ref];
           enc_picture->mv         [LIST_0][block_y][block_x][0] = cur_mv[0];
           enc_picture->mv         [LIST_0][block_y][block_x][1] = cur_mv[1];
         }
-        
+
         if (bframe)
         {
           if (best_pdir==0)
@@ -3079,11 +3068,11 @@ void assign_enc_picture_params(int mode, char best_pdir, int block, int list_off
             {
               cur_mv = img->all_mv[j+ block*2][i][LIST_1][best_bw_ref][mode];
 
-              enc_picture->ref_pic_id [LIST_1][block_y][block_x] = 
+              enc_picture->ref_pic_id [LIST_1][block_y][block_x] =
                 enc_picture->ref_pic_num[LIST_1 + list_offset][best_bw_ref];
               enc_picture->mv[LIST_1][block_y][block_x][0] = cur_mv[0];
               enc_picture->mv[LIST_1][block_y][block_x][1] = cur_mv[1];
-            }                       
+            }
           }
         }
       }
@@ -3109,12 +3098,12 @@ void assign_enc_picture_params(int mode, char best_pdir, int block, int list_off
           cur_mv = img->all_mv[j][block*2+i][LIST_0][best_fw_ref][mode];
 
           enc_picture->ref_idx    [LIST_0][block_y][block_x] = best_fw_ref;
-          enc_picture->ref_pic_id [LIST_0][block_y][block_x] = 
-            enc_picture->ref_pic_num[LIST_0 + list_offset][best_fw_ref];          
+          enc_picture->ref_pic_id [LIST_0][block_y][block_x] =
+            enc_picture->ref_pic_num[LIST_0 + list_offset][best_fw_ref];
           enc_picture->mv[LIST_0][block_y][block_x][0] = cur_mv[0];
           enc_picture->mv[LIST_0][block_y][block_x][1] = cur_mv[1];
         }
-        
+
         if (bframe)
         {
           if (best_pdir==0)
@@ -3130,9 +3119,9 @@ void assign_enc_picture_params(int mode, char best_pdir, int block, int list_off
             if(best_bw_ref>=0)
             {
               cur_mv = img->all_mv[j][block*2+i][LIST_1][best_bw_ref][mode];
-              enc_picture->ref_pic_id [LIST_1][block_y][block_x] = 
+              enc_picture->ref_pic_id [LIST_1][block_y][block_x] =
                 enc_picture->ref_pic_num[LIST_1 + list_offset][best_bw_ref];
-              
+
               enc_picture->mv[LIST_1][block_y][block_x][0] = cur_mv[0];
               enc_picture->mv[LIST_1][block_y][block_x][1] = cur_mv[1];
             }
@@ -3170,5 +3159,5 @@ void update_refresh_map(int intra, int intra1, Macroblock *currMB)
     refresh_map[2*img->mb_y+1][2*img->mb_x  ] = (currMB->mb_type==I16MB || currMB->mb_type==I4MB ? 1 : 0);
     refresh_map[2*img->mb_y+1][2*img->mb_x+1] = (currMB->mb_type==I16MB || currMB->mb_type==I4MB ? 1 : 0);
   }
-}  
+}
 

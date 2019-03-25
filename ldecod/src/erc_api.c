@@ -37,11 +37,11 @@ void ercInit(int pic_sizex, int pic_sizey, int flag)
   ercClose(erc_errorVar);
   erc_object_list = (objectBuffer_t *) calloc((pic_sizex * pic_sizey) >> 6, sizeof(objectBuffer_t));
   if (erc_object_list == NULL) no_mem_exit("ercInit: erc_object_list");
-  
-  /* the error concelament instance is allocated */
+
+  // the error concealment instance is allocated
   erc_errorVar = ercOpen();
-  
-  /* set error concealment ON */
+
+  // set error concealment ON
   ercSetErrorConcealment(erc_errorVar, flag);
 }
 
@@ -56,7 +56,7 @@ void ercInit(int pic_sizex, int pic_sizey, int flag)
 ercVariables_t *ercOpen( void )
 {
   ercVariables_t *errorVar = NULL;
-  
+
   errorVar = (ercVariables_t *)malloc( sizeof(ercVariables_t));
   if ( errorVar == NULL ) no_mem_exit("ercOpen: errorVar");
 
@@ -67,16 +67,16 @@ ercVariables_t *ercOpen( void )
   errorVar->uCondition = NULL;
   errorVar->vCondition = NULL;
   errorVar->prevFrameYCondition = NULL;
-  
+
   errorVar->concealment = 1;
-  
+
   return errorVar;
 }
 
 /*!
  ************************************************************************
  * \brief
- *      Resets the variables used in error detection. 
+ *      Resets the variables used in error detection.
  *      Should be called always when starting to decode a new frame.
  * \param errorVar
  *      Variables for error concealment
@@ -88,15 +88,15 @@ ercVariables_t *ercOpen( void )
  *      Width of the frame in pixels.
  ************************************************************************
  */
-void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 picSizeX )
+void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int picSizeX )
 {
   int *tmp = NULL;
   int i = 0;
-  
-  if ( errorVar && errorVar->concealment ) 
+
+  if ( errorVar && errorVar->concealment )
   {
-    /* If frame size has been changed */
-    if ( nOfMBs != errorVar->nOfMBs && errorVar->yCondition != NULL ) 
+    // If frame size has been changed
+    if ( nOfMBs != errorVar->nOfMBs && errorVar->yCondition != NULL )
     {
       free( errorVar->yCondition );
       errorVar->yCondition = NULL;
@@ -109,15 +109,15 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 pi
       free( errorVar->segments );
       errorVar->segments = NULL;
     }
-    
-    /* If the structures are uninitialized (first frame, or frame size is chaned) */
-    if ( errorVar->yCondition == NULL ) 
+
+    // If the structures are uninitialized (first frame, or frame size is changed)
+    if ( errorVar->yCondition == NULL )
     {
       errorVar->segments = (ercSegment_t *)malloc( numOfSegments*sizeof(ercSegment_t) );
       if ( errorVar->segments == NULL ) no_mem_exit("ercReset: errorVar->segments");
       memset( errorVar->segments, 0, numOfSegments*sizeof(ercSegment_t));
       errorVar->nOfSegments = numOfSegments;
-      
+
       errorVar->yCondition = (int *)malloc( 4*nOfMBs*sizeof(int) );
       if ( errorVar->yCondition == NULL ) no_mem_exit("ercReset: errorVar->yCondition");
       errorVar->prevFrameYCondition = (int *)malloc( 4*nOfMBs*sizeof(int) );
@@ -128,20 +128,20 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 pi
       if ( errorVar->vCondition == NULL ) no_mem_exit("ercReset: errorVar->vCondition");
       errorVar->nOfMBs = nOfMBs;
     }
-    else 
+    else
     {
-      /* Store the yCondition struct of the previous frame */
+      // Store the yCondition struct of the previous frame
       tmp = errorVar->prevFrameYCondition;
       errorVar->prevFrameYCondition = errorVar->yCondition;
       errorVar->yCondition = tmp;
     }
-    
-    /* Reset tables and parameters */
+
+    // Reset tables and parameters
     memset( errorVar->yCondition, 0, 4*nOfMBs*sizeof(*errorVar->yCondition));
     memset( errorVar->uCondition, 0,   nOfMBs*sizeof(*errorVar->uCondition));
     memset( errorVar->vCondition, 0,   nOfMBs*sizeof(*errorVar->vCondition));
-    
-    if (errorVar->nOfSegments != numOfSegments) 
+
+    if (errorVar->nOfSegments != numOfSegments)
     {
       free( errorVar->segments );
       errorVar->segments = NULL;
@@ -149,16 +149,16 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 pi
       if ( errorVar->segments == NULL ) no_mem_exit("ercReset: errorVar->segments");
       errorVar->nOfSegments = numOfSegments;
     }
-    
+
     memset( errorVar->segments, 0, errorVar->nOfSegments*sizeof(ercSegment_t));
 
-    for ( i = 0; i < errorVar->nOfSegments; i++ ) 
+    for ( i = 0; i < errorVar->nOfSegments; i++ )
     {
       errorVar->segments[i].fCorrupted = 1; //! mark segments as corrupted
       errorVar->segments[i].startMBPos = 0;
       errorVar->segments[i].endMBPos = nOfMBs - 1;
     }
-    
+
     errorVar->currSegment = 0;
     errorVar->nOfCorruptedSegments = 0;
   }
@@ -167,7 +167,7 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 pi
 /*!
  ************************************************************************
  * \brief
- *      Resets the variables used in error detection. 
+ *      Resets the variables used in error detection.
  *      Should be called always when starting to decode a new frame.
  * \param errorVar
  *      Variables for error concealment
@@ -175,9 +175,9 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 pi
  */
 void ercClose( ercVariables_t *errorVar )
 {
-  if ( errorVar != NULL ) 
+  if ( errorVar != NULL )
   {
-    if (errorVar->yCondition != NULL) 
+    if (errorVar->yCondition != NULL)
     {
       free( errorVar->segments );
       free( errorVar->yCondition );
@@ -188,7 +188,7 @@ void ercClose( ercVariables_t *errorVar )
     free( errorVar );
     errorVar = NULL;
   }
-  
+
   if (erc_object_list)
   {
     free(erc_object_list);
@@ -229,16 +229,16 @@ void ercSetErrorConcealment( ercVariables_t *errorVar, int value )
  *      Variables for error detector
  ************************************************************************
  */
-void ercStartSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t *errorVar )
+void ercStartSegment( int currMBNum, int segment, unsigned int bitPos, ercVariables_t *errorVar )
 {
-  if ( errorVar && errorVar->concealment ) 
+  if ( errorVar && errorVar->concealment )
   {
     errorVar->currSegmentCorrupted = 0;
-        
+
     errorVar->segments[ segment ].fCorrupted = 0;
     errorVar->segments[ segment ].startMBPos = currMBNum;
-    
-  }   
+
+  }
 }
 
 /*!
@@ -256,9 +256,9 @@ void ercStartSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t
  *      Variables for error detector
  ************************************************************************
  */
-void ercStopSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t *errorVar )
+void ercStopSegment( int currMBNum, int segment, unsigned int bitPos, ercVariables_t *errorVar )
 {
-  if ( errorVar && errorVar->concealment ) 
+  if ( errorVar && errorVar->concealment )
   {
     errorVar->segments[ segment ].endMBPos = currMBNum; //! Changed TO 12.11.2001
     errorVar->currSegment++;
@@ -276,21 +276,21 @@ void ercStopSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t 
  *      Variables for error detector
  ************************************************************************
  */
-void ercMarkCurrSegmentLost(int32 picSizeX, ercVariables_t *errorVar )
+void ercMarkCurrSegmentLost(int picSizeX, ercVariables_t *errorVar )
 {
   int j = 0;
   int current_segment;
-  
+
   current_segment = errorVar->currSegment-1;
-  if ( errorVar && errorVar->concealment ) 
+  if ( errorVar && errorVar->concealment )
   {
-    if (errorVar->currSegmentCorrupted == 0) 
+    if (errorVar->currSegmentCorrupted == 0)
     {
       errorVar->nOfCorruptedSegments++;
       errorVar->currSegmentCorrupted = 1;
     }
-     
-    for ( j = errorVar->segments[current_segment].startMBPos; j <= errorVar->segments[current_segment].endMBPos; j++ ) 
+
+    for ( j = errorVar->segments[current_segment].startMBPos; j <= errorVar->segments[current_segment].endMBPos; j++ )
     {
       errorVar->yCondition[MBNum2YBlock (j, 0, picSizeX)] = ERC_BLOCK_CORRUPTED;
       errorVar->yCondition[MBNum2YBlock (j, 1, picSizeX)] = ERC_BLOCK_CORRUPTED;
@@ -314,16 +314,16 @@ void ercMarkCurrSegmentLost(int32 picSizeX, ercVariables_t *errorVar )
  *      Variables for error detector
  ************************************************************************
  */
-void ercMarkCurrSegmentOK(int32 picSizeX, ercVariables_t *errorVar )
+void ercMarkCurrSegmentOK(int picSizeX, ercVariables_t *errorVar )
 {
   int j = 0;
   int current_segment;
-  
+
   current_segment = errorVar->currSegment-1;
-  if ( errorVar && errorVar->concealment ) 
+  if ( errorVar && errorVar->concealment )
   {
     // mark all the Blocks belonging to the segment as OK */
-    for ( j = errorVar->segments[current_segment].startMBPos; j <= errorVar->segments[current_segment].endMBPos; j++ ) 
+    for ( j = errorVar->segments[current_segment].startMBPos; j <= errorVar->segments[current_segment].endMBPos; j++ )
     {
       errorVar->yCondition[MBNum2YBlock (j, 0, picSizeX)] = ERC_BLOCK_OK;
       errorVar->yCondition[MBNum2YBlock (j, 1, picSizeX)] = ERC_BLOCK_OK;
@@ -350,19 +350,19 @@ void ercMarkCurrSegmentOK(int32 picSizeX, ercVariables_t *errorVar )
  *      Variables for error detector
  ************************************************************************
  */
-void ercMarkCurrMBConcealed( int currMBNum, int comp, int32 picSizeX, ercVariables_t *errorVar )
+void ercMarkCurrMBConcealed( int currMBNum, int comp, int picSizeX, ercVariables_t *errorVar )
 {
   int setAll = 0;
-  
-  if ( errorVar && errorVar->concealment ) 
+
+  if ( errorVar && errorVar->concealment )
   {
-    if (comp < 0) 
+    if (comp < 0)
     {
       setAll = 1;
       comp = 0;
     }
-    
-    switch (comp) 
+
+    switch (comp)
     {
     case 0:
       errorVar->yCondition[MBNum2YBlock (currMBNum, 0, picSizeX)] = ERC_BLOCK_CONCEALED;

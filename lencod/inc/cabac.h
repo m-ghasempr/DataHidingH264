@@ -39,26 +39,23 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
 void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 void writeHeaderToBuffer(void);
-int  writeSyntaxElement_CABAC(SyntaxElement *se, DataPartition *this_dataPart);
-void writeMB_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeIntraPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeB8_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeCBP_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeRunLevel_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeBiDirBlkSize_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeCIPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeMB_typeInfo_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeIntraPredMode_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeB8_typeInfo_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeRefFrame_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeMVD_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeCBP_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeDquant_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeRunLevel_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeCIPredMode_CABAC(SyntaxElement *se, DataPartition *dp);
 void print_ctx_TextureInfo(TextureInfoContexts *enco_ctx);
-void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeFieldModeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp); //GB
+void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeFieldModeInfo_CABAC(SyntaxElement *se, DataPartition *dp); //GB
 void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter, EncodingEnvironmentPtr eep_dp);
 void cabac_new_slice(void);
 void CheckAvailabilityOfNeighborsCABAC(void);
 
-void writeMB_transform_size_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeMB_transform_size_CABAC(SyntaxElement *se, DataPartition *dp);
 
 
 #endif  // CABAC_H

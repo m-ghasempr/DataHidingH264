@@ -20,12 +20,12 @@
 
 
 
-/*! 
+/*!
  *************************************************************************************
  * \brief
  *    Converts a NALU to an RBSP
  *
- * \param 
+ * \param
  *    nalu: nalu structure to be filled
  *
  * \return
@@ -37,7 +37,7 @@ int NALUtoRBSP (NALU_t *nalu)
 {
   assert (nalu != NULL);
 
-  nalu->len = EBSPtoRBSP (nalu->buf, nalu->len, 1) ; 
+  nalu->len = EBSPtoRBSP (nalu->buf, nalu->len, 1) ;
 
   return nalu->len ;
 }
