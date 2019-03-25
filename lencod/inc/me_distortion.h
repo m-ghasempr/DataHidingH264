@@ -18,6 +18,13 @@
 #ifndef _ME_DISTORTION_H_
 #define _ME_DISTORTION_H_
 
+extern distblk distortion4x4SAD(short* diff, distblk min_mcost);
+extern distblk distortion4x4SSE(short* diff, distblk min_mcost);
+extern distblk distortion4x4SATD(short* diff, distblk min_cost);
+extern distblk distortion8x8SAD(short* diff, distblk min_mcost);
+extern distblk distortion8x8SSE(short* diff, distblk min_mcost);
+extern distblk distortion8x8SATD(short* diff, distblk min_cost);
+
 extern int HadamardSAD4x4(short* diff);
 extern int HadamardSAD8x8(short* diff);
 // SAD functions
@@ -81,4 +88,5 @@ extern distblk computeBiPredSSE2    (StorablePicture *ref1, StorablePicture *ref
 
 extern void select_distortion   (VideoParameters *p_Vid, InputParameters *p_Inp);
 
+extern void calcDifference(imgpel **origImg, int ox, int oy, imgpel **predImg, int px, int py, int width, int height, short *diff);
 #endif

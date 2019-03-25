@@ -6,8 +6,8 @@
  *    Rate-Distortion optimized mode decision
  *
  * \author
- *    - Heiko Schwarz              <hschwarz@hhi.de>
- *    - Valeri George              <george@hhi.de>
+ *    - Heiko Schwarz
+ *    - Valeri George
  *    - Lowell Winger              <lwinger@lsil.com>
  *    - Alexis Michael Tourapis    <alexismt@ieee.org>
  * \date
@@ -29,6 +29,7 @@
 #include "q_around.h"
 #include "intra4x4.h"
 #include "rd_intra_jm.h"
+#include "blk_prediction.h"
 
 /*!
  *************************************************************************************
@@ -43,7 +44,7 @@ int mode_decision_for_I4x4_blocks_JM_High444 (Macroblock *currMB, int  b8,  int 
   Slice *currSlice = currMB->p_Slice;
   RDOPTStructure  *p_RDO = currSlice->p_RDO;
 
-  int    ipmode, best_ipmode = 0, i, j, y, dummy;
+  int    ipmode, best_ipmode = 0, y, dummy;
   int    c_nz, nonzero = 0;
   int*   ACLevel = currSlice->cofAC[b8][b4][0];
   int*   ACRun   = currSlice->cofAC[b8][b4][1];
@@ -220,6 +221,7 @@ int mode_decision_for_I4x4_blocks_JM_High444 (Macroblock *currMB, int  b8,  int 
       select_plane(p_Vid, k);
 
       copy_4x4block(&currSlice->mb_pred[k][block_y], currSlice->mpr_4x4[k][best_ipmode], block_x, 0);
+      /*
       for (j=0; j<4; j++)
       {
         for (i=0; i<4; i++)
@@ -227,6 +229,8 @@ int mode_decision_for_I4x4_blocks_JM_High444 (Macroblock *currMB, int  b8,  int 
           currSlice->mb_ores[k][block_y+j][block_x+i]   = p_Vid->pImgOrg[k][currMB->pix_y+block_y+j][currMB->pix_x+block_x+i] - currSlice->mpr_4x4[k][best_ipmode][j][i];
         }
       }
+      */
+      compute_residue(&(p_Vid->pImgOrg[k][currMB->pix_y+block_y]), &currSlice->mb_pred[k][block_y], &currSlice->mb_ores[k][block_y], block_x, currMB->pix_x+block_x, 4, 4);
       currMB->cr_cbp[k] = currMB->residual_transform_quant_luma_4x4(currMB, k, block_x,block_y,&dummy,1);
     }
     select_plane(p_Vid, PLANE_Y);
@@ -281,7 +285,7 @@ int mode_decision_for_I4x4_blocks_JM_Low444 (Macroblock *currMB, int  b8,  int  
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_Slice;
 
-  int     ipmode, best_ipmode = 0, i, j, dummy;
+  int     ipmode, best_ipmode = 0, dummy;
   distblk cost;
   int     nonzero = 0;
 
@@ -407,6 +411,7 @@ int mode_decision_for_I4x4_blocks_JM_Low444 (Macroblock *currMB, int  b8,  int  
     for (k = PLANE_U; k <= PLANE_V; k++)
     {
       select_plane(p_Vid, k);
+      /* 
       for (j=0; j<4; j++)
       {
         for (i=0; i<4; i++)
@@ -415,7 +420,9 @@ int mode_decision_for_I4x4_blocks_JM_Low444 (Macroblock *currMB, int  b8,  int  
           currSlice->mb_ores[k][block_y + j][block_x+i] = p_Vid->pImgOrg[k][pic_opix_y+j][pic_opix_x+i] - currSlice->mpr_4x4[k][best_ipmode][j][i]; 
         }
       }
-
+      */
+      copy_4x4block(&currSlice->mb_pred[k][block_y], currSlice->mpr_4x4[k][best_ipmode], block_x, 0);
+      compute_residue(&(p_Vid->pImgOrg[k][pic_opix_y]), &currSlice->mb_pred[k][block_y], &currSlice->mb_ores[k][block_y], block_x, pic_opix_x, 4, 4);
       currMB->cr_cbp[k] = currMB->residual_transform_quant_luma_4x4 (currMB, k, block_x, block_y, &dummy, 1);
     }
     select_plane(p_Vid, PLANE_Y);

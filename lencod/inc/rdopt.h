@@ -115,8 +115,6 @@ extern void set_modes_and_refs_for_blocks_i_slice(Macroblock *currMB, short mode
 extern void set_coeff_and_recon_8x8_p_slice      (Macroblock* currMB);
 extern void set_coeff_and_recon_8x8_b_slice      (Macroblock* currMB);
 
-extern distblk compute_sad4x4_cost (VideoParameters *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
-
 extern Info8x8 init_info_8x8_struct(void);
 
 /*!

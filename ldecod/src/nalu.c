@@ -21,48 +21,6 @@
 #include "vlc.h"
 #endif
 
-
-/*!
-*************************************************************************************
-* \brief
-*    Initialize bitstream reading structure
-*
-* \param
-*    p_Vid: Imageparameter information
-* \param
-*    filemode: 
-*
-*************************************************************************************
-*/
-
-void initBitsFile (VideoParameters *p_Vid, int filemode)
-{
-
-  switch (filemode)
-  {
-  case PAR_OF_ANNEXB:
-    if ((p_Vid->bitsfile  =  (BitsFile *) calloc(1, sizeof(BitsFile)))==NULL) 
-      no_mem_exit("initBitsFile : p_Vid->bitsfile");
-
-    p_Vid->bitsfile->OpenBitsFile     = OpenAnnexBFile;
-    p_Vid->bitsfile->CloseBitsFile    = CloseAnnexBFile;
-    p_Vid->bitsfile->GetNALU          = GetAnnexbNALU;
-    malloc_annex_b(p_Vid);
-    break;
-  case PAR_OF_RTP:
-    if ((p_Vid->bitsfile  =  (BitsFile *) calloc(1, sizeof(BitsFile)))==NULL) 
-      no_mem_exit("initBitsFile : p_Vid->bitsfile");
-
-    p_Vid->bitsfile->OpenBitsFile     = OpenRTPFile;
-    p_Vid->bitsfile->CloseBitsFile    = CloseRTPFile;
-    p_Vid->bitsfile->GetNALU          = GetRTPNALU;
-    break;
-  default:
-    error ("initBitsFile: Unknown bitstream file mode", 255);
-    break;
-  }    
-}
-
 /*!
  *************************************************************************************
  * \brief
@@ -96,7 +54,16 @@ int read_next_nalu(VideoParameters *p_Vid, NALU_t *nalu)
   InputParameters *p_Inp = p_Vid->p_Inp;
   int ret;
 
-  ret = p_Vid->bitsfile->GetNALU(p_Vid, nalu);
+  switch( p_Inp->FileFormat )
+  {
+  default:
+  case PAR_OF_ANNEXB:
+    ret = GetAnnexbNALU(p_Vid, nalu, p_Vid->annex_b);
+    break;
+  case PAR_OF_RTP:
+    ret = GetRTPNALU(p_Vid, nalu, p_Vid->BitStreamFile);
+    break;   
+  }
 
   if (ret < 0)
   {
@@ -117,7 +84,6 @@ int read_next_nalu(VideoParameters *p_Vid, NALU_t *nalu)
 
   if (ret < 0)
     error ("Invalid startcode emulation prevention found.", 602);
-
 
   // Got a NALU
   if (nalu->forbidden_bit)
@@ -189,28 +155,28 @@ void CheckZeroByteVCL(VideoParameters *p_Vid, NALU_t *nalu)
 #if (MVC_EXTENSION_ENABLE)
 void nal_unit_header_mvc_extension(NALUnitHeaderMVCExt_t *NaluHeaderMVCExt, Bitstream *s)
 {  
- 	//to be implemented;  
-	NaluHeaderMVCExt->non_idr_flag = u_v (1, "non_idr_flag"						, s);
-	NaluHeaderMVCExt->priority_id = u_v (6, "priority_id"						, s);
-	NaluHeaderMVCExt->view_id = u_v (10, "view_id"								, s);
-	NaluHeaderMVCExt->temporal_id = u_v (3, "temporal_id"						, s);
-	NaluHeaderMVCExt->anchor_pic_flag = u_v (1, "anchor_pic_flag"				, s);
-	NaluHeaderMVCExt->inter_view_flag = u_v (1, "inter_view_flag"				, s);
-	NaluHeaderMVCExt->reserved_one_bit = u_v (1, "reserved_one_bit"				, s);
-	if(NaluHeaderMVCExt->reserved_one_bit != 1)
-	{
-		printf("Nalu Header MVC Extension: reserved_one_bit is not 1!\n");
-	}
+  //to be implemented;  
+  NaluHeaderMVCExt->non_idr_flag     = read_u_v (1, "non_idr_flag",     s, &p_Dec->UsedBits);
+  NaluHeaderMVCExt->priority_id      = read_u_v (6, "priority_id",      s, &p_Dec->UsedBits);
+  NaluHeaderMVCExt->view_id          = read_u_v (10, "view_id",         s, &p_Dec->UsedBits);
+  NaluHeaderMVCExt->temporal_id      = read_u_v (3, "temporal_id",      s, &p_Dec->UsedBits);
+  NaluHeaderMVCExt->anchor_pic_flag  = read_u_v (1, "anchor_pic_flag",  s, &p_Dec->UsedBits);
+  NaluHeaderMVCExt->inter_view_flag  = read_u_v (1, "inter_view_flag",  s, &p_Dec->UsedBits);
+  NaluHeaderMVCExt->reserved_one_bit = read_u_v (1, "reserved_one_bit", s, &p_Dec->UsedBits);
+  if(NaluHeaderMVCExt->reserved_one_bit != 1)
+  {
+    printf("Nalu Header MVC Extension: reserved_one_bit is not 1!\n");
+  }
 }
 
 void nal_unit_header_svc_extension( void )
 {
-	//to be implemented for Annex G;
+  //to be implemented for Annex G;
 }
 
 void prefix_nal_unit_svc( void )
 {
-	//to be implemented for Annex G;
+  //to be implemented for Annex G;
 }
 
 #endif

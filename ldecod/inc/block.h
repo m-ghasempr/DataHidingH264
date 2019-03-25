@@ -107,9 +107,6 @@ extern void iMBtrans8x8(Macroblock *currMB, ColorPlane pl);
 
 extern void itrans_sp_cr(Macroblock *currMB, int uv);
 
-extern void intrapred_chroma      (Macroblock *currMB);
-extern void intrapred_chroma_mbaff(Macroblock *currMB);
-
 extern void Inv_Residual_trans_4x4(Macroblock *currMB, ColorPlane pl, int ioff, int joff);
 extern void Inv_Residual_trans_8x8(Macroblock *currMB, ColorPlane pl, int ioff,int joff);
 extern void Inv_Residual_trans_16x16 (Macroblock *currMB, ColorPlane pl);
@@ -118,7 +115,6 @@ extern void Inv_Residual_trans_Chroma(Macroblock *currMB, int uv);
 extern void itrans4x4   (Macroblock *currMB, ColorPlane pl, int ioff, int joff);
 extern void itrans4x4_ls(Macroblock *currMB, ColorPlane pl, int ioff, int joff);
 extern void itrans_sp   (Macroblock *currMB, ColorPlane pl, int ioff, int joff);
-extern int  intrapred   (Macroblock *currMB, ColorPlane pl, int ioff,int joff,int i4,int j4);
 extern void itrans_2    (Macroblock *currMB, ColorPlane pl);
 extern void iTransform  (Macroblock *currMB, ColorPlane pl, int smb);
 

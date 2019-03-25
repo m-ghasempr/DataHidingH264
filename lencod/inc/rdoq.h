@@ -170,8 +170,8 @@ extern void est_writeRunLevel_CABAC(Macroblock *currMB, levelDataStruct levelDat
 extern void init_trellis_data_4x4_CAVLC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, 
                          LevelQuantParams **q_params_4x4, const byte *p_scan, 
                          levelDataStruct *dataLevel, int type);
-extern int init_trellis_data_4x4_CABAC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, 
-                                       LevelQuantParams **q_params_4x4, const byte *p_scan, 
+extern int init_trellis_data_4x4_CABAC(Macroblock *currMB, int **tblock, 
+                                       struct quant_methods *q_method, const byte *p_scan, 
                                        levelDataStruct *dataLevel, int* kStart, int* kStop, int type);
 extern void init_trellis_data_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, 
                          LevelQuantParams **q_params_8x8, const byte *p_scan, 

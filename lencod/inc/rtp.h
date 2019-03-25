@@ -46,9 +46,9 @@ typedef struct
 } RTPpacket_t;
 
 extern void RTPUpdateTimestamp (VideoParameters *p_Vid, int tr);
-extern void OpenRTPFile        (VideoParameters *p_Vid, char *Filename);
-extern void CloseRTPFile       (VideoParameters *p_Vid);
-extern int WriteRTPNALU        (VideoParameters *p_Vid, NALU_t *n);
+extern void OpenRTPFile        (char *Filename, FILE **f_rtp);
+extern void CloseRTPFile       (FILE *f_rtp);
+extern int WriteRTPNALU        (VideoParameters *p_Vid, NALU_t *n, FILE **f_rtp);
 
 
 

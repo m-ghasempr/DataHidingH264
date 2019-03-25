@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 
 //#include "global.h"
+#include "win32.h"
 #include "h264decoder.h"
 #include "configfile.h"
 
@@ -25,6 +26,7 @@
 #define BITSTREAM_FILENAME  "test.264"
 #define DECRECON_FILENAME   "test_dec.yuv"
 #define ENCRECON_FILENAME   "test_rec.yuv"
+#define FCFR_DEBUG_FILENAME "fcfr_dec_rpu_stats.txt"
 #define DECOUTPUT_VIEW0_FILENAME  "H264_Decoder_Output_View0.yuv"
 #define DECOUTPUT_VIEW1_FILENAME  "H264_Decoder_Output_View1.yuv"
 
@@ -38,25 +40,9 @@ static void Configure(InputParameters *p_Inp, int ac, char *av[])
   strcpy(p_Inp->outfile, DECRECON_FILENAME); //! set default output file name
   strcpy(p_Inp->reffile, ENCRECON_FILENAME); //! set default reference file name
   
-  p_Inp->FileFormat = PAR_OF_ANNEXB;
-  p_Inp->ref_offset=0;
-  p_Inp->poc_scale=2;
-  p_Inp->silent = FALSE;
-  p_Inp->intra_profile_deblocking = 0;
-
 #ifdef _LEAKYBUCKET_
-  p_Inp->R_decoder=500000;          //! Decoder rate
-  p_Inp->B_decoder=104000;          //! Decoder buffer size
-  p_Inp->F_decoder=73000;           //! Decoder initial delay
   strcpy(p_Inp->LeakyBucketParamFile,"leakybucketparam.cfg");    // file where Leaky Bucket parameters (computed by encoder) are stored
 #endif
-  p_Inp->iDecFrmNum = 0;
-
-  p_Inp->write_uv=1;
-  // picture error concealment
-  p_Inp->conceal_mode = 0;
-  p_Inp->ref_poc_gap = 2;
-  p_Inp->poc_gap = 2;
 
   ParseCommand(p_Inp, ac, av);
 
@@ -105,6 +91,7 @@ static int WriteOneFrame(DecodedPicList *pDecPic, int hFileOutput0, int hFileOut
     int i, iWidth, iHeight, iStride, iWidthUV, iHeightUV, iStrideUV;
     byte *pbBuf;    
     int hFileOutput;
+    int res;
 
     iWidth = pPic->iWidth*((pPic->iBitDepth+7)>>3);
     iHeight = pPic->iHeight;
@@ -131,18 +118,36 @@ static int WriteOneFrame(DecodedPicList *pDecPic, int hFileOutput0, int hFileOut
         //Y;
         pbBuf = pPic->pY;
         for(i=0; i<iHeight; i++)
-          write(hFileOutput, pbBuf+i*iStride, iWidth);
+        {
+          res = write(hFileOutput, pbBuf+i*iStride, iWidth);
+          if (-1==res)
+          {
+            error ("error writing to output file.", 600);
+          }
+        }
 
         if(pPic->iYUVFormat != YUV400)
         {
          //U;
          pbBuf = pPic->pU;
          for(i=0; i<iHeightUV; i++)
-          write(hFileOutput, pbBuf+i*iStrideUV, iWidthUV);
+         {
+           res = write(hFileOutput, pbBuf+i*iStrideUV, iWidthUV);
+           if (-1==res)
+           {
+             error ("error writing to output file.", 600);
+           }
+}
          //V;
          pbBuf = pPic->pV;
          for(i=0; i<iHeightUV; i++)
-          write(hFileOutput, pbBuf+i*iStrideUV, iWidthUV);
+         {
+           res = write(hFileOutput, pbBuf+i*iStrideUV, iWidthUV);
+           if (-1==res)
+           {
+             error ("error writing to output file.", 600);
+           }
+         }
         }
 
         iOutputFrame++;
@@ -157,7 +162,13 @@ static int WriteOneFrame(DecodedPicList *pDecPic, int hFileOutput0, int hFileOut
           //Y;
           pbBuf = pPic->pY+iPicSize;
           for(i=0; i<iHeight; i++)
-            write(hFileOutput, pbBuf+i*iStride, iWidth);
+          {
+            res = write(hFileOutput, pbBuf+i*iStride, iWidth);
+            if (-1==res)
+            {
+              error ("error writing to output file.", 600);
+            }
+          }
 
           if(pPic->iYUVFormat != YUV400)
           {
@@ -165,11 +176,23 @@ static int WriteOneFrame(DecodedPicList *pDecPic, int hFileOutput0, int hFileOut
            //U;
            pbBuf = pPic->pU+iPicSize;
            for(i=0; i<iHeightUV; i++)
-            write(hFileOutput, pbBuf+i*iStrideUV, iWidthUV);
+           {
+             res = write(hFileOutput, pbBuf+i*iStrideUV, iWidthUV);
+             if (-1==res)
+             {
+               error ("error writing to output file.", 600);
+             }
+           }
            //V;
            pbBuf = pPic->pV+iPicSize;
            for(i=0; i<iHeightUV; i++)
-            write(hFileOutput, pbBuf+i*iStrideUV, iWidthUV);
+           {
+             res = write(hFileOutput, pbBuf+i*iStrideUV, iWidthUV);
+             if (-1==res)
+             {
+               error ("error writing to output file.", 600);
+             }
+           }
           }
 
           iOutputFrame++;
@@ -212,6 +235,8 @@ int main(int argc, char **argv)
   fprintf(stdout, "Decoder output view1: %s\n", DECOUTPUT_VIEW1_FILENAME);
 #endif
 
+  init_time();
+
   //get input parameters;
   Configure(&InputParams, argc, argv);
   //open decoder;
@@ -253,8 +278,7 @@ int main(int argc, char **argv)
     close(hFileDecOutput1);
   }
 
-  //printf("%d frames are decoded.\n", iFramesDecoded);
-  //printf("%d frames are decoded, %d frames output.\n", iFramesDecoded, iFramesOutput);
+  printf("%d frames are decoded.\n", iFramesDecoded);
   return 0;
 }
 

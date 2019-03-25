@@ -67,11 +67,11 @@ static const byte NTAB3[2][2][2] =
   {{2,0},{1,1}},
 };
 
-extern int se_v (char *tracestring, Bitstream *bitstream);
-extern int ue_v (char *tracestring, Bitstream *bitstream);
-extern Boolean u_1 (char *tracestring, Bitstream *bitstream);
-extern int u_v (int LenInBits, char *tracestring, Bitstream *bitstream);
-extern int i_v (int LenInBits, char *tracestring, Bitstream *bitstream);
+extern int read_se_v (char *tracestring, Bitstream *bitstream, int *used_bits);
+extern int read_ue_v (char *tracestring, Bitstream *bitstream, int *used_bits);
+extern Boolean read_u_1 (char *tracestring, Bitstream *bitstream, int *used_bits);
+extern int read_u_v (int LenInBits, char *tracestring, Bitstream *bitstream, int *used_bits);
+extern int read_i_v (int LenInBits, char *tracestring, Bitstream *bitstream, int *used_bits);
 
 // CAVLC mapping
 extern void linfo_ue(int len, int info, int *value1, int *dummy);
@@ -88,7 +88,7 @@ extern void linfo_levrun_c2x2(int len,int info,int *level,int *irun);
 extern int  uvlc_startcode_follows(Slice *currSlice, int dummy);
 
 extern int  readSyntaxElement_VLC (SyntaxElement *sym, Bitstream *currStream);
-extern int  readSyntaxElement_UVLC(Macroblock *currMB, SyntaxElement *sym, struct datapartition *dp);
+extern int  readSyntaxElement_UVLC(Macroblock *currMB, SyntaxElement *sym, struct datapartition_dec *dp);
 extern int  readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, Bitstream   *currStream);
 
 extern int  GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount);

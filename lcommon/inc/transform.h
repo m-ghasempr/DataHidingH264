@@ -21,7 +21,7 @@
 extern void forward4x4   (int **block , int **tblock, int pos_y, int pos_x);
 extern void inverse4x4   (int **tblock, int **block , int pos_y, int pos_x);
 extern void forward8x8   (int **block , int **tblock, int pos_y, int pos_x);
-extern void inverse8x8   (int **tblock, int **block , int pos_y, int pos_x);
+extern void inverse8x8   (int **tblock, int **block , int pos_x);
 extern void hadamard4x4  (int **block , int **tblock);
 extern void ihadamard4x4 (int **tblock, int **block);
 extern void hadamard4x2  (int **block , int **tblock);

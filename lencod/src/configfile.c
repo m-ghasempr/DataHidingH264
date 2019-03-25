@@ -1,4 +1,4 @@
-
+      
 /*!
  ***********************************************************************
  * \file
@@ -79,6 +79,28 @@ static const int mb_height_cr[4]= {0,8,16,16};
 
 #define MAX_ITEMS_TO_PARSE  10000
 
+#include "sei.h"
+static void SetVUIScaleAndTicks(InputParameters *p_Inp, double frame_rate);
+
+/*!
+ ***********************************************************************
+ * \brief
+ *   Set JM VUI parameters
+ ***********************************************************************
+ */
+
+static void set_jm_vui_params( InputParameters *p_Inp )
+{
+  SetVUIScaleAndTicks(p_Inp, 1.25 * p_Inp->output.frame_rate); 
+
+  p_Inp->EnableVUISupport             = 1;
+
+  p_Inp->VUI.nal_hrd_parameters_present_flag = 0;
+  p_Inp->VUI.vcl_hrd_parameters_present_flag = 0;
+  p_Inp->VUI.timing_info_present_flag = 1;   
+  p_Inp->VUI.pic_struct_present_flag  = 1;
+  p_Inp->VUI.fixed_frame_rate_flag    = 1;
+}
 
 /*!
  ***********************************************************************
@@ -102,18 +124,18 @@ void JMHelpExit (void)
     "         See default encoder.cfg file for description of all parameters.\n\n"
 
     "## Supported video file formats\n"
-    "   RAW:  .yuv.,rgb -> 	P444 - Planar, 4:4:4 \n"
-    "                      	P422 - Planar, 4:2:2 \n"
-    "                      	P420 - Planar, 4:2:0  \n"
-    "                      	P400 - Planar, 4:0:0 \n"
-    "                      	I444 - Packed, 4:4:4 \n"
-    "                      	I422 - Packed, 4:2:2 \n"
-    "                      	I420 - Packed, 4:2:0 \n"
-    "                      	IYUV/YV12 - Planar, 4:2:0 \n"
-    "                      	IYU1 - Packed, 4:2:0 (UYYVYY) \n"
-    "                      	IYU2 - Packed, 4:4:4 (UYV) \n"
-    "                      	YUY2 - Packed, 4:2:2 (YUYV) \n"
-    "                      	YUV  - Packed, 4:4:4 (YUV) \n\n"
+    "   RAW:  .yuv.,rgb ->  P444 - Planar, 4:4:4 \n"
+    "                       P422 - Planar, 4:2:2 \n"
+    "                       P420 - Planar, 4:2:0  \n"
+    "                       P400 - Planar, 4:0:0 \n"
+    "                       I444 - Packed, 4:4:4 \n"
+    "                       I422 - Packed, 4:2:2 \n"
+    "                       I420 - Packed, 4:2:0 \n"
+    "                       IYUV/YV12 - Planar, 4:2:0 \n"
+    "                       IYU1 - Packed, 4:2:0 (UYYVYY) \n"
+    "                       IYU2 - Packed, 4:4:4 (UYV) \n"
+    "                       YUY2 - Packed, 4:2:2 (YUYV) \n"
+    "                       YUV  - Packed, 4:4:4 (YUV) \n\n"
 
     "## Examples of usage:\n"
     "   lencod\n"
@@ -154,6 +176,7 @@ int64 getVideoFileSize(int video_file)
 void get_number_of_frames (InputParameters *p_Inp, VideoDataFile *input_file)
 {
   int64 fsize = getVideoFileSize(input_file->f_num);
+
   int64 isize = (int64) p_Inp->source.size;
   int maxBitDepth = imax(p_Inp->source.bit_depth[0], p_Inp->source.bit_depth[1]);
 
@@ -422,6 +445,20 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
     }
   }
   printf ("\n");
+
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->num_of_views > 1)
+  {
+    printf ("Parsing Configfile %s", p_Inp->View1ConfigName );
+    content = GetConfigFileContent ( p_Inp->View1ConfigName );
+    if (NULL==content)
+      error (errortext, 300);
+    ParseContent (p_Inp, MapView1, content, (int) strlen(content));
+    printf ("\n");
+    free (content);
+  }
+#endif
+
   PatchInp(p_Vid, p_Inp);
 
   cfgparams = *p_Inp;
@@ -708,7 +745,6 @@ void read_slice_group_info(VideoParameters *p_Vid, InputParameters *p_Inp)
 static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int i;
-  int storedBplus1;
   int bitdepth_qp_scale[3];
 
   if (p_Inp->src_BitDepthRescale)
@@ -740,6 +776,13 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   }
 #endif
 
+    if(p_Inp->source.bit_depth[0] >8)
+    {
+      if(!IMGTYPE)
+      {
+        error("IMGTYPE should be 1 when bitdepth is greater than 8", 600);
+      }
+    }
   // Read resolution from file name
   if (p_Inp->source.width[0] == 0 || p_Inp->source.height[0] == 0)
   {
@@ -780,6 +823,16 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 
 
   updateOutFormat(p_Inp);
+  // SEI/VUI 3:2 pulldown support
+  if ( p_Inp->SEIVUI32Pulldown && p_Inp->enable_32_pulldown )
+  {
+    snprintf(errortext, ET_SIZE, "SEIVUI32Pulldown and Enable32Pulldown cannot be set at the same time.");
+    error (errortext, 500);
+  }
+  if ( p_Inp->SEIVUI32Pulldown )
+  {    
+    set_jm_vui_params( p_Inp );
+  }
 
   if (p_Inp->no_frames == -1)
   {
@@ -788,8 +841,6 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     CloseFiles(&p_Inp->input_file1);
   }
 
-  storedBplus1 = (p_Inp->BRefPictures ) ? p_Inp->NumberBFrames + 1: 1;
-  
   if (p_Inp->no_frames < 1)
   {      
     snprintf(errortext, ET_SIZE, "Not enough frames to encode (%d)", p_Inp->no_frames);
@@ -810,6 +861,11 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Inp->directInferenceFlag = 1;
   }
 
+  if(p_Inp->PicInterlace > 0 || p_Inp->MbInterlace > 0)
+  {
+    printf("\nWarning: WPMCPredicions is set to 0 due to interlace coding.\n");
+    p_Inp->WPMCPrecision = 0;
+  }
 #if TRACE
   if ((int) strlen (p_Inp->TraceFile) > 0 && (p_Enc->p_trace = fopen(p_Inp->TraceFile,"w"))==NULL)
   {
@@ -842,31 +898,72 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     snprintf(errortext, ET_SIZE, "WPMCPrecision requires both RDPictureDecision=1 and GenerateMultiplePPS=1.\n");
     error (errortext, 400);
   }
+  p_Inp->num_ref_frames_org = p_Inp->num_ref_frames;
+  p_Inp->P_List0_refs_org[0] = p_Inp->P_List0_refs[0];
+  p_Inp->B_List0_refs_org[0] = p_Inp->B_List0_refs[0];
+  p_Inp->B_List1_refs_org[0] = p_Inp->B_List1_refs[0];
+  p_Inp->P_List0_refs_org[1] = p_Inp->P_List0_refs[1];
+  p_Inp->B_List0_refs_org[1] = p_Inp->B_List0_refs[1];
+  p_Inp->B_List1_refs_org[1] = p_Inp->B_List1_refs[1];
+
   if (p_Inp->WPMCPrecision && p_Inp->WPMCPrecFullRef && p_Inp->num_ref_frames < 16 )
   {
     p_Inp->num_ref_frames++;
-    if ( p_Inp->P_List0_refs )
-      p_Inp->P_List0_refs++;
+    if ( p_Inp->P_List0_refs[0] )
+    {
+      p_Inp->P_List0_refs[0]++;
+    }
     else
-      p_Inp->P_List0_refs = p_Inp->num_ref_frames;
-    if ( p_Inp->B_List0_refs )
-      p_Inp->B_List0_refs++;
+    {
+      p_Inp->P_List0_refs[0] = p_Inp->num_ref_frames;
+    }    
+    if ( p_Inp->B_List0_refs[0] )
+    {
+      p_Inp->B_List0_refs[0]++;
+    }
     else
-      p_Inp->B_List0_refs = p_Inp->num_ref_frames;
-    if ( p_Inp->B_List1_refs )
-      p_Inp->B_List1_refs++;
+    {
+      p_Inp->B_List0_refs[0] = p_Inp->num_ref_frames;
+    }
+    if ( p_Inp->B_List1_refs[0] )
+    {
+      p_Inp->B_List1_refs[0]++;
+    }
     else
-      p_Inp->B_List1_refs = p_Inp->num_ref_frames;
+    {
+      p_Inp->B_List1_refs[0] = p_Inp->num_ref_frames;
+    }
+    if ( p_Inp->SepViewInterSearch )
+    {
+      if ( p_Inp->P_List0_refs[1] )
+      {
+        p_Inp->P_List0_refs[1]++;
+      }
+      else
+      {
+        p_Inp->P_List0_refs[1] = p_Inp->num_ref_frames;
+      }
+      if ( p_Inp->B_List0_refs[1] )
+      {
+        p_Inp->B_List0_refs[1]++;
+      }
+      else
+      {
+        p_Inp->B_List0_refs[1] = p_Inp->num_ref_frames;
+      }
+      if ( p_Inp->B_List1_refs[1] )
+      {
+        p_Inp->B_List1_refs[1]++;
+      }
+      else
+      {
+        p_Inp->B_List1_refs[1] = p_Inp->num_ref_frames;
+      }
+    }
   }
   else if ( p_Inp->WPMCPrecision && p_Inp->WPMCPrecFullRef )
   {
     snprintf(errortext, ET_SIZE, "WPMCPrecFullRef requires NumberReferenceFrames < 16.\n");
-    error (errortext, 400);
-  }
-
-  if ( p_Inp->WPMCPrecision && ( p_Inp->PicInterlace || p_Inp->MbInterlace ) )
-  {
-    snprintf(errortext, ET_SIZE, "WPMCPrecision does not work for PicInterlace > 0 or MbInterlace > 0.\n");
     error (errortext, 400);
   }
 
@@ -896,19 +993,19 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Inp->ReferenceReorder = 0;
   }
 
-#if (MVC_EXTENSION_ENABLE)
-  if ( (p_Inp->num_of_views > 1) && (p_Inp->ReferenceReorder > 0) )
+  if ( is_MVC_profile(p_Inp->ProfileIDC) )
   {
-    snprintf(errortext, ET_SIZE, "ReferenceReorder is not supported with more than one view.\n");
-    error (errortext, 400);
+    if (p_Inp->ReferenceReorder)
+    {
+      snprintf(errortext, ET_SIZE, "ReferenceReorder>0 is not supported with the Multiview (118) or Stereo High (128) profiles and is therefore disabled. \n");
+      p_Inp->ReferenceReorder = 0;
+    }
+    if ( (p_Inp->PocMemoryManagement) && (p_Inp->PicInterlace > 0) )
+    {
+      snprintf(errortext, ET_SIZE, "PocMemoryManagement>0 is not supported with the Multiview (118) or Stereo High (128) profiles and is therefore disabled. \n");
+      p_Inp->PocMemoryManagement = 0;
+    }
   }
-
-  if ( (p_Inp->num_of_views > 1) && (p_Inp->PocMemoryManagement > 0) )
-  {
-    snprintf(errortext, ET_SIZE, "PocMemoryManagement is not supported with more than one view.\n");
-    error (errortext, 400);
-  }
-#endif
 
 
   if (p_Inp->PocMemoryManagement && p_Inp->MbInterlace )
@@ -962,6 +1059,13 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   if (p_Inp->of_mode != PAR_OF_RTP && p_Inp->SparePictureOption == TRUE)
   {
     snprintf(errortext, ET_SIZE, "Only RTP output mode is compatible with spare picture features.");
+    error (errortext, 500);
+  }
+
+  // RTP is not defined for MVC yet
+  if (p_Inp->of_mode == PAR_OF_RTP && (( p_Inp->ProfileIDC == STEREO_HIGH ) || (p_Inp->ProfileIDC == MULTIVIEW_HIGH) ))
+  {
+    snprintf(errortext, ET_SIZE, "RTP output mode is not compatible with MVC profiles.");
     error (errortext, 500);
   }
 
@@ -1019,7 +1123,15 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   if( !p_Inp->direct_spatial_mv_pred_flag && p_Inp->num_ref_frames<2 && p_Inp->NumberBFrames >0)
     error("temporal direct needs at least 2 ref frames\n",-1000);
 
-  if (p_Inp->SearchMode == FAST_FULL_SEARCH && p_Inp->MEErrorMetric[F_PEL] > ERROR_SSE)
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->SepViewInterSearch && p_Inp->SearchMode[1] == FAST_FULL_SEARCH && p_Inp->MEErrorMetric[F_PEL] > ERROR_SSE)
+  {
+    snprintf(errortext, ET_SIZE, "\nOnly SAD and SSE distortion computation supported with Fast Full Search.");
+    error (errortext, 500);
+  }
+  else
+#endif
+  if (p_Inp->SearchMode[0] == FAST_FULL_SEARCH && p_Inp->MEErrorMetric[F_PEL] > ERROR_SSE)
   {
     snprintf(errortext, ET_SIZE, "\nOnly SAD and SSE distortion computation supported with Fast Full Search.");
     error (errortext, 500);
@@ -1027,7 +1139,7 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if (p_Inp->rdopt == 0)
   {
-    if (p_Inp->DisableSubpelME)
+    if (p_Inp->DisableSubpelME[0] || p_Inp->DisableSubpelME[1])
     {
       if (p_Inp->MEErrorMetric[F_PEL] != p_Inp->ModeDecisionMetric)
       {
@@ -1077,11 +1189,21 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     error (errortext, 500);
   }
 
-  if (p_Inp->NumberBFrames && ((p_Inp->BiPredMotionEstimation) && (p_Inp->search_range < p_Inp->BiPredMESearchRange)))
+  if (p_Inp->NumberBFrames && ((p_Inp->BiPredMotionEstimation) && (p_Inp->search_range[0] < p_Inp->BiPredMESearchRange[0])))
   {
     snprintf(errortext, ET_SIZE, "\nBiPredMESearchRange must be smaller or equal SearchRange.");
     error (errortext, 500);
   }
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->SepViewInterSearch )
+  {
+    if (p_Inp->NumberBFrames && ((p_Inp->BiPredMotionEstimation) && (p_Inp->search_range[1] < p_Inp->BiPredMESearchRange[1])))
+    {
+      snprintf(errortext, ET_SIZE, "\nView1BiPredMESearchRange must be smaller or equal View1SearchRange.");
+      error (errortext, 500);
+    }
+  }
+#endif
 
   if (p_Inp->BiPredMotionEstimation)
   {
@@ -1137,9 +1259,9 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if(p_Inp->MVCInterViewReorder)
   {
-    if(p_Inp->ProfileIDC!=MULTIVIEW_HIGH && p_Inp->ProfileIDC!=STEREO_HIGH)
+    if ( !is_MVC_profile(p_Inp->ProfileIDC) )
     {
-      snprintf(errortext, ET_SIZE, "ProfileIDC must be 118 or 128 to use MVCInterViewReorder=1.");
+      snprintf(errortext, ET_SIZE, "ProfileIDC must be 118, 128, 134, or 135 to use MVCInterViewReorder=1.");
       error (errortext, 500);
     }
     if(p_Inp->ReferenceReorder!=0)
@@ -1150,7 +1272,11 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   }
 #endif
 
-  if (p_Inp->SearchMode != EPZS)
+  if (p_Inp->SearchMode[0] != EPZS 
+#if (MVC_EXTENSION_ENABLE)
+    && (!p_Inp->SepViewInterSearch || p_Inp->SearchMode[1] != EPZS )
+#endif
+    )
     p_Inp->EPZSSubPelGrid = 0;
 
   if (p_Inp->redundant_pic_flag)
@@ -1259,6 +1385,42 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Inp->RDPictureDirectMode    = 0;
     p_Inp->RDPictureFrameQPPSlice = 0;
     p_Inp->RDPictureFrameQPBSlice = 0;
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Set VUI time scale and number of clock ticks given input frame rate
+ ************************************************************************
+*/
+
+static void SetVUIScaleAndTicks(InputParameters *p_Inp, double frame_rate)
+{
+  double frame_rate_integer = (double)ceil( frame_rate );  
+
+  if ( frame_rate_integer != frame_rate )
+  {    
+    // frame rate is a floating-point number
+    // check whether multiplying it with 1001/1000=1.001 brings it closer to frame_rate_integer
+    double new_frame_rate = 1.001 * frame_rate;
+
+    if ( dabs( new_frame_rate - frame_rate_integer ) < dabs( frame_rate - frame_rate_integer ) )
+    {
+      p_Inp->VUI.num_units_in_tick = 1001;
+      p_Inp->VUI.time_scale        = (int)floor( frame_rate_integer * (1000 << 1) ); // two ticks per frame    
+    }
+    else
+    {
+      p_Inp->VUI.num_units_in_tick = 1000;
+      p_Inp->VUI.time_scale        = (int)floor( frame_rate * (p_Inp->VUI.num_units_in_tick << 1) + 0.5 ); // two ticks per frame    
+    }
+  }
+  else
+  {
+    // frame rate is an integer
+    p_Inp->VUI.num_units_in_tick = 1000;
+    p_Inp->VUI.time_scale        = (int)floor( frame_rate * (p_Inp->VUI.num_units_in_tick << 1) ); // two ticks per frame    
   }
 }
 

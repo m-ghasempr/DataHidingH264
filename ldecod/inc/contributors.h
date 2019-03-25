@@ -84,7 +84,7 @@
       10587 Berlin
       Germany
 
-      Detlev Marpe                    <marpe@hhi.de>
+      Detlev Marpe
       Fraunhofer-Institute for Telecommunications
       Heinrich-Hertz-Institut (HHI)
       Einsteinufer 37
@@ -124,14 +124,14 @@
       P.O. Box 88
       33721 Tampere, Finland
 
-      Karsten Suehring                <suehring@hhi.de>
+      Karsten Suehring                <Karsten.Suehring(at)hhi.fraunhofer.de>
       Fraunhofer-Institute for Telecommunications
       Heinrich-Hertz-Institut (HHI)
       Einsteinufer 37
       10587 Berlin
       Germany
 
-      Heiko Schwarz                   <hschwarz@hhi.de>
+      Heiko Schwarz
       Fraunhofer-Institute for Telecommunications
       Heinrich-Hertz-Institut (HHI)
       Einsteinufer 37
@@ -222,10 +222,10 @@
       Sejong University
       98 Kunja-Dong, Kwangjin-Gu, Seoul 143-747, Korea
 
-			Jianhua Wu                      <jianhua.wu@sg.panasonic.com>
-			Panasonic Singapore Laboratories Pte Ltd
-			Blk 1022 Tai Seng Ave #06-3530 Tai Seng Ind Est
-			Singapore 534415
+      Jianhua Wu                      <jianhua.wu@sg.panasonic.com>
+      Panasonic Singapore Laboratories Pte Ltd
+      Blk 1022 Tai Seng Ave #06-3530 Tai Seng Ind Est
+      Singapore 534415
 
   \endverbatim
 */

@@ -51,6 +51,11 @@ int picture_coding_decision (VideoParameters *p_Vid, Picture *picture1, Picture 
   else
     lambda_picture = (qp < 20 ? 0.55 : 0.68) * pow (2, (qp - SHIFT_QP) / 3.0);
 
+  if(picture1->distortion.value[0] == 0)
+    return 0;
+  else if(picture2->distortion.value[0] == 0)
+    return 1;
+
   sse_picture1 = picture1->distortion.value[0] + picture1->distortion.value[1] + picture1->distortion.value[2];
   sse_picture2 = picture2->distortion.value[0] + picture2->distortion.value[1] + picture2->distortion.value[2];
  

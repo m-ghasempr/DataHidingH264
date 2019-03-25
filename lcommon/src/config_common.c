@@ -1,4 +1,3 @@
-
 /*!
  ***********************************************************************
  * \file
@@ -98,7 +97,8 @@ char *GetConfigFileContent (char *Filename)
   }
 
   FileSize = ftell (f);
-  if (FileSize < 0 || FileSize > 100000)
+
+  if (FileSize < 0 || FileSize > 150000)
   {
     snprintf (errortext, ET_SIZE, "Unreasonable Filesize %ld reported by ftell for configuration file %s.", FileSize, Filename);
     return NULL;

@@ -8,7 +8,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *     - Detlev Marpe
- *     - Karsten Sühring                 <suehring@hhi.de> 
+ *     - Karsten Suehring
  *     - Alexis Michael Tourapis         <alexismt@ieee.org> 
  *   
  *
@@ -27,8 +27,8 @@
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-#define JM                  "17 (FRExt)"
-#define VERSION             "17.2"
+#define JM                  "18 (FRExt)"
+#define VERSION             "18.0"
 #define EXT_VERSION         "(FRExt)"
 
 #define GET_METIME                1    //!< Enables or disables ME computation time
@@ -48,6 +48,7 @@
 #define INTRA_RDCOSTCALC_NNZ      1    //1: to recover block's nzn after rdcost calculation;
 #define JCOST_OVERFLOWCHECK       0    //!<1: to check the J cost if it is overflow>
 #define JM_PARALLEL_DEBLOCK       0    //!< Enables Parallel Deblocking
+#define SIMULCAST_ENABLE          0
 
 #define MVC_EXTENSION_ENABLE      1    //!< enable support for the Multiview High Profile
 #define EOS_OUTPUT                0 
@@ -58,7 +59,7 @@
 #define RC_MAX_TEMPORAL_LEVELS    5
 
 #define SSE_MEMORY_ALIGNMENT      16
-
+#define MAX_NUM_DPB_LAYERS        2
 //#define BEST_NZ_COEFF 1   // yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
 
 //AVC Profile IDC definitions
@@ -118,8 +119,6 @@ enum {
 
 #if (IMGTYPE == 0)
 #define DISTBLK_MAX  INT_MAX
-#elif (IMGTYPE == 2)
-#define DISTBLK_MAX  FLT_MAX
 #else
 #define DISTBLK_MAX  ((distblk) INT_MAX << LAMBDA_ACCURACY_BITS)
 #endif
@@ -298,7 +297,6 @@ enum {
 #define CALM_MF_FACTOR_THRESHOLD 512.0
 
 #define MAX_PLANE       3
-#define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
 
 #define MAXSLICEGROUPIDS 8
 
@@ -320,6 +318,12 @@ enum {
 #define NUM_LAST_CTX  15
 #define NUM_ONE_CTX    5
 #define NUM_ABS_CTX    5
+
+#if IMGTYPE
+#if JM_MEM_DISTORTION
+#pragma message("JM_MEM_DISTORTION must be zero!")
+#endif
+#endif
 
 
 #endif

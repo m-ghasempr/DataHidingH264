@@ -25,7 +25,6 @@
  */
 #ifndef _GLOBAL_H_
 #define _GLOBAL_H_
-
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
@@ -43,7 +42,7 @@
 #include "distortion.h"
 #include "io_video.h"
 
-typedef struct bit_stream Bitstream;
+typedef struct bit_stream_dec Bitstream;
 
 #define ET_SIZE 300      //!< size of error text buffer
 extern char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
@@ -110,8 +109,6 @@ typedef struct
   short y;
 } BlockPos;
 
-extern BlockPos *PicPos;
-
 //! struct for context management
 typedef struct
 {
@@ -138,8 +135,8 @@ typedef BiContextType *BiContextTypePtr;
 
 // structures that will be declared somewhere else
 struct storable_picture;
-struct datapartition;
-struct syntaxelement;
+struct datapartition_dec;
+struct syntaxelement_dec;
 
 typedef struct
 {
@@ -192,13 +189,23 @@ typedef struct DecRefPicMarking_s
   struct DecRefPicMarking_s *Next;
 } DecRefPicMarking_t;
 
+//! cbp structure
+typedef struct cbp_s
+{
+  int64         blk     ;
+  int64         bits    ;
+  int64         bits_8x8;
+} CBPStructure;
+
 //! Macroblock
-typedef struct macroblock
+typedef struct macroblock_dec
 {
   struct slice       *p_Slice;                    //!< pointer to the current slice
   struct video_par   *p_Vid;                      //!< pointer to VideoParameters
   struct inp_par     *p_Inp;
   int                 mbAddrX;                    //!< current MB address
+  int mbAddrA, mbAddrB, mbAddrC, mbAddrD;
+  Boolean mbAvailA, mbAvailB, mbAvailC, mbAvailD;
   BlockPos mb;
   int block_x;
   int block_y;
@@ -225,20 +232,18 @@ typedef struct macroblock
   short         delta_quant;          //!< for rate control
   short         list_offset;
 
-  struct macroblock   *mb_up;   //!< pointer to neighboring MB (CABAC)
-  struct macroblock   *mb_left; //!< pointer to neighboring MB (CABAC)
+  struct macroblock_dec   *mb_up;   //!< pointer to neighboring MB (CABAC)
+  struct macroblock_dec   *mb_left; //!< pointer to neighboring MB (CABAC)
 
-  struct macroblock   *mbup;   // neighbors for loopfilter
-  struct macroblock   *mbleft; // neighbors for loopfilter
+  struct macroblock_dec   *mbup;   // neighbors for loopfilter
+  struct macroblock_dec   *mbleft; // neighbors for loopfilter
 
   // some storage of macroblock syntax elements for global access
   short         mb_type;
   short         mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   //short         ****mvd;      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int           cbp;
-  int64         cbp_blk     [3];
-  int64         cbp_bits    [3];
-  int64         cbp_bits_8x8[3];
+  CBPStructure  s_cbp[3];
 
   int           i16mode;
   char          b8mode[4];
@@ -251,28 +256,35 @@ typedef struct macroblock
   short         DFBetaOffset;
 
   Boolean       mb_field;
+  //Flag for MBAFF deblocking;
+  byte          mixedModeEdgeFlag;
 
-  int mbAddrA, mbAddrB, mbAddrC, mbAddrD;
-  Boolean mbAvailA, mbAvailB, mbAvailC, mbAvailD;
+  // deblocking strength indices
+  byte strength_ver[4][4];
+  byte strength_hor[4][16];
+
 
   Boolean       luma_transform_size_8x8_flag;
   Boolean       NoMbPartLessThan8x8Flag;
 
-  void (*itrans_4x4)(struct macroblock *currMB, ColorPlane pl, int ioff, int joff);
-  void (*itrans_8x8)(struct macroblock *currMB, ColorPlane pl, int ioff, int joff);
+  void (*itrans_4x4)(struct macroblock_dec *currMB, ColorPlane pl, int ioff, int joff);
+  void (*itrans_8x8)(struct macroblock_dec *currMB, ColorPlane pl, int ioff, int joff);
 
-  void (*GetMVPredictor) (struct macroblock *currMB, PixelPos *block, 
+  void (*GetMVPredictor) (struct macroblock_dec *currMB, PixelPos *block, 
     MotionVector *pmv, short ref_frame, struct pic_motion_params **mv_info, int list, int mb_x, int mb_y, int blockshape_x, int blockshape_y);
 
-  int (*read_and_store_CBP_block_bit) (struct macroblock *currMB, DecodingEnvironmentPtr  dep_dp, int type);
-  char (*readRefPictureIdx)   (struct macroblock *currMB, struct syntaxelement *currSE, struct datapartition *dP, char b8mode, int list);
+  int  (*read_and_store_CBP_block_bit)  (struct macroblock_dec *currMB, DecodingEnvironmentPtr  dep_dp, int type);
+  char (*readRefPictureIdx)             (struct macroblock_dec *currMB, struct syntaxelement_dec *currSE, struct datapartition_dec *dP, char b8mode, int list);
 
-  //MBAFF case;
-  byte mixedModeEdgeFlag;
+  void (*read_comp_coeff_4x4_CABAC)     (struct macroblock_dec *currMB, struct syntaxelement_dec *currSE, ColorPlane pl, int (*InvLevelScale4x4)[4], int qp_per, int cbp);
+  void (*read_comp_coeff_8x8_CABAC)     (struct macroblock_dec *currMB, struct syntaxelement_dec *currSE, ColorPlane pl);
+
+  void (*read_comp_coeff_4x4_CAVLC)     (struct macroblock_dec *currMB, ColorPlane pl, int (*InvLevelScale4x4)[4], int qp_per, int cbp, byte **nzcoeff);
+  void (*read_comp_coeff_8x8_CAVLC)     (struct macroblock_dec *currMB, ColorPlane pl, int (*InvLevelScale8x8)[8], int qp_per, int cbp, byte **nzcoeff);
 } Macroblock;
 
 //! Syntaxelement
-typedef struct syntaxelement
+typedef struct syntaxelement_dec
 {
   int           type;                  //!< type of syntax element for data part.
   int           value1;                //!< numerical value of syntax element
@@ -291,12 +303,12 @@ typedef struct syntaxelement
   //! for mapping of CAVLC to syntaxElement
   void  (*mapping)(int len, int info, int *value1, int *value2);
   //! used for CABAC: refers to actual coding method of each individual syntax element type
-  void  (*reading)(Macroblock *currMB, struct syntaxelement *, DecodingEnvironmentPtr);
+  void  (*reading)(struct macroblock_dec *currMB, struct syntaxelement_dec *, DecodingEnvironmentPtr);
 } SyntaxElement;
 
 
 //! Bitstream
-struct bit_stream
+struct bit_stream_dec
 {
   // CABAC Decoding
   int           read_len;           //!< actual position in the codebuffer, CABAC only
@@ -310,17 +322,23 @@ struct bit_stream
 };
 
 //! DataPartition
-typedef struct datapartition
+typedef struct datapartition_dec
 {
 
   Bitstream           *bitstream;
   DecodingEnvironment de_cabac;
 
-  int     (*readSyntaxElement)(Macroblock *currMB, SyntaxElement *, struct datapartition *);
+  int     (*readSyntaxElement)(struct macroblock_dec *currMB, struct syntaxelement_dec *, struct datapartition_dec *);
           /*!< virtual function;
                actual method depends on chosen data partition and
                entropy coding method  */
 } DataPartition;
+
+typedef struct wp_params
+{
+  short weight[3];
+  short offset[3];
+} WPParams;
 
 #if (MVC_EXTENSION_ENABLE)
 typedef struct nalunitheadermvcext_tag
@@ -448,15 +466,15 @@ typedef struct slice
   int                 *long_term_pic_idx[2];
 
 #if (MVC_EXTENSION_ENABLE)
-  int									*abs_diff_view_idx_minus1[2];
+  int                 *abs_diff_view_idx_minus1[2];
 
-  int				          view_id;
+  int                 view_id;
   int                 inter_view_flag;
   int                 anchor_pic_flag;
 
   NALUnitHeaderMVCExt_t NaluHeaderMVCExt;
 #endif
-
+  int                 layer_id;
   short               DFDisableIdc;     //!< Disable deblocking filter on slice
   short               DFAlphaC0Offset;  //!< Alpha and C0 offset for filtering slice
   short               DFBetaOffset;     //!< Beta offset for filtering slice
@@ -467,6 +485,7 @@ typedef struct slice
   int                 dpC_NotPresent;    //!< non-zero, if data partition C is lost
 
   Boolean is_reset_coeff;
+  Boolean is_reset_coeff_cr;
   imgpel  ***mb_pred;
   imgpel  ***mb_rec;
   int     ***mb_rres;
@@ -501,6 +520,9 @@ typedef struct slice
 
   unsigned short luma_log2_weight_denom;
   unsigned short chroma_log2_weight_denom;
+  
+  WPParams **wp_params; // wp parameters in [list][index]
+
   int ***wp_weight;  // weight in [list][index][component] order
   int ***wp_offset;  // offset in [list][index][component] order
   int ****wbp_weight; //weight in [list][fw_index][bw_index][component] order
@@ -519,6 +541,13 @@ typedef struct slice
   int max_mb_vmv_r;                          //!< maximum vertical motion vector range in luma quarter pixel units for the current level_idc
   int ref_flag[17];                //!< 0: i-th previous frame is incorrect
 
+  int erc_mvperMB;
+  Macroblock *mb_data;
+  struct storable_picture *dec_picture;
+  int **siblock;
+  byte **ipredmode;
+  char  *intra_block;
+  char  chroma_vector_adjustment[6][16];
   void (*read_CBP_and_coeffs_from_NAL) (Macroblock *currMB);
   int  (*decode_one_component     )    (Macroblock *currMB, ColorPlane curr_plane, imgpel **currImg, struct storable_picture *dec_picture);
   int  (*readSlice                )    (struct video_par *, struct inp_par *);  
@@ -527,17 +556,17 @@ typedef struct slice
   void (*read_one_macroblock      )    (Macroblock *currMB);
   void (*interpret_mb_mode        )    (Macroblock *currMB);
   void (*init_lists               )    (struct slice *currSlice);
-  void (*intrapred_chroma         )    (Macroblock *currMB);
+
+  void (*intra_pred_chroma        )    (Macroblock *currMB);
+  int  (*intra_pred_4x4)               (Macroblock *currMB, ColorPlane pl, int ioff, int joff,int i4,int j4);
+  int  (*intra_pred_8x8)               (Macroblock *currMB, ColorPlane pl, int ioff, int joff);
+  int  (*intra_pred_16x16)             (Macroblock *currMB, ColorPlane pl, int predmode);
+
   void (*linfo_cbp_intra          )    (int len, int info, int *cbp, int *dummy);
   void (*linfo_cbp_inter          )    (int len, int info, int *cbp, int *dummy);    
   void (*update_direct_mv_info    )    (Macroblock *currMB);
-  int erc_mvperMB;
-  Macroblock *mb_data;
-  struct storable_picture *dec_picture;
-  int **siblock;
-  byte **ipredmode;
-  char  *intra_block;
-  char  chroma_vector_adjustment[6][16];
+  void (*read_coeff_4x4_CAVLC     )    (Macroblock *currMB, int block_type, int i, int j, int levarr[16], int runarr[16], int *number_coefficients);
+
 } Slice;
 
 typedef struct decodedpic_t
@@ -556,10 +585,91 @@ typedef struct decodedpic_t
   int iYBufStride;            //stride of pY[0/1] buffer in bytes;
   int iUVBufStride;           //stride of pU[0/1] and pV[0/1] buffer in bytes;
   int iSkipPicNum;
+  int iBufSize;
   struct decodedpic_t *pNext;
 } DecodedPicList;
 
 //****************************** ~DM ***********************************
+typedef struct coding_par
+{
+  int layer_id;
+  int profile_idc;
+  int width;
+  int height;
+  int width_cr;                               //!< width chroma  
+  int height_cr;                              //!< height chroma
+
+  int pic_unit_bitsize_on_disk;
+  short bitdepth_luma;
+  short bitdepth_chroma;
+  int bitdepth_scale[2];
+  int bitdepth_luma_qp_scale;
+  int bitdepth_chroma_qp_scale;
+  unsigned int dc_pred_value_comp[MAX_PLANE]; //!< component value for DC prediction (depends on component pel bit depth)
+  int max_pel_value_comp[MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
+
+  int yuv_format;
+  int lossless_qpprime_flag;
+  int num_blk8x8_uv;
+  int num_uv_blocks;
+  int num_cdc_coeff;
+  int mb_cr_size_x;
+  int mb_cr_size_y;
+  int mb_cr_size_x_blk;
+  int mb_cr_size_y_blk;
+  int mb_cr_size;
+  int mb_size[3][2];                         //!< component macroblock dimensions
+  int mb_size_blk[3][2];                     //!< component macroblock dimensions 
+  int mb_size_shift[3][2];
+  
+  int max_vmv_r;                             //!< maximum vertical motion vector range in luma quarter frame pixel units for the current level_idc
+  int separate_colour_plane_flag;
+  int ChromaArrayType;
+  int MaxFrameNum;
+  unsigned int PicWidthInMbs;
+  unsigned int PicHeightInMapUnits;
+  unsigned int FrameHeightInMbs;
+  unsigned int FrameSizeInMbs;
+  int iLumaPadX;
+  int iLumaPadY;
+  int iChromaPadX;
+  int iChromaPadY;
+
+  int subpel_x;
+  int subpel_y;
+  int shiftpel_x;
+  int shiftpel_y;
+  int total_scale;
+  unsigned int oldFrameSizeInMbs;
+
+  //padding info;
+  void (*img2buf)          (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom, int iOutStride);
+  int rgb_output;
+
+  imgpel **imgY_ref;                              //!< reference frame find snr
+  imgpel ***imgUV_ref;
+  Macroblock *mb_data;               //!< array containing all MBs of a whole frame
+  Macroblock *mb_data_JV[MAX_PLANE]; //!< mb_data to be used for 4:4:4 independent mode
+  char  *intra_block;
+  char  *intra_block_JV[MAX_PLANE];
+  BlockPos *PicPos;  
+  byte **ipredmode;                  //!< prediction type [90][74]
+  byte **ipredmode_JV[MAX_PLANE];
+  byte ****nz_coeff;
+  int **siblock;
+  int **siblock_JV[MAX_PLANE];
+  int *qp_per_matrix;
+  int *qp_rem_matrix;
+}CodingParameters;
+
+typedef struct layer_par
+{
+  int layer_id;
+  struct video_par *p_Vid;
+  CodingParameters *p_Cps;
+  seq_parameter_set_rbsp_t *p_SPS;
+  struct decoded_picture_buffer *p_Dpb;
+}LayerParameters;
 
 // video parameters
 typedef struct video_par
@@ -569,6 +679,9 @@ typedef struct video_par
   seq_parameter_set_rbsp_t *active_sps;
   seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
   pic_parameter_set_rbsp_t PicParSet[MAXPPS];
+  struct decoded_picture_buffer *p_Dpb_layer[MAX_NUM_DPB_LAYERS];
+  CodingParameters *p_EncodePar[MAX_NUM_DPB_LAYERS];
+  LayerParameters *p_LayerPar[MAX_NUM_DPB_LAYERS];
 
 #if (MVC_EXTENSION_ENABLE)
   subset_seq_parameter_set_rbsp_t *active_subset_sps;
@@ -598,16 +711,13 @@ typedef struct video_par
 
   //int sp_switch;                              //!< 1 for switching sp, 0 for normal sp  
   int type;                                   //!< image type INTER/INTRA
-  int width;
-  int height;
-  int width_cr;                               //!< width chroma  
-  int height_cr;                              //!< height chroma
 
   byte **ipredmode;                  //!< prediction type [90][74]
   byte **ipredmode_JV[MAX_PLANE];
   byte ****nz_coeff;
   int **siblock;
   int **siblock_JV[MAX_PLANE];
+  BlockPos *PicPos;
 
   int newframe;
   int structure;                     //!< Identify picture structure type
@@ -641,52 +751,13 @@ typedef struct video_par
   int PreviousFrameNumOffset;
   // /////////////////////////
 
-  int MaxFrameNum;
-
-  unsigned int PicWidthInMbs;
-  unsigned int PicHeightInMapUnits;
-  unsigned int FrameHeightInMbs;
   unsigned int PicHeightInMbs;
   unsigned int PicSizeInMbs;
-  unsigned int FrameSizeInMbs;
-  unsigned int oldFrameSizeInMbs;
 
   int no_output_of_prior_pics_flag;
 
   int last_has_mmco_5;
   int last_pic_bottom_field;
-
-  // Fidelity Range Extensions Stuff
-  int pic_unit_bitsize_on_disk;
-  short bitdepth_luma;
-  short bitdepth_chroma;
-  int bitdepth_scale[2];
-  int bitdepth_luma_qp_scale;
-  int bitdepth_chroma_qp_scale;
-  unsigned int dc_pred_value_comp[MAX_PLANE]; //!< component value for DC prediction (depends on component pel bit depth)
-  int max_pel_value_comp[MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
-
-  int profile_idc;
-  int yuv_format;
-  int lossless_qpprime_flag;
-  int num_blk8x8_uv;
-  int num_uv_blocks;
-  int num_cdc_coeff;
-  int mb_cr_size_x;
-  int mb_cr_size_y;
-  int mb_cr_size_x_blk;
-  int mb_cr_size_y_blk;
-  int mb_size[3][2];                         //!< component macroblock dimensions
-  int mb_size_blk[3][2];                     //!< component macroblock dimensions 
-  int mb_size_shift[3][2];
-  int subpel_x;
-  int subpel_y;
-  int shiftpel_x;
-  int shiftpel_y;
-  int total_scale;
-
-  int max_vmv_r;                             //!< maximum vertical motion vector range in luma quarter frame pixel units for the current level_idc
-  //int max_mb_vmv_r;                          //!< maximum vertical motion vector range in luma quarter pixel units for the current level_idc
 
   int idr_psnr_number;
   int psnr_number;
@@ -711,9 +782,6 @@ typedef struct video_par
   int recovery_frame_cnt;
   int recovery_frame_num;
   int recovery_poc;
-
-  int separate_colour_plane_flag;
-  int pic_unit_size_on_disk;
 
   byte *buf;
   byte *ibuf;
@@ -755,7 +823,7 @@ typedef struct video_par
   int  frame_no;
 
   int  g_nFrame;
-  Boolean global_init_done;
+  Boolean global_init_done[2];
 
   // global picture format dependent buffers, memory allocation in decod.c
   imgpel **imgY_ref;                              //!< reference frame find snr
@@ -780,7 +848,6 @@ typedef struct video_par
   int ec_flag[SE_MAX_ELEMENTS];        //!< array to set errorconcealment
 
   struct annex_b_struct *annex_b;
-  struct sBitsFile *bitsfile;
 
   struct frame_store *out_buffer;
 
@@ -789,11 +856,6 @@ typedef struct video_par
   int    recovery_flag;
 
   int BitStreamFile;
-  // dpb
-  struct decoded_picture_buffer *p_Dpb;
-  struct decoded_picture_buffer *p_Dpb_legacy; // This is the old JM dpb method and will be removed at some point
-  struct decoded_picture_buffer *p_Dpb_layer[2];
-
 
   // report
   char cslice_type[9];  
@@ -808,15 +870,16 @@ typedef struct video_par
 
   void (*buf2img)          (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int o_size_x, int o_size_y, int symbol_size_in_bytes, int bitshift);
   void (*getNeighbour)     (Macroblock *currMB, int xN, int yN, int mb_size[2], PixelPos *pix);
-  void (*get_mb_block_pos) (int mb_addr, short *x, short *y);
-  void (*GetStrengthVer)   (byte Strength[16], Macroblock *MbQ, int edge, int mvlimit, struct storable_picture *p);
-  void (*GetStrengthHor)   (byte Strength[16], Macroblock *MbQ, int edge, int mvlimit, struct storable_picture *p);
-  void (*EdgeLoopLumaVer)  (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, struct storable_picture *p);
-  void (*EdgeLoopLumaHor)  (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, struct storable_picture *p);
-  void (*EdgeLoopChromaVer)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int uv, struct storable_picture *p);
-  void (*EdgeLoopChromaHor)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int uv, struct storable_picture *p);
+  void (*get_mb_block_pos) (BlockPos *PicPos, int mb_addr, short *x, short *y);
+  void (*GetStrengthVer)   (Macroblock *MbQ, int edge, int mvlimit, struct storable_picture *p);
+  void (*GetStrengthHor)   (Macroblock *MbQ, int edge, int mvlimit, struct storable_picture *p);
+  void (*EdgeLoopLumaVer)  (ColorPlane pl, imgpel** Img, byte *Strength, Macroblock *MbQ, int edge);
+  void (*EdgeLoopLumaHor)  (ColorPlane pl, imgpel** Img, byte *Strength, Macroblock *MbQ, int edge, struct storable_picture *p);
+  void (*EdgeLoopChromaVer)(imgpel** Img, byte *Strength, Macroblock *MbQ, int edge, int uv, struct storable_picture *p);
+  void (*EdgeLoopChromaHor)(imgpel** Img, byte *Strength, Macroblock *MbQ, int edge, int uv, struct storable_picture *p);
   void (*img2buf)          (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom, int iOutStride);
 
+  ImageData tempData3;
   DecodedPicList *pDecOuputPic;
   int iDeblockMode;  //0: deblock in picture, 1: deblock in slice;
   struct nalu_t *nalu;
@@ -832,7 +895,61 @@ typedef struct video_par
   FILE *fpDbg;
 #endif
   pic_parameter_set_rbsp_t *pNextPPS;
+  int last_dec_poc;
+  int last_dec_view_id;
+  int last_dec_layer_id;
+  int dpb_layer_id;
+
+/******************* deprecative variables; ***************************************/
+  int width;
+  int height;
+  int width_cr;                               //!< width chroma  
+  int height_cr;                              //!< height chroma
+  // Fidelity Range Extensions Stuff
+  int pic_unit_bitsize_on_disk;
+  short bitdepth_luma;
+  short bitdepth_chroma;
+  int bitdepth_scale[2];
+  int bitdepth_luma_qp_scale;
+  int bitdepth_chroma_qp_scale;
+  unsigned int dc_pred_value_comp[MAX_PLANE]; //!< component value for DC prediction (depends on component pel bit depth)
+  int max_pel_value_comp[MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
+
+  int separate_colour_plane_flag;
+  int pic_unit_size_on_disk;
+
+  int profile_idc;
+  int yuv_format;
+  int lossless_qpprime_flag;
+  int num_blk8x8_uv;
+  int num_uv_blocks;
+  int num_cdc_coeff;
+  int mb_cr_size_x;
+  int mb_cr_size_y;
+  int mb_cr_size_x_blk;
+  int mb_cr_size_y_blk;
+  int mb_cr_size;
+  int mb_size[3][2];                         //!< component macroblock dimensions
+  int mb_size_blk[3][2];                     //!< component macroblock dimensions 
+  int mb_size_shift[3][2];
+  int subpel_x;
+  int subpel_y;
+  int shiftpel_x;
+  int shiftpel_y;
+  int total_scale;
+  int MaxFrameNum;
+
+  unsigned int PicWidthInMbs;
+  unsigned int PicHeightInMapUnits;
+  unsigned int FrameHeightInMbs;
+  unsigned int FrameSizeInMbs;
+  unsigned int oldFrameSizeInMbs;
+  int max_vmv_r;                             //!< maximum vertical motion vector range in luma quarter frame pixel units for the current level_idc
+  //int max_mb_vmv_r;                        //!< maximum vertical motion vector range in luma quarter pixel units for the current level_idc
+/******************* end deprecative variables; ***************************************/
+
 } VideoParameters;
+
 
 // signal to noise ratio parameters
 typedef struct snr_par
@@ -896,25 +1013,27 @@ typedef struct inp_par
   int iDecFrmNum;
 
   int bDisplayDecParams;
+  int dpb_plus[2];
 } InputParameters;
 
 typedef struct old_slice_par
 {
-   unsigned field_pic_flag;   
-   unsigned frame_num;
-   int      nal_ref_idc;
-   unsigned pic_oder_cnt_lsb;
-   int      delta_pic_oder_cnt_bottom;
-   int      delta_pic_order_cnt[2];
-   byte     bottom_field_flag;
-   byte     idr_flag;
-   int      idr_pic_id;
-   int      pps_id;
+  unsigned field_pic_flag;   
+  unsigned frame_num;
+  int      nal_ref_idc;
+  unsigned pic_oder_cnt_lsb;
+  int      delta_pic_oder_cnt_bottom;
+  int      delta_pic_order_cnt[2];
+  byte     bottom_field_flag;
+  byte     idr_flag;
+  int      idr_pic_id;
+  int      pps_id;
 #if (MVC_EXTENSION_ENABLE)
-   int      view_id;
-	 int      inter_view_flag;
-	 int      anchor_pic_flag;
+  int      view_id;
+  int      inter_view_flag;
+  int      anchor_pic_flag;
 #endif
+  int      layer_id;
 } OldSliceParams;
 
 typedef struct decoder_params
@@ -922,16 +1041,10 @@ typedef struct decoder_params
   InputParameters   *p_Inp;          //!< Input Parameters
   VideoParameters   *p_Vid;          //!< Image Parameters
   int64              bufferSize;     //!< buffersize for tiff reads (not currently supported)
-  int                UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
+  int                UsedBits;      // for internal statistics, is adjusted by read_se_v, read_ue_v, read_u_1
   FILE              *p_trace;        //!< Trace file
   int                bitcounter;
 } DecoderParams;
-
-typedef struct threadparameter
-{
-  DecoderParams *pDecoder;
-  int iThreadIdx;
-}ThreadParam_t;
 
 extern DecoderParams  *p_Dec;
 
@@ -939,8 +1052,9 @@ extern DecoderParams  *p_Dec;
 extern void error(char *text, int code);
 
 // dynamic mem allocation
-extern int  init_global_buffers( VideoParameters *p_Vid );
-extern void free_global_buffers( VideoParameters *p_Vid );
+extern int  init_global_buffers( VideoParameters *p_Vid, int layer_id );
+extern void free_global_buffers( VideoParameters *p_Vid);
+extern void free_layer_buffers( VideoParameters *p_Vid, int layer_id );
 
 extern int RBSPtoSODB(byte *streamBuffer, int last_byte_pos);
 extern int EBSPtoRBSP(byte *streamBuffer, int end_bytepos, int begin_bytepos);
@@ -959,13 +1073,44 @@ extern void change_plane_JV      ( VideoParameters *p_Vid, int nplane, Slice *pS
 extern void make_frame_picture_JV( VideoParameters *p_Vid );
 
 #if (MVC_EXTENSION_ENABLE)
-extern void nal_unit_header_mvc_extension(NALUnitHeaderMVCExt_t *NaluHeaderMVCExt, struct bit_stream *bitstream);
+extern void nal_unit_header_mvc_extension(NALUnitHeaderMVCExt_t *NaluHeaderMVCExt, struct bit_stream_dec *bitstream);
 #endif
 
 extern void FreeDecPicList ( DecodedPicList *pDecPicList );
 extern void ClearDecPicList( VideoParameters *p_Vid );
-extern DecodedPicList *GetOneAvailDecPicFromList(DecodedPicList *pDecPicList, int b3D);
+extern DecodedPicList *get_one_avail_dec_pic_from_list(DecodedPicList *pDecPicList, int b3D, int view_id);
 extern Slice *malloc_slice( InputParameters *p_Inp, VideoParameters *p_Vid );
-extern void CopySliceInfo ( Slice *currSlice, OldSliceParams *p_old_slice );
+extern void copy_slice_info ( Slice *currSlice, OldSliceParams *p_old_slice );
+extern void OpenOutputFiles(VideoParameters *p_Vid, int view0_id, int view1_id);
+extern void set_global_coding_par(VideoParameters *p_Vid, CodingParameters *cps);
+
+static inline int is_FREXT_profile(unsigned int profile_idc) 
+{
+  return ( profile_idc >= FREXT_HP || profile_idc == FREXT_CAVLC444 );
+}
+static inline int HI_intra_only_profile(unsigned int profile_idc, Boolean constrained_set3_flag)
+{
+  return ( ((profile_idc >= FREXT_Hi10P) && constrained_set3_flag) || (profile_idc == FREXT_CAVLC444) );
+}
+static inline int is_BL_profile(unsigned int profile_idc) 
+{
+  return ( profile_idc == FREXT_CAVLC444 || profile_idc == BASELINE || profile_idc == MAIN || profile_idc == EXTENDED ||
+           profile_idc == FREXT_HP || profile_idc == FREXT_Hi10P || profile_idc == FREXT_Hi422 || profile_idc == FREXT_Hi444);
+}
+static inline int is_EL_profile(unsigned int profile_idc) 
+{
+  return ( (profile_idc == MVC_HIGH) || (profile_idc == STEREO_HIGH)
+           );
+}
+
+static inline int is_MVC_profile(unsigned int profile_idc)
+{
+  return ( (0)
+#if (MVC_EXTENSION_ENABLE)
+  || (profile_idc == MVC_HIGH) || (profile_idc == STEREO_HIGH)
+#endif
+  );
+}
+
 #endif
 

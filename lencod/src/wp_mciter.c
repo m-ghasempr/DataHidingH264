@@ -293,7 +293,7 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
           if (p_Inp->ChromaWeightSupport == 1)
           {          
             for (k = 0; k < 2; k++)
-            {        	
+            {
               tmpPtr = currSlice->listX[clist][n]->imgUV[k];
               dc_ref_UV[clist][n][k] = ComputeImgSum(tmpPtr, p_Vid->height_cr, p_Vid->width_cr);
 
@@ -526,6 +526,11 @@ int TestWPBSliceAlg2(Slice *currSlice, int select_method)
   VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = p_Vid->p_Inp;
   int i, j, k, n;
+#if (MVC_EXTENSION_ENABLE)
+  int view_id = p_Vid->view_id;
+#else
+  int view_id = 0;
+#endif
 
   short tx, td, tb, DistScaleFactor;
 
@@ -719,8 +724,8 @@ int TestWPBSliceAlg2(Slice *currSlice, int select_method)
   {
     int active_refs[2];
 
-    active_refs[0] = (p_Inp->B_List0_refs == 0 ? currSlice->listXsize[0] : imin(p_Inp->B_List0_refs, currSlice->listXsize[0]));
-    active_refs[1] = (p_Inp->B_List1_refs == 0 ? currSlice->listXsize[1] : imin(p_Inp->B_List1_refs, currSlice->listXsize[1]));
+    active_refs[0] = (p_Inp->B_List0_refs == 0 ? currSlice->listXsize[0] : imin(p_Inp->B_List0_refs[view_id], currSlice->listXsize[0]));
+    active_refs[1] = (p_Inp->B_List1_refs == 0 ? currSlice->listXsize[1] : imin(p_Inp->B_List1_refs[view_id], currSlice->listXsize[1]));
 
     for (clist=0; clist<2 + list_offset; clist++)
     {

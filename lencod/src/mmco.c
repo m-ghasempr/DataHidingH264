@@ -63,7 +63,8 @@ void mmco_long_term(VideoParameters *p_Vid, int current_pic_num)
 void poc_based_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current_pic_num)
 {
   VideoParameters *p_Vid = p_Dpb->p_Vid;
-  unsigned i, pic_num = 0;
+  unsigned i;
+  int pic_num = 0;
 
   int min_poc=INT_MAX;
   DecRefPicMarking_t *tmp_drpm,*tmp_drpm2;
@@ -97,12 +98,12 @@ void poc_based_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current
   tmp_drpm2->Next=tmp_drpm;
 
   tmp_drpm2->memory_management_control_operation = 1;
-#if MVC_EXTENSION_ENABLE
-  if(p_Vid->active_sps->profile_idc < MULTIVIEW_HIGH)
+
+  if ( p_Vid->num_of_layers == 1 )
     tmp_drpm2->difference_of_pic_nums_minus1 = current_pic_num - pic_num - 1;
   else
     tmp_drpm2->difference_of_pic_nums_minus1 = (current_pic_num - pic_num)/2 - 1;
-#endif
+
   p_Vid->dec_ref_pic_marking_buffer = tmp_drpm2;
 }
 
@@ -116,7 +117,8 @@ void poc_based_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current
 void poc_based_ref_management_field_pic(DecodedPictureBuffer *p_Dpb, int current_pic_num)
 {
   VideoParameters *p_Vid = p_Dpb->p_Vid;
-  unsigned int i, pic_num1 = 0, pic_num2 = 0;
+  unsigned int i; 
+  int pic_num1 = 0, pic_num2 = 0;
 
   int min_poc=INT_MAX;
   DecRefPicMarking_t *tmp_drpm,*tmp_drpm2, *tmp_drpm3;
@@ -178,6 +180,7 @@ void tlyr_based_ref_management_frame_pic(VideoParameters *p_Vid, int current_pic
 {
   unsigned i, first = 1;
   DecRefPicMarking_t *drpm = NULL, *current_drpm = NULL, *tmp_drpm = NULL;
+  struct decoded_picture_buffer *p_Dpb = p_Vid->p_Dpb_layer[0];
 
   if (p_Vid->dec_ref_pic_marking_buffer!=NULL)
     return;
@@ -185,17 +188,17 @@ void tlyr_based_ref_management_frame_pic(VideoParameters *p_Vid, int current_pic
   if ( p_Vid->currentPicture->idr_flag )
     return;
 
-  if ((p_Vid->p_Dpb->ref_frames_in_buffer + p_Vid->p_Dpb->ltref_frames_in_buffer)==0)
+  if ((p_Dpb->ref_frames_in_buffer + p_Dpb->ltref_frames_in_buffer)==0)
     return;
 
-  for (i = 0; i < p_Vid->p_Dpb->used_size; i++)
+  for (i = 0; i < p_Dpb->used_size; i++)
   {
-    if (p_Vid->p_Dpb->fs[i]->is_reference && (!(p_Vid->p_Dpb->fs[i]->is_long_term)) && p_Vid->p_Dpb->fs[i]->frame->temporal_layer > p_Vid->enc_picture->temporal_layer)
+    if (p_Dpb->fs[i]->is_reference && (!(p_Dpb->fs[i]->is_long_term)) && p_Dpb->fs[i]->frame->temporal_layer > p_Vid->enc_picture->temporal_layer)
     {
       if (NULL == (tmp_drpm=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) 
         no_mem_exit("poc_based_ref_management: tmp_drpm2");
       tmp_drpm->memory_management_control_operation = 1;
-      tmp_drpm->difference_of_pic_nums_minus1 = current_pic_num - p_Vid->p_Dpb->fs[i]->frame->pic_num - 1;
+      tmp_drpm->difference_of_pic_nums_minus1 = current_pic_num - p_Dpb->fs[i]->frame->pic_num - 1;
       
       if (first) 
       {

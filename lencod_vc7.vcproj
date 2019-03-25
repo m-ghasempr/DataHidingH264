@@ -626,7 +626,7 @@
 				RelativePath=".\lencod\src\nalu.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\nalucommon.c">
+				RelativePath=".\lcommon\src\nalucommon.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\output.c">

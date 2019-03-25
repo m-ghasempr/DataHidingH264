@@ -6,8 +6,8 @@
  *    Rate-Distortion optimized mode decision
  *
  * \author
- *    - Heiko Schwarz              <hschwarz@hhi.de>
- *    - Valeri George              <george@hhi.de>
+ *    - Heiko Schwarz
+ *    - Valeri George
  *    - Lowell Winger              <lwinger@lsil.com>
  *    - Alexis Michael Tourapis    <alexismt@ieee.org>
  * \date
@@ -48,15 +48,16 @@
 
 #define FASTMODE 1
 
-static distblk compute_sse4x4_cost (VideoParameters *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
-static distblk compute_satd4x4_cost(VideoParameters *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
-static distblk compute_comp4x4_cost(VideoParameters *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
 static void set_stored_macroblock_parameters      (Macroblock *currMB);
 static void set_stored_macroblock_parameters_sp   (Macroblock *currMB);
 static void set_stored_macroblock_parameters_mpass(Macroblock *currMB);
 static void set_ref_and_motion_vectors_P_slice    (Macroblock *currMB, PicMotionParams **motion, Info8x8 *pred, int);
 static void set_ref_and_motion_vectors_B_slice    (Macroblock *currMB, PicMotionParams **motion, Info8x8 *pred, int);
 
+static distblk compute_sad4x4_cost (VideoParameters *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
+static distblk compute_sse4x4_cost (VideoParameters *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
+static distblk compute_satd4x4_cost(VideoParameters *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
+static distblk compute_comp4x4_cost(VideoParameters *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
 
 static inline void copy_motion_vectors_MB (Slice *currSlice, RD_DATA *rdopt)
 {
@@ -253,7 +254,7 @@ void init_rdopt (Slice *currSlice)
   }
 
   if (currSlice->mb_aff_frame_flag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1))
-	  currSlice->set_stored_mb_parameters = set_stored_macroblock_parameters_mpass;
+    currSlice->set_stored_mb_parameters = set_stored_macroblock_parameters_mpass;
   else
   {
     if (currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
@@ -759,8 +760,8 @@ distblk rdcost_for_8x8blocks (Macroblock *currMB, // --> Current macroblock to c
   // RDOPT with losses
   if (p_Inp->rdopt==3)
   {
-	  //Zhifeng 090611
-	  distortion = p_Vid->estimate_distortion(currMB, block, 8, mode, pdir, min_rdcost);    //===== get residue =====
+    //Zhifeng 090611
+    distortion = p_Vid->estimate_distortion(currMB, block, 8, mode, pdir, min_rdcost);    //===== get residue =====
   }
   else
   {    
@@ -1380,7 +1381,7 @@ void set_coeff_and_recon_8x8_p_slice (Macroblock* currMB)
 
     //restore reconstruction
     if (p_RDO->tr8x8->cnt_nonz_8x8 <= _LUMA_8x8_COEFF_COST_ &&
-      ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0) &&
+      ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0) &&
       (currSlice->slice_type != SP_SLICE))// modif ES added last condition (we probably never go there so is the next modification useful ? check)
     {      
       currMB->cbp     = 0;
@@ -1389,9 +1390,9 @@ void set_coeff_and_recon_8x8_p_slice (Macroblock* currMB)
       copy_image_data_16x16(&p_Vid->enc_picture->imgY[currMB->pix_y], p_RDO->tr8x8->mpr8x8, currMB->pix_x, 0);
 
       if(p_Inp->rdopt == 3)
-	    {
-		    p_Vid->p_decs->rec_type = 0;
-	    }
+      {
+        p_Vid->p_decs->rec_type = 0;
+      }
       
       if(currSlice->slice_type == SP_SLICE && !p_Vid->sp2_frame_indicator)
       {
@@ -1445,10 +1446,10 @@ void set_coeff_and_recon_8x8_p_slice (Macroblock* currMB)
         copy_image_data_16x16(&p_Vid->enc_picture->imgUV[1][currMB->pix_y], p_RDO->tr8x8->rec_mb8x8_cr[1], currMB->pix_x, 0);
       }
     }
-	  if (p_Inp->rdopt == 3)
-	  {
-	    errdo_get_best_P8x8(currMB, 1);
-	  }
+    if (p_Inp->rdopt == 3)
+    {
+      errdo_get_best_P8x8(currMB, 1);
+    }
   }
   else
   {
@@ -1470,7 +1471,7 @@ void set_coeff_and_recon_8x8_p_slice (Macroblock* currMB)
     }
 
     if (((p_Inp->disthres && p_RDO->tr4x4->cnt_nonz_8x8 <= 0) || (p_RDO->tr4x4->cnt_nonz_8x8 <= 5)) && currSlice->slice_type != SP_SLICE &&
-      ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0))
+      ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0))
     {
       currMB->cbp     = 0;
       currMB->cbp_blk = 0;
@@ -1478,9 +1479,9 @@ void set_coeff_and_recon_8x8_p_slice (Macroblock* currMB)
       copy_image_data_16x16(&p_Vid->enc_picture->imgY[currMB->pix_y], p_RDO->tr4x4->mpr8x8, currMB->pix_x, 0);
 
       if(p_Inp->rdopt == 3)
-	    {
-		    p_Vid->p_decs->rec_type = 0;
-	    }
+      {
+        p_Vid->p_decs->rec_type = 0;
+      }
 
       if(currSlice->slice_type == SP_SLICE && !p_Vid->sp2_frame_indicator)
       {
@@ -1516,9 +1517,9 @@ void set_coeff_and_recon_8x8_p_slice (Macroblock* currMB)
       copy_image_data_16x16(&p_Vid->enc_picture->imgY[currMB->pix_y], p_RDO->tr4x4->rec_mbY8x8, currMB->pix_x, 0);
 
       if(p_Inp->rdopt == 3)
-	    {
-		    p_Vid->p_decs->rec_type = 1;
-	    }
+      {
+        p_Vid->p_decs->rec_type = 1;
+      }
 
       if(currSlice->slice_type == SP_SLICE && !p_Vid->sp2_frame_indicator)
       {
@@ -1534,10 +1535,10 @@ void set_coeff_and_recon_8x8_p_slice (Macroblock* currMB)
         copy_image_data_16x16(&p_Vid->enc_picture->imgUV[1][currMB->pix_y], p_RDO->tr4x4->rec_mb8x8_cr[1], currMB->pix_x, 0);
       }
     }
-	  if (p_Inp->rdopt == 3)
-	  {
-	    errdo_get_best_P8x8(currMB, 0);
-	  }
+    if (p_Inp->rdopt == 3)
+    {
+      errdo_get_best_P8x8(currMB, 0);
+    }
   }
 }
 
@@ -1621,7 +1622,7 @@ void set_coeff_and_recon_8x8_b_slice (Macroblock* currMB)
 
     //restore reconstruction
     if (p_RDO->tr8x8->cnt_nonz_8x8 <= _LUMA_8x8_COEFF_COST_ &&
-      ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0))// modif ES added last condition (we probably never go there so is the next modification useful ? check)
+      ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0))// modif ES added last condition (we probably never go there so is the next modification useful ? check)
     {      
       currMB->cbp     = 0;
       currMB->cbp_blk = 0;
@@ -1629,9 +1630,9 @@ void set_coeff_and_recon_8x8_b_slice (Macroblock* currMB)
       copy_image_data_16x16(&p_Vid->enc_picture->imgY[currMB->pix_y], p_RDO->tr8x8->mpr8x8, currMB->pix_x, 0);
 
       if(p_Inp->rdopt == 3)
-	    {
-		    p_Vid->p_decs->rec_type = 0;
-	    }
+      {
+        p_Vid->p_decs->rec_type = 0;
+      }
 
 
       //memset( currSlice->cofAC[0][0][0], 0, 2080 * sizeof(int)); // 4 * 4 * 2 * 65
@@ -1659,9 +1660,9 @@ void set_coeff_and_recon_8x8_b_slice (Macroblock* currMB)
       copy_image_data_16x16(&p_Vid->enc_picture->imgY[currMB->pix_y], p_RDO->tr8x8->rec_mbY8x8, currMB->pix_x, 0);
 
       if(p_Inp->rdopt == 3)
-	    {
-		    p_Vid->p_decs->rec_type = 1;
-	    }
+      {
+        p_Vid->p_decs->rec_type = 1;
+      }
 
 
       if (p_Vid->P444_joined) 
@@ -1672,9 +1673,9 @@ void set_coeff_and_recon_8x8_b_slice (Macroblock* currMB)
       }
     }
     if (p_Inp->rdopt == 3)
-	  {
-	    errdo_get_best_P8x8(currMB, 1);
-	  }
+    {
+      errdo_get_best_P8x8(currMB, 1);
+    }
   }
   else
   {
@@ -1701,7 +1702,7 @@ void set_coeff_and_recon_8x8_b_slice (Macroblock* currMB)
     }
 
     if (((p_Inp->disthres && p_RDO->tr4x4->cnt_nonz_8x8 <= 0) || (p_RDO->tr4x4->cnt_nonz_8x8 <= 5)) &&
-      ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0))
+      ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0))
     {
       currMB->cbp     = 0;
       currMB->cbp_blk = 0;
@@ -1709,9 +1710,9 @@ void set_coeff_and_recon_8x8_b_slice (Macroblock* currMB)
       copy_image_data_16x16(&p_Vid->enc_picture->imgY[currMB->pix_y], p_RDO->tr4x4->mpr8x8, currMB->pix_x, 0);
 
       if(p_Inp->rdopt == 3)
-	    {
-		    p_Vid->p_decs->rec_type = 0;
-	    }
+      {
+        p_Vid->p_decs->rec_type = 0;
+      }
 
       if (currSlice->P444_joined)
       {
@@ -1737,9 +1738,9 @@ void set_coeff_and_recon_8x8_b_slice (Macroblock* currMB)
       copy_image_data_16x16(&p_Vid->enc_picture->imgY[currMB->pix_y], p_RDO->tr4x4->rec_mbY8x8, currMB->pix_x, 0);
 
       if(p_Inp->rdopt == 3)
-	    {
-		    p_Vid->p_decs->rec_type = 1;
-	    }
+      {
+        p_Vid->p_decs->rec_type = 1;
+      }
 
       if (currSlice->P444_joined)
       {
@@ -1749,9 +1750,9 @@ void set_coeff_and_recon_8x8_b_slice (Macroblock* currMB)
       }
     }
     if (p_Inp->rdopt == 3)
-	  {
-	    errdo_get_best_P8x8(currMB, 0);
-	  }
+    {
+      errdo_get_best_P8x8(currMB, 0);
+    }
   }
 }
 
@@ -1904,7 +1905,7 @@ int RDCost_for_macroblocks (Macroblock  *currMB,   // <-- Current Macroblock to 
   // LUMA
   if (p_Inp->rdopt == 3)
   {
-	  distortion = p_Vid->estimate_distortion(currMB, 0, 16, mode, 0, currMB->min_rdcost);
+    distortion = p_Vid->estimate_distortion(currMB, 0, 16, mode, 0, currMB->min_rdcost);
     //if (errdo_distortion (currMB, mode, &distortion) == 0)
     //  return 0;
   }
@@ -1917,7 +1918,7 @@ int RDCost_for_macroblocks (Macroblock  *currMB,   // <-- Current Macroblock to 
     return 0;
   //printf("passed distortion %.2f %.2f\n", (double)distortion, currMB->min_rdcost);
 
-  if (currMB->qp_scaled[0] == 0 && p_Vid->lossless_qpprime_flag == 1 && distortion != 0)
+  if (currMB->qp_scaled[0] == 0 && p_Vid->active_sps->lossless_qpprime_flag == 1 && distortion != 0)
     return 0;
 
   //=====   S T O R E   C O D I N G   S T A T E   =====
@@ -1963,7 +1964,7 @@ int RDCost_for_macroblocks (Macroblock  *currMB,   // <-- Current Macroblock to 
   else if (p_Inp->ForceTrueRateRDO == 2)
     rdcost = distortion + weight_cost(lambda, (rate +  IS_INTRA(currMB)));
   else
-    rdcost = distortion + (rate>0? (weight_cost(lambda, rate)): (weight_cost(lambda, 1)/2)); 
+    rdcost = distortion + (rate>0? (weight_cost(lambda, rate)): (weight_cost(lambda, 1)/2));
 
 #if JCOST_OVERFLOWCHECK //overflow checking;
   if(rdcost < distortion)
@@ -1980,13 +1981,13 @@ int RDCost_for_macroblocks (Macroblock  *currMB,   // <-- Current Macroblock to 
   }
 
   if ((rdcost >= currMB->min_rdcost) ||
-    ((currMB->qp_scaled[0]) == 0 && p_Vid->lossless_qpprime_flag == 1 && distortion != 0))
+    ((currMB->qp_scaled[0]) == 0 && p_Vid->active_sps->lossless_qpprime_flag == 1 && distortion != 0))
   {
 #if FASTMODE
     // Reordering RDCost comparison order of mode 0 and mode 1 in P_SLICE
     // if RDcost of mode 0 and mode 1 is same, we choose best_mode is 0
     // This might not always be good since mode 0 is more biased towards rate than quality.
-    if((currSlice->slice_type != P_SLICE || mode != 0 || rdcost != currMB->min_rdcost) || IS_FREXT_PROFILE(p_Inp->ProfileIDC))
+    if((currSlice->slice_type != P_SLICE || mode != 0 || rdcost != currMB->min_rdcost) || is_FREXT_profile(p_Inp->ProfileIDC))
 #endif
       return 0;
   }
@@ -2331,9 +2332,11 @@ static void set_stored_macroblock_parameters_mpass (Macroblock *currMB)
         {
           char cur_ref = p_RDO->l0_refframe[j][i];
           motion[block_y][block_x].ref_idx [LIST_0] = cur_ref;
+          if(cur_ref >=0)
+          {
           motion[block_y][block_x].ref_pic [LIST_0] = currSlice->listX[LIST_0 + currMB->list_offset][(short)cur_ref];
           motion[block_y][block_x].mv      [LIST_0] = currSlice->all_mv[LIST_0][(short)cur_ref][(short) currMB->b8x8[k].mode][j][i];
-
+          }
           // MBAFF or RDOQ
           currSlice->rddata->refar[LIST_0][j][i] = cur_ref;
         }

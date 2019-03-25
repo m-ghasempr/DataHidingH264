@@ -7,7 +7,7 @@
  *     Trace file handling and standard error handling function.
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *      - Karsten Suehring            <suehring@hhi.de>
+ *      - Karsten Suehring
  ***************************************************************************************
  */
 
@@ -152,5 +152,24 @@ void tracebits2(
 
   fflush (p_Dec->p_trace);
 }
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Tracing information such as motion/ref_idx etc
+ ************************************************************************
+ */
+void trace_info(
+                  SyntaxElement *currSE,        //!< syntax element to update
+                  const char *description_str,  //!< tracing information, char array describing the symbol
+                  int value1                    //!< value to be recorded
+)
+
+{
+  char tstring[20];   
+  sprintf( tstring, "%s%d", description_str, value1); 
+  strncpy(currSE->tracestring, tstring, TRACESTRING_SIZE);
+}
+
 #endif
 

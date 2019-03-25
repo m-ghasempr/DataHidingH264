@@ -226,7 +226,7 @@ static inline void LowPassForIntra8x8PredVer(imgpel *PredPel, int block_up_left,
  *    makes and returns 8x8 DC prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra_prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -253,7 +253,7 @@ static inline int intra8x8_dc_pred_mbaff(Macroblock *currMB,    //!< current mac
   int block_available_up_right;
   
 
-  imgpel *pred_pels, **mpr = currSlice->mb_pred[pl];
+  imgpel **mpr = currSlice->mb_pred[pl];
   int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   for (i=0;i<8;i++)
@@ -286,37 +286,28 @@ static inline int intra8x8_dc_pred_mbaff(Macroblock *currMB,    //!< current mac
   // form predictor pels
   if (block_available_up)
   {
-    pred_pels = &imgY[pix_b.pos_y][pix_b.pos_x];
-    P_A = pred_pels[0];
-    P_B = pred_pels[1];
-    P_C = pred_pels[2];
-    P_D = pred_pels[3];
-    P_E = pred_pels[4];
-    P_F = pred_pels[5];
-    P_G = pred_pels[6];
-    P_H = pred_pels[7];
+    memcpy(&PredPel[1], &imgY[pix_b.pos_y][pix_b.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[1], p_Vid->dc_pred_value_comp[pl], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = (imgpel) p_Vid->dc_pred_value_comp[pl];
+#endif
   }
 
   if (block_available_up_right)
   {
-    pred_pels = &imgY[pix_c.pos_y][pix_c.pos_x];
-    P_I = pred_pels[0];
-    P_J = pred_pels[1];
-    P_K = pred_pels[2];
-    P_L = pred_pels[3];
-    P_M = pred_pels[4];
-    P_N = pred_pels[5];
-    P_O = pred_pels[6];
-    P_P = pred_pels[7];
-
+    memcpy(&PredPel[9], &imgY[pix_c.pos_y][pix_c.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[9], PredPel[8], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = P_H;
+#endif
   }
 
   if (block_available_left)
@@ -344,7 +335,7 @@ static inline int intra8x8_dc_pred_mbaff(Macroblock *currMB,    //!< current mac
     P_Z = (imgpel) p_Vid->dc_pred_value_comp[pl];
   }
 
-  LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
+  LowPassForIntra8x8Pred(PredPel, block_available_up_left, block_available_up, block_available_left);
   
   if (block_available_up && block_available_left)
   {
@@ -380,7 +371,7 @@ static inline int intra8x8_dc_pred_mbaff(Macroblock *currMB,    //!< current mac
  *    makes and returns 8x8 vertical prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra_prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -405,7 +396,7 @@ static inline int intra8x8_vert_pred_mbaff(Macroblock *currMB,    //!< current m
   int block_available_up_right;
 
   
-  imgpel *pred_pels, **mpr = currSlice->mb_pred[pl];
+  imgpel **mpr = currSlice->mb_pred[pl];
   int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   for (i=0;i<8;i++)
@@ -441,36 +432,28 @@ static inline int intra8x8_vert_pred_mbaff(Macroblock *currMB,    //!< current m
   // form predictor pels
   if (block_available_up)
   {
-    pred_pels = &imgY[pix_b.pos_y][pix_b.pos_x];
-    P_A = *(pred_pels ++);
-    P_B = *(pred_pels ++);
-    P_C = *(pred_pels ++);
-    P_D = *(pred_pels ++);
-    P_E = *(pred_pels ++);
-    P_F = *(pred_pels ++);
-    P_G = *(pred_pels ++);
-    P_H = *pred_pels;
+    memcpy(&PredPel[1], &imgY[pix_b.pos_y][pix_b.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[1], p_Vid->dc_pred_value_comp[pl], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = (imgpel) p_Vid->dc_pred_value_comp[pl];
+#endif
   }
 
   if (block_available_up_right)
   {
-    pred_pels = &imgY[pix_c.pos_y][pix_c.pos_x];
-    P_I = *(pred_pels ++);
-    P_J = *(pred_pels ++);
-    P_K = *(pred_pels ++);
-    P_L = *(pred_pels ++);
-    P_M = *(pred_pels ++);
-    P_N = *(pred_pels ++);
-    P_O = *(pred_pels ++);
-    P_P = *pred_pels;
+    memcpy(&PredPel[9], &imgY[pix_c.pos_y][pix_c.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[9], PredPel[8], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = P_H;
+#endif
   }
 
   if (block_available_up_left)
@@ -486,7 +469,7 @@ static inline int intra8x8_vert_pred_mbaff(Macroblock *currMB,    //!< current m
   
   for (i=joff; i < joff + BLOCK_SIZE_8x8; i++)
   {
-    memcpy(&mpr[i][ioff], (&P_A), BLOCK_SIZE_8x8 * sizeof(imgpel));
+    memcpy(&mpr[i][ioff], &PredPel[1], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
 
   return DECODING_OK;
@@ -498,7 +481,7 @@ static inline int intra8x8_vert_pred_mbaff(Macroblock *currMB,    //!< current m
  *    makes and returns 8x8 horizontal prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra_prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -615,7 +598,7 @@ static inline int intra8x8_hor_pred_mbaff(Macroblock *currMB,    //!< current ma
  *    makes and returns 8x8 diagonal down right prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -641,7 +624,7 @@ static inline int intra8x8_diag_down_right_pred_mbaff(Macroblock *currMB,    //!
   int block_available_up_left;
   int block_available_up_right;
 
-  imgpel *pred_pels, **mpr = currSlice->mb_pred[pl];
+  imgpel **mpr = currSlice->mb_pred[pl];
   int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   for (i=0;i<8;i++)
@@ -677,37 +660,28 @@ static inline int intra8x8_diag_down_right_pred_mbaff(Macroblock *currMB,    //!
   // form predictor pels
   if (block_available_up)
   {
-    pred_pels = &imgY[pix_b.pos_y][pix_b.pos_x];
-    P_A = pred_pels[0];
-    P_B = pred_pels[1];
-    P_C = pred_pels[2];
-    P_D = pred_pels[3];
-    P_E = pred_pels[4];
-    P_F = pred_pels[5];
-    P_G = pred_pels[6];
-    P_H = pred_pels[7];
+    memcpy(&PredPel[1], &imgY[pix_b.pos_y][pix_b.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[1], p_Vid->dc_pred_value_comp[pl], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = (imgpel) p_Vid->dc_pred_value_comp[pl];
+#endif
   }
 
   if (block_available_up_right)
   {
-    pred_pels = &imgY[pix_c.pos_y][pix_c.pos_x];
-    P_I = pred_pels[0];
-    P_J = pred_pels[1];
-    P_K = pred_pels[2];
-    P_L = pred_pels[3];
-    P_M = pred_pels[4];
-    P_N = pred_pels[5];
-    P_O = pred_pels[6];
-    P_P = pred_pels[7];
-
+    memcpy(&PredPel[9], &imgY[pix_c.pos_y][pix_c.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[9], PredPel[8], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = P_H;
+#endif
   }
 
   if (block_available_left)
@@ -735,7 +709,7 @@ static inline int intra8x8_diag_down_right_pred_mbaff(Macroblock *currMB,    //!
     P_Z = (imgpel) p_Vid->dc_pred_value_comp[pl];
   }
 
-  LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
+  LowPassForIntra8x8Pred(PredPel, block_available_up_left, block_available_up, block_available_left);
 
   // Mode DIAG_DOWN_RIGHT_PRED
   PredArray[ 0] = (imgpel) ((P_X + P_V + 2*(P_W) + 2) >> 2);
@@ -772,7 +746,7 @@ static inline int intra8x8_diag_down_right_pred_mbaff(Macroblock *currMB,    //!
  *    makes and returns 8x8 diagonal down left prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -798,7 +772,7 @@ static inline int intra8x8_diag_down_left_pred_mbaff(Macroblock *currMB,    //!<
   int block_available_up_left;
   int block_available_up_right;
 
-  imgpel *pred_pels, **mpr = currSlice->mb_pred[pl];
+  imgpel **mpr = currSlice->mb_pred[pl];
   int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   for (i=0;i<8;i++)
@@ -834,37 +808,28 @@ static inline int intra8x8_diag_down_left_pred_mbaff(Macroblock *currMB,    //!<
   // form predictor pels
   if (block_available_up)
   {
-    pred_pels = &imgY[pix_b.pos_y][pix_b.pos_x];
-    P_A = pred_pels[0];
-    P_B = pred_pels[1];
-    P_C = pred_pels[2];
-    P_D = pred_pels[3];
-    P_E = pred_pels[4];
-    P_F = pred_pels[5];
-    P_G = pred_pels[6];
-    P_H = pred_pels[7];
+    memcpy(&PredPel[1], &imgY[pix_b.pos_y][pix_b.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[1], p_Vid->dc_pred_value_comp[pl], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = (imgpel) p_Vid->dc_pred_value_comp[pl];
+#endif
   }
 
   if (block_available_up_right)
   {
-    pred_pels = &imgY[pix_c.pos_y][pix_c.pos_x];
-    P_I = pred_pels[0];
-    P_J = pred_pels[1];
-    P_K = pred_pels[2];
-    P_L = pred_pels[3];
-    P_M = pred_pels[4];
-    P_N = pred_pels[5];
-    P_O = pred_pels[6];
-    P_P = pred_pels[7];
-
+    memcpy(&PredPel[9], &imgY[pix_c.pos_y][pix_c.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[9], PredPel[8], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = P_H;
+#endif
   }
 
   if (block_available_left)
@@ -892,7 +857,7 @@ static inline int intra8x8_diag_down_left_pred_mbaff(Macroblock *currMB,    //!<
     P_Z = (imgpel) p_Vid->dc_pred_value_comp[pl];
   }
 
-  LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
+  LowPassForIntra8x8Pred(PredPel, block_available_up_left, block_available_up, block_available_left);
 
   // Mode DIAG_DOWN_LEFT_PRED
   *Pred++ = (imgpel) ((P_A + P_C + 2*(P_B) + 2) >> 2);
@@ -931,7 +896,7 @@ static inline int intra8x8_diag_down_left_pred_mbaff(Macroblock *currMB,    //!<
  *    makes and returns 8x8 vertical right prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -956,7 +921,7 @@ static inline int intra8x8_vert_right_pred_mbaff(Macroblock *currMB,    //!< cur
   int block_available_up_left;
   int block_available_up_right;
 
-  imgpel *pred_pels, **mpr = currSlice->mb_pred[pl];
+  imgpel **mpr = currSlice->mb_pred[pl];
   int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   for (i=0;i<8;i++)
@@ -992,37 +957,28 @@ static inline int intra8x8_vert_right_pred_mbaff(Macroblock *currMB,    //!< cur
   // form predictor pels
   if (block_available_up)
   {
-    pred_pels = &imgY[pix_b.pos_y][pix_b.pos_x];
-    P_A = pred_pels[0];
-    P_B = pred_pels[1];
-    P_C = pred_pels[2];
-    P_D = pred_pels[3];
-    P_E = pred_pels[4];
-    P_F = pred_pels[5];
-    P_G = pred_pels[6];
-    P_H = pred_pels[7];
+    memcpy(&PredPel[1], &imgY[pix_b.pos_y][pix_b.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[1], p_Vid->dc_pred_value_comp[pl], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = (imgpel) p_Vid->dc_pred_value_comp[pl];
+#endif
   }
 
   if (block_available_up_right)
   {
-    pred_pels = &imgY[pix_c.pos_y][pix_c.pos_x];
-    P_I = pred_pels[0];
-    P_J = pred_pels[1];
-    P_K = pred_pels[2];
-    P_L = pred_pels[3];
-    P_M = pred_pels[4];
-    P_N = pred_pels[5];
-    P_O = pred_pels[6];
-    P_P = pred_pels[7];
-
+    memcpy(&PredPel[9], &imgY[pix_c.pos_y][pix_c.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[9], PredPel[8], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = P_H;
+#endif
   }
 
   if (block_available_left)
@@ -1050,11 +1006,11 @@ static inline int intra8x8_vert_right_pred_mbaff(Macroblock *currMB,    //!< cur
     P_Z = (imgpel) p_Vid->dc_pred_value_comp[pl];
   }
 
-  LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
+  LowPassForIntra8x8Pred(PredPel, block_available_up_left, block_available_up, block_available_left);
 
-  PredArray[ 0] = (imgpel) ((P_V + P_T + 2*P_U + 2) >> 2);
-  PredArray[ 1] = (imgpel) ((P_T + P_R + 2*P_S + 2) >> 2);
-  PredArray[ 2] = (imgpel) ((P_R + P_Z + 2*P_Q + 2) >> 2);
+  PredArray[ 0] = (imgpel) ((P_V + P_T + (P_U << 1) + 2) >> 2);
+  PredArray[ 1] = (imgpel) ((P_T + P_R + (P_S << 1) + 2) >> 2);
+  PredArray[ 2] = (imgpel) ((P_R + P_Z + (P_Q << 1) + 2) >> 2);
   PredArray[ 3] = (imgpel) ((P_Z + P_A + 1) >> 1);
   PredArray[ 4] = (imgpel) ((P_A + P_B + 1) >> 1);
   PredArray[ 5] = (imgpel) ((P_B + P_C + 1) >> 1);
@@ -1064,9 +1020,9 @@ static inline int intra8x8_vert_right_pred_mbaff(Macroblock *currMB,    //!< cur
   PredArray[ 9] = (imgpel) ((P_F + P_G + 1) >> 1);
   PredArray[10] = (imgpel) ((P_G + P_H + 1) >> 1);
 
-  PredArray[11] = (imgpel) ((P_W + P_U + 2*P_V + 2) >> 2);
-  PredArray[12] = (imgpel) ((P_U + P_S + 2*P_T + 2) >> 2);
-  PredArray[13] = (imgpel) ((P_S + P_Q + 2*P_R + 2) >> 2);
+  PredArray[11] = (imgpel) ((P_W + P_U + (P_V << 1) + 2) >> 2);
+  PredArray[12] = (imgpel) ((P_U + P_S + (P_T << 1) + 2) >> 2);
+  PredArray[13] = (imgpel) ((P_S + P_Q + (P_R << 1) + 2) >> 2);
   PredArray[14] = (imgpel) ((P_Q + P_A + 2*P_Z + 2) >> 2);
   PredArray[15] = (imgpel) ((P_Z + P_B + 2*P_A + 2) >> 2);
   PredArray[16] = (imgpel) ((P_A + P_C + 2*P_B + 2) >> 2);
@@ -1095,7 +1051,7 @@ static inline int intra8x8_vert_right_pred_mbaff(Macroblock *currMB,    //!< cur
  *    makes and returns 8x8 vertical left prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -1121,7 +1077,7 @@ static inline int intra8x8_vert_left_pred_mbaff(Macroblock *currMB,    //!< curr
   int block_available_up_left;
   int block_available_up_right;
 
-  imgpel *pred_pels, **mpr = currSlice->mb_pred[pl];
+  imgpel **mpr = currSlice->mb_pred[pl];
   int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   for (i=0;i<8;i++)
@@ -1157,37 +1113,28 @@ static inline int intra8x8_vert_left_pred_mbaff(Macroblock *currMB,    //!< curr
   // form predictor pels
   if (block_available_up)
   {
-    pred_pels = &imgY[pix_b.pos_y][pix_b.pos_x];
-    P_A = pred_pels[0];
-    P_B = pred_pels[1];
-    P_C = pred_pels[2];
-    P_D = pred_pels[3];
-    P_E = pred_pels[4];
-    P_F = pred_pels[5];
-    P_G = pred_pels[6];
-    P_H = pred_pels[7];
+    memcpy(&PredPel[1], &imgY[pix_b.pos_y][pix_b.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[1], p_Vid->dc_pred_value_comp[pl], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = (imgpel) p_Vid->dc_pred_value_comp[pl];
+#endif
   }
 
   if (block_available_up_right)
   {
-    pred_pels = &imgY[pix_c.pos_y][pix_c.pos_x];
-    P_I = pred_pels[0];
-    P_J = pred_pels[1];
-    P_K = pred_pels[2];
-    P_L = pred_pels[3];
-    P_M = pred_pels[4];
-    P_N = pred_pels[5];
-    P_O = pred_pels[6];
-    P_P = pred_pels[7];
-
+    memcpy(&PredPel[9], &imgY[pix_c.pos_y][pix_c.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[9], PredPel[8], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = P_H;
+#endif
   }
 
   if (block_available_left)
@@ -1215,7 +1162,7 @@ static inline int intra8x8_vert_left_pred_mbaff(Macroblock *currMB,    //!< curr
     P_Z = (imgpel) p_Vid->dc_pred_value_comp[pl];
   }
 
-  LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
+  LowPassForIntra8x8Pred(PredPel, block_available_up_left, block_available_up, block_available_left);
 
   *pred_pel++ = (imgpel) ((P_A + P_B + 1) >> 1);
   *pred_pel++ = (imgpel) ((P_B + P_C + 1) >> 1);
@@ -1235,10 +1182,10 @@ static inline int intra8x8_vert_left_pred_mbaff(Macroblock *currMB,    //!< curr
   *pred_pel++ = (imgpel) ((P_E + P_G + 2*P_F + 2) >> 2);
   *pred_pel++ = (imgpel) ((P_F + P_H + 2*P_G + 2) >> 2);
   *pred_pel++ = (imgpel) ((P_G + P_I + 2*P_H + 2) >> 2);
-  *pred_pel++ = (imgpel) ((P_H + P_J + 2*P_I + 2) >> 2);
-  *pred_pel++ = (imgpel) ((P_I + P_K + 2*P_J + 2) >> 2);
-  *pred_pel++ = (imgpel) ((P_J + P_L + 2*P_K + 2) >> 2);
-  *pred_pel   = (imgpel) ((P_K + P_M + 2*P_L + 2) >> 2);
+  *pred_pel++ = (imgpel) ((P_H + P_J + (P_I << 1) + 2) >> 2);
+  *pred_pel++ = (imgpel) ((P_I + P_K + (P_J << 1) + 2) >> 2);
+  *pred_pel++ = (imgpel) ((P_J + P_L + (P_K << 1) + 2) >> 2);
+  *pred_pel   = (imgpel) ((P_K + P_M + (P_L << 1) + 2) >> 2);
 
   memcpy(&mpr[joff++][ioff], &PredArray[ 0], 8 * sizeof(imgpel));
   memcpy(&mpr[joff++][ioff], &PredArray[11], 8 * sizeof(imgpel));
@@ -1258,7 +1205,7 @@ static inline int intra8x8_vert_left_pred_mbaff(Macroblock *currMB,    //!< curr
  *    makes and returns 8x8 horizontal up prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -1272,7 +1219,7 @@ static inline int intra8x8_hor_up_pred_mbaff(Macroblock *currMB,    //!< current
   
   int i;
   imgpel PredPel[25];  // array of predictor pels
-  imgpel PredArray[16];   // array of final prediction values
+  imgpel PredArray[22];   // array of final prediction values
   imgpel **imgY = (pl) ? currSlice->dec_picture->imgUV[pl - 1] : currSlice->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
@@ -1285,13 +1232,7 @@ static inline int intra8x8_hor_up_pred_mbaff(Macroblock *currMB,    //!< current
   int jpos0 = joff    , jpos1 = joff + 1, jpos2 = joff + 2, jpos3 = joff + 3;
   int jpos4 = joff + 4, jpos5 = joff + 5, jpos6 = joff + 6, jpos7 = joff + 7;
 
-#if (IMGTYPE == 0)
-  int ipos3 = ioff + 3, ipos5 = ioff + 5, ipos7 = ioff + 7;
-#else
-  int ipos0 = ioff    , ipos1 = ioff + 1, ipos2 = ioff + 2, ipos3 = ioff + 3;
-  int ipos4 = ioff + 4, ipos5 = ioff + 5, ipos6 = ioff + 6, ipos7 = ioff + 7;
-#endif
-  imgpel *pred_pels, **mpr = currSlice->mb_pred[pl];
+  imgpel **mpr = currSlice->mb_pred[pl];
   int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   for (i=0;i<8;i++)
@@ -1327,37 +1268,28 @@ static inline int intra8x8_hor_up_pred_mbaff(Macroblock *currMB,    //!< current
   // form predictor pels
   if (block_available_up)
   {
-    pred_pels = &imgY[pix_b.pos_y][pix_b.pos_x];
-    P_A = pred_pels[0];
-    P_B = pred_pels[1];
-    P_C = pred_pels[2];
-    P_D = pred_pels[3];
-    P_E = pred_pels[4];
-    P_F = pred_pels[5];
-    P_G = pred_pels[6];
-    P_H = pred_pels[7];
+    memcpy(&PredPel[1], &imgY[pix_b.pos_y][pix_b.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[1], p_Vid->dc_pred_value_comp[pl], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = (imgpel) p_Vid->dc_pred_value_comp[pl];
+#endif
   }
 
   if (block_available_up_right)
   {
-    pred_pels = &imgY[pix_c.pos_y][pix_c.pos_x];
-    P_I = pred_pels[0];
-    P_J = pred_pels[1];
-    P_K = pred_pels[2];
-    P_L = pred_pels[3];
-    P_M = pred_pels[4];
-    P_N = pred_pels[5];
-    P_O = pred_pels[6];
-    P_P = pred_pels[7];
-
+    memcpy(&PredPel[9], &imgY[pix_c.pos_y][pix_c.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[9], PredPel[8], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = P_H;
+#endif
   }
 
   if (block_available_left)
@@ -1385,44 +1317,40 @@ static inline int intra8x8_hor_up_pred_mbaff(Macroblock *currMB,    //!< current
     P_Z = (imgpel) p_Vid->dc_pred_value_comp[pl];
   }
 
-  LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
+  LowPassForIntra8x8Pred(PredPel, block_available_up_left, block_available_up, block_available_left);
 
   PredArray[ 0] = (imgpel) ((P_Q + P_R + 1) >> 1);
-  PredArray[ 1] = (imgpel) ((P_S + P_Q + 2*P_R + 2) >> 2);
+  PredArray[ 1] = (imgpel) ((P_S + P_Q + (P_R << 1) + 2) >> 2);
   PredArray[ 2] = (imgpel) ((P_R + P_S + 1) >> 1);
-  PredArray[ 3] = (imgpel) ((P_T + P_R + 2*P_S + 2) >> 2);
+  PredArray[ 3] = (imgpel) ((P_T + P_R + (P_S << 1) + 2) >> 2);
   PredArray[ 4] = (imgpel) ((P_S + P_T + 1) >> 1);
-  PredArray[ 5] = (imgpel) ((P_U + P_S + 2*P_T + 2) >> 2);
+  PredArray[ 5] = (imgpel) ((P_U + P_S + (P_T << 1) + 2) >> 2);
   PredArray[ 6] = (imgpel) ((P_T + P_U + 1) >> 1);
-  PredArray[ 7] = (imgpel) ((P_V + P_T + 2*P_U + 2) >> 2);
+  PredArray[ 7] = (imgpel) ((P_V + P_T + (P_U << 1) + 2) >> 2);
   PredArray[ 8] = (imgpel) ((P_U + P_V + 1) >> 1);
-  PredArray[ 9] = (imgpel) ((P_W + P_U + 2*P_V + 2) >> 2);
+  PredArray[ 9] = (imgpel) ((P_W + P_U + (P_V << 1) + 2) >> 2);
   PredArray[10] = (imgpel) ((P_V + P_W + 1) >> 1);
-  PredArray[11] = (imgpel) ((P_X + P_V + 2*P_W + 2) >> 2);
+  PredArray[11] = (imgpel) ((P_X + P_V + (P_W << 1) + 2) >> 2);
   PredArray[12] = (imgpel) ((P_W + P_X + 1) >> 1);
-  PredArray[13] = (imgpel) ((P_W + 3*P_X + 2) >> 2);
+  PredArray[13] = (imgpel) ((P_W + P_X + (P_X << 1) + 2) >> 2);
   PredArray[14] = (imgpel) P_X;
+  PredArray[15] = (imgpel) P_X;
+  PredArray[16] = (imgpel) P_X;
+  PredArray[17] = (imgpel) P_X;
+  PredArray[18] = (imgpel) P_X;
+  PredArray[19] = (imgpel) P_X;
+  PredArray[20] = (imgpel) P_X;
+  PredArray[21] = (imgpel) P_X;
 
   memcpy(&mpr[jpos0][ioff], &PredArray[0], 8 * sizeof(imgpel));
   memcpy(&mpr[jpos1][ioff], &PredArray[2], 8 * sizeof(imgpel));
   memcpy(&mpr[jpos2][ioff], &PredArray[4], 8 * sizeof(imgpel));
   memcpy(&mpr[jpos3][ioff], &PredArray[6], 8 * sizeof(imgpel));
-  memcpy(&mpr[jpos4][ioff], &PredArray[8], 7 * sizeof(imgpel));
-  memcpy(&mpr[jpos5][ioff], &PredArray[10], 5 * sizeof(imgpel));
-  memcpy(&mpr[jpos6][ioff], &PredArray[12], 3 * sizeof(imgpel));
+  memcpy(&mpr[jpos4][ioff], &PredArray[8], 8 * sizeof(imgpel));
+  memcpy(&mpr[jpos5][ioff], &PredArray[10], 8 * sizeof(imgpel));
+  memcpy(&mpr[jpos6][ioff], &PredArray[12], 8 * sizeof(imgpel));
+  memcpy(&mpr[jpos7][ioff], &PredArray[14], 8 * sizeof(imgpel));
 
-#if (IMGTYPE == 0)
-  mpr[jpos4][ipos7] = PredArray[14];
-  memset(&mpr[jpos5][ipos5], PredArray[14], 3 * sizeof(imgpel));
-  memset(&mpr[jpos6][ipos3], PredArray[14], 5 * sizeof(imgpel));
-  memset(&mpr[jpos7][ioff ], PredArray[14], 8 * sizeof(imgpel));
-#else
-  mpr[jpos4][ipos7] = PredArray[14];
-  mpr[jpos5][ipos5] = mpr[jpos5][ipos6] = mpr[jpos5][ipos7] = PredArray[14];  
-  mpr[jpos6][ipos3] = mpr[jpos6][ipos4] = mpr[jpos6][ipos5] = mpr[jpos6][ipos6] = mpr[jpos6][ipos7] = PredArray[14];
-  mpr[jpos7][ipos0] = mpr[jpos7][ipos1] = mpr[jpos7][ipos2] = mpr[jpos7][ipos3] =
-    mpr[jpos7][ipos4] = mpr[jpos7][ipos5] = mpr[jpos7][ipos6] = mpr[jpos7][ipos7] = PredArray[14];
-#endif
   return DECODING_OK;
 }
 
@@ -1432,7 +1360,7 @@ static inline int intra8x8_hor_up_pred_mbaff(Macroblock *currMB,    //!< current
  *    makes and returns 8x8 horizontal down prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -1459,7 +1387,7 @@ static inline int intra8x8_hor_down_pred_mbaff(Macroblock *currMB,    //!< curre
   int jpos0 = joff    , jpos1 = joff + 1, jpos2 = joff + 2, jpos3 = joff + 3;
   int jpos4 = joff + 4, jpos5 = joff + 5, jpos6 = joff + 6, jpos7 = joff + 7;
   
-  imgpel *pred_pels, **mpr = currSlice->mb_pred[pl];
+  imgpel **mpr = currSlice->mb_pred[pl];
   int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   for (i=0;i<8;i++)
@@ -1495,37 +1423,28 @@ static inline int intra8x8_hor_down_pred_mbaff(Macroblock *currMB,    //!< curre
   // form predictor pels
   if (block_available_up)
   {
-    pred_pels = &imgY[pix_b.pos_y][pix_b.pos_x];
-    P_A = pred_pels[0];
-    P_B = pred_pels[1];
-    P_C = pred_pels[2];
-    P_D = pred_pels[3];
-    P_E = pred_pels[4];
-    P_F = pred_pels[5];
-    P_G = pred_pels[6];
-    P_H = pred_pels[7];
+    memcpy(&PredPel[1], &imgY[pix_b.pos_y][pix_b.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[1], p_Vid->dc_pred_value_comp[pl], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = (imgpel) p_Vid->dc_pred_value_comp[pl];
+#endif
   }
 
   if (block_available_up_right)
   {
-    pred_pels = &imgY[pix_c.pos_y][pix_c.pos_x];
-    P_I = pred_pels[0];
-    P_J = pred_pels[1];
-    P_K = pred_pels[2];
-    P_L = pred_pels[3];
-    P_M = pred_pels[4];
-    P_N = pred_pels[5];
-    P_O = pred_pels[6];
-    P_P = pred_pels[7];
-
+    memcpy(&PredPel[9], &imgY[pix_c.pos_y][pix_c.pos_x], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
   else
   {
+#if (IMGTYPE == 0)
+    memset(&PredPel[9], PredPel[8], BLOCK_SIZE_8x8 * sizeof(imgpel));
+#else
     P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = P_H;
+#endif
   }
 
   if (block_available_left)
@@ -1553,22 +1472,22 @@ static inline int intra8x8_hor_down_pred_mbaff(Macroblock *currMB,    //!< curre
     P_Z = (imgpel) p_Vid->dc_pred_value_comp[pl];
   }
 
-  LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
+  LowPassForIntra8x8Pred(PredPel, block_available_up_left, block_available_up, block_available_left);
 
   PredArray[ 0] = (imgpel) ((P_X + P_W + 1) >> 1);
-  PredArray[ 1] = (imgpel) ((P_V + P_X + 2*P_W + 2) >> 2);
+  PredArray[ 1] = (imgpel) ((P_V + P_X + (P_W << 1) + 2) >> 2);
   PredArray[ 2] = (imgpel) ((P_W + P_V + 1) >> 1);
-  PredArray[ 3] = (imgpel) ((P_U + P_W + 2*P_V + 2) >> 2);
+  PredArray[ 3] = (imgpel) ((P_U + P_W + (P_V << 1) + 2) >> 2);
   PredArray[ 4] = (imgpel) ((P_V + P_U + 1) >> 1);
-  PredArray[ 5] = (imgpel) ((P_T + P_V + 2*P_U + 2) >> 2);
+  PredArray[ 5] = (imgpel) ((P_T + P_V + (P_U << 1) + 2) >> 2);
   PredArray[ 6] = (imgpel) ((P_U + P_T + 1) >> 1);
-  PredArray[ 7] = (imgpel) ((P_S + P_U + 2*P_T + 2) >> 2);
+  PredArray[ 7] = (imgpel) ((P_S + P_U + (P_T << 1) + 2) >> 2);
   PredArray[ 8] = (imgpel) ((P_T + P_S + 1) >> 1);
-  PredArray[ 9] = (imgpel) ((P_R + P_T + 2*P_S + 2) >> 2);
+  PredArray[ 9] = (imgpel) ((P_R + P_T + (P_S << 1) + 2) >> 2);
   PredArray[10] = (imgpel) ((P_S + P_R + 1) >> 1);
-  PredArray[11] = (imgpel) ((P_Q + P_S + 2*P_R + 2) >> 2);
+  PredArray[11] = (imgpel) ((P_Q + P_S + (P_R << 1) + 2) >> 2);
   PredArray[12] = (imgpel) ((P_R + P_Q + 1) >> 1);
-  PredArray[13] = (imgpel) ((P_Z + P_R + 2*P_Q + 2) >> 2);
+  PredArray[13] = (imgpel) ((P_Z + P_R + (P_Q << 1) + 2) >> 2);
   PredArray[14] = (imgpel) ((P_Q + P_Z + 1) >> 1);
   PredArray[15] = (imgpel) ((P_Q + P_A + 2*P_Z + 2) >> 2);
   PredArray[16] = (imgpel) ((P_Z + P_B + 2*P_A + 2) >> 2);
@@ -1604,7 +1523,7 @@ static inline int intra8x8_hor_down_pred_mbaff(Macroblock *currMB,    //!< curre
  *
  ************************************************************************
  */
-int intrapred8x8_mbaff(Macroblock *currMB,    //!< Current Macroblock
+int intra_pred_8x8_mbaff(Macroblock *currMB,    //!< Current Macroblock
                    ColorPlane pl,         //!< Current color plane
                    int ioff,              //!< ioff
                    int joff)              //!< joff

@@ -32,8 +32,8 @@
 */
 void init_rdoq_slice(Slice *currSlice)
 {
-  //norm_factor_4x4 = (double) ((int64) 1 << (2 * DQ_BITS + 19)); // norm factor 4x4 is basically (1<<31)
-  //norm_factor_8x8 = (double) ((int64) 1 << (2 * Q_BITS_8 + 9)); // norm factor 8x8 is basically (1<<41)
+  //currSlice->norm_factor_4x4 = (double) ((int64) 1 << (2 * DQ_BITS + 19)); // norm factor 4x4 is basically (1<<31)
+  //currSlice->norm_factor_8x8 = (double) ((int64) 1 << (2 * Q_BITS_8 + 9)); // norm factor 8x8 is basically (1<<41)
   currSlice->norm_factor_4x4 = pow(2, (2 * DQ_BITS + 19));
   currSlice->norm_factor_8x8 = pow(2, (2 * Q_BITS_8 + 9));
 }
@@ -44,7 +44,7 @@ void init_rdoq_slice(Slice *currSlice)
 ****************************************************************************
 */
 int init_trellis_data_DC_cr_CAVLC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, 
-                         LevelQuantParams *q_params_4x4, const byte *p_scan, 
+                         LevelQuantParams *q_params, const byte *p_scan, 
                          levelDataStruct *dataLevel)
 {
   Slice *currSlice = currMB->p_Slice;
@@ -54,7 +54,7 @@ int init_trellis_data_DC_cr_CAVLC(Macroblock *currMB, int **tblock, int qp_per, 
   int q_bits = Q_BITS + qp_per + 1; 
   int q_offset = ( 1 << (q_bits - 1) );
   double err; 
-  int level, lowerInt, k;
+  int scaled_coeff, level, lowerInt, k;
   double estErr = (double) estErr4x4[qp_rem][0][0] / currSlice->norm_factor_4x4; // note that we could also use int64
 
   for (coeff_ctr = 0; coeff_ctr < end_coeff_ctr; coeff_ctr++)
@@ -64,21 +64,22 @@ int init_trellis_data_DC_cr_CAVLC(Macroblock *currMB, int **tblock, int qp_per, 
 
     m7 = &tblock[j][i];
     if (*m7 == 0)
-    {
-      dataLevel->levelDouble = 0;
+    {      
       dataLevel->level[0] = 0;
-      dataLevel->noLevels = 1;
-      err = 0.0;
+      dataLevel->levelDouble = 0;
       dataLevel->errLevel[0] = 0.0;
+      dataLevel->noLevels = 1;
+      err = 0.0;      
       dataLevel->pre_level = 0;
       dataLevel->sign = 0;
     }
     else
     {
-      dataLevel->levelDouble = iabs(*m7 * q_params_4x4->ScaleComp);
-      level = (dataLevel->levelDouble >> q_bits);
+      scaled_coeff = iabs (*m7) * q_params->ScaleComp;
+      dataLevel->levelDouble = scaled_coeff;
+      level = (scaled_coeff >> q_bits);
 
-      lowerInt=( ((int)dataLevel->levelDouble - (level << q_bits)) < q_offset )? 1 : 0;
+      lowerInt = ((scaled_coeff - (level << q_bits)) < q_offset )? 1 : 0;
       dataLevel->level[0] = 0;
       if (level == 0 && lowerInt == 1)
       {
@@ -103,14 +104,14 @@ int init_trellis_data_DC_cr_CAVLC(Macroblock *currMB, int **tblock, int qp_per, 
 
       for (k = 0; k < dataLevel->noLevels; k++)
       {
-        err = (double)(dataLevel->level[k] << q_bits) - (double)dataLevel->levelDouble;
+        err = (double)(dataLevel->level[k] << q_bits) - (double)scaled_coeff;
         dataLevel->errLevel[k] = (err * err * estErr); 
       }
 
       if(dataLevel->noLevels == 1)
         dataLevel->pre_level = 0;
       else
-        dataLevel->pre_level = (iabs (*m7) * q_params_4x4->ScaleComp + q_params_4x4->OffsetComp) >> q_bits;
+        dataLevel->pre_level = (iabs (*m7) * q_params->ScaleComp + q_params->OffsetComp) >> q_bits;
       dataLevel->sign = isign(*m7);
     }
     dataLevel++;
@@ -126,7 +127,7 @@ int init_trellis_data_DC_cr_CAVLC(Macroblock *currMB, int **tblock, int qp_per, 
 ****************************************************************************
 */
 int init_trellis_data_DC_cr_CABAC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, 
-                         LevelQuantParams *q_params_4x4, const byte *p_scan, 
+                         LevelQuantParams *q_params, const byte *p_scan, 
                          levelDataStruct *dataLevel, int* kStart, int* kStop)
 {
   Slice *currSlice = currMB->p_Slice;
@@ -137,7 +138,7 @@ int init_trellis_data_DC_cr_CABAC(Macroblock *currMB, int **tblock, int qp_per, 
   int q_bits = Q_BITS + qp_per + 1; 
   int q_offset = ( 1 << (q_bits - 1) );
   double err; 
-  int level, lowerInt, k;
+  int scaled_coeff, level, lowerInt, k;
   double estErr = (double) estErr4x4[qp_rem][0][0] / currSlice->norm_factor_4x4; // note that we could also use int64
 
   for (coeff_ctr = 0; coeff_ctr < end_coeff_ctr; coeff_ctr++)
@@ -147,32 +148,36 @@ int init_trellis_data_DC_cr_CABAC(Macroblock *currMB, int **tblock, int qp_per, 
 
     m7 = &tblock[j][i];
     if (*m7 == 0)
-    {
-      dataLevel->levelDouble = 0;
+    {      
       dataLevel->level[0] = 0;
-      dataLevel->noLevels = 1;
-      err = 0.0;
+      dataLevel->levelDouble = 0;
       dataLevel->errLevel[0] = 0.0;
+      dataLevel->noLevels = 1;
+      err = 0.0;      
     }
     else
     {
-      dataLevel->levelDouble = iabs(*m7 * q_params_4x4->ScaleComp);
-      level = (dataLevel->levelDouble >> q_bits);
+      scaled_coeff = iabs (*m7) * q_params->ScaleComp;
+      dataLevel->levelDouble = scaled_coeff;
+      level = (scaled_coeff >> q_bits);
 
-      lowerInt=( ((int)dataLevel->levelDouble - (level << q_bits)) < q_offset )? 1 : 0;
+      lowerInt=( (scaled_coeff - (level << q_bits)) < q_offset )? 1 : 0;
       dataLevel->level[0] = 0;
-      if (level == 0 && lowerInt == 1)
+      if (level == 0)
       {
-        dataLevel->noLevels = 1;
+        if (lowerInt == 1)
+        {
+          dataLevel->noLevels = 1;
+        }
+        else
+        {
+          dataLevel->level[1] = level + 1;
+          dataLevel->noLevels = 2;
+          *kStop = coeff_ctr;
+          noCoeff++;
+        }
       }
-      else if (level == 0 && lowerInt == 0)
-      {
-        dataLevel->level[1] = level + 1;
-        dataLevel->noLevels = 2;
-        *kStop = coeff_ctr;
-        noCoeff++;
-      }
-      else if (level > 0 && lowerInt == 1)
+      else if (lowerInt == 1)
       {
         dataLevel->level[1] = level;
         dataLevel->noLevels = 2;
@@ -191,7 +196,7 @@ int init_trellis_data_DC_cr_CABAC(Macroblock *currMB, int **tblock, int qp_per, 
 
       for (k = 0; k < dataLevel->noLevels; k++)
       {
-        err = (double)(dataLevel->level[k] << q_bits) - (double)dataLevel->levelDouble;
+        err = (double)(dataLevel->level[k] << q_bits) - (double)scaled_coeff;
         dataLevel->errLevel[k] = (err * err * estErr); 
       }
     }
@@ -233,9 +238,9 @@ void trellis_mp(Macroblock *currMB)
 #if RDOQ_BASE
   const int deltaQPTabB[] = {0,  1, -1,  2, 3, -2, 4,  5, -3};
   const int deltaQPTabP[] = {0, -1,  1, -2, 2, -3, 3, -4,  4};
+  int   qp_anchor;
 #endif
   int   deltaQPCnt; 
-  int   qp_anchor;
 
   masterQP = p_Vid->masterQP = p_Vid->qp;
   
@@ -250,6 +255,7 @@ void trellis_mp(Macroblock *currMB)
     estRunLevel_CABAC(currMB, LUMA_16DC);
     if (p_Inp->Transform8x8Mode)
       estRunLevel_CABAC(currMB, LUMA_8x8);
+
     if (p_Vid->yuv_format != YUV400)
     {
       estRunLevel_CABAC(currMB, CHROMA_AC);
@@ -262,7 +268,9 @@ void trellis_mp(Macroblock *currMB)
 
   qp_left   = (currMB->mb_left) ? currMB->mb_left->qp : p_Vid->masterQP;
   qp_up     = (currMB->mb_up)   ? currMB->mb_up->qp   : p_Vid->masterQP;
+#if RDOQ_BASE
   qp_anchor = (qp_left + qp_up + 1)>>1;
+#endif
 
   for (deltaQPCnt=0; deltaQPCnt < currSlice->RDOQ_QP_Num; deltaQPCnt++)
   {
@@ -377,8 +385,12 @@ void trellis_coding(Macroblock *currMB)
 void RDOQ_update_mode(Slice *currSlice, RD_PARAMS *enc_mb)
 {
   InputParameters *p_Inp = currSlice->p_Inp;
+#if (MVC_EXTENSION_ENABLE)
+  int *InterSearch = p_Inp->InterSearch[(currSlice->p_Vid->num_of_layers > 1) ? currSlice->view_id : 0][(currSlice->slice_type == B_SLICE)];
+#else
+  int *InterSearch = p_Inp->InterSearch[0][(currSlice->slice_type == B_SLICE)];
+#endif
 
-  int bslice = (currSlice->slice_type == B_SLICE);
   int mb_type = currSlice->rddata_trellis_best.mb_type;
   int i;
   for(i=0; i<MAXMODE; i++)
@@ -388,10 +400,10 @@ void RDOQ_update_mode(Slice *currSlice, RD_PARAMS *enc_mb)
 
     if(mb_type  == P8x8)
     {            
-      enc_mb->valid[4] = (short) (p_Inp->InterSearch[bslice][4]);
-      enc_mb->valid[5] = (short) (p_Inp->InterSearch[bslice][5] && !(p_Inp->Transform8x8Mode==2));
-      enc_mb->valid[6] = (short) (p_Inp->InterSearch[bslice][6] && !(p_Inp->Transform8x8Mode==2));
-      enc_mb->valid[7] = (short) (p_Inp->InterSearch[bslice][7] && !(p_Inp->Transform8x8Mode==2));
+      enc_mb->valid[4] = (short) (InterSearch[4]);
+      enc_mb->valid[5] = (short) (InterSearch[5] && !(p_Inp->Transform8x8Mode==2));
+      enc_mb->valid[6] = (short) (InterSearch[6] && !(p_Inp->Transform8x8Mode==2));
+      enc_mb->valid[7] = (short) (InterSearch[7] && !(p_Inp->Transform8x8Mode==2));
     }
 }
 

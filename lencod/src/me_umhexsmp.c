@@ -520,7 +520,7 @@ smpUMHEXSubPelBlockMotionSearch  (
   Slice *currSlice = currMB->p_Slice;
   UMHexSMPStruct *p_UMHexSMP = p_Vid->p_UMHexSMP;
   distblk   mcost;
-  MotionVector cand, iMinNow, currmv = {0, 0}, candWithPad;
+  MotionVector cand, iMinNow, currmv = {0, 0}, cand_pad;
 
   int   blocktype = mv_block->blocktype;
   int   list = mv_block->list;
@@ -548,9 +548,9 @@ smpUMHEXSubPelBlockMotionSearch  (
     cand.mv_x = mv->mv_x;
     cand.mv_y = mv->mv_y;
     mcost = mv_cost (p_Vid, lambda_factor, &cand, pred_mv);
-    candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
+    cand_pad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
 
-    mcost   += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); //&cand);
+    mcost   += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &cand_pad); //&cand);
     if (mcost < min_mcost)
     {
       min_mcost = mcost;
@@ -580,8 +580,8 @@ smpUMHEXSubPelBlockMotionSearch  (
     p_UMHexSMP->SearchState[cand.mv_y -mv->mv_y + dynamic_search_range][cand.mv_x - mv->mv_x + dynamic_search_range] = 1;
     mcost = mv_cost (p_Vid, lambda_factor, &cand, pred_mv);
 
-    candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
-    mcost   += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); //&cand);
+    cand_pad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
+    mcost   += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &cand_pad); //&cand);
 
     if (mcost < min_mcost)
     {
@@ -608,8 +608,8 @@ smpUMHEXSubPelBlockMotionSearch  (
         {
           p_UMHexSMP->SearchState[cand.mv_y - mv->mv_y + dynamic_search_range][cand.mv_x - mv->mv_x + dynamic_search_range] = 1;
           mcost = mv_cost (p_Vid, lambda_factor, &cand, pred_mv);
-          candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
-          mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); //&cand);
+          cand_pad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
+          mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &cand_pad); //&cand);
           if (mcost < min_mcost)
           {
             min_mcost    = mcost;

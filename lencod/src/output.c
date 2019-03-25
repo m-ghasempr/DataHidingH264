@@ -8,7 +8,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Karsten Suehring               <suehring@hhi.de>
+ *    - Karsten Suehring
  ************************************************************************
  */
 
@@ -48,9 +48,7 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
 
   int twidth  = size_x - crop_left - crop_right;
   int theight = size_y - crop_top - crop_bottom;
-
   int size = 0;
-
   unsigned char  ui8;
   uint16 tmp16, ui16;
   unsigned long  tmp32, ui32;
@@ -195,10 +193,10 @@ void write_out_picture(StorablePicture *p, FrameFormat *output, int p_out)
 
   if (p->frame_cropping_flag)
   {
-    crop_left   = SubWidthC[p->chroma_format_idc] * p->frame_cropping_rect_left_offset;
-    crop_right  = SubWidthC[p->chroma_format_idc] * p->frame_cropping_rect_right_offset;
-    crop_top    = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset;
-    crop_bottom = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
+    crop_left   = SubWidthC[p->chroma_format_idc] * p->frame_crop_left_offset;
+    crop_right  = SubWidthC[p->chroma_format_idc] * p->frame_crop_right_offset;
+    crop_top    = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) * p->frame_crop_top_offset;
+    crop_bottom = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) * p->frame_crop_bottom_offset;
   }
   else
   {
@@ -216,10 +214,10 @@ void write_out_picture(StorablePicture *p, FrameFormat *output, int p_out)
 
   if(rgb_output)
   {
-    crop_left   = p->frame_cropping_rect_left_offset;
-    crop_right  = p->frame_cropping_rect_right_offset;
-    crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset;
-    crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
+    crop_left   = p->frame_crop_left_offset;
+    crop_right  = p->frame_crop_right_offset;
+    crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_crop_top_offset;
+    crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_crop_bottom_offset;
 
     img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
     ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
@@ -230,10 +228,10 @@ void write_out_picture(StorablePicture *p, FrameFormat *output, int p_out)
 
     if (p->frame_cropping_flag)
     {
-      crop_left   = SubWidthC[p->chroma_format_idc] * p->frame_cropping_rect_left_offset;
-      crop_right  = SubWidthC[p->chroma_format_idc] * p->frame_cropping_rect_right_offset;
-      crop_top    = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset;
-      crop_bottom = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
+      crop_left   = SubWidthC[p->chroma_format_idc] * p->frame_crop_left_offset;
+      crop_right  = SubWidthC[p->chroma_format_idc] * p->frame_crop_right_offset;
+      crop_top    = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) * p->frame_crop_top_offset;
+      crop_bottom = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) * p->frame_crop_bottom_offset;
     }
     else
     {
@@ -250,10 +248,10 @@ void write_out_picture(StorablePicture *p, FrameFormat *output, int p_out)
 
   if (p->chroma_format_idc != YUV400)
   {
-    crop_left   = p->frame_cropping_rect_left_offset;
-    crop_right  = p->frame_cropping_rect_right_offset;
-    crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset;
-    crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
+    crop_left   = p->frame_crop_left_offset;
+    crop_right  = p->frame_crop_right_offset;
+    crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_crop_top_offset;
+    crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_crop_bottom_offset;
 
     img2buf (p->imgUV[0], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
     ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes);
@@ -398,10 +396,10 @@ void write_unpaired_field(VideoParameters *p_Vid, FrameStore* fs, FrameFormat *o
     fs ->top_field->frame_cropping_flag = fs->bottom_field->frame_cropping_flag;
     if(fs ->top_field->frame_cropping_flag)
     {
-      fs ->top_field->frame_cropping_rect_top_offset = fs->bottom_field->frame_cropping_rect_top_offset;
-      fs ->top_field->frame_cropping_rect_bottom_offset = fs->bottom_field->frame_cropping_rect_bottom_offset;
-      fs ->top_field->frame_cropping_rect_left_offset = fs->bottom_field->frame_cropping_rect_left_offset;
-      fs ->top_field->frame_cropping_rect_right_offset = fs->bottom_field->frame_cropping_rect_right_offset;
+      fs ->top_field->frame_crop_top_offset = fs->bottom_field->frame_crop_top_offset;
+      fs ->top_field->frame_crop_bottom_offset = fs->bottom_field->frame_crop_bottom_offset;
+      fs ->top_field->frame_crop_left_offset = fs->bottom_field->frame_crop_left_offset;
+      fs ->top_field->frame_crop_right_offset = fs->bottom_field->frame_crop_right_offset;
     }
     dpb_combine_field_yuv(p_Vid, fs);
     write_picture (fs->frame, output, p_out);

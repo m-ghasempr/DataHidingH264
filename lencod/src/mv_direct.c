@@ -71,7 +71,7 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
         {
           int iPosBlkY;
           if(currSlice->listX[LIST_1][0]->motion.mb_field[currMB->mbAddrX] )
-            iPosBlkY = (RSD(opic_block_y)>>2)*8+4*(currMB->mbAddrX&1);
+            iPosBlkY = (opic_block_y>>2)*8+4*(currMB->mbAddrX&1)+(opic_block_y&0x03);
           else
             iPosBlkY = RSD(opic_block_y)*2;
 
@@ -157,11 +157,11 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
           colocated.ref_pic[LIST_1] = list1[0]->frame->mv_info[iPosBlkY][RSD(opic_block_x)].ref_pic[LIST_1];
       }
 
-      refList = (colocated.ref_idx[LIST_0] == -1 ? LIST_1 : LIST_0);
+      refList = ((colocated.ref_idx[LIST_0] == -1 || (p_Vid->view_id && colocated.ref_idx[LIST_0]==list1[0]->ref_pic_na[0]))? LIST_1 : LIST_0);
       ref_idx = colocated.ref_idx[refList];
 
       // next P is intra mode
-      if (ref_idx == -1)
+      if (ref_idx == -1 || (p_Vid->view_id && ref_idx==list1[0]->ref_pic_na[refList]))
       {
         all_mvs[LIST_0][0][0][block_y][block_x] = zero_mv;
         all_mvs[LIST_1][0][0][block_y][block_x] = zero_mv;

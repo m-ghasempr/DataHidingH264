@@ -13,7 +13,7 @@ do
    sed -e "s///" < $f >$f.tmp && mv $f.tmp $f
 done
 
-for f in rtpdump/*.cpp rtpdump/*.h rtpdump/Makefile
+for f in rtpdump/*.cpp rtpdump/Makefile
 do
    sed -e "s///" < $f >$f.tmp && mv $f.tmp $f
 done

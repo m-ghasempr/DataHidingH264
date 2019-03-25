@@ -11,7 +11,7 @@
 *    18 Jan 2006
 *
 * \author
-*    Karsten Suehring   suehring@hhi.de
+*    Karsten Suehring
 **************************************************************************/
 
 #include "global.h"

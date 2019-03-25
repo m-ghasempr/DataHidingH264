@@ -2,7 +2,7 @@
  **************************************************************************
  *  \file errdo_dist_mhyp.h
  *  \brief  
- *	  Header file for distortion estimation with multiple decoder based method
+ *    Header file for distortion estimation with multiple decoder based method
  *
  *  \author 
  *    Main contributors (see contributors.h for copyright, address and affiliation details)

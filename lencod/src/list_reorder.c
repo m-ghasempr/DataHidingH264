@@ -9,7 +9,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *     - Athanasios Leontaris            <aleon@dolby.com>
- *     - Karsten Sühring                 <suehring@hhi.de> 
+ *     - Karsten Suehring
  *     - Alexis Michael Tourapis         <alexismt@ieee.org> 
  ***************************************************************************************
  */
@@ -35,9 +35,11 @@ void init_ref_pic_list_reordering(Slice* currSlice, int refReorderMethod)
   currSlice->ref_pic_list_reordering_flag[LIST_0] = 0;
   currSlice->ref_pic_list_reordering_flag[LIST_1] = 0;
 
-  currSlice->poc_ref_pic_reorder_frame = poc_ref_pic_reorder_frame_default;
-  if(refReorderMethod == 2) 
+  if (refReorderMethod == 2)
     currSlice->poc_ref_pic_reorder_frame = tlyr_ref_pic_reorder_frame_default;
+  else
+    currSlice->poc_ref_pic_reorder_frame = poc_ref_pic_reorder_frame_default;
+
 
 }
 
@@ -47,9 +49,11 @@ void init_ref_pic_list_reordering(Slice* currSlice, int refReorderMethod)
 *    decide reference picture reordering, Frame only
 ************************************************************************
 */
-void poc_ref_pic_reorder_frame_default(Slice *currSlice, StorablePicture **list, 
-                               unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no)
+void poc_ref_pic_reorder_frame_default(Slice *currSlice, unsigned num_ref_idx_lX_active, int list_no)
 {
+  StorablePicture **list = currSlice->listX[list_no];
+  int *reordering_of_pic_nums_idc = currSlice->reordering_of_pic_nums_idc[list_no]; 
+  int *abs_diff_pic_num_minus1 = currSlice->abs_diff_pic_num_minus1[list_no]; 
   VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
   StorablePicture *p_Enc_Pic = p_Vid->enc_picture;
@@ -225,8 +229,11 @@ void poc_ref_pic_reorder_frame_default(Slice *currSlice, StorablePicture **list,
 *    decide reference picture reordering, Field only
 ************************************************************************
 */
-void poc_ref_pic_reorder_field(Slice *currSlice, StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no)
+void poc_ref_pic_reorder_field(Slice *currSlice, unsigned num_ref_idx_lX_active, int list_no)
 {
+  StorablePicture **list = currSlice->listX[list_no];
+  int *reordering_of_pic_nums_idc = currSlice->reordering_of_pic_nums_idc[list_no]; 
+  int *abs_diff_pic_num_minus1 = currSlice->abs_diff_pic_num_minus1[list_no]; 
 
   VideoParameters *p_Vid = currSlice->p_Vid;
   //InputParameters *p_Inp = currSlice->p_Inp;
@@ -486,12 +493,16 @@ void poc_ref_pic_reorder_field(Slice *currSlice, StorablePicture **list, unsigne
 *    decide reference picture reordering based on temporal layer, Frame only
 ************************************************************************
 */
-void tlyr_ref_pic_reorder_frame_default(Slice *currSlice, StorablePicture **list, 
-                               unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no)
+void tlyr_ref_pic_reorder_frame_default(Slice *currSlice, unsigned num_ref_idx_lX_active, int list_no)
 {
+  StorablePicture **list = currSlice->listX[list_no];
+  int *reordering_of_pic_nums_idc = currSlice->reordering_of_pic_nums_idc[list_no]; 
+  int *abs_diff_pic_num_minus1 = currSlice->abs_diff_pic_num_minus1[list_no]; 
+
   VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
   StorablePicture *p_Enc_Pic = p_Vid->enc_picture;
+  struct decoded_picture_buffer *p_Dpb = currSlice->p_Dpb;
 
   unsigned int i,j,k;
 
@@ -532,25 +543,25 @@ void tlyr_ref_pic_reorder_frame_default(Slice *currSlice, StorablePicture **list
   // to a potential reordering list. For each one of these
   // references compute the poc distance compared to current
   // frame.
-  num_refs = p_Vid->p_Dpb->ref_frames_in_buffer;
-  for (i=0; i<p_Vid->p_Dpb->ref_frames_in_buffer; i++)
+  num_refs = p_Dpb->ref_frames_in_buffer;
+  for (i=0; i<p_Dpb->ref_frames_in_buffer; i++)
   {
     poc_diff[i] = 0xFFFF;
-    re_order[i] = p_Vid->p_Dpb->fs_ref[i]->frame->pic_num;
+    re_order[i] = p_Dpb->fs_ref[i]->frame->pic_num;
     
-    temporal_layer[i] = p_Vid->p_Dpb->fs_ref[i]->frame->temporal_layer; 
+    temporal_layer[i] = p_Dpb->fs_ref[i]->frame->temporal_layer; 
 
-    if (p_Vid->p_Dpb->fs_ref[i]->is_used==3 && (p_Vid->p_Dpb->fs_ref[i]->frame->used_for_reference)&&(!p_Vid->p_Dpb->fs_ref[i]->frame->is_long_term))
+    if (p_Dpb->fs_ref[i]->is_used==3 && (p_Dpb->fs_ref[i]->frame->used_for_reference)&&(!p_Dpb->fs_ref[i]->frame->is_long_term))
     {
-      abs_poc_dist = iabs(p_Vid->p_Dpb->fs_ref[i]->frame->poc - p_Enc_Pic->poc) ;
+      abs_poc_dist = iabs(p_Dpb->fs_ref[i]->frame->poc - p_Enc_Pic->poc) ;
       poc_diff[i] = abs_poc_dist;
       if (list_no == LIST_0)
       {
-        list_sign[i] = (p_Enc_Pic->poc < p_Vid->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
+        list_sign[i] = (p_Enc_Pic->poc < p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
       }
       else
       {
-        list_sign[i] = (p_Enc_Pic->poc > p_Vid->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
+        list_sign[i] = (p_Enc_Pic->poc > p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
       }
     }
   }
@@ -725,26 +736,17 @@ void reorder_lists( Slice *currSlice )
     if ( p_Inp->ReferenceReorder == 2 ) 
     { // temporal layer based
       if ( currSlice->structure == FRAME )
-        currSlice->poc_ref_pic_reorder_frame(currSlice, currSlice->listX[LIST_0], num_ref,
-        currSlice->reordering_of_pic_nums_idc[LIST_0],
-        currSlice->abs_diff_pic_num_minus1[LIST_0],
-        currSlice->long_term_pic_idx[LIST_0], LIST_0);
+        currSlice->poc_ref_pic_reorder_frame(currSlice, num_ref, LIST_0);
     }
     else
     {
-    if ( currSlice->structure == FRAME )
-      currSlice->poc_ref_pic_reorder_frame(currSlice, currSlice->listX[LIST_0], num_ref,
-      currSlice->reordering_of_pic_nums_idc[LIST_0],
-      currSlice->abs_diff_pic_num_minus1[LIST_0],
-      currSlice->long_term_pic_idx[LIST_0], LIST_0);
-    else
-    {
-      poc_ref_pic_reorder_field(currSlice, currSlice->listX[LIST_0], num_ref,
-        currSlice->reordering_of_pic_nums_idc[LIST_0],
-        currSlice->abs_diff_pic_num_minus1[LIST_0],
-        currSlice->long_term_pic_idx[LIST_0], LIST_0);
+      if ( currSlice->structure == FRAME )
+        currSlice->poc_ref_pic_reorder_frame(currSlice, num_ref, LIST_0);
+      else
+      {
+        poc_ref_pic_reorder_field(currSlice, num_ref, LIST_0);
+      }
     }
-    } 
 
     currSlice->num_ref_idx_active[LIST_0] = currSlice->listXsize[0]; 
     //reference picture reordering
@@ -789,10 +791,7 @@ void wp_mcprec_reorder_lists( Slice *currSlice )
   // LIST_0
   num_ref = currSlice->num_ref_idx_active[LIST_0];
 
-  currSlice->poc_ref_pic_reorder_frame(currSlice, currSlice->listX[LIST_0], num_ref,
-    currSlice->reordering_of_pic_nums_idc[LIST_0],
-    currSlice->abs_diff_pic_num_minus1[LIST_0],
-    currSlice->long_term_pic_idx[LIST_0], LIST_0);
+  currSlice->poc_ref_pic_reorder_frame(currSlice, num_ref, LIST_0);
   // reference picture reordering
   reorder_ref_pic_list ( currSlice, LIST_0);
 
@@ -801,12 +800,141 @@ void wp_mcprec_reorder_lists( Slice *currSlice )
     // LIST_1
     num_ref = currSlice->num_ref_idx_active[LIST_1];
 
-    currSlice->poc_ref_pic_reorder_frame(currSlice, currSlice->listX[LIST_1], num_ref,
-      currSlice->reordering_of_pic_nums_idc[LIST_1],
-      currSlice->abs_diff_pic_num_minus1[LIST_1],
-      currSlice->long_term_pic_idx[LIST_1], LIST_1);
+    currSlice->poc_ref_pic_reorder_frame(currSlice, num_ref, LIST_1);
     // reference picture reordering
     reorder_ref_pic_list ( currSlice, LIST_1);
   }
 }
 
+void set_default_ref_pic_lists(Slice *currSlice)
+{
+  int list, ref;
+
+  for(list = LIST_0; list <= (currSlice->slice_type == P_SLICE ? LIST_0:LIST_1); list++)
+  {
+    for(ref = 0; ref < currSlice->listXsize[list]; ref++)
+    {
+      currSlice->default_pic_num[list][ref] = currSlice->listX[list][ref]->pic_num;
+#if MVC_EXTENSION_ENABLE
+      currSlice->default_view_id[list][ref] = currSlice->listX[list][ref]->view_id;
+#endif
+    }
+  }
+}
+#if MVC_EXTENSION_ENABLE
+void reorder_against_default_ref_pic_lists(Slice *currSlice, int cur_list)
+{
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  int *reordering_of_pic_nums_idc = currSlice->reordering_of_pic_nums_idc[cur_list];
+  int *abs_diff_pic_num_minus1 = currSlice->abs_diff_pic_num_minus1[cur_list];
+  int *abs_diff_view_idx_minus1 = currSlice->abs_diff_view_idx_minus1[cur_list];
+  int i;
+
+  int maxPicNum, currPicNum, picNumLXNoWrap, picNumLXPred;
+  int picViewIdxLX;
+  int maxViewIdx =0;
+  int currViewIdx = -1;
+  int picViewIdxLXPred=-1;
+  
+  int diff;
+
+  if (p_Vid->structure==FRAME)
+  {
+    maxPicNum  = p_Vid->max_frame_num;
+    currPicNum = p_Vid->frame_num;
+  }
+  else
+  {
+    maxPicNum  = 2*p_Vid->max_frame_num;
+    currPicNum = 2*p_Vid->frame_num+1;
+  }
+
+  currViewIdx = p_Vid->view_id;
+  maxViewIdx = 1;
+  picViewIdxLXPred=-1;
+
+  picNumLXPred = currPicNum/2;
+
+  currSlice->ref_pic_list_reordering_flag[cur_list] = 0;
+  for (i = 0; i < currSlice->listXsize[cur_list]; i++)
+  {
+    if(currSlice->default_view_id[cur_list][i] != currSlice->listX[cur_list][i]->view_id || 
+       currSlice->default_pic_num[cur_list][i] != currSlice->listX[cur_list][i]->pic_num)
+    {
+      currSlice->ref_pic_list_reordering_flag[cur_list] = 1;
+      break;
+    }
+  }
+  if(!currSlice->ref_pic_list_reordering_flag[cur_list])
+    return;
+
+  // initialization
+  for (i = 0; i < currSlice->listXsize[cur_list]+1; i++)
+    reordering_of_pic_nums_idc[i] = 3;
+
+  for (i=0; i < currSlice->listXsize[cur_list]; i++)
+  {
+    StorablePicture *ref_pic = currSlice->listX[cur_list][i];
+    // inter_view ref reordering
+    if(ref_pic->view_id != currViewIdx)
+    {
+      diff = 1;
+      
+      reordering_of_pic_nums_idc[i] = 5;
+      abs_diff_view_idx_minus1[i] = iabs(diff)-1;
+    }
+    // temporal ref reordering
+    else
+    {
+      diff = (ref_pic->pic_num-ref_pic->view_id)/2-picNumLXPred;
+      if (diff <= 0)
+      {
+        reordering_of_pic_nums_idc[i] = 0;
+        abs_diff_pic_num_minus1[i] = iabs(diff)-1;
+        if (abs_diff_pic_num_minus1[i] < 0)
+          abs_diff_pic_num_minus1[i] = maxPicNum-1;
+      }
+      else
+      {
+        reordering_of_pic_nums_idc[i] = 1;
+        abs_diff_pic_num_minus1[i] = iabs(diff)-1;
+      }
+    }
+
+    if (reordering_of_pic_nums_idc[i] == 0 || reordering_of_pic_nums_idc[i] == 1)
+    {
+      if (reordering_of_pic_nums_idc[i] == 0)
+      {
+        if( picNumLXPred - ( abs_diff_pic_num_minus1[i] + 1 ) < 0 )
+          picNumLXNoWrap = picNumLXPred - ( abs_diff_pic_num_minus1[i] + 1 ) + maxPicNum;
+        else
+          picNumLXNoWrap = picNumLXPred - ( abs_diff_pic_num_minus1[i] + 1 );
+      }
+      else // (remapping_of_pic_nums_idc[i] == 1)
+      {
+        if( picNumLXPred + ( abs_diff_pic_num_minus1[i] + 1 )  >=  maxPicNum )
+          picNumLXNoWrap = picNumLXPred + ( abs_diff_pic_num_minus1[i] + 1 ) - maxPicNum;
+        else
+          picNumLXNoWrap = picNumLXPred + ( abs_diff_pic_num_minus1[i] + 1 );
+      }
+      picNumLXPred = picNumLXNoWrap;
+    }
+    else if (reordering_of_pic_nums_idc[i] == 4 || reordering_of_pic_nums_idc[i] == 5)
+    {
+      if(reordering_of_pic_nums_idc[i] == 4) 
+      {
+        picViewIdxLX = picViewIdxLXPred - (abs_diff_view_idx_minus1[i] + 1);
+        if( picViewIdxLX <0)
+          picViewIdxLX += maxViewIdx;
+      }
+      else //if(reordering_of_pic_nums_idc[i] == 5)
+      {
+        picViewIdxLX = picViewIdxLXPred + (abs_diff_view_idx_minus1[i] + 1);
+        if( picViewIdxLX >= maxViewIdx)
+          picViewIdxLX -= maxViewIdx;
+      }
+      picViewIdxLXPred = picViewIdxLX;
+    }
+  }
+}
+#endif

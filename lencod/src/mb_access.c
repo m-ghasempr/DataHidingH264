@@ -8,7 +8,7 @@
  *
  *  \author
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
- *      - Karsten Sühring          <suehring@hhi.de>
+ *      - Karsten Suehring
  *************************************************************************************
  */
 
@@ -49,6 +49,7 @@ void CheckAvailabilityOfNeighbors(Macroblock *currMB)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   const int mb_nr = currMB->mbAddrX;
+  BlockPos *PicPos = p_Vid->PicPos;
 
   // mark all neighbors as unavailable
   currMB->mb_up   = NULL;
@@ -62,10 +63,10 @@ void CheckAvailabilityOfNeighbors(Macroblock *currMB)
     currMB->mbAddrC = 2 * (cur_mb_pair - p_Vid->PicWidthInMbs + 1);
     currMB->mbAddrD = 2 * (cur_mb_pair - p_Vid->PicWidthInMbs - 1);
 
-    currMB->mbAvailA = (byte) (mb_is_available(currMB->mbAddrA, currMB) && ((PicPos[cur_mb_pair    ][0])!=0));
+    currMB->mbAvailA = (byte) (mb_is_available(currMB->mbAddrA, currMB) && ((PicPos[cur_mb_pair    ].x)!=0));
     currMB->mbAvailB = (byte) (mb_is_available(currMB->mbAddrB, currMB));
-    currMB->mbAvailC = (byte) (mb_is_available(currMB->mbAddrC, currMB) && ((PicPos[cur_mb_pair + 1][0])!=0));
-    currMB->mbAvailD = (byte) (mb_is_available(currMB->mbAddrD, currMB) && ((PicPos[cur_mb_pair    ][0])!=0));
+    currMB->mbAvailC = (byte) (mb_is_available(currMB->mbAddrC, currMB) && ((PicPos[cur_mb_pair + 1].x)!=0));
+    currMB->mbAvailD = (byte) (mb_is_available(currMB->mbAddrD, currMB) && ((PicPos[cur_mb_pair    ].x)!=0));
   }
   else
   {
@@ -74,10 +75,10 @@ void CheckAvailabilityOfNeighbors(Macroblock *currMB)
     currMB->mbAddrC = mb_nr - p_Vid->PicWidthInMbs + 1;
     currMB->mbAddrD = mb_nr - p_Vid->PicWidthInMbs - 1;
 
-    currMB->mbAvailA = (byte) (mb_is_available(currMB->mbAddrA, currMB) && ((PicPos[mb_nr    ][0])!=0));
+    currMB->mbAvailA = (byte) (mb_is_available(currMB->mbAddrA, currMB) && ((PicPos[mb_nr    ].x)!=0));
     currMB->mbAvailB = (byte) (mb_is_available(currMB->mbAddrB, currMB));
-    currMB->mbAvailC = (byte) (mb_is_available(currMB->mbAddrC, currMB) && ((PicPos[mb_nr + 1][0])!=0));
-    currMB->mbAvailD = (byte) (mb_is_available(currMB->mbAddrD, currMB) && ((PicPos[mb_nr    ][0])!=0));
+    currMB->mbAvailC = (byte) (mb_is_available(currMB->mbAddrC, currMB) && ((PicPos[mb_nr + 1].x)!=0));
+    currMB->mbAvailD = (byte) (mb_is_available(currMB->mbAddrD, currMB) && ((PicPos[mb_nr    ].x)!=0));
   }
 
   if (currMB->mbAvailA) currMB->mb_left = &(p_Vid->mb_data[currMB->mbAddrA]);
@@ -91,10 +92,10 @@ void CheckAvailabilityOfNeighbors(Macroblock *currMB)
  *    returns the x and y macroblock coordinates for a given MbAddress
  ************************************************************************
  */
-void get_mb_block_pos_normal (int mb_addr, short *x, short *y)
+void get_mb_block_pos_normal (BlockPos *PicPos, int mb_addr, short *x, short *y)
 {
-  *x = (short) PicPos[ mb_addr ][0];
-  *y = (short) PicPos[ mb_addr ][1];
+  *x = (short) PicPos[ mb_addr ].x;
+  *y = (short) PicPos[ mb_addr ].y;
 }
 
 /*!
@@ -104,10 +105,10 @@ void get_mb_block_pos_normal (int mb_addr, short *x, short *y)
  *    for mbaff type slices
  ************************************************************************
  */
-void get_mb_block_pos_mbaff (int mb_addr, short *x, short *y)
+void get_mb_block_pos_mbaff (BlockPos *PicPos, int mb_addr, short *x, short *y)
 {
-  *x = (short)  PicPos[mb_addr>>1][0];
-  *y = (short) ((PicPos[mb_addr>>1][1] << 1) + (mb_addr & 0x01));
+  *x = (short)  PicPos[mb_addr>>1].x;
+  *y = (short) ((PicPos[mb_addr>>1].y << 1) + (mb_addr & 0x01));
 }
 
 /*!
@@ -118,7 +119,7 @@ void get_mb_block_pos_mbaff (int mb_addr, short *x, short *y)
  */
 void get_mb_pos (VideoParameters *p_Vid, int mb_addr, int mb_size[2], short *x, short *y)
 {
-  p_Vid->get_mb_block_pos(mb_addr, x, y);
+  p_Vid->get_mb_block_pos(p_Vid->PicPos, mb_addr, x, y);
 
   (*x) = (short) ((*x) * mb_size[0]);
   (*y) = (short) ((*y) * mb_size[1]);
@@ -143,6 +144,7 @@ void get_mb_pos (VideoParameters *p_Vid, int mb_addr, int mb_size[2], short *x, 
  */
 void getNonAffNeighbour(Macroblock *currMB, int xN, int yN, int mb_size[2], PixelPos *pix)
 {
+  BlockPos *PicPos = currMB->p_Vid->PicPos;
   if (xN < 0)
   {
     if (yN < 0)
@@ -191,8 +193,8 @@ void getNonAffNeighbour(Macroblock *currMB, int xN, int yN, int mb_size[2], Pixe
   {
     pix->x     = (short) (xN & (mb_size[0] - 1));
     pix->y     = (short) (yN & (mb_size[1] - 1)); 
-    pix->pos_x = (short) (pix->x + PicPos[ pix->mb_addr ][0] * mb_size[0]);    
-    pix->pos_y = (short) (pix->y + PicPos[ pix->mb_addr ][1] * mb_size[1]);
+    pix->pos_x = (short) (pix->x + PicPos[ pix->mb_addr ].x * mb_size[0]);    
+    pix->pos_y = (short) (pix->y + PicPos[ pix->mb_addr ].y * mb_size[1]);
   }
 }
 

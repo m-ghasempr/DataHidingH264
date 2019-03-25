@@ -320,7 +320,7 @@ int get_colocated_info_8x8(Macroblock *currMB, StorablePicture *list1, int i, in
       int jdiv = (jj>>1);
       int moving;
       PicMotionParams *fs = &list1->mv_info[jj][ii];
-
+      
       if(currSlice->field_pic_flag && currSlice->structure!=list1->structure && list1->coded_frame)
       {
          if(currSlice->structure == TOP_FIELD)
@@ -540,8 +540,6 @@ static void update_direct_mv_info_spatial_4x4(Macroblock *currMB)
     Slice *currSlice = currMB->p_Slice;
     int i,j,k;
 
-    int j6;
-
     int j4, i4;
     StorablePicture *dec_picture = p_Vid->dec_picture;
 
@@ -561,7 +559,6 @@ static void update_direct_mv_info_spatial_4x4(Macroblock *currMB)
         i = 2 * (k & 0x01);
         for(j = 2 * (k >> 1); j < 2 * (k >> 1)+2;++j)
         {
-          j6 = currMB->block_y_aff + j;
           j4 = currMB->block_y     + j;
 
           for(i4 = currMB->block_x + i; i4 < currMB->block_x + i + 2; ++i4)
@@ -597,6 +594,7 @@ static void update_direct_mv_info_spatial_4x4(Macroblock *currMB)
               {
                 if  (is_not_moving)
                 {
+                  mv_info->ref_pic[LIST_0] = NULL;
                   mv_info->ref_pic[LIST_1] = list1[0];
                   mv_info->mv[LIST_0] = zero_mv;
                   mv_info->mv[LIST_1] = zero_mv;
@@ -605,6 +603,7 @@ static void update_direct_mv_info_spatial_4x4(Macroblock *currMB)
                 }
                 else
                 {
+                  mv_info->ref_pic[LIST_0] = NULL;
                   mv_info->ref_pic[LIST_1] = list1[(short) l1_rFrame];
                   mv_info->mv[LIST_0] = zero_mv;            
                   mv_info->mv[LIST_1] = pmvl1;

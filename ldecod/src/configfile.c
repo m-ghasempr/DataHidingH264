@@ -148,17 +148,18 @@ void ParseCommand(InputParameters *p_Inp, int ac, char *av[])
     }
   }
 
-  memset (&cfgparams, 0, sizeof (InputParameters));
+  memcpy (&cfgparams, p_Inp, sizeof (InputParameters));
   //Set default parameters.
   printf ("Setting Default Parameters...\n");
   InitParams(Map);
 
+  *p_Inp = cfgparams;
   // Process default config file
   CLcount = 1;
 
   if (ac>=3)
   {
-    if (0 == strncmp (av[1], "-d", 2))
+    if ((strlen(av[1])==2) && (0 == strncmp (av[1], "-d", 2)))
     {
       if(0 == strncmp (av[2], "null", 4))
         filename=NULL;
@@ -285,7 +286,7 @@ void ParseCommand(InputParameters *p_Inp, int ac, char *av[])
     }
   }
   printf ("\n");
-  
+
   PatchInp(p_Inp);
   cfgparams = *p_Inp;
   p_Inp->enable_32_pulldown = 0;
@@ -304,8 +305,8 @@ static void PatchInp (InputParameters *p_Inp)
 {
   //int i;
   //int storedBplus1;
-
   TestParams(Map, NULL);
-  
+  if(p_Inp->export_views == 1)
+    p_Inp->dpb_plus[1] = imax(1, p_Inp->dpb_plus[1]);
 }
 

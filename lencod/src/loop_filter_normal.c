@@ -27,9 +27,9 @@
 
 static void GetStrengthVer      (byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int mvlimit);
 static void GetStrengthHor      (byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int mvlimit);
-static void EdgeLoopLumaVer     (ColorPlane pl, imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int width);
+static void EdgeLoopLumaVer     (ColorPlane pl, imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge);
 static void EdgeLoopLumaHor     (ColorPlane pl, imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int width);
-static void EdgeLoopChromaVer   (imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int width, int uv);
+static void EdgeLoopChromaVer   (imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int uv);
 static void EdgeLoopChromaHor   (imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int width, int uv);
 
 
@@ -81,7 +81,7 @@ static void GetStrengthVer(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int ed
 
         short    mb_x, mb_y;
 
-        get_mb_block_pos_normal (MbQ->mbAddrX, &mb_x, &mb_y);
+        get_mb_block_pos_normal (p_Vid->PicPos, MbQ->mbAddrX, &mb_x, &mb_y);
         mb_x <<= 2;
         mb_y <<= 2;
 
@@ -206,7 +206,7 @@ static void GetStrengthHor(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int ed
 
         short    mb_x, mb_y;
 
-        get_mb_block_pos_normal (MbQ->mbAddrX, &mb_x, &mb_y);
+        get_mb_block_pos_normal (p_Vid->PicPos, MbQ->mbAddrX, &mb_x, &mb_y);
         mb_x <<= 2;
         mb_y <<= 2;
         yQ ++;
@@ -292,14 +292,13 @@ static void GetStrengthHor(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int ed
 }
 
 
-
 /*!
  *****************************************************************************************
  * \brief
  *    Filters 16 pel block edge of Frame or Field coded MBs 
  *****************************************************************************************
  */
-static void EdgeLoopLumaVer(ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width)
+static void EdgeLoopLumaVer(ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge)
 {
   VideoParameters *p_Vid = MbQ->p_Vid;
 
@@ -343,7 +342,7 @@ static void EdgeLoopLumaVer(ColorPlane pl, imgpel** Img, byte Strength[16], Macr
             imgpel  R0 = *SrcPtrQ;
 
             if( iabs( R0 - L0 ) < Alpha )
-            {          
+            {
               imgpel  R1 = *(SrcPtrQ + 1);
               imgpel  L1 = *(SrcPtrP - 1);
               if ((iabs( R0 - R1) < Beta)  && (iabs(L0 - L1) < Beta))
@@ -379,11 +378,11 @@ static void EdgeLoopLumaVer(ColorPlane pl, imgpel** Img, byte Strength[16], Macr
                   *SrcPtrQ = (imgpel) (((R1 << 1) + R0 + L1 + 2) >> 2);
                 }
               }
-            }              
+            }
           }
         }
         else if( *Strength != 0) // normal filtering
-        {              
+        {
           int C0  = ClipTab[ *Strength ] * bitdepth_scale;
           int i;
           imgpel *SrcPtrP, *SrcPtrQ;
@@ -432,7 +431,7 @@ static void EdgeLoopLumaVer(ColorPlane pl, imgpel** Img, byte Strength[16], Macr
         Strength += 4;
       }
     }
-  }  
+  }
 }
 
 
@@ -463,7 +462,6 @@ static void EdgeLoopLumaHor(ColorPlane pl, imgpel** Img, byte Strength[16], Macr
 
     int Alpha  = ALPHA_TABLE[indexA] * bitdepth_scale;
     int Beta   = BETA_TABLE [indexB] * bitdepth_scale;
-
     if ((Alpha | Beta )!= 0)
     {
       const byte *ClipTab = CLIP_TAB[indexA];
@@ -565,7 +563,7 @@ static void EdgeLoopLumaHor(ColorPlane pl, imgpel** Img, byte Strength[16], Macr
                   *SrcPtrQ = (imgpel) iClip1(max_imgpel_value, *SrcPtrQ - dif);
                 }
 
-                if( aq  )
+                if( aq )
                   *SrcPtrQ1 += iClip3( -C0,  C0, (R2 + RL0 - (*SrcPtrQ1<<1)) >> 1 );          
               }
             }
@@ -583,14 +581,13 @@ static void EdgeLoopLumaHor(ColorPlane pl, imgpel** Img, byte Strength[16], Macr
 }
 
 
-
 /*!
  *****************************************************************************************
  * \brief
  *    Filters chroma block edge for Frame or Field coded pictures
  *****************************************************************************************
  */
-static void EdgeLoopChromaVer(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width, int uv)
+static void EdgeLoopChromaVer(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int uv)
 {
   VideoParameters *p_Vid = MbQ->p_Vid;  
 
@@ -617,7 +614,6 @@ static void EdgeLoopChromaVer(imgpel** Img, byte Strength[16], Macroblock *MbQ, 
 
     int Alpha   = ALPHA_TABLE[indexA] * bitdepth_scale;
     int Beta    = BETA_TABLE [indexB] * bitdepth_scale;
-
     if ((Alpha | Beta) != 0)
     {
       const int PelNum = pelnum_cr[0][p_Vid->yuv_format];
@@ -657,17 +653,16 @@ static void EdgeLoopChromaVer(imgpel** Img, byte Strength[16], Macroblock *MbQ, 
 
                   if (dif != 0)
                   {
-                    *SrcPtrP = (imgpel) iClip1 ( max_imgpel_value, *SrcPtrP + dif) ;
-                    *SrcPtrQ = (imgpel) iClip1 ( max_imgpel_value, *SrcPtrQ - dif) ;
+                    *SrcPtrP = (imgpel) iClip1 ( max_imgpel_value, *SrcPtrP + dif );
+                    *SrcPtrQ = (imgpel) iClip1 ( max_imgpel_value, *SrcPtrQ - dif );
                   }
                 }
               }
             }
           }
         }
-
         cur_img++;
-      }
+      }     
     }
   }
 }
@@ -706,7 +701,6 @@ static void EdgeLoopChromaHor(imgpel** Img, byte Strength[16], Macroblock *MbQ, 
 
     int Alpha   = ALPHA_TABLE[indexA] * bitdepth_scale;
     int Beta    = BETA_TABLE [indexB] * bitdepth_scale;
-
     if ((Alpha | Beta) != 0)
     {
       const int PelNum = pelnum_cr[1][p_Vid->yuv_format];
@@ -747,8 +741,8 @@ static void EdgeLoopChromaHor(imgpel** Img, byte Strength[16], Macroblock *MbQ, 
 
                   if (dif != 0)
                   {
-                    *SrcPtrP = (imgpel) iClip1 ( max_imgpel_value, *SrcPtrP + dif) ;
-                    *SrcPtrQ = (imgpel) iClip1 ( max_imgpel_value, *SrcPtrQ - dif) ;
+                    *SrcPtrP = (imgpel) iClip1 ( max_imgpel_value, *SrcPtrP + dif );
+                    *SrcPtrQ = (imgpel) iClip1 ( max_imgpel_value, *SrcPtrQ - dif );
                   }
                 }
               }

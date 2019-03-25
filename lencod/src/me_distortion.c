@@ -116,7 +116,6 @@ distblk distortion8x8SAD(short* diff, distblk min_dist)
   return (dist_scale((distblk) distortion));
 }
 
-
 /*!
 ***********************************************************************
 * \brief
@@ -133,6 +132,7 @@ distblk distortion8x8SSE(short* diff, distblk min_dist)
   }
   return (dist_scale(distortion));
 }
+
 /*!
 ***********************************************************************
 * \brief
@@ -1549,3 +1549,17 @@ distblk computeBiPredSSE2(StorablePicture *ref1,
 }
 
 
+void calcDifference(imgpel **origImg, int ox, int oy, imgpel **predImg, int px, int py, int width, int height, short *diff)
+{
+  int i, j;
+  imgpel *orig, *pred;
+  for (j = 0; j < height; j++)
+  {
+    orig = origImg[oy+j]+ox;
+    pred = predImg[py+j]+px;
+    for (i = 0; i < width; i++)
+    {
+      *diff++ = *orig++ - *pred++;
+    }
+  }
+}

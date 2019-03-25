@@ -170,13 +170,13 @@ int WriteRTPPacket (RTPpacket_t *p, FILE *f)
  *****************************************************************************/
 
 
-int WriteRTPNALU (VideoParameters *p_Vid, NALU_t *n)
+int WriteRTPNALU (VideoParameters *p_Vid, NALU_t *n, FILE **f_rtp)
 {
   RTPpacket_t *p;
   
   byte first_byte;
 
-  assert (p_Vid->f_rtp != NULL);
+  assert ((*f_rtp) != NULL);
   assert (n != NULL);
   assert (n->len < 65000);
 
@@ -218,7 +218,7 @@ int WriteRTPNALU (VideoParameters *p_Vid, NALU_t *n)
     printf ("Cannot compose RTP packet, exit\n");
     exit (-1);
   }
-  if (WriteRTPPacket (p, p_Vid->f_rtp) < 0)
+  if (WriteRTPPacket (p, *f_rtp) < 0)
   {
     printf ("Cannot write %d bytes of RTP packet to outfile, exit\n", p->packlen);
     exit (-1);
@@ -296,9 +296,9 @@ void RTPUpdateTimestamp (VideoParameters *p_Vid, int tr)
  ********************************************************************************************
 */
 
-void OpenRTPFile (VideoParameters *p_Vid, char *Filename)
+void OpenRTPFile (char *Filename, FILE **f_rtp)
 {
-  if ((p_Vid->f_rtp = fopen (Filename, "wb")) == NULL)
+  if (((*f_rtp) = fopen (Filename, "wb")) == NULL)
   {
     printf ("Fatal: cannot open bitstream file '%s', exit (-1)\n", Filename);
     exit (-1);
@@ -317,8 +317,8 @@ void OpenRTPFile (VideoParameters *p_Vid, char *Filename)
  ********************************************************************************************
 */
 
-void CloseRTPFile (VideoParameters *p_Vid)
+void CloseRTPFile (FILE *f_rtp)
 {
-  fclose(p_Vid->f_rtp);
+  fclose(f_rtp);
 }
 

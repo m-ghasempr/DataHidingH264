@@ -63,7 +63,7 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
   if(nal_unit_type==NALU_TYPE_PREFIX || nal_unit_type==NALU_TYPE_SLC_EXT)
   {
     nalu->svc_extension_flag = 0;
-    nalu->non_idr_flag       = (nal_reference_idc==NALU_PRIORITY_HIGHEST) ? 0:1;
+    //nalu->non_idr_flag       = (nal_reference_idc==NALU_PRIORITY_HIGHEST) ? 0:1;
     nalu->reserved_one_bit   = 1;
 
   }
@@ -110,7 +110,7 @@ int Write_AUD_NALU( VideoParameters *p_Vid )
   // write RBSP into NALU
   NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_AUD, NALU_PRIORITY_DISPOSABLE, 1 );
   // write NALU into bitstream
-  len     = p_Vid->WriteNALU( p_Vid, nalu );
+  len     = p_Vid->WriteNALU( p_Vid, nalu, p_Vid->f_out );
 
   FreeNALU( nalu );
 
@@ -151,7 +151,7 @@ int Write_Filler_Data_NALU( VideoParameters *p_Vid, int num_bytes )
   // write RBSP into NALU
   NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_FILL, NALU_PRIORITY_DISPOSABLE, 1 );
   // write NALU into bitstream
-  len     = p_Vid->WriteNALU( p_Vid, nalu );
+  len     = p_Vid->WriteNALU( p_Vid, nalu, p_Vid->f_out );
   p_Vid->bytes_in_picture += (nalu->len + 1);
 
   FreeNALU( nalu );

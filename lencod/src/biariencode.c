@@ -11,7 +11,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Detlev Marpe                    <marpe@hhi.de>
+ *    - Detlev Marpe
  *    - Gabi Blaettermann
  *    - Gunnar Marten
  *************************************************************************************
@@ -58,13 +58,7 @@ EncodingEnvironmentPtr arienco_create_encoding_environment(void)
  */
 void arienco_delete_encoding_environment(EncodingEnvironmentPtr eep)
 {
-  if (eep == NULL)
-  {
-    snprintf(errortext, ET_SIZE, "Error freeing eep (NULL pointer)");
-    error (errortext, 200);
-  }
-  else
-    free(eep);
+  free_pointer(eep);
 }
 
 /*!
@@ -356,11 +350,10 @@ static const byte AC_next_state_LPS_64[64] =
 };
 
   unsigned int low = eep->Elow;
-  unsigned int range = eep->Erange;  
+  unsigned int range = eep->Erange;
   int bl = eep->Ebits_to_go;
   unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3]; 
  
-
   range -= rLPS;
 
   ++(eep->C);
@@ -390,7 +383,7 @@ static const byte AC_next_state_LPS_64[64] =
         return;
       }
     }
-  } 
+  }
   else         //LPS
   {
     unsigned int renorm = renorm_table_32[(rLPS >> 3) & 0x1F];

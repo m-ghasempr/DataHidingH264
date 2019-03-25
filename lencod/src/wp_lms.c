@@ -214,7 +214,6 @@ void ComputeExplicitWPParamsJNT(Slice *currSlice,
   VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = p_Vid->p_Inp;
   int clist, n, k, comp;
-  int slice_size, slice_size_cr; 
 
   // all these should be converted to int64
   int64 dc_org[3];
@@ -234,9 +233,6 @@ void ComputeExplicitWPParamsJNT(Slice *currSlice,
       }
     }
   }
-
-  slice_size    = (end_mb-start_mb)*MB_BLOCK_SIZE*MB_BLOCK_SIZE;
-  slice_size_cr = (end_mb-start_mb)*p_Vid->mb_cr_size_x*p_Vid->mb_cr_size_y;
 
   dc_org[0] = ComputeSumBlockBased   (p_Vid->pCurImg, p_Vid->FrameHeightInMbs, p_Vid->PicWidthInMbs, MB_BLOCK_SIZE, MB_BLOCK_SIZE,
     start_mb, end_mb);  
@@ -403,7 +399,7 @@ void EstimateWPPSliceAlg1(Slice *currSlice, int select_offset)
             if(p_Vid->wp_offsets)
               p_Vid->wp_offsets[comp][clist][n][cur_slice] = offset[clist][n][comp];
           }
-#if DEBUG_WP
+#if DEBUG_WP 
         for(comp = 0; comp < 3; comp++)
           printf("slice %d: index %d component %d weight %d offset %d\n", cur_slice, n,comp,currSlice->wp_weight[clist][n][comp],currSlice->wp_offset[clist][n][comp]);
 #endif
@@ -423,6 +419,9 @@ void EstimateWPPSliceAlg1(Slice *currSlice, int select_offset)
           {
             currSlice->wp_weight[clist][n][i] = p_Vid->wp_weights[i][clist][n][cur_slice];
             currSlice->wp_offset[clist][n][i] = p_Vid->wp_offsets[i][clist][n][cur_slice];
+#if DEBUG_WP
+          printf("slice %d: index %d component %d weight %d offset %d\n", cur_slice, n,i,currSlice->wp_weight[clist][n][i],currSlice->wp_offset[clist][n][i]);
+#endif
           }
         }
       }

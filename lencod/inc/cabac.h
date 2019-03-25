@@ -48,8 +48,8 @@ extern void writeIntraPredMode_CABAC  (SyntaxElement *se, DataPartition *dp);
 extern void writeB8_typeInfo_CABAC    (SyntaxElement *se, DataPartition *dp);
 extern void writeB8_B_typeInfo_CABAC  (SyntaxElement *se, DataPartition *dp);
 
-extern void writeRefPic_B_CABAC       (SyntaxElement *se, DataPartition *dp);
-extern void writeRefPic_P_CABAC       (SyntaxElement *se, DataPartition *dp);
+extern void writeRefPic_B_CABAC        (Macroblock *currMB, SyntaxElement *se, DataPartition *dp);
+extern void writeRefPic_P_CABAC        (Macroblock *currMB, SyntaxElement *se, DataPartition *dp);
 
 extern void writeMVD_CABAC             (Macroblock *currMB, SyntaxElement *se, DataPartition *dp);
 extern void writeCBP_CABAC             (Macroblock *currMB, SyntaxElement *se, DataPartition *dp);

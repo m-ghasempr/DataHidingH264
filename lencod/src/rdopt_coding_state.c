@@ -125,7 +125,7 @@ static void store_coding_state_nordo (Macroblock *currMB, CSobj *cs)
  *    store cavlc coding state (for rd-optimized mode decision)
  ************************************************************************
  */
-static void store_coding_state_cavlc (Macroblock *currMB, CSobj *cs)
+void store_coding_state_cavlc (Macroblock *currMB, CSobj *cs)
 {
   int  i;
   Slice *currSlice = currMB->p_Slice;
@@ -202,7 +202,7 @@ static void reset_coding_state_nordo (Macroblock *currMB, CSobj *cs)
  *    restore coding state (for rd-optimized mode decision)
  ************************************************************************
  */
-static void reset_coding_state_cavlc (Macroblock *currMB, CSobj *cs)
+void reset_coding_state_cavlc (Macroblock *currMB, CSobj *cs)
 {
   int  i;
   Slice *currSlice = currMB->p_Slice;

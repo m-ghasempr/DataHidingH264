@@ -32,7 +32,7 @@ extern void OneComponentChromaPrediction4x4_retrieve   (Macroblock *currMB, imgp
 extern void intra_chroma_prediction_mbaff(Macroblock *currMB, int*, int*, int*);
 extern void intra_chroma_prediction      (Macroblock *currMB, int*, int*, int*);
 extern void IntraChromaPrediction4x4     (Macroblock* currMB, int uv, int block_x, int  block_y);
-
+extern void get_difference_4x4(imgpel **src, imgpel **prd, short *diff, int pos_x, int block_x);
 
 #endif
 

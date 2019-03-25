@@ -1,6 +1,6 @@
 /*!
 *************************************************************************************
-* \file img_luma.c
+* \file img_luma_uint8.c
 *
 * \brief
 *    Luma interpolation functions
@@ -9,6 +9,7 @@
 *    Main contributors (see contributors.h for copyright, address and affiliation details)
 *      - Alexis Michael Tourapis <alexis.tourapis@dolby.com>
 *      - Athanasios Leontaris    <aleon@dolby.com>
+*      - Yuwen He                <yhe@dolby.com>
 *
 *************************************************************************************
 */
@@ -21,86 +22,6 @@
 #include "image.h"
 #include "img_luma.h"
 #include "memalloc.h"
-
-
-static const int ONE_FOURTH_TAP[2][3] =
-{
-  {20, -5, 1},  // AVC Interpolation taps
-  {20,-4, 0},   // Experimental - not valid
-};
-
-/*!
- ************************************************************************
- * \brief
- *    Creates the 4x4 = 16 images that contain quarter-pel samples
- *    sub-sampled at different spatial orientations;
- *    enables more efficient implementation
- *
- * \param p_Vid
- *    pointer to VideoParameters structure
- * \param s
- *    pointer to StorablePicture structure
- s************************************************************************
- */
-void getSubImagesLuma( VideoParameters *p_Vid, StorablePicture *s )
-{
-  imgpel ****cImgSub   = s->p_curr_img_sub;
-
-  //  0  1  2  3
-  //  4  5  6  7
-  //  8  9 10 11
-  // 12 13 14 15
-
-  //// INTEGER PEL POSITIONS ////
-
-  // sub-image 0 [0][0]
-  // simply copy the integer pels
-  getSubImageInteger_s( s, cImgSub[0][0], s->p_curr_img);
-
-  //// HALF-PEL POSITIONS: SIX-TAP FILTER ////
-
-  // sub-image 2 [0][2]
-  // HOR interpolate (six-tap) sub-image [0][0]
-  getHorSubImageSixTap( p_Vid, s, cImgSub[0][2], cImgSub[0][0] );
-
-  // sub-image 8 [2][0]
-  // VER interpolate (six-tap) sub-image [0][0]
-  getVerSubImageSixTap( p_Vid, s, cImgSub[2][0], cImgSub[0][0]);
-
-  // sub-image 10 [2][2]
-  // VER interpolate (six-tap) sub-image [0][2]
-  getVerSubImageSixTapTmp( p_Vid, s, cImgSub[2][2]);
-
-  //// QUARTER-PEL POSITIONS: BI-LINEAR INTERPOLATION ////
-
-  // sub-image 1 [0][1]
-  getSubImageBiLinear    ( s, cImgSub[0][1], cImgSub[0][0], cImgSub[0][2]);
-  // sub-image 4 [1][0]
-  getSubImageBiLinear    ( s, cImgSub[1][0], cImgSub[0][0], cImgSub[2][0]);
-  // sub-image 5 [1][1]
-  getSubImageBiLinear    ( s, cImgSub[1][1], cImgSub[0][2], cImgSub[2][0]);
-  // sub-image 6 [1][2]
-  getSubImageBiLinear    ( s, cImgSub[1][2], cImgSub[0][2], cImgSub[2][2]);
-  // sub-image 9 [2][1]
-  getSubImageBiLinear    ( s, cImgSub[2][1], cImgSub[2][0], cImgSub[2][2]);
-
-  // sub-image 3  [0][3]
-  getHorSubImageBiLinear ( s, cImgSub[0][3], cImgSub[0][2], cImgSub[0][0]);
-  // sub-image 7  [1][3]
-  getHorSubImageBiLinear ( s, cImgSub[1][3], cImgSub[0][2], cImgSub[2][0]);
-  // sub-image 11 [2][3]
-  getHorSubImageBiLinear ( s, cImgSub[2][3], cImgSub[2][2], cImgSub[2][0]);
-
-  // sub-image 12 [3][0]
-  getVerSubImageBiLinear ( s, cImgSub[3][0], cImgSub[2][0], cImgSub[0][0]);
-  // sub-image 13 [3][1]
-  getVerSubImageBiLinear ( s, cImgSub[3][1], cImgSub[2][0], cImgSub[0][2]);
-  // sub-image 14 [3][2]
-  getVerSubImageBiLinear ( s, cImgSub[3][2], cImgSub[2][2], cImgSub[0][2]);
-
-  // sub-image 15 [3][3]
-  getDiagSubImageBiLinear( s, cImgSub[3][3], cImgSub[0][2], cImgSub[2][0]);
-}
 
 
 /*!
@@ -116,7 +37,7 @@ void getSubImagesLuma( VideoParameters *p_Vid, StorablePicture *s )
  *    source image
  ************************************************************************
  */
-void getSubImageInteger( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
+static void getSubImageInteger( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
 {
   int i, j;
   int size_x_minus1 = s->size_x - 1;
@@ -164,7 +85,7 @@ void getSubImageInteger( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
   }
 }
 
-void getSubImageInteger_s( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
+static void getSubImageInteger_s( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
 {
   int i, j;
   int size_x_minus1 = s->size_x - 1;
@@ -185,12 +106,12 @@ void getSubImageInteger_s( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
     *(wBufDst++) = wBufSrc[size_x_minus1];
 
   // Now copy remaining pad lines
-  for (j = -IMG_PAD_SIZE_Y+1; j < 0; ++j)
+  for (j = -IMG_PAD_SIZE_Y+1; j < 1; ++j)
   {
     memcpy(dstImg[j]-IMG_PAD_SIZE_X, dstImg[j - 1]-IMG_PAD_SIZE_X, s->size_x_padded * sizeof(imgpel));
   }
 
-  for (j = 0; j < s->size_y; ++j)
+  for (j = 1; j < s->size_y; ++j)
   {    
     wBufDst = &( dstImg[j][-IMG_PAD_SIZE_X] ); // 4:4:4 independent mode
     wBufSrc = srcImg[j];
@@ -227,7 +148,7 @@ void getSubImageInteger_s( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
  *    source image
  ************************************************************************
  */
-void getHorSubImageSixTap( VideoParameters *p_Vid, StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
+static void getHorSubImageSixTap( VideoParameters *p_Vid, StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
 {
   int is, jpad, ipad;
   int ypadded_size = s->size_y_padded;
@@ -333,7 +254,7 @@ void getHorSubImageSixTap( VideoParameters *p_Vid, StorablePicture *s, imgpel **
  *    pointer to source image
  ************************************************************************
  */
-void getVerSubImageSixTap( VideoParameters *p_Vid, StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
+static void getVerSubImageSixTap( VideoParameters *p_Vid, StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
 {
   int is, jpad, ipad;
   int ypadded_size = s->size_y_padded;
@@ -423,7 +344,7 @@ void getVerSubImageSixTap( VideoParameters *p_Vid, StorablePicture *s, imgpel **
  *    pointer to source image
  ************************************************************************
  */
-void getVerSubImageSixTapTmp( VideoParameters *p_Vid, StorablePicture *s, imgpel **dstImg)
+static void getVerSubImageSixTapTmp( VideoParameters *p_Vid, StorablePicture *s, imgpel **dstImg)
 {
   int is, jpad, ipad;
   int ypadded_size = s->size_y_padded;
@@ -516,7 +437,7 @@ void getVerSubImageSixTapTmp( VideoParameters *p_Vid, StorablePicture *s, imgpel
  *    source right image 
  ************************************************************************
  */
-void getSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR)
+static void getSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR)
 {
   int jpad, ipad;
   int ypadded_size = s->size_y_padded;
@@ -553,7 +474,7 @@ void getSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL,
  *    source right image 
  ************************************************************************
  */
-void getHorSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR)
+static void getHorSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR)
 {
   int jpad, ipad;
   int ypadded_size = s->size_y_padded;
@@ -593,7 +514,7 @@ void getHorSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcIm
  *    source bottom image 
  ************************************************************************
  */
-void getVerSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB)
+static void getVerSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB)
 {
   int jpad, ipad;
   int ypadded_size = s->size_y_padded - 1;
@@ -640,7 +561,7 @@ void getVerSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcIm
  *    source bottom/right image 
  ************************************************************************
  */
-void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB )
+static void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB )
 {
   int jpad, ipad;
   int maxx = s->size_x_padded - 1-IMG_PAD_SIZE_X;
@@ -674,4 +595,82 @@ void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcI
     *wBufDst++ = (imgpel) rshift_rnd_sf(*wBufSrcL++ + wBufSrcR[-1], 1);
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Creates the 4x4 = 16 images that contain quarter-pel samples
+ *    sub-sampled at different spatial orientations;
+ *    enables more efficient implementation
+ *
+ * \param p_Vid
+ *    pointer to VideoParameters structure
+ * \param s
+ *    pointer to StorablePicture structure
+ s************************************************************************
+ */
+void getSubImagesLuma( VideoParameters *p_Vid, StorablePicture *s )
+{
+  imgpel ****cImgSub   = s->p_curr_img_sub;
 
+  //  0  1  2  3
+  //  4  5  6  7
+  //  8  9 10 11
+  // 12 13 14 15
+
+  //// INTEGER PEL POSITIONS ////
+
+  // sub-image 0 [0][0]
+  // simply copy the integer pels
+  if (cImgSub[0][0][0] != s->p_curr_img[0])
+  {
+    getSubImageInteger( s, cImgSub[0][0], s->p_curr_img);
+  }
+  else
+  {
+    getSubImageInteger_s( s, cImgSub[0][0], s->p_curr_img);
+  }
+
+  //// HALF-PEL POSITIONS: SIX-TAP FILTER ////
+
+  // sub-image 2 [0][2]
+  // HOR interpolate (six-tap) sub-image [0][0]
+  getHorSubImageSixTap( p_Vid, s, cImgSub[0][2], cImgSub[0][0] );
+
+  // sub-image 8 [2][0]
+  // VER interpolate (six-tap) sub-image [0][0]
+  getVerSubImageSixTap( p_Vid, s, cImgSub[2][0], cImgSub[0][0]);
+
+  // sub-image 10 [2][2]
+  // VER interpolate (six-tap) sub-image [0][2]
+  getVerSubImageSixTapTmp( p_Vid, s, cImgSub[2][2]);
+
+  //// QUARTER-PEL POSITIONS: BI-LINEAR INTERPOLATION ////
+
+  // sub-image 1 [0][1]
+  getSubImageBiLinear    ( s, cImgSub[0][1], cImgSub[0][0], cImgSub[0][2]);
+  // sub-image 4 [1][0]
+  getSubImageBiLinear    ( s, cImgSub[1][0], cImgSub[0][0], cImgSub[2][0]);
+  // sub-image 5 [1][1]
+  getSubImageBiLinear    ( s, cImgSub[1][1], cImgSub[0][2], cImgSub[2][0]);
+  // sub-image 6 [1][2]
+  getSubImageBiLinear    ( s, cImgSub[1][2], cImgSub[0][2], cImgSub[2][2]);
+  // sub-image 9 [2][1]
+  getSubImageBiLinear    ( s, cImgSub[2][1], cImgSub[2][0], cImgSub[2][2]);
+
+  // sub-image 3  [0][3]
+  getHorSubImageBiLinear ( s, cImgSub[0][3], cImgSub[0][2], cImgSub[0][0]);
+  // sub-image 7  [1][3]
+  getHorSubImageBiLinear ( s, cImgSub[1][3], cImgSub[0][2], cImgSub[2][0]);
+  // sub-image 11 [2][3]
+  getHorSubImageBiLinear ( s, cImgSub[2][3], cImgSub[2][2], cImgSub[2][0]);
+
+  // sub-image 12 [3][0]
+  getVerSubImageBiLinear ( s, cImgSub[3][0], cImgSub[2][0], cImgSub[0][0]);
+  // sub-image 13 [3][1]
+  getVerSubImageBiLinear ( s, cImgSub[3][1], cImgSub[2][0], cImgSub[0][2]);
+  // sub-image 14 [3][2]
+  getVerSubImageBiLinear ( s, cImgSub[3][2], cImgSub[2][2], cImgSub[0][2]);
+
+  // sub-image 15 [3][3]
+  getDiagSubImageBiLinear( s, cImgSub[3][3], cImgSub[0][2], cImgSub[2][0]);
+}

@@ -193,11 +193,11 @@ static void DeblockMb(VideoParameters *p_Vid, imgpel **imgY, imgpel ***imgUV, in
       {
         if (filterNon8x8LumaEdgesFlag[edge])
         {
-          p_Vid->EdgeLoopLumaVer( PLANE_Y, imgY, Strength, MbQ, edge << 2, p_Vid->width_padded) ;
+          p_Vid->EdgeLoopLumaVer( PLANE_Y, imgY, Strength, MbQ, edge << 2) ;
           if (p_Vid->P444_joined)
           {
-            p_Vid->EdgeLoopLumaVer(PLANE_U, imgUV[0], Strength, MbQ, edge << 2, p_Vid->width_padded);
-            p_Vid->EdgeLoopLumaVer(PLANE_V, imgUV[1], Strength, MbQ, edge << 2, p_Vid->width_padded);
+            p_Vid->EdgeLoopLumaVer(PLANE_U, imgUV[0], Strength, MbQ, edge << 2);
+            p_Vid->EdgeLoopLumaVer(PLANE_V, imgUV[1], Strength, MbQ, edge << 2);
           }
         }
         if(p_Vid->yuv_format==YUV420 || p_Vid->yuv_format==YUV422 )
@@ -205,8 +205,8 @@ static void DeblockMb(VideoParameters *p_Vid, imgpel **imgY, imgpel ***imgUV, in
           edge_cr = chroma_edge[0][edge][p_Vid->yuv_format];
           if( (imgUV != NULL) && (edge_cr >= 0))
           {
-            p_Vid->EdgeLoopChromaVer( imgUV[0], Strength, MbQ, edge_cr, p_Vid->width_cr + p_Vid->pad_size_uv_x * 2, 0);
-            p_Vid->EdgeLoopChromaVer( imgUV[1], Strength, MbQ, edge_cr, p_Vid->width_cr + p_Vid->pad_size_uv_x * 2, 1);
+            p_Vid->EdgeLoopChromaVer( imgUV[0], Strength, MbQ, edge_cr, 0);
+            p_Vid->EdgeLoopChromaVer( imgUV[1], Strength, MbQ, edge_cr, 1);
           }
         }
       }        

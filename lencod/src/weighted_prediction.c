@@ -137,12 +137,14 @@ double ComputeImgSum(imgpel **CurrentImage, int height, int width)
 {
   int i, j;
   double sum_value = 0.0;
+  imgpel *p_tmp;
 
   for (i = 0; i < height; i++)
   {
+    p_tmp = CurrentImage[i];
     for (j = 0; j < width; j++)
     {
-      sum_value += (double) CurrentImage[i][j];
+      sum_value += (double) *(p_tmp++);
     }
   }
   return sum_value;
@@ -701,6 +703,11 @@ int TestWPBSliceAlg0(Slice *currSlice, int select_method)
   VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = p_Vid->p_Inp;
   int i, j, k, n;
+#if (MVC_EXTENSION_ENABLE)
+  int view_id = p_Vid->view_id;
+#else
+  int view_id = 0;
+#endif
 
   int index;
   int comp;
@@ -880,8 +887,8 @@ int TestWPBSliceAlg0(Slice *currSlice, int select_method)
   {
     int active_refs[2];
 
-    active_refs[0] = (p_Inp->B_List0_refs == 0 ? currSlice->listXsize[0] : imin(p_Inp->B_List0_refs, currSlice->listXsize[0]));
-    active_refs[1] = (p_Inp->B_List1_refs == 0 ? currSlice->listXsize[1] : imin(p_Inp->B_List1_refs, currSlice->listXsize[1]));
+    active_refs[0] = (p_Inp->B_List0_refs == 0 ? currSlice->listXsize[0] : imin(p_Inp->B_List0_refs[view_id], currSlice->listXsize[0]));
+    active_refs[1] = (p_Inp->B_List1_refs == 0 ? currSlice->listXsize[1] : imin(p_Inp->B_List1_refs[view_id], currSlice->listXsize[1]));
 
     perform_wp = 0;
     for (clist=0; clist<2 + list_offset; clist++)

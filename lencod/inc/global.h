@@ -28,9 +28,10 @@
 #include "lagrangian.h"
 #include "quant_params.h"
 #include "rc_types.h"
-#include "pred_struct_types.h"
 
-typedef struct bit_stream Bitstream;
+typedef struct bit_stream_enc Bitstream;
+
+#include "pred_struct_types.h"
 
 
 /***********************************************************************
@@ -66,6 +67,12 @@ typedef struct search_window {
   int    min_y;
   int    max_y;
 } SearchWindow;
+
+typedef struct
+{
+  short x;
+  short y;
+} BlockPos;
 
 //! bit counter for a macroblock. Note that it seems safe to change all to unsigned short for 16x16 MBs. May be an issue if MB > 32x32
 typedef struct bit_counter
@@ -214,7 +221,7 @@ typedef struct
   int slice_type;         //! Slice type
   int display_no;         //! GOP Display order
   int reference_idc;      //! Is reference?
-  int slice_qp;           //! Assigned QP
+  int slice_qp_off;       //! Assigned QP offset
   int hierarchy_layer;    //! Hierarchy layer (used with GOP Hierarchy option 2)
   int hierarchyPocDelta;  //! Currently unused
   int temporal_layer;     //! Temporal layer; 
@@ -274,7 +281,7 @@ typedef struct me_block
   struct search_window searchRange;
   int              cost;           //!< Rate Distortion cost
   imgpel         **orig_pic;      //!< Block Data
-  Boolean          ChromaMEEnable;
+  int              ChromaMEEnable;
   int              ChromaMEWeight;
   // use weighted prediction based ME
   int              apply_weights;
@@ -297,7 +304,7 @@ typedef struct me_block
   int              search_pos2;   // <--  search positions for    half-pel search  (default: 9)
   int              search_pos4;   // <--  search positions for quarter-pel search  (default: 9)
   int              iteration_no;  // <--  bi pred iteration number
-
+  
   // functions
   distblk (*computePredFPel)    (struct storable_picture *, struct me_block *, distblk , MotionVector * );
   distblk (*computePredHPel)    (struct storable_picture *, struct me_block *, distblk , MotionVector * );
@@ -308,7 +315,7 @@ typedef struct me_block
 } MEBlock;
 
 //! Syntax Element
-typedef struct syntaxelement
+typedef struct syntaxelement_enc
 {
   int                 type;           //!< type of syntax element for data part.
   int                 value1;         //!< numerical value of syntax element
@@ -328,8 +335,14 @@ typedef struct syntaxelement
 
 } SyntaxElement;
 
+typedef struct wp_params
+{
+  short weight[3];
+  short offset[3];
+} WPParams;
+
 //! Macroblock
-typedef struct macroblock
+typedef struct macroblock_enc
 {
   struct slice       *p_Slice;                    //!< pointer to the current slice
   struct video_par   *p_Vid;                      //!< pointer to VideoParameters
@@ -382,9 +395,12 @@ typedef struct macroblock
 
   Info8x8             b8x8[4];    
   //imgpel              intra4x4_pred[16][17]; //!< 4x4 Intra prediction samples
-  imgpel              intra4x4_pred[3][17]; //!< 4x4 Intra prediction samples
-  imgpel              intra8x8_pred[3][25]; //!< 8x8 Intra prediction samples
-  imgpel              intra16x16_pred[3][33]; //!< 8x8 Intra prediction samples
+  imgpel              **intra4x4_pred; //[3][17]; //!< 4x4 Intra prediction samples
+  imgpel              **intra4x4_pred_buf[2]; //[3][17]; //!< 4x4 Intra prediction samples
+  imgpel              **intra8x8_pred; //[3][25]; //!< 8x8 Intra prediction samples
+  imgpel              **intra8x8_pred_buf[2]; //[3][25]; //!< 8x8 Intra prediction samples
+  imgpel              **intra16x16_pred; //[3][33]; //!< 8x8 Intra prediction samples
+  imgpel              **intra16x16_pred_buf[2]; //[3][33]; //!< 8x8 Intra prediction samples
 
   char                IntraChromaPredModeFlag;
   byte                mb_field;
@@ -426,30 +442,30 @@ typedef struct macroblock
 
 
 
-  struct macroblock   *mb_up;   //!< pointer to neighboring MB (CABAC)
-  struct macroblock   *mb_left; //!< pointer to neighboring MB (CABAC)
-  struct macroblock   *PrevMB;
+  struct macroblock_enc   *mb_up;   //!< pointer to neighboring MB (CABAC)
+  struct macroblock_enc   *mb_left; //!< pointer to neighboring MB (CABAC)
+  struct macroblock_enc   *PrevMB;
 
   // Functions
-  void (*GetMVPredictor) (struct macroblock *currMB, PixelPos *block, MotionVector *pmv, short ref_frame, 
+  void (*GetMVPredictor) (struct macroblock_enc *currMB, PixelPos *block, MotionVector *pmv, short ref_frame, 
     struct pic_motion_params **mv_info, int list, int mb_x, int mb_y, int blockshape_x, int blockshape_y);
-  distblk (*IntPelME)       (struct macroblock *currMB, MotionVector *, struct me_block *mv_block, distblk, int);
-  distblk (*SubPelBiPredME) (struct macroblock *currMB, struct me_block *, int list, 
+  distblk (*IntPelME)       (struct macroblock_enc *currMB, MotionVector *, struct me_block *mv_block, distblk, int);
+  distblk (*SubPelBiPredME) (struct macroblock_enc *currMB, struct me_block *, int list, 
     MotionVector *pred_mv1, MotionVector *pred_mv2, MotionVector *mv1, MotionVector *mv2, distblk min_mcost, int* lambda_factor);
-  distblk (*SubPelME)       (struct macroblock *currMB, 
+  distblk (*SubPelME)       (struct macroblock_enc *currMB, 
     MotionVector *pred_mv, struct me_block *mv_block, distblk min_mcost, int* lambda_factor);
-  distblk (*BiPredME)       (struct macroblock *currMB, int, MotionVector *, MotionVector *, MotionVector *, MotionVector *, struct me_block *, int, distblk, int);
-  int (*residual_transform_quant_luma_4x4)      (struct macroblock *currMB, ColorPlane pl, int block_x, int block_y, int *coeff_cost, int intra);
-  int (*residual_transform_quant_luma_16x16)    (struct macroblock *currMB, ColorPlane pl);
-  int (*residual_transform_quant_luma_8x8)      (struct macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
-  int  (*residual_transform_quant_chroma_4x4[2])(struct macroblock *currMB, int uv,int i11);
+  distblk (*BiPredME)       (struct macroblock_enc *currMB, int, MotionVector *, MotionVector *, MotionVector *, MotionVector *, struct me_block *, int, distblk, int);
+  int (*residual_transform_quant_luma_4x4)      (struct macroblock_enc *currMB, ColorPlane pl, int block_x, int block_y, int *coeff_cost, int intra);
+  int (*residual_transform_quant_luma_16x16)    (struct macroblock_enc *currMB, ColorPlane pl);
+  int (*residual_transform_quant_luma_8x8)      (struct macroblock_enc *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
+  int  (*residual_transform_quant_chroma_4x4[2])(struct macroblock_enc *currMB, int uv,int i11);
 
   void (*cbp_linfo_intra)(int cbp, int dummy, int *len,int *info);
   void (*cbp_linfo_inter)(int cbp, int dummy, int *len,int *info);    
 } Macroblock;
 
 //! Bitstream
-struct bit_stream
+struct bit_stream_enc
 {
   int     buffer_size;        //!< Buffer size      
   int     byte_pos;           //!< current position in bitstream;
@@ -473,7 +489,7 @@ struct bit_stream
 
 
 //! DataPartition
-typedef struct datapartition
+typedef struct datapartition_enc
 {
   struct slice        *p_Slice;
   struct video_par      *p_Vid;
@@ -559,7 +575,10 @@ typedef struct slice
   int                 *reordering_of_pic_nums_idc[2];
   int                 *abs_diff_pic_num_minus1[2];
   int                 *long_term_pic_idx[2];
-
+#if (MVC_EXTENSION_ENABLE)
+  int                 *abs_diff_view_idx_minus1[2];
+#endif
+  int                 view_id;
   int                 width_blk;               //!< Number of columns in blocks
   int                 height_blk;              //!< Number of lines in blocks
 
@@ -580,9 +599,14 @@ typedef struct slice
   unsigned int        PicSizeInMbs;
   int                 num_blk8x8_uv;
   int                 nal_reference_idc;                       //!< nal_reference_idc from NAL unit
+
+  // Bit depth related information
   short               bitdepth_luma;
   short               bitdepth_chroma;
-
+  int                 bitdepth_scale[2];
+  int                 bitdepth_luma_qp_scale;
+  int                 bitdepth_chroma_qp_scale;
+  int                 bitdepth_lambda_scale;
 
   DataPartition       *partArr;     //!< array of partitions
   MotionInfoContexts  *mot_ctx;     //!< pointer to struct of context models for use in CABAC
@@ -657,6 +681,8 @@ typedef struct slice
   struct est_bits_cabac *estBitsCabac; // [NUM_BLOCK_TYPES]
   double norm_factor_4x4;
   double norm_factor_8x8;
+  int    norm_shift_4x4;
+  int    norm_shift_8x8;
 
   imgpel ****mpr_4x4;           //!< prediction samples for   4x4 intra prediction modes
   imgpel ****mpr_8x8;           //!< prediction samples for   8x8 intra prediction modes
@@ -683,6 +709,8 @@ typedef struct slice
   int  coeff_ctr;
   int  pos;
 
+  int default_pic_num[2][MAX_REFERENCE_PICTURES];
+  int default_view_id[2][MAX_REFERENCE_PICTURES];
 
   // Function pointers  
   int     (*mode_decision_for_I16x16_MB)        (Macroblock *currMB, int lambda);
@@ -724,7 +752,7 @@ typedef struct slice
   void (*writeMB_Skip)          (Macroblock *currMB, SyntaxElement *se, DataPartition *dP);
   void (*writeIntraPredMode)    (SyntaxElement *se, DataPartition *dP);
   void (*writeB8_typeInfo)      (SyntaxElement *se, DataPartition *dP);
-  void (*writeRefFrame[6])      (SyntaxElement *se, DataPartition *dP);
+  void (*writeRefFrame[6])      (Macroblock* currMB, SyntaxElement *se, DataPartition *dP);
   int  (*writeMotionInfo2NAL)   (Macroblock* currMB);
   int  (*write_MB_layer)        (Macroblock *currMB, int rdopt, int *coeff_rate);
   void (*writeMVD)              (Macroblock *currMB, SyntaxElement *se, DataPartition *dP);
@@ -743,8 +771,7 @@ typedef struct slice
 
   // List initialization / reordering
   void (*init_lists               ) (struct slice *currSlice);
-  void (*poc_ref_pic_reorder_frame) (struct slice *currSlice, struct storable_picture **list, unsigned num_ref_idx_lX_active, 
-    int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no );
+  void (*poc_ref_pic_reorder_frame) (struct slice *currSlice, unsigned num_ref_idx_lX_active, int list_no );
    
 
   // Quantization
@@ -832,6 +859,70 @@ typedef struct block_8x8_info
   Info8x8 best[MAXMODE][4];
 } Block8x8Info;
 
+typedef struct coding_par
+{
+  int layer_id;
+  ColorFormat yuv_format;
+  int P444_joined;
+
+  short bitdepth_luma;
+  short bitdepth_chroma;
+  int bitdepth_scale[2];
+  int bitdepth_luma_qp_scale;
+  int bitdepth_chroma_qp_scale;
+  int bitdepth_lambda_scale;
+
+  uint32 dc_pred_value_comp[MAX_PLANE]; //!< component value for DC prediction (depends on component pel bit depth)
+  int max_pel_value_comp      [MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
+  int max_imgpel_value_comp_sq   [MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
+
+  int num_blk8x8_uv;
+  int num_cdc_coeff;
+  
+  short mb_cr_size_x;
+  short mb_cr_size_y;
+  int mb_size[MAX_PLANE][2];
+
+  int max_bitCount;
+  int width;                   //!< Number of pels
+  int width_padded;            //!< Width in pels of padded picture
+  int width_blk;               //!< Number of columns in blocks
+  int width_cr;                //!< Number of pels chroma
+  int height;                  //!< Number of lines
+  int height_padded;           //!< Number in lines of padded picture
+  int height_blk;              //!< Number of lines in blocks
+  int height_cr;               //!< Number of lines  chroma
+  int height_cr_frame;         //!< Number of lines  chroma frame
+  int size;                    //!< Luma Picture size in pels
+  int size_cr;                 //!< Chroma Picture size in pels
+
+  int padded_size_x;  
+  int padded_size_x_m8x8;
+  int padded_size_x_m4x4;
+  int cr_padded_size_x;
+  int cr_padded_size_x_m8;
+  int cr_padded_size_x2;
+  int cr_padded_size_x4;
+
+  int pad_size_uv_x;
+  int pad_size_uv_y;
+  unsigned char chroma_mask_mv_y;
+  unsigned char chroma_mask_mv_x;
+  int chroma_shift_x;
+  int chroma_shift_y; 
+  int shift_cr_x;
+  int shift_cr_y;
+
+  unsigned int PicWidthInMbs;
+  unsigned int PicHeightInMapUnits;
+  unsigned int FrameHeightInMbs;
+  unsigned int FrameSizeInMbs;
+
+  //uint32 dc_pred_value;                 //!< DC prediction value for current component
+  //short max_imgpel_value;              //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
+
+}CodingParameters;
+
 //! VideoParameters
 typedef struct video_par
 {
@@ -840,6 +931,8 @@ typedef struct video_par
   seq_parameter_set_rbsp_t *active_sps;
   struct sei_params        *p_SEI;
   struct decoders          *p_decs;
+  CodingParameters         *p_CurrEncodePar;
+  CodingParameters         *p_EncodePar[MAX_NUM_DPB_LAYERS];
 
   int number;                  //!< current image number to be encoded (in first layer)  
   int LevelIndex;              //!< mapped level idc
@@ -873,7 +966,7 @@ typedef struct video_par
   FrameUnitStruct *p_curr_frm_struct;
   PicStructure    *p_curr_pic;
   SliceStructure  *p_curr_slice;
-
+  int pic_struct;
   struct search_window searchRange;
   ImageData imgData;           //!< Image data to be encoded
   ImageData imgData0;          //!< Input Image Data
@@ -885,6 +978,13 @@ typedef struct video_par
   ImageData imgData4;
   ImageData imgData5;
   ImageData imgData6;
+  ImageData imgRefData;
+  ImageData origData0;
+  ImageData origData1;
+
+  ImageData imgDataOpt1;
+  ImageData imgDataOpt2;
+
 
   int   num_slices_wp;
   int   wp_parameters_set; 
@@ -894,15 +994,23 @@ typedef struct video_par
 
   struct image_structure imgSRC;
   struct image_structure imgREF;
+  struct image_structure imgREF0;
+  struct image_structure imgREF1;
   struct image_structure imgRGB_src;
   struct image_structure imgRGB_ref;
   int       **imgY_sub_tmp;           //!< Y picture temporary component (Quarter pel)
   imgpel    **imgY_com;               //!< Encoded luma images
-  imgpel   ***imgUV_com;              //!< Encoded croma images
+  imgpel   **imgUV_com[2];              //!< Encoded croma images
+
+  imgpel    **imgY_com_buf[2];               //!< Encoded luma images
+  imgpel   **imgUV_com_buf[2][2];              //!< Encoded croma images
 
   imgpel    **pCurImg;                //!< Reference image. Luma for other profiles, can be any component for 4:4:4
   // global picture format dependend buffers, mem allocation in image.c
   imgpel    **pImgOrg[MAX_PLANE];
+
+  imgpel    **pCurImgRef;
+  imgpel    **pImgOrgRef[MAX_PLANE];
 
   Picture *p_frame_pic;
   Picture **frame_pic;
@@ -960,7 +1068,9 @@ typedef struct video_par
   struct epzs_struct *ldiamond;
   struct epzs_struct *sbdiamond;
   struct epzs_struct *pmvfast;
-
+  struct epzs_struct *search_rpu_square;
+  struct epzs_struct *SP_M2DRPU;
+  struct epzs_struct *SP_M2DRPU4MM;
 
   // RDOQ
   int precalcUnaryLevelTab[128][MAX_PREC_COEFF];
@@ -977,22 +1087,11 @@ typedef struct video_par
   byte **pixel_map;   //!< Shows the latest reference frame that is reliable for each pixel
   byte **refresh_map; //!< Stores the new values for pixel_map
   int intras;         //!< Counts the intra updates in each frame.
-
+  int iInterViewMBs;  
   int RCMinQP;
   int RCMaxQP;
 
   float framerate;
-  int width;                   //!< Number of pels
-  int width_padded;            //!< Width in pels of padded picture
-  int width_blk;               //!< Number of columns in blocks
-  int width_cr;                //!< Number of pels chroma
-  int height;                  //!< Number of lines
-  int height_padded;           //!< Number in lines of padded picture
-  int height_blk;              //!< Number of lines in blocks
-  int height_cr;               //!< Number of lines  chroma
-  int height_cr_frame;         //!< Number of lines  chroma frame
-  int size;                    //!< Luma Picture size in pels
-  int size_cr;                 //!< Chroma Picture size in pels
 
   int is_v_block;
   int mb_y_upd;
@@ -1005,6 +1104,7 @@ typedef struct video_par
 
   int cod_counter;             //!< Current count of number of skipped macroblocks in a row
   int ***nz_coeff;             //!< number of coefficients per block (CAVLC)
+  int ***nz_coeff_buf[2];
   int pix_x;                   //!< current pixel horizontal
   int pix_y;                   //!< current pixel vertical
 
@@ -1017,6 +1117,8 @@ typedef struct video_par
   int ****ARCofAdj4x4;         //!< Transform coefficients for 4x4 luma/chroma. 
   int ****ARCofAdj8x8;         //!< Transform coefficients for 4x4 luma/chroma. 
 
+  ImageData tempData1, tempData2, tempData3, tempData4;
+  imgpel **tempImg;
 
   Picture       *currentPicture; //!< The coded picture currently in the works (typically p_frame_pic, p_Vid->field_pic[0], or p_Vid->field_pic[1])
   struct slice  *currentSlice;                                //!< pointer to current Slice data struct
@@ -1046,19 +1148,7 @@ typedef struct video_par
 
   char direct_spatial_mv_pred_flag;              //!< Direct Mode type to be used (0: Temporal, 1: Spatial)
 
-  int pad_size_uv_x;
-  int pad_size_uv_y;
-  unsigned char chroma_mask_mv_y;
-  unsigned char chroma_mask_mv_x;
-  int chroma_shift_y, chroma_shift_x;
-  int shift_cr_x, shift_cr_x2, shift_cr_y;
-  int padded_size_x;  
-  int padded_size_x_m8x8;
-  int padded_size_x_m4x4;
-  int cr_padded_size_x;
-  int cr_padded_size_x_m8;
-  int cr_padded_size_x2;
-  int cr_padded_size_x4;
+  int shift_cr_x2;
 
   int num_ref_idx_l0_active;
   int num_ref_idx_l1_active;
@@ -1100,11 +1190,7 @@ typedef struct video_par
   signed int ThisPOC;      //!< current picture POC
   unsigned int frame_num;    //!< frame_num for this frame
 
-  unsigned int PicWidthInMbs;
-  unsigned int PicHeightInMapUnits;
-  unsigned int FrameHeightInMbs;
   unsigned int PicSizeInMbs;
-  unsigned int FrameSizeInMbs;
 
   //the following should probably go in picture parameters
   Boolean bottom_field_pic_order_in_frame_present_flag; // ????????
@@ -1139,37 +1225,27 @@ typedef struct video_par
 
   int slice_group_change_cycle;
 
-  short bitdepth_luma;
-  short bitdepth_chroma;
-  int bitdepth_scale[2];
-  int bitdepth_luma_qp_scale;
-  int bitdepth_chroma_qp_scale;
-  int bitdepth_lambda_scale;
-  int max_bitCount;
   int max_qp_delta;
   int min_qp_delta;
+
   // Lagrangian Parameters
   LambdaParams **lambda;  
   double  **lambda_md;     //!< Mode decision Lambda
   double ***lambda_me;     //!< Motion Estimation Lambda
   int    ***lambda_mf;     //!< Integer formatted Motion Estimation Lambda
-
+  double  **lambda_rdoq;   //!< RDOQ Lambda
   double **lambda_mf_factor; //!< Motion Estimation Lamda Scale Factor
 
-  imgpel dc_pred_value_comp[MAX_PLANE]; //!< component value for DC prediction (depends on component pel bit depth)
-  imgpel dc_pred_value;                 //!< DC prediction value for current component
-  int max_pel_value_comp      [MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
-  int max_imgpel_value_comp_sq   [MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
+  LambdaParams **lambda_buf[2];  
+  double  **lambda_md_buf[2];     //!< Mode decision Lambda
+  double ***lambda_me_buf[2];     //!< Motion Estimation Lambda
+  int    ***lambda_mf_buf[2];     //!< Integer formatted Motion Estimation Lambda
+  double  **lambda_rdoq_buf[2];   //!< RDOQ Lambda
+  double **lambda_mf_factor_buf[2]; //!< Motion Estimation Lamda Scale Factor
+
+  uint32 dc_pred_value;                 //!< DC prediction value for current component
   short max_imgpel_value;              //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
 
-  int num_blk8x8_uv;
-  int num_cdc_coeff;
-  ColorFormat yuv_format;
-  int P444_joined;
-  int lossless_qpprime_flag;
-  short mb_cr_size_x;
-  short mb_cr_size_y;
-  int mb_size[MAX_PLANE][2];
   struct edge_info *p_edge;
 
   int chroma_qp_offset[2];      //!< offset for qp for chroma [0-Cb, 1-Cr]
@@ -1209,10 +1285,9 @@ typedef struct video_par
   int frameOffsetCount[2][MAX_REFERENCE_PICTURES]; 
   short frameOffset[2][MAX_REFERENCE_PICTURES];
   int frameOffsetAvail;
-
+  int view_id;
 #if (MVC_EXTENSION_ENABLE)
-  int sec_view_force_fld;	   //!< if view 0 is coded as FLD then force also view to be coded as FLD as well
-
+  int sec_view_force_fld;    //!< if view 0 is coded as FLD then force also view to be coded as FLD as well
   int prev_view_is_anchor;
 
   int temp0_nal_reference_idc;
@@ -1225,13 +1300,13 @@ typedef struct video_par
 
   int non_idr_flag[2];
   int priority_id;
-  int view_id;
   int temporal_id;
   int anchor_pic_flag[2];
   int inter_view_flag[2];
 
   PrevCodingStats prev_cs;
   int MVCInterViewReorder;
+  struct storable_picture *proc_picture;
 #endif
 
   double *mb16x16_cost_frame;
@@ -1248,6 +1323,11 @@ typedef struct video_par
   // Redundant picture
   imgpel **imgY_tmp;
   imgpel **imgUV_tmp[2];
+  imgpel **imgY_tmp_buf[2];
+  imgpel **imgUV_tmp_buf[2][2];
+
+  // RDOQ related parameters
+  //int Intra_Selected; 
 
   int CbCr_predmode_8x8[4]; 
   distblk ****motion_cost;
@@ -1277,6 +1357,8 @@ typedef struct video_par
   // files
   FILE *p_log;                     //!< SNR file
 
+  // generic output file
+  FILE **f_out;
   // ANNEX B output file
   FILE *f_annexb; 
   // RTP output file
@@ -1293,7 +1375,8 @@ typedef struct video_par
   DistortionParams *p_Dist;
   struct stat_parameters  *p_Stats;
   pic_parameter_set_rbsp_t *PicParSet[MAXPPS];
-  struct decoded_picture_buffer *p_Dpb;
+  //struct decoded_picture_buffer *p_Dpb;
+  struct decoded_picture_buffer *p_Dpb_layer[MAX_NUM_DPB_LAYERS];
   struct frame_store            *out_buffer;
   struct storable_picture       *enc_picture;
   struct storable_picture       **enc_frame_picture;
@@ -1344,8 +1427,8 @@ typedef struct video_par
   //Various
   void (*buf2img)              (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int o_size_x, int o_size_y, int symbol_size_in_bytes, int bitshift);
   void (*getNeighbour)         (Macroblock *currMB, int xN, int yN, int mb_size[2], PixelPos *pix);
-  void (*get_mb_block_pos)     (int mb_addr, short *x, short *y);
-  int  (*WriteNALU)            (struct video_par *p_Vid, NALU_t *n);     //! Hides the write function in Annex B or RTP
+  void (*get_mb_block_pos)     (BlockPos *PicPos, int mb_addr, short *x, short *y);
+  int  (*WriteNALU)            (struct video_par *p_Vid, NALU_t *n, FILE **f_out);     //! Hides the write function in Annex B or RTP
   void (*error_conceal_picture)(struct video_par *p_Vid, struct storable_picture *enc_pic, int decoder);
   distblk (*estimate_distortion)(Macroblock *currMB, int block, int block_size, short mode, short pdir, distblk min_rdcost);
   // function pointer for different ways of obtaining chroma interpolation
@@ -1355,8 +1438,8 @@ typedef struct video_par
   void (*GetStrengthVer)    (byte Strength[16], Macroblock *MbQ, int edge, int mvlimit);
   void (*GetStrengthHor)    (byte Strength[16], Macroblock *MbQ, int edge, int mvlimit);
   void (*EdgeLoopLumaHor)   (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width);
-  void (*EdgeLoopLumaVer)   (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width);
-  void (*EdgeLoopChromaVer)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width, int uv);
+  void (*EdgeLoopLumaVer)   (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge);
+  void (*EdgeLoopChromaVer)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int uv);
   void (*EdgeLoopChromaHor)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width, int uv);
 
   // We should move these at the slice level at some point.
@@ -1371,6 +1454,62 @@ typedef struct video_par
   distblk (*computeUniPred[6])   (struct storable_picture *ref1, struct me_block *, distblk , MotionVector * );
   distblk (*computeBiPred1[3])   (struct storable_picture *ref1, struct storable_picture *ref2, struct me_block*, distblk , MotionVector *, MotionVector *);
   distblk (*computeBiPred2[3])   (struct storable_picture *ref1, struct storable_picture *ref2, struct me_block*, distblk , MotionVector *, MotionVector *);
+
+  seq_parameter_set_rbsp_t *sps[MAX_NUM_DPB_LAYERS];
+  FrameFormat output_format[MAX_NUM_DPB_LAYERS];
+  int num_of_layers; 
+  int dpb_layer_id;
+
+  BlockPos *PicPos;
+
+  //deprecative varialbes, they will be removed in future, so donot add varaibles here;
+  ColorFormat yuv_format;
+  int P444_joined;
+  short bitdepth_luma;
+  short bitdepth_chroma;
+  int bitdepth_scale[2];
+  int bitdepth_luma_qp_scale;
+  int bitdepth_chroma_qp_scale;
+  int bitdepth_lambda_scale;
+  uint32 dc_pred_value_comp[MAX_PLANE]; //!< component value for DC prediction (depends on component pel bit depth)
+  int max_pel_value_comp      [MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
+  int max_imgpel_value_comp_sq   [MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
+  int num_blk8x8_uv;
+  int num_cdc_coeff;
+  short mb_cr_size_x;
+  short mb_cr_size_y;
+  int mb_size[MAX_PLANE][2];
+  int max_bitCount;
+  int width;                   //!< Number of pels
+  int width_padded;            //!< Width in pels of padded picture
+  int width_blk;               //!< Number of columns in blocks
+  int width_cr;                //!< Number of pels chroma
+  int height;                  //!< Number of lines
+  int height_padded;           //!< Number in lines of padded picture
+  int height_blk;              //!< Number of lines in blocks
+  int height_cr;               //!< Number of lines  chroma
+  int height_cr_frame;         //!< Number of lines  chroma frame
+  int size;                    //!< Luma Picture size in pels
+  int size_cr;                 //!< Chroma Picture size in pels
+  int padded_size_x;  
+  int padded_size_x_m8x8;
+  int padded_size_x_m4x4;
+  int cr_padded_size_x;
+  int cr_padded_size_x_m8;
+  int cr_padded_size_x2;
+  int cr_padded_size_x4;
+  int pad_size_uv_x;
+  int pad_size_uv_y;
+  unsigned char chroma_mask_mv_y;
+  unsigned char chroma_mask_mv_x;
+  int chroma_shift_y, chroma_shift_x;
+  int shift_cr_x, shift_cr_y;
+
+  unsigned int PicWidthInMbs;
+  unsigned int PicHeightInMapUnits;
+  unsigned int FrameHeightInMbs;
+  unsigned int FrameSizeInMbs;
+  //end;
 } VideoParameters;
 
 
@@ -1447,8 +1586,24 @@ extern void make_frame_picture_JV( VideoParameters *p_Vid );
 
 
 
-short **PicPos;
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
+extern void setup_coding_layer(VideoParameters *p_Vid);
+
+static inline int is_FREXT_profile(unsigned int profile_idc) 
+{
+  return ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 );
+}
+
+
+static inline int is_MVC_profile(unsigned int profile_idc)
+{
+  return ( (0)
+#if (MVC_EXTENSION_ENABLE)
+  || (profile_idc == MULTIVIEW_HIGH) || (profile_idc == STEREO_HIGH)
+#endif
+    );
+}
+
 
 #endif
 

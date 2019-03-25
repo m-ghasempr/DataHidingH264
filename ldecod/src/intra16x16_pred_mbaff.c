@@ -25,7 +25,7 @@
  *    makes and returns 16x16 DC prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -50,9 +50,9 @@ static int intra16x16_dc_pred_mbaff(Macroblock *currMB, ColorPlane pl)
 
   for (i=0;i<17;++i)
   {
-    p_Vid->getNeighbour(currMB, -1,  i-1, p_Vid->mb_size[IS_LUMA], &left[i]);
+    getAffNeighbour(currMB, -1,  i-1, p_Vid->mb_size[IS_LUMA], &left[i]);
   }
-  p_Vid->getNeighbour(currMB,    0,   -1, p_Vid->mb_size[IS_LUMA], &b);
+  getAffNeighbour(currMB,    0,   -1, p_Vid->mb_size[IS_LUMA], &b);
 
   if (!p_Vid->active_pps->constrained_intra_pred_flag)
   {
@@ -107,7 +107,7 @@ static int intra16x16_dc_pred_mbaff(Macroblock *currMB, ColorPlane pl)
  *    makes and returns 16x16 vertical prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -124,8 +124,7 @@ static int intra16x16_vert_pred_mbaff(Macroblock *currMB, ColorPlane pl)
 
   int up_avail;
 
-  //getNonAffNeighbour(currMB,    0,   -1, p_Vid->mb_size[IS_LUMA], &b);
-  p_Vid->getNeighbour(currMB,    0,   -1, p_Vid->mb_size[IS_LUMA], &b);
+  getAffNeighbour(currMB,    0,   -1, p_Vid->mb_size[IS_LUMA], &b);
 
   if (!p_Vid->active_pps->constrained_intra_pred_flag)
   {
@@ -161,7 +160,7 @@ static int intra16x16_vert_pred_mbaff(Macroblock *currMB, ColorPlane pl)
  *    makes and returns 16x16 horizontal prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -181,7 +180,7 @@ static int intra16x16_hor_pred_mbaff(Macroblock *currMB, ColorPlane pl)
 
   for (i=0;i<17;++i)
   {
-    p_Vid->getNeighbour(currMB, -1,  i-1, p_Vid->mb_size[IS_LUMA], &left[i]);
+    getAffNeighbour(currMB, -1,  i-1, p_Vid->mb_size[IS_LUMA], &left[i]);
   }
 
   if (!p_Vid->active_pps->constrained_intra_pred_flag)
@@ -215,7 +214,7 @@ static int intra16x16_hor_pred_mbaff(Macroblock *currMB, ColorPlane pl)
  *    makes and returns 16x16 horizontal prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -241,9 +240,9 @@ static int intra16x16_plane_pred_mbaff(Macroblock *currMB, ColorPlane pl)
 
   for (i=0;i<17; ++i)
   {
-    p_Vid->getNeighbour(currMB, -1,  i-1, p_Vid->mb_size[IS_LUMA], &left[i]);
+    getAffNeighbour(currMB, -1,  i-1, p_Vid->mb_size[IS_LUMA], &left[i]);
   }
-  p_Vid->getNeighbour(currMB,    0,   -1, p_Vid->mb_size[IS_LUMA], &b);
+  getAffNeighbour(currMB,    0,   -1, p_Vid->mb_size[IS_LUMA], &b);
 
   if (!p_Vid->active_pps->constrained_intra_pred_flag)
   {
@@ -293,11 +292,11 @@ static int intra16x16_plane_pred_mbaff(Macroblock *currMB, ColorPlane pl)
  *    makes and returns 16x16 intra prediction blocks 
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *    SEARCH_SYNC   search next sync element as errors while decoding occured
  ***********************************************************************
  */
-int intrapred_16x16_mbaff(Macroblock *currMB,  //!< Current Macroblock
+int intra_pred_16x16_mbaff(Macroblock *currMB,  //!< Current Macroblock
                           ColorPlane pl,       //!< Current colorplane (for 4:4:4)                         
                           int predmode)        //!< prediction mode
 {

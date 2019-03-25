@@ -366,34 +366,36 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
         for (index=0; index < max_index; index++)
         {
           mode = mb_mode_table[index];
-      if (enc_mb.valid[mode])
-      {
-          if (p_Vid->yuv_format != YUV400)
-          {           
-            currMB->i16mode = 0; 
-          }
+          if (mode == 1)
+            continue;
+          if (enc_mb.valid[mode])
+          {
+            if (p_Vid->yuv_format != YUV400)
+            {           
+              currMB->i16mode = 0; 
+            }
 
-          // Skip intra modes in inter slices if best mode is inter <P8x8 with cbp equal to 0    
-          if (currSlice->P444_joined)
-          {
-            if (p_Inp->SkipIntraInInterSlices && !intra && mode >= I16MB 
-            && currMB->best_mode <=3 && currMB->best_cbp == 0 && currSlice->cmp_cbp[1] == 0 && currSlice->cmp_cbp[2] == 0 && (currMB->min_rdcost < weighted_cost(enc_mb.lambda_mdfp, 5)))
-              continue;
-          }
-          else
-          {
-            if (p_Inp->SkipIntraInInterSlices && !intra && mode >= I4MB && currMB->best_mode <=3 && currMB->best_cbp == 0 && (currMB->min_rdcost < weighted_cost(enc_mb.lambda_mdfp,5)))
-              continue;
-          }
+            // Skip intra modes in inter slices if best mode is inter <P8x8 with cbp equal to 0    
+            if (currSlice->P444_joined)
+            {
+              if (p_Inp->SkipIntraInInterSlices && !intra && mode >= I16MB 
+                && currMB->best_mode <=3 && currMB->best_cbp == 0 && currSlice->cmp_cbp[1] == 0 && currSlice->cmp_cbp[2] == 0 && (currMB->min_rdcost < weighted_cost(enc_mb.lambda_mdfp, 5)))
+                continue;
+            }
+            else
+            {
+              if (p_Inp->SkipIntraInInterSlices && !intra && mode >= I4MB && currMB->best_mode <=3 && currMB->best_cbp == 0 && (currMB->min_rdcost < weighted_cost(enc_mb.lambda_mdfp,5)))
+                continue;
+            }
 
             compute_mode_RD_cost(currMB, &enc_mb, (short) mode, &inter_skip);
 
-      }
+          }
         }// for (index=0; index<max_index; index++)
       }// for (currMB->c_ipred_mode=DC_PRED_8; currMB->c_ipred_mode<=chroma_pred_mode_range[1]; currMB->c_ipred_mode++)                     
 
       // Selective Intra Coding
-      if((currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE) && p_Inp->SelectiveIntraEnable && !IS_FREXT_PROFILE(p_Inp->ProfileIDC))
+      if((currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE) && p_Inp->SelectiveIntraEnable && !is_FREXT_profile(p_Inp->ProfileIDC))
       {
         fast_mode_intra_decision(currMB, &intra_skip);
 

@@ -12,7 +12,7 @@
  *    21. Oct 2000
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Detlev Marpe                    <marpe@hhi.de>
+ *    - Detlev Marpe
  *    - Gabi Blaettermann
  *    - Gunnar Marten
  *************************************************************************************
@@ -82,7 +82,7 @@ void arideco_done_decoding(DecodingEnvironmentPtr dep)
  *    read one byte from the bitstream
  ************************************************************************
  */
-unsigned int getbyte(DecodingEnvironmentPtr dep)
+static inline unsigned int getbyte(DecodingEnvironmentPtr dep)
 {     
 #if(TRACE==2)
   fprintf(p_trace, "get_byte: %d\n", (*dep->Dcodestrm_len));
@@ -96,15 +96,16 @@ unsigned int getbyte(DecodingEnvironmentPtr dep)
  *    read two bytes from the bitstream
  ************************************************************************
  */
-unsigned int getword(DecodingEnvironmentPtr dep)
+static inline unsigned int getword(DecodingEnvironmentPtr dep)
 {
-  int d = *dep->Dcodestrm_len;
+  int *len = dep->Dcodestrm_len;
+  byte *p_code_strm = &dep->Dcodestrm[*len];
 #if(TRACE==2)
-  fprintf(p_trace, "get_byte: %d\n", d);
-  fprintf(p_trace, "get_byte: %d\n", d + 1);
+  fprintf(p_trace, "get_byte: %d\n", *len);
+  fprintf(p_trace, "get_byte: %d\n", *len + 1);
 #endif
-  *dep->Dcodestrm_len += 2;
-  return ((dep->Dcodestrm[d]<<8) | dep->Dcodestrm[d+1]);
+  *len += 2;
+  return ((*p_code_strm<<8) | *(p_code_strm + 1));
 }
 /*!
  ************************************************************************
@@ -140,12 +141,13 @@ void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *code_buff
  */
 int arideco_bits_read(DecodingEnvironmentPtr dep)
 { 
-  int tmp = ((*dep->Dcodestrm_len) << 3) - dep->DbitsLeft;
-
 #if (2==TRACE)
+  int tmp = ((*dep->Dcodestrm_len) << 3) - dep->DbitsLeft;
   fprintf(p_trace, "tmp: %d\n", tmp);
-#endif
   return tmp;
+#else
+ return (((*dep->Dcodestrm_len) << 3) - dep->DbitsLeft);
+#endif
 }
 
 
@@ -157,7 +159,7 @@ int arideco_bits_read(DecodingEnvironmentPtr dep)
 *    the decoded symbol
 ************************************************************************
 */
-unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct )
+unsigned int biari_decode_symbol(DecodingEnvironment *dep, BiContextType *bi_ct )
 {  
   unsigned int bit    = bi_ct->MPS;
   unsigned int *value = &dep->Dvalue;
@@ -171,20 +173,20 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
   if(*value < (*range << *DbitsLeft))   //MPS
   {
     *state = AC_next_state_MPS_64[*state]; // next state 
-
     if( *range >= QUARTER )
     {
       return (bit);
     }
     else 
+    {
       *range <<= 1;
-
-    (*DbitsLeft)--;
+      (*DbitsLeft)--;
+    }
   }
   else         // LPS 
   {
     int renorm = renorm_table_32[(rLPS>>3) & 0x1F];
-    *value -= (*range << dep->DbitsLeft);
+    *value -= (*range << *DbitsLeft);
 
     *range = (rLPS << renorm);
     (*DbitsLeft) -= renorm;

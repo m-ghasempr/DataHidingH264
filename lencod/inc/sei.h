@@ -18,9 +18,9 @@
 #define MAX_LAYER_NUMBER 2
 #define MAX_DEPENDENT_SUBSEQ 5
 // tone mapping information
-#define MAX_CODED_BIT_DEPTH	12
-#define MAX_SEI_BIT_DEPTH	12
-#define MAX_NUM_PIVOTS		(1<<MAX_CODED_BIT_DEPTH)
+#define MAX_CODED_BIT_DEPTH  12
+#define MAX_SEI_BIT_DEPTH    12
+#define MAX_NUM_PIVOTS       (1<<MAX_CODED_BIT_DEPTH)
 // This is only temp
 //! Buffering Period Information
 #define MAX_CPB_CNT_MINUS1 31
@@ -170,10 +170,13 @@ typedef struct
 typedef struct
 {
   int pan_scan_rect_id;
-  int pan_scan_rect_left_offset;
-  int pan_scan_rect_right_offset;
-  int pan_scan_rect_top_offset;
-  int pan_scan_rect_bottom_offset;
+  int pan_scan_rect_cancel_flag;
+  int pan_scan_cnt_minus1;             //!< ranges from 0 to 2
+  int pan_scan_rect_left_offset[3];
+  int pan_scan_rect_right_offset[3];
+  int pan_scan_rect_top_offset[3];
+  int pan_scan_rect_bottom_offset[3];
+  int pac_scan_rect_repetition_period;
 
   Bitstream *data;
   int payloadSize;
@@ -393,7 +396,8 @@ extern void InitSceneInformation        (SEIParameters *p_SEI);
 extern void CloseSceneInformation       (SEIParameters *p_SEI);
 extern void UpdateSceneInformation      (SEIParameters *p_SEI, Boolean HasSceneInformation, int sceneID, int sceneTransType, int secondSceneID);
 extern void FinalizeSceneInformation    (SEIParameters *p_SEI);
-extern void UpdatePanScanRectInfo(SEIParameters *p_SEI);
+extern void UpdatePanScanRectInfo       (VideoParameters *p_Vid);
+extern void ClearPanScanRectInfoPayload (SEIParameters *p_SEI);
 
 extern void UpdateUser_data_unregistered(SEIParameters *p_SEI);
 extern void UpdateUser_data_registered_itu_t_t35(SEIParameters *p_SEI);
@@ -424,6 +428,6 @@ extern void ComposeSparePictureMessage (SEIParameters *p_SEI, int delta_spare_fr
 extern void ClearFramePackingArrangement(SEIParameters *p_SEI);
 extern void UpdateFramePackingArrangement(VideoParameters *p_Vid, InputParameters *p_Inp);
 
-
 // end of temp additions
+
 #endif

@@ -35,7 +35,7 @@ typedef struct dec_set_t
   int bDBEnable;
   int bAllLayers;
   int time_incr;
-	int bDecCompAdapt;
+  int bDecCompAdapt;
 } DecSet_t;
 
 #ifdef __cplusplus

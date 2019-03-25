@@ -572,7 +572,7 @@ int residual_transform_quant_luma_8x8(Macroblock *currMB, ColorPlane pl, int b8,
   if (nonzero)
   {
     // Inverse 8x8 transform
-    inverse8x8(mb_rres, mb_rres, block_y, block_x);
+    inverse8x8(&mb_rres[block_y], &mb_rres[block_y], block_x);
 
     // generate final block
     sample_reconstruct (&img_enc[currMB->pix_y + block_y], &mb_pred[block_y], &mb_rres[block_y], block_x, currMB->pix_x + block_x, BLOCK_SIZE_8x8, BLOCK_SIZE_8x8, max_imgpel_value, DQ_BITS_8);
@@ -646,7 +646,7 @@ int residual_transform_quant_luma_8x8_cavlc(Macroblock *currMB, ColorPlane pl, i
   if (nonzero)
   {
     // Inverse 8x8 transform
-    inverse8x8(mb_rres, mb_rres, block_y, block_x);
+    inverse8x8(&mb_rres[block_y], &mb_rres[block_y], block_x);
 
     // generate final block
     sample_reconstruct (&img_enc[currMB->pix_y + block_y], &mb_pred[block_y], &mb_rres[block_y], block_x, currMB->pix_x + block_x, BLOCK_SIZE_8x8, BLOCK_SIZE_8x8, max_imgpel_value, DQ_BITS_8);

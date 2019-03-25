@@ -8,8 +8,8 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Detlev Marpe                    <marpe@hhi.de>
- *    - Heiko Schwarz                   <hschwarz@hhi.de>
+ *    - Detlev Marpe
+ *    - Heiko Schwarz
  **************************************************************************************
  */
 
@@ -208,7 +208,6 @@ double XRate (VideoParameters *p_Vid, BiContextTypePtr ctx, const char* model)
   mod_state = iClip3(0, 127, mod_state);
   ctx_state = (ctx->MPS ? 64 + ctx->state : 63 - ctx->state);
 
-  //xr -= weight * (p_Vid->probability[ctx_state] * (p_Vid->entropy[mod_state] - p_Vid->entropy[127 - mod_state]) + p_Vid->entropy[127 - mod_state]);
   xr -= weight * (p_Vid->probability[ctx_state] * p_Vid->enorm[mod_state] + p_Vid->entropy[127 - mod_state]);
 
   return xr;

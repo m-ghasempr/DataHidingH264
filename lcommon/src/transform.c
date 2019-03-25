@@ -447,7 +447,7 @@ void forward8x8(int **block, int **tblock, int pos_y, int pos_x)
   }
 }
 
-void inverse8x8(int **tblock, int **block, int pos_y, int pos_x)
+void inverse8x8(int **tblock, int **block, int pos_x)
 {
   int i, ii;
   int tmp[64];
@@ -457,7 +457,7 @@ void inverse8x8(int **tblock, int **block, int pos_y, int pos_x)
   int b0, b1, b2, b3, b4, b5, b6, b7;
 
   // Horizontal  
-  for (i=pos_y; i < pos_y + BLOCK_SIZE_8x8; i++)
+  for (i=0; i < BLOCK_SIZE_8x8; i++)
   {
     pblock = &tblock[i][pos_x];
     p0 = *(pblock++);
@@ -535,14 +535,14 @@ void inverse8x8(int **tblock, int **block, int pos_y, int pos_x)
     b5 =  a2 - (a1 >> 2);
 
     ii = i + pos_x;
-    block[pos_y    ][ii] = b0 + b7;
-    block[pos_y + 1][ii] = b2 - b5;
-    block[pos_y + 2][ii] = b4 + b3;
-    block[pos_y + 3][ii] = b6 + b1;
-    block[pos_y + 4][ii] = b6 - b1;
-    block[pos_y + 5][ii] = b4 - b3;
-    block[pos_y + 6][ii] = b2 + b5;
-    block[pos_y + 7][ii] = b0 - b7;
+    block[0][ii] = b0 + b7;
+    block[1][ii] = b2 - b5;
+    block[2][ii] = b4 + b3;
+    block[3][ii] = b6 + b1;
+    block[4][ii] = b6 - b1;
+    block[5][ii] = b4 - b3;
+    block[6][ii] = b2 + b5;
+    block[7][ii] = b0 - b7;
   }
 }
 

@@ -696,7 +696,7 @@ void submacroblock_mode_decision_low(Macroblock *currMB,
 
   int64 curr_cbp_blk;
   double min_rdcost, rdcost = 0.0;
-  int j0, i0, j1, i1;
+  int j0, i0;
   int i, j;
   int index;
   int mode;
@@ -717,6 +717,7 @@ void submacroblock_mode_decision_low(Macroblock *currMB,
   Boolean stored_state_8x8 = FALSE;
 
 #ifdef BEST_NZ_COEFF
+  int j1, i1;
   int best_nz_coeff[2][2];
 #endif
 
@@ -729,11 +730,11 @@ void submacroblock_mode_decision_low(Macroblock *currMB,
 
   //--- set coordinates ---
   j0 = ((block>>1)<<3);
-  j1 = (j0>>2);
   i0 = ((block&0x01)<<3);
-  i1 = (i0>>2);
 
 #ifdef BEST_NZ_COEFF
+  j1 = (j0>>2);
+  i1 = (i0>>2);
   for(j = 0; j <= 1; j++)
   {
     for(i = 0; i <= 1; i++)

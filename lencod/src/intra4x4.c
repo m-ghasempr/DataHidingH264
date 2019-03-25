@@ -18,8 +18,7 @@
 #include "image.h"
 #include "mb_access.h"
 
-void generate_pred_error_4x4(imgpel **cur_img, imgpel **prd_img, imgpel **cur_prd, 
-                         int **m7, int pic_opix_x, int block_x)
+void generate_pred_error_4x4(imgpel **cur_img, imgpel **prd_img, imgpel **cur_prd, int **m7, int pic_opix_x, int block_x)
 {
   int j, i, *m7_line;
   imgpel *cur_line, *prd_line;
@@ -77,8 +76,6 @@ static inline void get_i4x4_vertical(imgpel **cur_pred, imgpel *PredPel)
   memcpy(cur_pred[2], &PredPel[1], BLOCK_SIZE * sizeof(imgpel));
   memcpy(cur_pred[3], &PredPel[1], BLOCK_SIZE * sizeof(imgpel));
 }
-
-
 
 /*!
  ************************************************************************
@@ -426,7 +423,6 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
 
-  int i;
   imgpel  *PredPel = currMB->intra4x4_pred[pl];  // array of predictor pels
   imgpel   **img_enc = p_Vid->enc_picture->p_curr_img;
 
@@ -466,8 +462,6 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   *left_available = block_available_left;
   *up_available   = block_available_up;
   *all_available  = block_available_up && block_available_left && block_available_up_left;
-
-  i = (img_x & 15);
 
   // form predictor pels
   if (block_available_up)
@@ -565,4 +559,3 @@ void get_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int i4x4_mode, int img
     break;
   }
 }
-

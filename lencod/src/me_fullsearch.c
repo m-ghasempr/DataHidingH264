@@ -147,8 +147,8 @@ FullPelBlockMotionBiPred (Macroblock *currMB,      // <--  current Macroblock
   for (pos=0; pos<max_pos; pos++)
   {
     //--- set candidate position (absolute position in pel units) ---
-    cand.mv_x = center1.mv_x + (p_Vid->spiral_search[pos].mv_x << 2);
-    cand.mv_y = center1.mv_y + (p_Vid->spiral_search[pos].mv_y << 2);
+    cand.mv_x = center1.mv_x + p_Vid->spiral_qpel_search[pos].mv_x;
+    cand.mv_y = center1.mv_y + p_Vid->spiral_qpel_search[pos].mv_y;
 
     //--- initialize motion cost (cost for motion vector) and check ---
     mcost  = mv_cost (p_Vid, lambda_factor, &cand, &pred1);
@@ -171,7 +171,7 @@ FullPelBlockMotionBiPred (Macroblock *currMB,      // <--  current Macroblock
   //===== set best motion vector and return minimum motion cost =====
   if (best_pos)
   {
-    add_mvs(mv1, &p_Vid->spiral_search[best_pos]);
+    add_mvs(mv1, &p_Vid->spiral_qpel_search[best_pos]);
   }
   return min_mcost;
 }

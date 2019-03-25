@@ -16,25 +16,6 @@
 #include "mb_access.h"
 #include "intra8x8.h"
 
-void generate_pred_error_8x8(imgpel **cur_img, imgpel **prd_img, imgpel **cur_prd, 
-                         int **m7, int pic_opix_x, int block_x)
-{
-  int j, i, *m7_line;
-  imgpel *cur_line, *prd_line;
-
-  for (j=0; j < BLOCK_SIZE_8x8; j++)
-  {
-    prd_line = prd_img[j];
-    memcpy(&cur_prd[j][block_x], prd_line, BLOCK_SIZE_8x8 * sizeof(imgpel));
-    cur_line = &cur_img[j][pic_opix_x];    
-    m7_line = &m7[j][block_x];
-    for (i = 0; i < BLOCK_SIZE_8x8; i++)
-    {
-      *m7_line++ = (int) (*cur_line++ - *prd_line++);
-    }
-  }
-}
-
 // Notation for comments regarding prediction and predictors.
 // The pels of the 8x8 block are labelled a1..h8. The predictor pels above
 // are labelled A..P, from the left Q..X, and from above left Z, as follows:
@@ -75,6 +56,25 @@ void generate_pred_error_8x8(imgpel **cur_img, imgpel **prd_img, imgpel **cur_pr
 #define P_V (PredPel[22])
 #define P_W (PredPel[23])
 #define P_X (PredPel[24])
+
+void generate_pred_error_8x8(imgpel **cur_img, imgpel **prd_img, imgpel **cur_prd, 
+                         int **m7, int pic_opix_x, int block_x)
+{
+  int j, i, *m7_line;
+  imgpel *cur_line, *prd_line;
+
+  for (j=0; j < BLOCK_SIZE_8x8; j++)
+  {
+    prd_line = prd_img[j];
+    memcpy(&cur_prd[j][block_x], prd_line, BLOCK_SIZE_8x8 * sizeof(imgpel));
+    cur_line = &cur_img[j][pic_opix_x];    
+    m7_line = &m7[j][block_x];
+    for (i = 0; i < BLOCK_SIZE_8x8; i++)
+    {
+      *m7_line++ = (int) (*cur_line++ - *prd_line++);
+    }
+  }
+}
 
 /*!
  *************************************************************************************
@@ -152,7 +152,6 @@ static inline void get_i8x8_vertical(imgpel **cur_pred, imgpel *PredPel)
     memcpy(cur_pred[j], &P_A, BLOCK_SIZE_8x8 * sizeof(imgpel));
 }
 
-
 /*!
  ************************************************************************
  * \brief
@@ -225,70 +224,36 @@ static inline void get_i8x8_dc(imgpel **cur_pred, imgpel *PredPel, int left_avai
  */
 static inline void get_i8x8_downleft(imgpel **cur_pred, imgpel *PredPel)
 {
-  cur_pred[0][0] = (imgpel) ((P_A + P_C + ((P_B) << 1) + 2) >> 2);
-  cur_pred[0][1] =
-  cur_pred[1][0] = (imgpel) ((P_B + P_D + ((P_C) << 1) + 2) >> 2);
-  cur_pred[0][2] =
-  cur_pred[1][1] =
-  cur_pred[2][0] = (imgpel) ((P_C + P_E + ((P_D) << 1) + 2) >> 2);
-  cur_pred[0][3] =
-  cur_pred[1][2] =
-  cur_pred[2][1] =
-  cur_pred[3][0] = (imgpel) ((P_D + P_F + ((P_E) << 1) + 2) >> 2);
-  cur_pred[0][4] =
-  cur_pred[1][3] =
-  cur_pred[2][2] =
-  cur_pred[3][1] =
-  cur_pred[4][0] = (imgpel) ((P_E + P_G + ((P_F) << 1) + 2) >> 2);
-  cur_pred[0][5] =
-  cur_pred[1][4] =
-  cur_pred[2][3] =
-  cur_pred[3][2] =
-  cur_pred[4][1] =
-  cur_pred[5][0] = (imgpel) ((P_F + P_H + ((P_G) << 1) + 2) >> 2);
-  cur_pred[0][6] =
-  cur_pred[1][5] =
-  cur_pred[2][4] =
-  cur_pred[3][3] =
-  cur_pred[4][2] =
-  cur_pred[5][1] =
-  cur_pred[6][0] = (imgpel) ((P_G + P_I + ((P_H) << 1) + 2) >> 2);
-  cur_pred[0][7] =
-  cur_pred[1][6] =
-  cur_pred[2][5] =
-  cur_pred[3][4] =
-  cur_pred[4][3] =
-  cur_pred[5][2] =
-  cur_pred[6][1] =
-  cur_pred[7][0] = (imgpel) ((P_H + P_J + ((P_I) << 1) + 2) >> 2);
-  cur_pred[1][7] =
-  cur_pred[2][6] =
-  cur_pred[3][5] =
-  cur_pred[4][4] =
-  cur_pred[5][3] =
-  cur_pred[6][2] =
-  cur_pred[7][1] = (imgpel) ((P_I + P_K + ((P_J) << 1) + 2) >> 2);
-  cur_pred[2][7] =
-  cur_pred[3][6] =
-  cur_pred[4][5] =
-  cur_pred[5][4] =
-  cur_pred[6][3] =
-  cur_pred[7][2] = (imgpel) ((P_J + P_L + (P_K << 1) + 2) >> 2);
-  cur_pred[3][7] =
-  cur_pred[4][6] =
-  cur_pred[5][5] =
-  cur_pred[6][4] =
-  cur_pred[7][3] = (imgpel) ((P_K + P_M + (P_L << 1) + 2) >> 2);
-  cur_pred[4][7] =
-  cur_pred[5][6] =
-  cur_pred[6][5] =
-  cur_pred[7][4] = (imgpel) ((P_L + P_N + (P_M << 1) + 2) >> 2);
-  cur_pred[5][7] =
-  cur_pred[6][6] =
-  cur_pred[7][5] = (imgpel) ((P_M + P_O + (P_N << 1) + 2) >> 2);
-  cur_pred[6][7] =
-  cur_pred[7][6] = (imgpel) ((P_N + P_P + (P_O << 1) + 2) >> 2);
-  cur_pred[7][7] = (imgpel) ((P_O + P_P + (P_P << 1) + 2) >> 2);
+  imgpel PredArray[16];  // array of final prediction values
+  imgpel *Pred = &PredArray[0];
+
+  // Mode DIAG_DOWN_LEFT_PRED
+  *Pred++ = (imgpel) ((P_A + P_C + ((P_B) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_B + P_D + ((P_C) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_C + P_E + ((P_D) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_D + P_F + ((P_E) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_E + P_G + ((P_F) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_F + P_H + ((P_G) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_G + P_I + ((P_H) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_H + P_J + ((P_I) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_I + P_K + ((P_J) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_J + P_L + ((P_K) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_K + P_M + ((P_L) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_L + P_N + ((P_M) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_M + P_O + ((P_N) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_N + P_P + ((P_O) << 1) + 2) >> 2);
+  *Pred   = (imgpel) ((P_O + P_P + ((P_P) << 1) + 2) >> 2);
+
+  Pred = &PredArray[ 0];
+
+  memcpy(*cur_pred++, Pred++, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred++, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred++, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred++, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred++, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred++, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred++, 8 * sizeof(imgpel));
+  memcpy(*cur_pred  , Pred  , 8 * sizeof(imgpel));
 }
 
 /*!
@@ -299,72 +264,37 @@ static inline void get_i8x8_downleft(imgpel **cur_pred, imgpel *PredPel)
  */
 static inline void get_i8x8_downright(imgpel **cur_pred, imgpel *PredPel)
 {
-    cur_pred[7][0] = (imgpel) ((P_X + P_V + (P_W << 1) + 2) >> 2);
-    cur_pred[6][0] =
-    cur_pred[7][1] = (imgpel) ((P_W + P_U + (P_V << 1) + 2) >> 2);
-    cur_pred[5][0] =
-    cur_pred[6][1] =
-    cur_pred[7][2] = (imgpel) ((P_V + P_T + (P_U << 1) + 2) >> 2);
-    cur_pred[4][0] =
-    cur_pred[5][1] =
-    cur_pred[6][2] =
-    cur_pred[7][3] = (imgpel) ((P_U + P_S + (P_T << 1) + 2) >> 2);
-    cur_pred[3][0] =
-    cur_pred[4][1] =
-    cur_pred[5][2] =
-    cur_pred[6][3] =
-    cur_pred[7][4] = (imgpel) ((P_T + P_R + (P_S << 1) + 2) >> 2);
-    cur_pred[2][0] =
-    cur_pred[3][1] =
-    cur_pred[4][2] =
-    cur_pred[5][3] =
-    cur_pred[6][4] =
-    cur_pred[7][5] = (imgpel) ((P_S + P_Q + (P_R << 1) + 2) >> 2);
-    cur_pred[1][0] =
-    cur_pred[2][1] =
-    cur_pred[3][2] =
-    cur_pred[4][3] =
-    cur_pred[5][4] =
-    cur_pred[6][5] =
-    cur_pred[7][6] = (imgpel) ((P_R + P_Z + (P_Q << 1) + 2) >> 2);
-    cur_pred[0][0] =
-    cur_pred[1][1] =
-    cur_pred[2][2] =
-    cur_pred[3][3] =
-    cur_pred[4][4] =
-    cur_pred[5][5] =
-    cur_pred[6][6] =
-    cur_pred[7][7] = (imgpel) ((P_Q + P_A + (P_Z << 1) + 2) >> 2);
-    cur_pred[0][1] =
-    cur_pred[1][2] =
-    cur_pred[2][3] =
-    cur_pred[3][4] =
-    cur_pred[4][5] =
-    cur_pred[5][6] =
-    cur_pred[6][7] = (imgpel) ((P_Z + P_B + (P_A << 1) + 2) >> 2);
-    cur_pred[0][2] =
-    cur_pred[1][3] =
-    cur_pred[2][4] =
-    cur_pred[3][5] =
-    cur_pred[4][6] =
-    cur_pred[5][7] = (imgpel) ((P_A + P_C + (P_B << 1) + 2) >> 2);
-    cur_pred[0][3] =
-    cur_pred[1][4] =
-    cur_pred[2][5] =
-    cur_pred[3][6] =
-    cur_pred[4][7] = (imgpel) ((P_B + P_D + (P_C << 1) + 2) >> 2);
-    cur_pred[0][4] =
-    cur_pred[1][5] =
-    cur_pred[2][6] =
-    cur_pred[3][7] = (imgpel) ((P_C + P_E + (P_D << 1) + 2) >> 2);
-    cur_pred[0][5] =
-    cur_pred[1][6] =
-    cur_pred[2][7] = (imgpel) ((P_D + P_F + (P_E << 1) + 2) >> 2);
-    cur_pred[0][6] =
-    cur_pred[1][7] = (imgpel) ((P_E + P_G + (P_F << 1) + 2) >> 2);
-    cur_pred[0][7] = (imgpel) ((P_F + P_H + (P_G << 1) + 2) >> 2);
-}
+  imgpel PredArray[16];  // array of final prediction values
+  imgpel *Pred = &PredArray[0];
 
+  // Mode DIAG_DOWN_RIGHT_PRED
+  *Pred++ = (imgpel) ((P_X + P_V + ((P_W) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_W + P_U + ((P_V) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_V + P_T + ((P_U) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_U + P_S + ((P_T) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_T + P_R + ((P_S) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_S + P_Q + ((P_R) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_R + P_Z + ((P_Q) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_Q + P_A + ((P_Z) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_Z + P_B + ((P_A) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_A + P_C + ((P_B) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_B + P_D + ((P_C) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_C + P_E + ((P_D) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_D + P_F + ((P_E) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_E + P_G + ((P_F) << 1) + 2) >> 2);
+  *Pred   = (imgpel) ((P_F + P_H + ((P_G) << 1) + 2) >> 2);
+
+  Pred = &PredArray[7];
+
+  memcpy(*cur_pred++, Pred--, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred--, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred--, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred--, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred--, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred--, 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, Pred--, 8 * sizeof(imgpel));
+  memcpy(*cur_pred  , Pred  , 8 * sizeof(imgpel));
+}
 
 /*!
  ************************************************************************
@@ -374,71 +304,42 @@ static inline void get_i8x8_downright(imgpel **cur_pred, imgpel *PredPel)
  */
 static inline void get_i8x8_vertleft(imgpel **cur_pred, imgpel *PredPel)
 {
-    cur_pred[0][0] = (imgpel) ((P_A + P_B + 1) >> 1);
-    cur_pred[0][1] =
-    cur_pred[2][0] = (imgpel) ((P_B + P_C + 1) >> 1);
-    cur_pred[0][2] =
-    cur_pred[2][1] =
-    cur_pred[4][0] = (imgpel) ((P_C + P_D + 1) >> 1);
-    cur_pred[0][3] =
-    cur_pred[2][2] =
-    cur_pred[4][1] =
-    cur_pred[6][0] = (imgpel) ((P_D + P_E + 1) >> 1);
-    cur_pred[0][4] =
-    cur_pred[2][3] =
-    cur_pred[4][2] =
-    cur_pred[6][1] = (imgpel) ((P_E + P_F + 1) >> 1);
-    cur_pred[0][5] =
-    cur_pred[2][4] =
-    cur_pred[4][3] =
-    cur_pred[6][2] = (imgpel) ((P_F + P_G + 1) >> 1);
-    cur_pred[0][6] =
-    cur_pred[2][5] =
-    cur_pred[4][4] =
-    cur_pred[6][3] = (imgpel) ((P_G + P_H + 1) >> 1);
-    cur_pred[0][7] =
-    cur_pred[2][6] =
-    cur_pred[4][5] =
-    cur_pred[6][4] = (imgpel) ((P_H + P_I + 1) >> 1);
-    cur_pred[2][7] =
-    cur_pred[4][6] =
-    cur_pred[6][5] = (imgpel) ((P_I + P_J + 1) >> 1);
-    cur_pred[4][7] =
-    cur_pred[6][6] = (imgpel) ((P_J + P_K + 1) >> 1);
-    cur_pred[6][7] = (imgpel) ((P_K + P_L + 1) >> 1);
-    cur_pred[1][0] = (imgpel) ((P_A + P_C + 2*P_B + 2) >> 2);
-    cur_pred[1][1] =
-    cur_pred[3][0] = (imgpel) ((P_B + P_D + 2*P_C + 2) >> 2);
-    cur_pred[1][2] =
-    cur_pred[3][1] =
-    cur_pred[5][0] = (imgpel) ((P_C + P_E + 2*P_D + 2) >> 2);
-    cur_pred[1][3] =
-    cur_pred[3][2] =
-    cur_pred[5][1] =
-    cur_pred[7][0] = (imgpel) ((P_D + P_F + 2*P_E + 2) >> 2);
-    cur_pred[1][4] =
-    cur_pred[3][3] =
-    cur_pred[5][2] =
-    cur_pred[7][1] = (imgpel) ((P_E + P_G + 2*P_F + 2) >> 2);
-    cur_pred[1][5] =
-    cur_pred[3][4] =
-    cur_pred[5][3] =
-    cur_pred[7][2] = (imgpel) ((P_F + P_H + 2*P_G + 2) >> 2);
-    cur_pred[1][6] =
-    cur_pred[3][5] =
-    cur_pred[5][4] =
-    cur_pred[7][3] = (imgpel) ((P_G + P_I + 2*P_H + 2) >> 2);
-    cur_pred[1][7] =
-    cur_pred[3][6] =
-    cur_pred[5][5] =
-    cur_pred[7][4] = (imgpel) ((P_H + P_J + 2*P_I + 2) >> 2);
-    cur_pred[3][7] =
-    cur_pred[5][6] =
-    cur_pred[7][5] = (imgpel) ((P_I + P_K + 2*P_J + 2) >> 2);
-    cur_pred[5][7] =
-    cur_pred[7][6] = (imgpel) ((P_J + P_L + 2*P_K + 2) >> 2);
-    cur_pred[7][7] = (imgpel) ((P_K + P_M + 2*P_L + 2) >> 2);
+  imgpel PredArray[22];  // array of final prediction values
+  imgpel *Pred = &PredArray[0];
+
+  *Pred++ = (imgpel) ((P_A + P_B + 1) >> 1);
+  *Pred++ = (imgpel) ((P_B + P_C + 1) >> 1);
+  *Pred++ = (imgpel) ((P_C + P_D + 1) >> 1);
+  *Pred++ = (imgpel) ((P_D + P_E + 1) >> 1);
+  *Pred++ = (imgpel) ((P_E + P_F + 1) >> 1);
+  *Pred++ = (imgpel) ((P_F + P_G + 1) >> 1);
+  *Pred++ = (imgpel) ((P_G + P_H + 1) >> 1);
+  *Pred++ = (imgpel) ((P_H + P_I + 1) >> 1);
+  *Pred++ = (imgpel) ((P_I + P_J + 1) >> 1);
+  *Pred++ = (imgpel) ((P_J + P_K + 1) >> 1);
+  *Pred++ = (imgpel) ((P_K + P_L + 1) >> 1);
+  *Pred++ = (imgpel) ((P_A + P_C + ((P_B) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_B + P_D + ((P_C) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_C + P_E + ((P_D) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_D + P_F + ((P_E) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_E + P_G + ((P_F) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_F + P_H + ((P_G) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_G + P_I + ((P_H) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_H + P_J + ((P_I) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_I + P_K + ((P_J) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_J + P_L + ((P_K) << 1) + 2) >> 2);
+  *Pred   = (imgpel) ((P_K + P_M + ((P_L) << 1) + 2) >> 2);
+
+  memcpy(*cur_pred++, &PredArray[ 0], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[11], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[ 1], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[12], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[ 2], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[13], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[ 3], 8 * sizeof(imgpel));
+  memcpy(*cur_pred  , &PredArray[14], 8 * sizeof(imgpel));
 }
+
 
 /*!
  ************************************************************************
@@ -448,70 +349,41 @@ static inline void get_i8x8_vertleft(imgpel **cur_pred, imgpel *PredPel)
  */
 static inline void get_i8x8_vertright(imgpel **cur_pred, imgpel *PredPel)
 {
-    cur_pred[0][0] =
-    cur_pred[2][1] =
-    cur_pred[4][2] =
-    cur_pred[6][3] = (imgpel) ((P_Z + P_A + 1) >> 1);
-    cur_pred[0][1] =
-    cur_pred[2][2] =
-    cur_pred[4][3] =
-    cur_pred[6][4] = (imgpel) ((P_A + P_B + 1) >> 1);
-    cur_pred[0][2] =
-    cur_pred[2][3] =
-    cur_pred[4][4] =
-    cur_pred[6][5] = (imgpel) ((P_B + P_C + 1) >> 1);
-    cur_pred[0][3] =
-    cur_pred[2][4] =
-    cur_pred[4][5] =
-    cur_pred[6][6] = (imgpel) ((P_C + P_D + 1) >> 1);
-    cur_pred[0][4] =
-    cur_pred[2][5] =
-    cur_pred[4][6] =
-    cur_pred[6][7] = (imgpel) ((P_D + P_E + 1) >> 1);
-    cur_pred[0][5] =
-    cur_pred[2][6] =
-    cur_pred[4][7] = (imgpel) ((P_E + P_F + 1) >> 1);
-    cur_pred[0][6] =
-    cur_pred[2][7] = (imgpel) ((P_F + P_G + 1) >> 1);
-    cur_pred[0][7] = (imgpel) ((P_G + P_H + 1) >> 1);
-    cur_pred[1][0] =
-    cur_pred[3][1] =
-    cur_pred[5][2] =
-    cur_pred[7][3] = (imgpel) ((P_Q + P_A + (P_Z << 1) + 2) >> 2);
-    cur_pred[1][1] =
-    cur_pred[3][2] =
-    cur_pred[5][3] =
-    cur_pred[7][4] = (imgpel) ((P_Z + P_B + (P_A << 1) + 2) >> 2);
-    cur_pred[1][2] =
-    cur_pred[3][3] =
-    cur_pred[5][4] =
-    cur_pred[7][5] = (imgpel) ((P_A + P_C + (P_B << 1) + 2) >> 2);
-    cur_pred[1][3] =
-    cur_pred[3][4] =
-    cur_pred[5][5] =
-    cur_pred[7][6] = (imgpel) ((P_B + P_D + (P_C << 1) + 2) >> 2);
-    cur_pred[1][4] =
-    cur_pred[3][5] =
-    cur_pred[5][6] =
-    cur_pred[7][7] = (imgpel) ((P_C + P_E + (P_D << 1) + 2) >> 2);
-    cur_pred[1][5] =
-    cur_pred[3][6] =
-    cur_pred[5][7] = (imgpel) ((P_D + P_F + (P_E << 1) + 2) >> 2);
-    cur_pred[1][6] =
-    cur_pred[3][7] = (imgpel) ((P_E + P_G + (P_F << 1) + 2) >> 2);
-    cur_pred[1][7] = (imgpel) ((P_F + P_H + (P_G << 1) + 2) >> 2);
-    cur_pred[2][0] =
-    cur_pred[4][1] =
-    cur_pred[6][2] = (imgpel) ((P_R + P_Z + (P_Q << 1) + 2) >> 2);
-    cur_pred[3][0] =
-    cur_pred[5][1] =
-    cur_pred[7][2] = (imgpel) ((P_S + P_Q + (P_R << 1) + 2) >> 2);
-    cur_pred[4][0] =
-    cur_pred[6][1] = (imgpel) ((P_T + P_R + (P_S << 1) + 2) >> 2);
-    cur_pred[5][0] =
-    cur_pred[7][1] = (imgpel) ((P_U + P_S + (P_T << 1) + 2) >> 2);
-    cur_pred[6][0] = (imgpel) ((P_V + P_T + (P_U << 1) + 2) >> 2);
-    cur_pred[7][0] = (imgpel) ((P_W + P_U + (P_V << 1) + 2) >> 2);
+  imgpel PredArray[22];  // array of final prediction values
+  imgpel *Pred = &PredArray[0];
+
+  *Pred++ = (imgpel) ((P_V + P_T + ((P_U) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_T + P_R + ((P_S) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_R + P_Z + ((P_Q) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_Z + P_A + 1) >> 1);
+  *Pred++ = (imgpel) ((P_A + P_B + 1) >> 1);
+  *Pred++ = (imgpel) ((P_B + P_C + 1) >> 1);
+  *Pred++ = (imgpel) ((P_C + P_D + 1) >> 1);
+  *Pred++ = (imgpel) ((P_D + P_E + 1) >> 1);
+  *Pred++ = (imgpel) ((P_E + P_F + 1) >> 1);
+  *Pred++ = (imgpel) ((P_F + P_G + 1) >> 1);
+  *Pred++ = (imgpel) ((P_G + P_H + 1) >> 1);
+
+  *Pred++ = (imgpel) ((P_W + P_U + ((P_V) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_U + P_S + ((P_T) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_S + P_Q + ((P_R) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_Q + P_A + ((P_Z) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_Z + P_B + ((P_A) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_A + P_C + ((P_B) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_B + P_D + ((P_C) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_C + P_E + ((P_D) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_D + P_F + ((P_E) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_E + P_G + ((P_F) << 1) + 2) >> 2);
+  *Pred   = (imgpel) ((P_F + P_H + ((P_G) << 1) + 2) >> 2);
+
+  memcpy(*cur_pred++, &PredArray[ 3], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[14], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[ 2], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[13], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[ 1], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[12], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[ 0], 8 * sizeof(imgpel));
+  memcpy(*cur_pred  , &PredArray[11], 8 * sizeof(imgpel));
 }
 
 /*!
@@ -522,70 +394,48 @@ static inline void get_i8x8_vertright(imgpel **cur_pred, imgpel *PredPel)
  */
 static inline void get_i8x8_hordown(imgpel **cur_pred, imgpel *PredPel)
 {
-    cur_pred[0][0] =
-    cur_pred[1][2] =
-    cur_pred[2][4] =
-    cur_pred[3][6] = (imgpel) ((P_Q + P_Z + 1) >> 1);
-    cur_pred[1][0] =
-    cur_pred[2][2] =
-    cur_pred[3][4] =
-    cur_pred[4][6] = (imgpel) ((P_R + P_Q + 1) >> 1);
-    cur_pred[2][0] =
-    cur_pred[3][2] =
-    cur_pred[4][4] =
-    cur_pred[5][6] = (imgpel) ((P_S + P_R + 1) >> 1);
-    cur_pred[3][0] =
-    cur_pred[4][2] =
-    cur_pred[5][4] =
-    cur_pred[6][6] = (imgpel) ((P_T + P_S + 1) >> 1);
-    cur_pred[4][0] =
-    cur_pred[5][2] =
-    cur_pred[6][4] =
-    cur_pred[7][6] = (imgpel) ((P_U + P_T + 1) >> 1);
-    cur_pred[5][0] =
-    cur_pred[6][2] =
-    cur_pred[7][4] = (imgpel) ((P_V + P_U + 1) >> 1);
-    cur_pred[6][0] =
-    cur_pred[7][2] = (imgpel) ((P_W + P_V + 1) >> 1);
-    cur_pred[7][0] = (imgpel) ((P_X + P_W + 1) >> 1);
-    cur_pred[0][1] =
-    cur_pred[1][3] =
-    cur_pred[2][5] =
-    cur_pred[3][7] = (imgpel) ((P_Q + P_A + (P_Z << 1) + 2) >> 2);
-    cur_pred[1][1] =
-    cur_pred[2][3] =
-    cur_pred[3][5] =
-    cur_pred[4][7] = (imgpel) ((P_Z + P_R + (P_Q << 1) + 2) >> 2);
-    cur_pred[2][1] =
-    cur_pred[3][3] =
-    cur_pred[4][5] =
-    cur_pred[5][7] = (imgpel) ((P_Q + P_S + (P_R << 1) + 2) >> 2);
-    cur_pred[3][1] =
-    cur_pred[4][3] =
-    cur_pred[5][5] =
-    cur_pred[6][7] = (imgpel) ((P_R + P_T + (P_S << 1) + 2) >> 2);
-    cur_pred[4][1] =
-    cur_pred[5][3] =
-    cur_pred[6][5] =
-    cur_pred[7][7] = (imgpel) ((P_S + P_U + (P_T << 1) + 2) >> 2);
-    cur_pred[5][1] =
-    cur_pred[6][3] =
-    cur_pred[7][5] = (imgpel) ((P_T + P_V + (P_U << 1) + 2) >> 2);
-    cur_pred[6][1] =
-    cur_pred[7][3] = (imgpel) ((P_U + P_W + (P_V << 1) + 2) >> 2);
-    cur_pred[7][1] = (imgpel) ((P_V + P_X + (P_W << 1) + 2) >> 2);
-    cur_pred[0][2] =
-    cur_pred[1][4] =
-    cur_pred[2][6] = (imgpel) ((P_Z + P_B + (P_A << 1) + 2) >> 2);
-    cur_pred[0][3] =
-    cur_pred[1][5] =
-    cur_pred[2][7] = (imgpel) ((P_A + P_C + (P_B << 1) + 2) >> 2);
-    cur_pred[0][4] =
-    cur_pred[1][6] = (imgpel) ((P_B + P_D + (P_C << 1) + 2) >> 2);
-    cur_pred[0][5] =
-    cur_pred[1][7] = (imgpel) ((P_C + P_E + (P_D << 1) + 2) >> 2);
-    cur_pred[0][6] = (imgpel) ((P_D + P_F + (P_E << 1) + 2) >> 2);
-    cur_pred[0][7] = (imgpel) ((P_E + P_G + (P_F << 1) + 2) >> 2);
+  imgpel PredArray[22];  // array of final prediction values
+  imgpel *Pred = &PredArray[0];
+
+  *Pred++ = (imgpel) ((P_X + P_W + 1) >> 1);
+  *Pred++ = (imgpel) ((P_V + P_X + (P_W << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_W + P_V + 1) >> 1);
+  *Pred++ = (imgpel) ((P_U + P_W + ((P_V) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_V + P_U + 1) >> 1);
+  *Pred++ = (imgpel) ((P_T + P_V + ((P_U) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_U + P_T + 1) >> 1);
+  *Pred++ = (imgpel) ((P_S + P_U + ((P_T) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_T + P_S + 1) >> 1);
+  *Pred++ = (imgpel) ((P_R + P_T + ((P_S) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_S + P_R + 1) >> 1);
+  *Pred++ = (imgpel) ((P_Q + P_S + ((P_R) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_R + P_Q + 1) >> 1);
+  *Pred++ = (imgpel) ((P_Z + P_R + ((P_Q) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_Q + P_Z + 1) >> 1);
+  *Pred++ = (imgpel) ((P_Q + P_A + ((P_Z) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_Z + P_B + ((P_A) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_A + P_C + ((P_B) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_B + P_D + ((P_C) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_C + P_E + ((P_D) << 1) + 2) >> 2);
+  *Pred++ = (imgpel) ((P_D + P_F + ((P_E) << 1) + 2) >> 2);
+  *Pred   = (imgpel) ((P_E + P_G + ((P_F) << 1) + 2) >> 2);
+
+  Pred = &PredArray[14];
+  memcpy(*cur_pred++, Pred, 8 * sizeof(imgpel));
+  Pred -= 2;
+  memcpy(*cur_pred++, Pred, 8 * sizeof(imgpel));
+  Pred -= 2;
+  memcpy(*cur_pred++, Pred, 8 * sizeof(imgpel));
+  Pred -= 2;
+  memcpy(*cur_pred++, Pred, 8 * sizeof(imgpel));
+  Pred -= 2;
+  memcpy(*cur_pred++, Pred, 8 * sizeof(imgpel));
+  Pred -= 2;
+  memcpy(*cur_pred++, Pred, 8 * sizeof(imgpel));
+  Pred -= 2;
+  memcpy(*cur_pred++, Pred, 8 * sizeof(imgpel));
+  Pred -= 2;
+  memcpy(*cur_pred  , Pred, 8 * sizeof(imgpel));
 }
 
 
@@ -597,70 +447,38 @@ static inline void get_i8x8_hordown(imgpel **cur_pred, imgpel *PredPel)
  */
 static inline void get_i8x8_horup(imgpel **cur_pred, imgpel *PredPel)
 {
-  cur_pred[0][0] = (imgpel) ((P_Q + P_R + 1) >> 1);
-  cur_pred[1][0] =
-  cur_pred[0][2] = (imgpel) ((P_R + P_S + 1) >> 1);
-  cur_pred[2][0] =
-  cur_pred[1][2] =
-  cur_pred[0][4] = (imgpel) ((P_S + P_T + 1) >> 1);
-  cur_pred[3][0] =
-  cur_pred[2][2] =
-  cur_pred[1][4] =
-  cur_pred[0][6] = (imgpel) ((P_T + P_U + 1) >> 1);
-  cur_pred[4][0] =
-  cur_pred[3][2] =
-  cur_pred[2][4] =
-  cur_pred[1][6] = (imgpel) ((P_U + P_V + 1) >> 1);
-  cur_pred[5][0] =
-  cur_pred[4][2] =
-  cur_pred[3][4] =
-  cur_pred[2][6] = (imgpel) ((P_V + P_W + 1) >> 1);
-  cur_pred[6][0] =
-  cur_pred[5][2] =
-  cur_pred[4][4] =
-  cur_pred[3][6] = (imgpel) ((P_W + P_X + 1) >> 1);
-  cur_pred[4][6] =
-  cur_pred[4][7] =
-  cur_pred[5][4] =
-  cur_pred[5][5] =
-  cur_pred[5][6] =
-  cur_pred[5][7] =
-  cur_pred[6][2] =
-  cur_pred[6][3] =
-  cur_pred[6][4] =
-  cur_pred[6][5] =
-  cur_pred[6][6] =
-  cur_pred[6][7] =
-  cur_pred[7][0] =
-  cur_pred[7][1] =
-  cur_pred[7][2] =
-  cur_pred[7][3] =
-  cur_pred[7][4] =
-  cur_pred[7][5] =
-  cur_pred[7][6] =
-  cur_pred[7][7] = (imgpel) P_X;
-  cur_pred[6][1] =
-  cur_pred[5][3] =
-  cur_pred[4][5] =
-  cur_pred[3][7] = (imgpel) ((P_W + P_X + (P_X << 1) + 2) >> 2);
-  cur_pred[5][1] =
-  cur_pred[4][3] =
-  cur_pred[3][5] =
-  cur_pred[2][7] = (imgpel) ((P_X + P_V + (P_W << 1) + 2) >> 2);
-  cur_pred[4][1] =
-  cur_pred[3][3] =
-  cur_pred[2][5] =
-  cur_pred[1][7] = (imgpel) ((P_W + P_U + (P_V << 1) + 2) >> 2);
-  cur_pred[3][1] =
-  cur_pred[2][3] =
-  cur_pred[1][5] =
-  cur_pred[0][7] = (imgpel) ((P_V + P_T + (P_U << 1) + 2) >> 2);
-  cur_pred[2][1] =
-  cur_pred[1][3] =
-  cur_pred[0][5] = (imgpel) ((P_U + P_S + (P_T << 1) + 2) >> 2);
-  cur_pred[1][1] =
-  cur_pred[0][3] = (imgpel) ((P_T + P_R + (P_S << 1) + 2) >> 2);
-  cur_pred[0][1] = (imgpel) ((P_S + P_Q + (P_R << 1) + 2) >> 2);
+  imgpel PredArray[22];
+  PredArray[ 0] = (imgpel) ((P_Q + P_R + 1) >> 1);
+  PredArray[ 1] = (imgpel) ((P_S + P_Q + ((P_R) << 1) + 2) >> 2);
+  PredArray[ 2] = (imgpel) ((P_R + P_S + 1) >> 1);
+  PredArray[ 3] = (imgpel) ((P_T + P_R + ((P_S) << 1) + 2) >> 2);
+  PredArray[ 4] = (imgpel) ((P_S + P_T + 1) >> 1);
+  PredArray[ 5] = (imgpel) ((P_U + P_S + ((P_T) << 1) + 2) >> 2);
+  PredArray[ 6] = (imgpel) ((P_T + P_U + 1) >> 1);
+  PredArray[ 7] = (imgpel) ((P_V + P_T + ((P_U) << 1) + 2) >> 2);
+  PredArray[ 8] = (imgpel) ((P_U + P_V + 1) >> 1);
+  PredArray[ 9] = (imgpel) ((P_W + P_U + ((P_V) << 1) + 2) >> 2);
+  PredArray[10] = (imgpel) ((P_V + P_W + 1) >> 1);
+  PredArray[11] = (imgpel) ((P_X + P_V + ((P_W) << 1) + 2) >> 2);
+  PredArray[12] = (imgpel) ((P_W + P_X + 1) >> 1);
+  PredArray[13] = (imgpel) ((P_W + P_X + ((P_X) << 1) + 2) >> 2);
+  PredArray[14] = (imgpel) P_X;
+  PredArray[15] = (imgpel) P_X;
+  PredArray[16] = (imgpel) P_X;
+  PredArray[17] = (imgpel) P_X;
+  PredArray[18] = (imgpel) P_X;
+  PredArray[19] = (imgpel) P_X;
+  PredArray[20] = (imgpel) P_X;
+  PredArray[21] = (imgpel) P_X;
+
+  memcpy(*cur_pred++, &PredArray[ 0], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[ 2], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[ 4], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[ 6], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[ 8], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[10], 8 * sizeof(imgpel));
+  memcpy(*cur_pred++, &PredArray[12], 8 * sizeof(imgpel));
+  memcpy(*cur_pred  , &PredArray[14], 8 * sizeof(imgpel));
 }
 
 
@@ -767,7 +585,7 @@ void set_intrapred_8x8(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
     P_Z = p_Vid->dc_pred_value;
   }
 
-  LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
+  LowPassForIntra8x8Pred(PredPel, block_available_up_left, block_available_up, block_available_left);
 }
 
 
@@ -880,7 +698,7 @@ void set_intrapred_8x8_mbaff(Macroblock *currMB, ColorPlane pl, int img_x,int im
     P_Z = p_Vid->dc_pred_value;
   }
 
-  LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
+  LowPassForIntra8x8Pred(PredPel, block_available_up_left, block_available_up, block_available_left);
 }
 
 /*!
@@ -935,3 +753,4 @@ void get_intrapred_8x8(Macroblock *currMB, ColorPlane pl, int i8x8_mode, int lef
     break;
   }
 }
+

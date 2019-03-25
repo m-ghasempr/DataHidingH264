@@ -143,10 +143,11 @@ int UMHEX_get_mem(VideoParameters *p_Vid, InputParameters *p_Inp)
   UMHexStruct *p_UMHex = p_Vid->p_UMHex;
 
   int memory_size = 0;
+  int search_range = p_Inp->SearchMode[0] == UM_HEX ? p_Inp->search_range[0] : p_Inp->search_range[1];
 
   if (NULL==(p_UMHex->flag_intra = calloc ((p_Vid->width>>4)+1,sizeof(byte)))) no_mem_exit("UMHEX_get_mem: p_UMHex->flag_intra"); //fwf 20050330
 
-  memory_size += get_mem2D(&p_UMHex->McostState, 2*p_Inp->search_range+1, 2*p_Inp->search_range+1);
+  memory_size += get_mem2D(&p_UMHex->McostState, 2*search_range+1, 2*search_range+1);
 
   memory_size += get_mem4Ddistblk(&(p_UMHex->fastme_ref_cost), p_Vid->max_num_references, 9, 4, 4);
   memory_size += get_mem3Ddistblk(&(p_UMHex->fastme_l0_cost), 9, p_Vid->height >> 2, p_Vid->width >> 2);
@@ -268,7 +269,7 @@ UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macro
 
 
   //////allocate memory for search state//////////////////////////
-  memset(p_UMHex->McostState[0],0,(2*p_Inp->search_range+1)*(2*p_Inp->search_range+1));
+  memset(p_UMHex->McostState[0],0,(2*p_Inp->search_range[p_Vid->view_id]+1)*(2*p_Inp->search_range[p_Vid->view_id]+1));
 
 
   //check the center median predictor
@@ -511,7 +512,7 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
   UMHexStruct *p_UMHex = p_Vid->p_UMHex;
   static const MotionVector DiamondQ[4] = {{-1, 0}, { 0, 1}, { 1, 0}, { 0, -1}};
   distblk mcost;
-  MotionVector cand, iMinNow, currmv = {0, 0}, candWithPad;
+  MotionVector cand, iMinNow, currmv = {0, 0}, cand_pad;
 
   int   list          = mv_block->list;        
   int   list_offset   = currMB->list_offset;
@@ -540,8 +541,8 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
     p_UMHex->SearchState[dynamic_search_range][dynamic_search_range] = 1;
     cand = *mv;
     mcost = mv_cost (p_Vid, lambda_factor, &cand, pred_mv);
-    candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
-    mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); //&cand);
+    cand_pad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
+    mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &cand_pad); //&cand);
 
     if (mcost < min_mcost)
     {
@@ -561,9 +562,9 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
     cand.mv_y = (short) (mv->mv_y + pred_frac_mv_y);
     mcost = mv_cost (p_Vid, lambda_factor, &cand, pred_mv);
     p_UMHex->SearchState[cand.mv_y -mv->mv_y + dynamic_search_range][cand.mv_x - mv->mv_x + dynamic_search_range] = 1;
-    candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
+    cand_pad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
 
-    mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); //&cand);
+    mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &cand_pad); //&cand);
 
     if (mcost < min_mcost)
     {
@@ -588,9 +589,9 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
         {
           p_UMHex->SearchState[cand.mv_y -mv->mv_y + dynamic_search_range][cand.mv_x -mv->mv_x + dynamic_search_range] = 1;
           mcost = mv_cost (p_Vid, lambda_factor, &cand, pred_mv);
-          candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
+          cand_pad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
 
-          mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); // &cand);                    
+          mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &cand_pad); // &cand);                    
           if (mcost < min_mcost)
           {
             min_mcost = mcost;
@@ -1038,7 +1039,7 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
   //sub step2: multi-grid-hexagon-search
   memcpy(temp_Big_Hexagon_X,Big_Hexagon_X,64);
   memcpy(temp_Big_Hexagon_Y,Big_Hexagon_Y,64);
-  for(i=1;i<=(p_Inp->search_range >> 2); i++)
+  for(i=1;i<=(p_Inp->search_range[p_Vid->view_id] >> 2); i++)
   {
 
     for (m = 0; m < 16; m++)
@@ -1343,18 +1344,18 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
       dsr_mv_avail=block_a.available+block_b.available+block_c.available;
       if(dsr_mv_avail < 2)
       {
-        dsr_temp_search_range[hv] = p_Inp->search_range;
+        dsr_temp_search_range[hv] = p_Inp->search_range[p_Vid->view_id];
       }
       else
       {
         dsr_mv_max = imax(iabs(mv_a),imax(iabs(mv_b),iabs(mv_c)));
         dsr_mv_sum = (iabs(mv_a)+iabs(mv_b)+iabs(mv_c));
-        if(dsr_mv_sum == 0) dsr_small_search_range = (p_Inp->search_range + 4) >> 3;
-        else if(dsr_mv_sum > 3 ) dsr_small_search_range = (p_Inp->search_range + 2) >>2;
-        else dsr_small_search_range = (3*p_Inp->search_range + 8) >> 4;
-        dsr_temp_search_range[hv]=imin(p_Inp->search_range,imax(dsr_small_search_range,dsr_mv_max<<1));
+        if(dsr_mv_sum == 0) dsr_small_search_range = (p_Inp->search_range[p_Vid->view_id] + 4) >> 3;
+        else if(dsr_mv_sum > 3 ) dsr_small_search_range = (p_Inp->search_range[p_Vid->view_id] + 2) >>2;
+        else dsr_small_search_range = (3*p_Inp->search_range[p_Vid->view_id] + 8) >> 4;
+        dsr_temp_search_range[hv]=imin(p_Inp->search_range[p_Vid->view_id],imax(dsr_small_search_range,dsr_mv_max<<1));
         if(distblkmax(p_UMHex->SAD_a, distblkmax(p_UMHex->SAD_b,p_UMHex->SAD_c)) > p_UMHex->Threshold_DSR_MB[p_UMHex->UMHEX_blocktype])
-          dsr_temp_search_range[hv] = p_Inp->search_range;
+          dsr_temp_search_range[hv] = p_Inp->search_range[p_Vid->view_id];
       }
     }
   }

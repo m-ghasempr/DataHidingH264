@@ -19,14 +19,6 @@
 
 #include "nalucommon.h"
 
-typedef struct sBitsFile
-{
-  void (*OpenBitsFile)    (VideoParameters *p_Vid, char *filename);
-  void (*CloseBitsFile)   (VideoParameters *p_Vid);
-  int  (*GetNALU)         (VideoParameters *p_Vid, NALU_t *nalu);
-} BitsFile;
-
-extern void initBitsFile (VideoParameters *p_Vid, int filemode);
 extern void CheckZeroByteNonVCL(VideoParameters *p_Vid, NALU_t *nalu);
 extern void CheckZeroByteVCL   (VideoParameters *p_Vid, NALU_t *nalu);
 

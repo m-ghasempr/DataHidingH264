@@ -15,7 +15,7 @@
  *     - Byeong-Moon Jeon                <jeonbm@lge.com>
  *     - Yoon-Seong Soh                  <yunsung@lge.com>
  *     - Thomas Stockhammer              <stockhammer@ei.tum.de>
- *     - Detlev Marpe                    <marpe@hhi.de>
+ *     - Detlev Marpe
  *     - Guido Heising
  *     - Thomas Wedi                     <wedi@tnt.uni-hannover.de>
  *     - Ragip Kurceren                  <ragip.kurceren@nokia.com>
@@ -42,6 +42,7 @@
 #include "fmo.h"
 #include "sei.h"
 #include "memalloc.h"
+#include "fast_memory.h"
 #include "nalu.h"
 #include "ratectl.h"
 #include "mb_access.h"
@@ -61,8 +62,9 @@
 #include "rdopt.h"
 #include "sei.h"
 #include "configfile.h"
+#include "mbuffer.h"
 
-
+//#include "resize.h"
 #include "md_common.h"
 #include "me_epzs_common.h"
 
@@ -324,6 +326,34 @@ byte get_idr_flag( VideoParameters *p_Vid )
 /*!
  ************************************************************************
  * \brief
+ *    Determine whether picture is coded as IDR or Openg GOP Intra
+ ************************************************************************
+ */
+byte get_random_access_flag( VideoParameters *p_Vid )
+{
+  int random_access;
+  FrameUnitStruct *p_cur_frm = p_Vid->p_curr_frm_struct;
+
+  switch( p_Vid->structure )
+  {
+  default:
+  case FRAME:
+    random_access = p_cur_frm->p_frame_pic->random_access;
+    break;
+  case TOP_FIELD:
+    random_access = p_cur_frm->p_top_fld_pic->random_access;
+    break;
+  case BOTTOM_FIELD:
+    random_access = p_cur_frm->p_bot_fld_pic->random_access;
+    break;
+  }
+
+  return (byte) random_access;
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    Update global stats
  ************************************************************************
  */
@@ -464,7 +494,7 @@ void write_el_field_vcl_nalu(VideoParameters *p_Vid)
     p_Vid->anchor_pic_flag[1] = p_Vid->temp0_anchor_pic_flag[1];
     p_Vid->inter_view_flag[0] = p_Vid->temp0_inter_view_flag[0];
     p_Vid->inter_view_flag[1] = p_Vid->temp0_inter_view_flag[1];
-    writeout_picture (p_Vid, p_Vid->field_pic1[0], 0);	//top
+    writeout_picture (p_Vid, p_Vid->field_pic1[0], 0);  //top
 
     //restore view_id 1
     p_Vid->nal_reference_idc  = temp1_nal_reference_idc;
@@ -478,7 +508,7 @@ void write_el_field_vcl_nalu(VideoParameters *p_Vid)
     p_Vid->inter_view_flag[0] = temp1_inter_view_flag[0];
     p_Vid->inter_view_flag[1] = temp1_inter_view_flag[1];
     write_non_vcl_nalu_mvc( p_Vid );
-    writeout_picture (p_Vid, p_Vid->field_pic2[0], 0);	//top
+    writeout_picture (p_Vid, p_Vid->field_pic2[0], 0);  //top
 
     //restore view_id 0
     p_Vid->nal_reference_idc  = p_Vid->temp0_nal_reference_idc;
@@ -493,7 +523,7 @@ void write_el_field_vcl_nalu(VideoParameters *p_Vid)
     p_Vid->inter_view_flag[1] = p_Vid->temp0_inter_view_flag[1];
     p_Vid->structure = BOTTOM_FIELD;
     write_non_vcl_nalu_mvc( p_Vid );
-    writeout_picture (p_Vid, p_Vid->field_pic1[1], 1);	//bot
+    writeout_picture (p_Vid, p_Vid->field_pic1[1], 1);  //bot
 
     //restore view_id 1
     p_Vid->nal_reference_idc  = temp1_nal_reference_idc;
@@ -507,9 +537,9 @@ void write_el_field_vcl_nalu(VideoParameters *p_Vid)
     p_Vid->inter_view_flag[0] = temp1_inter_view_flag[0];
     p_Vid->inter_view_flag[1] = temp1_inter_view_flag[1];
     write_non_vcl_nalu_mvc( p_Vid );
-    writeout_picture (p_Vid, p_Vid->field_pic2[1], 1);	//bot
+    writeout_picture (p_Vid, p_Vid->field_pic2[1], 1);  //bot
   }
-  else	// store the first view nal unit
+  else  // store the first view nal unit
   {
     p_Vid->temp0_nal_reference_idc   = p_Vid->nal_reference_idc;
     p_Vid->temp0_non_idr_flag[0]     = p_Vid->non_idr_flag[0];
@@ -726,6 +756,7 @@ void perform_encode_field(VideoParameters *p_Vid)
     p_Vid->p_rc_gen->FieldControl = 1;
 
   p_Vid->field_picture = 1;  // we encode fields
+
 #if (MVC_EXTENSION_ENABLE)
   field_picture (p_Vid, p_Vid->field_pic_ptr[0], p_Vid->field_pic_ptr[1]);
 #else
@@ -793,9 +824,13 @@ void perform_encode_frame(VideoParameters *p_Vid)
   }
 #endif
 
+#if (MVC_EXTENSION_ENABLE)
+  if ((p_Inp->PicInterlace == ADAPTIVE_CODING) && (!is_MVC_profile(p_Vid->active_sps->profile_idc) || 
+     (/*(p_Vid->active_sps->profile_idc == SBSPLUS_HIGH) &&*/ ((p_Vid->view_id == 0) || (p_Vid->view_id == 1 && p_Vid->sec_view_force_fld)))))
+#else
   if (p_Inp->PicInterlace == ADAPTIVE_CODING)
+#endif
   {
-    //Rate control
 
     if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
       p_Vid->p_rc_gen->FieldControl=1;
@@ -811,7 +846,7 @@ void perform_encode_frame(VideoParameters *p_Vid)
 #if (MVC_EXTENSION_ENABLE)
     field_picture (p_Vid, p_Vid->field_pic_ptr[0], p_Vid->field_pic_ptr[1]);
 
-    if(p_Inp->num_of_views==1 || p_Vid->view_id==0)	// first view will make the decision
+    if(p_Inp->num_of_views==1 || p_Vid->view_id==0)  // first view will make the decision
     {
       if(p_Vid->rd_pass == 0)
         p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[0], p_Vid->field_pic_ptr[0], p_Vid->field_pic_ptr[1]);
@@ -820,7 +855,7 @@ void perform_encode_frame(VideoParameters *p_Vid)
       else
         p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[2], p_Vid->field_pic_ptr[0], p_Vid->field_pic_ptr[1]);
 
-      p_Vid->sec_view_force_fld = p_Vid->fld_flag;		// store 1st view decision, same coding structure to be used for second view
+      p_Vid->sec_view_force_fld = p_Vid->fld_flag;    // store 1st view decision, same coding structure to be used for second view
     }
     else
     {
@@ -911,8 +946,13 @@ void store_coded_picture(DecodedPictureBuffer *p_Dpb)
 {
   VideoParameters *p_Vid = p_Dpb->p_Vid;
   InputParameters *p_Inp = p_Vid->p_Inp;
+  unsigned int profile_idc = p_Vid->active_sps->profile_idc;
 
-  if (p_Inp->PicInterlace == ADAPTIVE_CODING)
+#if (MVC_EXTENSION_ENABLE)
+  if ( (p_Inp->PicInterlace == ADAPTIVE_CODING) && ((p_Dpb->layer_id == 0 ) || !is_MVC_profile(profile_idc)))
+#else
+  if ( p_Inp->PicInterlace == ADAPTIVE_CODING )
+#endif
   {
     if (p_Vid->fld_flag)
     {      
@@ -920,6 +960,13 @@ void store_coded_picture(DecodedPictureBuffer *p_Dpb)
       update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[1]->stats);
       // store bottom field
       store_picture_in_dpb (p_Dpb, p_Vid->enc_field_picture[1], &p_Inp->output);
+#if (MVC_EXTENSION_ENABLE)
+      if ( p_Vid->proc_picture && is_MVC_profile(profile_idc) )
+      {
+        store_proc_picture_in_dpb (p_Vid->p_Dpb_layer[1], p_Vid->proc_picture, &p_Inp->output);
+        p_Vid->proc_picture = NULL;
+      }
+#endif
       free_storable_picture(p_Vid, p_Vid->enc_frame_picture[0]);
       free_storable_picture(p_Vid, p_Vid->enc_frame_picture[1]);
       free_storable_picture(p_Vid, p_Vid->enc_frame_picture[2]);
@@ -931,12 +978,24 @@ void store_coded_picture(DecodedPictureBuffer *p_Dpb)
       if (p_Vid->rd_pass==2)
       {
         replace_top_pic_with_frame(p_Dpb, p_Vid->enc_frame_picture[2], &p_Inp->output);
+#if (MVC_EXTENSION_ENABLE)
+        if ( is_MVC_profile(profile_idc) )
+        {
+          replace_top_proc_pic_with_frame(p_Vid->p_Dpb_layer[1], p_Vid->enc_frame_picture[2]);
+        }
+#endif
         free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[0]);
         free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[1]);
       }
       else if (p_Vid->rd_pass==1)
       {
         replace_top_pic_with_frame(p_Dpb, p_Vid->enc_frame_picture[1], &p_Inp->output);
+#if (MVC_EXTENSION_ENABLE)
+        if ( is_MVC_profile(profile_idc) )
+        {
+          replace_top_proc_pic_with_frame(p_Vid->p_Dpb_layer[1], p_Vid->enc_frame_picture[1]);
+        }
+#endif
         free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[0]);
         free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[2]);
       }
@@ -945,6 +1004,12 @@ void store_coded_picture(DecodedPictureBuffer *p_Dpb)
         if(p_Inp->redundant_pic_flag==0 || (p_Vid->key_frame==0))
         {
           replace_top_pic_with_frame(p_Dpb, p_Vid->enc_frame_picture[0], &p_Inp->output);
+#if (MVC_EXTENSION_ENABLE)
+          if ( is_MVC_profile(profile_idc) )
+          {
+            replace_top_proc_pic_with_frame(p_Vid->p_Dpb_layer[1], p_Vid->enc_frame_picture[0]);
+          }
+#endif
           free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[1]);
           free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[2]);
         }
@@ -959,6 +1024,13 @@ void store_coded_picture(DecodedPictureBuffer *p_Dpb)
       update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[0]->stats);
       update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[1]->stats);
       store_picture_in_dpb(p_Dpb, p_Vid->enc_field_picture[1], &p_Inp->output);
+#if (MVC_EXTENSION_ENABLE)
+      if ( is_MVC_profile(profile_idc) && p_Vid->proc_picture)
+      {
+        store_proc_picture_in_dpb (p_Vid->p_Dpb_layer[1], p_Vid->proc_picture, &p_Inp->output);
+        p_Vid->proc_picture = NULL;
+      }
+#endif
     }
     else
     {      
@@ -966,6 +1038,14 @@ void store_coded_picture(DecodedPictureBuffer *p_Dpb)
       {
         update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_picture->stats);
         store_picture_in_dpb (p_Dpb, p_Vid->enc_picture, &p_Inp->output);
+
+#if (MVC_EXTENSION_ENABLE)
+        if ( is_MVC_profile(profile_idc) && p_Vid->proc_picture)
+        {
+          store_proc_picture_in_dpb (p_Vid->p_Dpb_layer[1], p_Vid->proc_picture, &p_Inp->output);
+          p_Vid->proc_picture = NULL;
+        }
+#endif
         free_pictures(p_Vid, -1);
       }
     }
@@ -1180,8 +1260,6 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
   }
 #endif
 
-  
-
 
   // Following code should consider optimal coding mode. Currently also does not support
   // multiple slices per frame.
@@ -1273,7 +1351,10 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
   {
     storeRedundantFrame(p_Vid);
   }
-  store_coded_picture(p_Vid->p_Dpb);
+
+  //printf("view_id:%d, frame_num:%d, poc:%d\n", p_Vid->view_id, (int)p_Vid->enc_picture->frame_num, p_Vid->enc_picture->poc);
+  store_coded_picture(p_Vid->p_Dpb_layer[p_Vid->view_id]);
+
 
   p_Vid->AverageFrameQP = isign(p_Vid->SumFrameQP) * ((iabs(p_Vid->SumFrameQP) + (int) (p_Vid->FrameSizeInMbs >> 1))/ (int) p_Vid->FrameSizeInMbs);  
 
@@ -1407,13 +1488,13 @@ static void writeout_picture(VideoParameters *p_Vid, Picture *pic, int is_bottom
           nalu->inter_view_flag     = p_Vid->inter_view_flag[is_bottom];
           nalu->reserved_one_bit    = 1;
 
-          bits = p_Vid->WriteNALU (p_Vid, nalu);
+          bits = p_Vid->WriteNALU (p_Vid, nalu, p_Vid->f_out);
           p_Vid->p_Stats->bit_ctr += bits;
           p_Vid->p_Stats->bit_ctr_v[0] += bits;
           FreeNALU(nalu);
         }
 
-        bits = p_Vid->WriteNALU (p_Vid, currSlice->partArr[partition].nal_unit);
+        bits = p_Vid->WriteNALU (p_Vid, currSlice->partArr[partition].nal_unit, p_Vid->f_out);
         p_Vid->p_Stats->bit_ctr += bits;
         if ( p_Vid->p_Inp->num_of_views == 2 )
         {
@@ -1442,7 +1523,7 @@ static void writeout_picture(VideoParameters *p_Vid, Picture *pic)
       // write only if the partition has content
       if (currSlice->partArr[partition].bitstream->write_flag )
       {
-        bits = p_Vid->WriteNALU (p_Vid, currSlice->partArr[partition].nal_unit);
+        bits = p_Vid->WriteNALU (p_Vid, currSlice->partArr[partition].nal_unit, p_Vid->f_out);
         p_Vid->p_Stats->bit_ctr += bits;
 
       }
@@ -1463,17 +1544,17 @@ void copy_params(VideoParameters *p_Vid, StorablePicture *enc_picture, seq_param
 
   if (active_sps->frame_cropping_flag)
   {
-    enc_picture->frame_cropping_rect_left_offset   = active_sps->frame_cropping_rect_left_offset;
-    enc_picture->frame_cropping_rect_right_offset  = active_sps->frame_cropping_rect_right_offset;
-    enc_picture->frame_cropping_rect_top_offset    = active_sps->frame_cropping_rect_top_offset;
-    enc_picture->frame_cropping_rect_bottom_offset = active_sps->frame_cropping_rect_bottom_offset;
+    enc_picture->frame_crop_left_offset   = active_sps->frame_crop_left_offset;
+    enc_picture->frame_crop_right_offset  = active_sps->frame_crop_right_offset;
+    enc_picture->frame_crop_top_offset    = active_sps->frame_crop_top_offset;
+    enc_picture->frame_crop_bottom_offset = active_sps->frame_crop_bottom_offset;
   }
   else
   {
-    enc_picture->frame_cropping_rect_left_offset   = 0;
-    enc_picture->frame_cropping_rect_right_offset  = 0;
-    enc_picture->frame_cropping_rect_top_offset    = 0;
-    enc_picture->frame_cropping_rect_bottom_offset = 0;
+    enc_picture->frame_crop_left_offset   = 0;
+    enc_picture->frame_crop_right_offset  = 0;
+    enc_picture->frame_crop_top_offset    = 0;
+    enc_picture->frame_crop_bottom_offset = 0;
   }
 }
 
@@ -1545,8 +1626,6 @@ void frame_picture (VideoParameters *p_Vid, Picture *frame, ImageData *imgData, 
   if(rd_pass == 0 && p_Vid->wp_parameters_set == 0)
     ResetWP(p_Vid, p_Inp); 
 
-
-
   if( (p_Inp->separate_colour_plane_flag != 0) )
   {
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
@@ -1587,7 +1666,6 @@ static void field_picture (VideoParameters *p_Vid, Picture *top, Picture *bottom
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
   //Rate control
-  int old_pic_type;              // picture type of top field used for rate control
   int TopFieldBits;
 
   p_Vid->SumFrameQP = 0;
@@ -1596,9 +1674,6 @@ static void field_picture (VideoParameters *p_Vid, Picture *top, Picture *bottom
 
   //set mv limits to field type
   update_mv_limits(p_Vid, TRUE);
-
-  //Rate control
-  old_pic_type = p_Vid->type;
 
   p_Vid->height    = (p_Inp->output.height[0] + p_Vid->auto_crop_bottom) >> 1;
   p_Vid->height_cr = p_Vid->height_cr_frame >> 1;
@@ -1634,9 +1709,15 @@ static void field_picture (VideoParameters *p_Vid, Picture *top, Picture *bottom
 
   code_a_picture(p_Vid, top);
   p_Vid->enc_picture->structure = TOP_FIELD;
+  store_picture_in_dpb(p_Vid->p_Dpb_layer[p_Vid->view_id], p_Vid->enc_field_picture[0], &p_Inp->output);
 
-  store_picture_in_dpb(p_Vid->p_Dpb, p_Vid->enc_field_picture[0], &p_Inp->output);
-
+#if (MVC_EXTENSION_ENABLE)
+  if ( is_MVC_profile(p_Vid->active_sps->profile_idc) && p_Vid->proc_picture)
+  {
+    store_proc_picture_in_dpb (p_Vid->p_Dpb_layer[1], p_Vid->proc_picture, &p_Inp->output);
+    p_Vid->proc_picture = NULL;
+  }
+#endif
   calc_picture_bits(top);
 
   //Rate control
@@ -1675,7 +1756,7 @@ static void field_picture (VideoParameters *p_Vid, Picture *top, Picture *bottom
   calc_picture_bits(bottom);
 
   // the distortion for a field coded frame (consisting of top and bottom field)
-  // lives in the top->distortion variables, the bottom-> are dummies
+  // lives in the top->distortion variables, the bottom-> are dummies  
   distortion_fld (p_Vid, p_Inp, top, &p_Vid->imgData);
 }
 
@@ -1993,10 +2074,22 @@ static void init_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
   // set parameters for direct mode and deblocking filter
   // currently selection is done at the frame level instead of slice level. This needs to be changed.  
   p_Vid->direct_spatial_mv_pred_flag = (char) p_Inp->direct_spatial_mv_pred_flag;
-  p_Vid->DFDisableIdc                = (char) p_Inp->DFDisableIdc[p_Vid->nal_reference_idc > 0][p_Vid->type];
-  p_Vid->DFAlphaC0Offset             = (char) p_Inp->DFAlpha     [p_Vid->nal_reference_idc > 0][p_Vid->type];
-  p_Vid->DFBetaOffset                = (char) p_Inp->DFBeta      [p_Vid->nal_reference_idc > 0][p_Vid->type];
-
+#if (MVC_EXTENSION_ENABLE)
+  if ( (p_Inp->num_of_views == 1) || (p_Vid->view_id == 0) )
+#endif
+  {
+    p_Vid->DFDisableIdc                = (char) p_Inp->DFDisableIdc[p_Vid->nal_reference_idc > 0][p_Vid->type];
+    p_Vid->DFAlphaC0Offset             = (char) p_Inp->DFAlpha     [p_Vid->nal_reference_idc > 0][p_Vid->type];
+    p_Vid->DFBetaOffset                = (char) p_Inp->DFBeta      [p_Vid->nal_reference_idc > 0][p_Vid->type];
+  }
+#if (MVC_EXTENSION_ENABLE)
+  else
+  {
+    p_Vid->DFDisableIdc                = (char) p_Inp->EnhLayerDFDisableIdc[p_Vid->nal_reference_idc > 0][p_Vid->type];
+    p_Vid->DFAlphaC0Offset             = (char) p_Inp->EnhLayerDFAlpha     [p_Vid->nal_reference_idc > 0][p_Vid->type];
+    p_Vid->DFBetaOffset                = (char) p_Inp->EnhLayerDFBeta      [p_Vid->nal_reference_idc > 0][p_Vid->type];
+  }
+#endif
   p_Vid->AdaptiveRounding            = p_Inp->AdaptiveRounding; 
 }
 
@@ -2053,7 +2146,6 @@ void UnifiedOneForthPix ( VideoParameters *p_Vid, StorablePicture *s)
   if(s->bInterpolated)
     return;
   s->bInterpolated = 1;
-
   // Y component
   s->p_img_sub[0] = s->imgY_sub;
   s->p_curr_img_sub = s->imgY_sub;
@@ -2064,20 +2156,27 @@ void UnifiedOneForthPix ( VideoParameters *p_Vid, StorablePicture *s)
   //if (p_Inp->intra_period != 1)
   {
     getSubImagesLuma ( p_Vid, s );
-
     // and the sub-images for U and V
-    if ( (p_Vid->yuv_format != YUV400) && (p_Inp->ChromaMCBuffer) )
+    if ( ((p_Vid->yuv_format != YUV400) && (p_Inp->ChromaMCBuffer)) || p_Vid->P444_joined )
     {
       if (p_Vid->P444_joined)
       {
+        imgpel **** p_curr_img_sub = s->p_curr_img_sub;
+        imgpel **   p_curr_img = s->p_curr_img;
         //U
         select_plane(p_Vid, PLANE_U);
+        s->p_curr_img_sub = s->imgUV_sub[0];
+        s->p_curr_img = s->imgUV[0];
         getSubImagesLuma (p_Vid, s);
         //V
         select_plane(p_Vid, PLANE_V);
+        s->p_curr_img_sub = s->imgUV_sub[1];
+        s->p_curr_img = s->imgUV[1];
         getSubImagesLuma (p_Vid, s);
         //Y
         select_plane(p_Vid, PLANE_Y);
+        s->p_curr_img_sub = p_curr_img_sub;
+        s->p_curr_img = p_curr_img;
       }
       else
         getSubImagesChroma( p_Vid, s );
@@ -2278,7 +2377,7 @@ static void ReportVerbose(VideoParameters *p_Vid, char *pic_type, int cur_bits, 
 static void ReportVerboseNVB(VideoParameters *p_Vid, char *pic_type, int cur_bits, int nvb_bits, int wp_method, int lambda, DistMetric *mPSNR, int tmp_time, int direct_mode)
 {
 #if (MVC_EXTENSION_ENABLE)
-  if ( p_Vid->p_Inp->num_of_views == 2 )
+  if ( p_Vid->num_of_layers == 2 )
   {
     if ( p_Vid->fld_flag && p_Vid->view_id == 0 )
     {
@@ -2328,13 +2427,13 @@ static void ReportVerboseNVB(VideoParameters *p_Vid, char *pic_type, int cur_bit
     }
     else
     {
-      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d  %d\n",
         p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, nvb_bits, wp_method,
         p_Vid->AverageFrameQP, lambda, 
         mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
         tmp_time, (int) p_Vid->me_time,
         p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
-        p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+        p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc, p_Vid->iInterViewMBs);
     }
   }
   else
@@ -2663,7 +2762,7 @@ static void ReportB(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 2)
   {
-    int lambda = (int) p_Vid->lambda_me[p_Vid->nal_reference_idc ? 5 : B_SLICE][p_Vid->AverageFrameQP][0];    
+    int lambda = (int) p_Vid->lambda_me[/*p_Vid->nal_reference_idc ? 5 :*/ B_SLICE][p_Vid->AverageFrameQP][0];    
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseSSIM(p_Vid, " B ", cur_bits, p_Vid->active_pps->weighted_bipred_idc, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, p_Vid->direct_spatial_mv_pred_flag);
     else
@@ -2671,7 +2770,7 @@ static void ReportB(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 3)
   {
-    int lambda = (int) p_Vid->lambda_me[p_Vid->nal_reference_idc ? 5 : B_SLICE][p_Vid->AverageFrameQP][0];    
+    int lambda = (int) p_Vid->lambda_me[/*p_Vid->nal_reference_idc ? 5 :*/ B_SLICE][p_Vid->AverageFrameQP][0];    
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseNVBSSIM(p_Vid, " B ", cur_bits + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, p_Vid->active_pps->weighted_bipred_idc, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, p_Vid->direct_spatial_mv_pred_flag);
     else
@@ -2679,7 +2778,7 @@ static void ReportB(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 4)
   {
-    int lambda = (int) p_Vid->lambda_me[p_Vid->nal_reference_idc ? 5 : B_SLICE][p_Vid->AverageFrameQP][0];    
+    int lambda = (int) p_Vid->lambda_me[/*p_Vid->nal_reference_idc ? 5 :*/ B_SLICE][p_Vid->AverageFrameQP][0];    
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseFDNSSIM(p_Vid, " B ", cur_bits + stats->bit_ctr_parametersets_n, (int)(stats->bit_ctr_filler_data - stats->bit_ctr_filler_data_n), stats->bit_ctr_parametersets_n, p_Vid->active_pps->weighted_bipred_idc, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, p_Vid->direct_spatial_mv_pred_flag);
     else
@@ -2749,6 +2848,18 @@ static void put_buffer_frame(VideoParameters *p_Vid)
     p_Vid->pImgOrg[1] = p_Vid->imgData.frm_data[1];
     p_Vid->pImgOrg[2] = p_Vid->imgData.frm_data[2];
   }
+
+  if (p_Vid->p_Inp->MDReference[0] || p_Vid->p_Inp->MDReference[1])
+  {
+    p_Vid->pCurImgRef    = p_Vid->imgRefData.frm_data[0];
+    p_Vid->pImgOrgRef[0] = p_Vid->imgRefData.frm_data[0];    
+    
+    if (p_Vid->yuv_format != YUV400)
+    {
+      p_Vid->pImgOrgRef[1] = p_Vid->imgRefData.frm_data[1];
+      p_Vid->pImgOrgRef[2] = p_Vid->imgRefData.frm_data[2];
+    }
+  }
 }
 
 /*!
@@ -2769,6 +2880,18 @@ static void put_buffer_top(VideoParameters *p_Vid)
     p_Vid->pImgOrg[1] = p_Vid->imgData.top_data[1];
     p_Vid->pImgOrg[2] = p_Vid->imgData.top_data[2];
   }
+  
+  if ( p_Vid->p_Inp->MDReference[0] || p_Vid->p_Inp->MDReference[1] )
+  {
+    p_Vid->pCurImgRef    = p_Vid->imgRefData.top_data[0];
+    p_Vid->pImgOrgRef[0] = p_Vid->imgRefData.top_data[0];
+    
+    if (p_Vid->yuv_format != YUV400)
+    {
+      p_Vid->pImgOrgRef[1] = p_Vid->imgRefData.top_data[1];
+      p_Vid->pImgOrgRef[2] = p_Vid->imgRefData.top_data[2];
+    }
+  }
 }
 
 /*!
@@ -2788,6 +2911,18 @@ static void put_buffer_bot(VideoParameters *p_Vid)
   {
     p_Vid->pImgOrg[1] = p_Vid->imgData.bot_data[1];
     p_Vid->pImgOrg[2] = p_Vid->imgData.bot_data[2];
+  }
+
+  if ( p_Vid->p_Inp->MDReference[0] || p_Vid->p_Inp->MDReference[1] )
+  {
+    p_Vid->pCurImgRef    = p_Vid->imgRefData.bot_data[0];
+    p_Vid->pImgOrgRef[0] = p_Vid->imgRefData.bot_data[0];
+    
+    if (p_Vid->yuv_format != YUV400)
+    {
+      p_Vid->pImgOrgRef[1] = p_Vid->imgRefData.bot_data[1];
+      p_Vid->pImgOrgRef[2] = p_Vid->imgRefData.bot_data[2];
+    }
   }
 }
 
@@ -2925,7 +3060,7 @@ void select_plane(VideoParameters *p_Vid, ColorPlane color_plane)
 */
 static int is_gop_first_unit(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  return ( get_idr_flag(p_Vid) || ( p_Vid->type == I_SLICE && p_Inp->EnableOpenGOP ) );
+  return ( get_idr_flag(p_Vid) || ( p_Vid->type == I_SLICE && p_Inp->EnableOpenGOP && get_random_access_flag(p_Vid) ) );
 }
 
 /*!
@@ -2954,15 +3089,17 @@ void write_non_vcl_nalu( VideoParameters *p_Vid )
   // PPS + AUD
   else if ( p_Inp->ResendPPS && p_Vid->curr_frm_idx != 0 )
   {
+    int i, total_pps = p_Inp->GenerateMultiplePPS ? 3 : 1;
+
+    p_Vid->p_Stats->bit_ctr_parametersets_n = 0;
     // Access Unit Delimiter NALU
     if ( p_Inp->SendAUD )
     {
       p_Vid->p_Stats->bit_ctr_parametersets_n = Write_AUD_NALU(p_Vid);
-      p_Vid->p_Stats->bit_ctr_parametersets_n += write_PPS(p_Vid, 0, 0);
     }
-    else
+    for ( i = 0; i < total_pps; i++ )
     {
-      p_Vid->p_Stats->bit_ctr_parametersets_n = write_PPS(p_Vid, 0, 0);
+      p_Vid->p_Stats->bit_ctr_parametersets_n += write_PPS(p_Vid, 0, i);
     }
   }
   // Access Unit Delimiter NALU
@@ -2982,7 +3119,22 @@ void write_non_vcl_nalu( VideoParameters *p_Vid )
   {
     UpdateToneMapping(p_Vid->p_SEI);
   }
-  PrepareAggregationSEIMessage(p_Vid);
+
+  // pic timing
+  ClearPicTiming(p_Vid->p_SEI);
+  if ( p_Inp->SEIVUI32Pulldown )
+  {
+    UpdatePicTiming(p_Vid, p_Inp);
+    PrepareAggregationSEIMessage(p_Vid);
+    p_Vid->p_Stats->bit_ctr_parametersets_n += Write_SEI_NALU(p_Vid, 0);
+    ClearPicTiming(p_Vid->p_SEI);
+    // clear message
+    clear_sei_message(p_Vid->p_SEI, AGGREGATION_SEI);
+  }
+  else
+  {
+    PrepareAggregationSEIMessage(p_Vid);
+  }
   
   p_Vid->p_Stats->bit_ctr_parametersets_n += Write_SEI_NALU(p_Vid, 0);
 
@@ -3009,15 +3161,17 @@ void write_non_vcl_nalu_bot_fld( VideoParameters *p_Vid )
   // PPS + AUD
   else if ( p_Inp->ResendPPS )
   {
+    int i, total_pps = p_Inp->GenerateMultiplePPS ? 3 : 1;
+
+    p_Vid->p_Stats->bit_ctr_parametersets_n = 0;
     // Access Unit Delimiter NALU
     if ( p_Inp->SendAUD )
     {
       p_Vid->p_Stats->bit_ctr_parametersets_n = Write_AUD_NALU(p_Vid);
-      p_Vid->p_Stats->bit_ctr_parametersets_n += write_PPS(p_Vid, 0, 0);
     }
-    else
+    for ( i = 0; i < total_pps; i++ )
     {
-      p_Vid->p_Stats->bit_ctr_parametersets_n = write_PPS(p_Vid, 0, 0);
+      p_Vid->p_Stats->bit_ctr_parametersets_n += write_PPS(p_Vid, 0, i);
     }
   }
   // Access Unit Delimiter NALU
@@ -3084,18 +3238,27 @@ void write_non_vcl_nalu_mvc( VideoParameters *p_Vid )
     // PPS + AUD
     else if ( p_Inp->ResendPPS && p_Vid->curr_frm_idx != 0 )
     {
+      int i, total_pps = p_Inp->GenerateMultiplePPS ? 3 : 1;
+
+      p_Vid->p_Stats->bit_ctr_parametersets_n = 0;
       // Access Unit Delimiter NALU
       if ( p_Inp->SendAUD )
       {
         p_Vid->p_Stats->bit_ctr_parametersets_n = bits = Write_AUD_NALU(p_Vid);
         p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
-        p_Vid->p_Stats->bit_ctr_parametersets_n += bits = write_PPS(p_Vid, 0, 0);
-        p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
+        for ( i = 0; i < total_pps; i++ )
+        {
+          p_Vid->p_Stats->bit_ctr_parametersets_n += bits = write_PPS(p_Vid, 0, i);
+          p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
+        }
       }
       else
       {
-        p_Vid->p_Stats->bit_ctr_parametersets_n = bits = write_PPS(p_Vid, 0, 0);
-        p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
+        for ( i = 0; i < total_pps; i++ )
+        {
+          p_Vid->p_Stats->bit_ctr_parametersets_n += bits = write_PPS(p_Vid, 0, i);
+          p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
+        }
       }
     }
     // Access Unit Delimiter NALU
@@ -3123,11 +3286,9 @@ void write_non_vcl_nalu_mvc( VideoParameters *p_Vid )
   p_Vid->p_Stats->bit_ctr_parametersets_n += bits = Write_SEI_NALU(p_Vid, 0);
   p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += bits;
 
-
   // update seq NVB counter
   p_Vid->p_Stats->bit_ctr_parametersets += p_Vid->p_Stats->bit_ctr_parametersets_n;
 }
 #endif
-
 
 

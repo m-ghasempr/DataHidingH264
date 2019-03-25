@@ -40,49 +40,37 @@ typedef enum TiffType {
 
 
 typedef struct TiffDirectoryEntry {
-  uint16
-    tag,                                //!< The tag that identifies the field.
-    type;                               //!< The field type.
-  uint32
-    count,                              //!< Number of values of the indicated type.
-    offset;                             //!< Value or offset.
+  uint16  tag;                                //!< The tag that identifies the field.
+  uint16  type;                               //!< The field type.
+  uint32  count;                              //!< Number of values of the indicated type.
+  uint32  offset;                             //!< Value or offset.
 } TiffDirectoryEntry;
 
 
 //! TIFF Image File Directory
 typedef struct TiffIFD {
-  uint16
-    nEntries;
-  TiffDirectoryEntry
-    directoryEntry[];
+  uint16             nEntries;
+  TiffDirectoryEntry *directoryEntry;
 } TiffIFD;
 
 
 typedef struct TiffImageFileHeader {
-  uint16
-    byteOrder,                          //!< "II" (4949H) or "MM" (4D4DH)
-    arbitraryNumber;                    //!< 42
-  uint32
-    offset;                             //!< Offset of the 0th IFD
+  uint16 byteOrder;                          //!< "II" (4949H) or "MM" (4D4DH)
+  uint16 arbitraryNumber;                    //!< 42
+  uint32 offset;                             //!< Offset of the 0th IFD
 } TiffImageFileHeader;
 
 
 //! TIFF file data
 typedef struct Tiff {
-  uint16
-    *img;                               //!< Image data
-  uint8
-    *fileInMemory;                      //!< The file will be read into memory in one gulp here.
-  uint8
-    *mp;                                //!< Memory pointer.
-  int
-    le,                                 //!< Little endian - 0 false, 1 - true
-    nStrips;
-  TiffImageFileHeader
-    ifh;
+  uint16 *img;                               //!< Image data
+  uint8  *fileInMemory;                      //!< The file will be read into memory in one gulp here.
+  uint8  *mp;                                //!< Memory pointer.
+  int    le;                                 //!< Little endian - 0 false, 1 - true
+  int    nStrips;
+  TiffImageFileHeader ifh;
                                         // Information from TAGs
-  uint16
-    Orientation;
+  uint16  Orientation;
   uint32
     BitsPerSample[3],
     RowsPerStrip,
@@ -178,16 +166,8 @@ void constructTiff (Tiff * t)
  */
 void destructTiff (Tiff * t) 
 {
-  if (t->fileInMemory) 
-  {
-    free( t->fileInMemory);
-    t->fileInMemory = 0;
-  }
-  if (t->img) 
-  {
-    free( t->img);  
-    t->img = 0;
-  }
+  free_pointer( t->fileInMemory);
+  free_pointer( t->img);  
 }
 
 
@@ -505,8 +485,7 @@ static int readFileIntoMemory (Tiff * t, const char * path)
       break;
     default:
       fprintf( stderr, "First two bytes indicate:  Not a TIFF file\n");
-      free( t->fileInMemory);
-      t->fileInMemory = 0;
+      free_pointer( t->fileInMemory);
       return 1;
   }
   if (t->le == machineLittleEndian)   // endianness of machine matches file
@@ -640,8 +619,8 @@ static int readTiff (Tiff * t, char * path) {
   return 0;
 
 Error:
-  if (t->fileInMemory) free( t->fileInMemory);  t->fileInMemory = 0;
-  if (t->img)          free( t->img);           t->img = 0;
+  free_pointer( t->fileInMemory);
+  free_pointer( t->img);
   return 1;
 }
 
@@ -1112,7 +1091,7 @@ int ReadTIFFImage (InputParameters *p_Inp, VideoDataFile *input_file, int FrameN
       // V
       horizontal_half_1chan_cosite( img+2, width, height, 3, temp2, 1, 65535);
       vertical_half_1chan( temp2, width/2, height, 1, vp, 1, 65535);
-      free(temp2);  temp2 = 0;
+      free_pointer(temp2);
       img = yp;                       // img points at result
       break;
     case YUV422:
@@ -1161,13 +1140,13 @@ int ReadTIFFImage (InputParameters *p_Inp, VideoDataFile *input_file, int FrameN
     goto Error;
   }
 
-  if (temp) free(temp);
+  free_pointer(temp);
   return 1;
 
 Error:
 
-  if (temp) free(temp);
-  report_stats_on_error();
+  free_pointer(temp);
+    report_stats_on_error();
 
   return 0;
 }

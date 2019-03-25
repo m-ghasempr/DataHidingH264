@@ -375,6 +375,7 @@ static void SetMVBSlice8x8(Slice *currSlice, PicMotionParams **motion, Macrobloc
 void SetMotionVectorsMBISlice (Macroblock* currMB)
 {
 }
+
 /*!
  *************************************************************************************
  * \brief

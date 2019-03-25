@@ -49,6 +49,16 @@ static void recon8x8(int **m7, imgpel **mb_rec, imgpel **mpr, int max_imgpel_val
   }
 }
 
+static void copy8x8(imgpel **mb_rec, imgpel **mpr, int ioff)
+{
+  int j;
+
+  for( j = 0; j < 8; j++)
+  {
+    memcpy((*mb_rec++) + ioff, (*mpr++) + ioff, 8 * sizeof(imgpel));
+  }
+}
+
 static void recon8x8_lossless(int **m7, imgpel **mb_rec, imgpel **mpr, int max_imgpel_value, int ioff)
 {
   int i, j;
@@ -83,7 +93,23 @@ void itrans8x8(Macroblock *currMB,   //!< current macroblock
   }
   else
   {
-    inverse8x8(m7, m7, joff, ioff);
+    inverse8x8(&m7[joff], &m7[joff], ioff);
     recon8x8  (&m7[joff], &currSlice->mb_rec[pl][joff], &currSlice->mb_pred[pl][joff], currMB->p_Vid->max_pel_value_comp[pl], ioff);
   }
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Inverse 8x8 transformation
+ ***********************************************************************
+ */ 
+void icopy8x8(Macroblock *currMB,   //!< current macroblock
+               ColorPlane pl,        //!< used color plane       
+               int ioff,             //!< index to 4x4 block
+               int joff)             //!< index to 4x4 block
+{
+  Slice *currSlice = currMB->p_Slice;
+
+  copy8x8  (&currSlice->mb_rec[pl][joff], &currSlice->mb_pred[pl][joff], ioff);
 }

@@ -525,6 +525,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\ldecod\src\intra_chroma_pred_mbaff.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\src\intra_pred_common.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lcommon\src\io_raw.c"
 				>
 			</File>
@@ -565,6 +573,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\ldecod\src\mb_read.c"
+				>
+			</File>
+			<File
 				RelativePath=".\ldecod\src\mbuffer.c"
 				>
 			</File>
@@ -597,7 +609,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\ldecod\src\nalucommon.c"
+				RelativePath=".\lcommon\src\nalucommon.c"
 				>
 			</File>
 			<File
@@ -614,6 +626,14 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\src\quant.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\src\read_comp_cabac.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\src\read_comp_cavlc.c"
 				>
 			</File>
 			<File
@@ -666,6 +686,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\inc\config_common.h"
+				>
+			</File>
+			<File
 				RelativePath=".\ldecod\inc\configfile.h"
 				>
 			</File>
@@ -714,6 +738,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\inc\fast_memory.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\filehandle.h"
+				>
+			</File>
+			<File
 				RelativePath=".\ldecod\inc\fmo.h"
 				>
 			</File>
@@ -747,6 +779,10 @@
 			</File>
 			<File
 				RelativePath=".\lcommon\inc\img_process.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\img_process_types.h"
 				>
 			</File>
 			<File
@@ -850,7 +886,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\ldecod\inc\parsetcommon.h"
+				RelativePath=".\lcommon\inc\parsetcommon.h"
 				>
 			</File>
 			<File

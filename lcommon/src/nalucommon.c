@@ -13,8 +13,8 @@
  */
 
 #include "global.h"
-#include "nalu.h"
-
+#include "nalucommon.h"
+#include "memalloc.h"
 
 /*!
  *************************************************************************************

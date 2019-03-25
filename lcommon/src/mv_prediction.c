@@ -8,7 +8,7 @@
  *  \author
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Alexis Michael Tourapis  <alexismt@ieee.org>
- *      - Karsten Sühring          <suehring@hhi.de>
+ *      - Karsten Suehring
  *************************************************************************************
  */
 

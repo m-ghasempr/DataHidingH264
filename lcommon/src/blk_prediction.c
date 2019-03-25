@@ -60,3 +60,4 @@ void sample_reconstruct (imgpel **curImg, imgpel **mpr, int **mb_rres, int mb_x,
       *imgOrg++ = (imgpel) iClip1( max_imgpel_value, rshift_rnd_sf(*m7++, dq_bits) + *imgPred++);
   }
 }
+

@@ -28,5 +28,10 @@ static inline void fast_memcpy(void *dst,void *src,int width)
   memcpy(dst,src,width);
 }
 
+static inline void fast_memset_zero(void *dst, int width)
+{
+  memset(dst,0,width);
+}
+
 #endif 
 

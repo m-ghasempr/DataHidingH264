@@ -10,7 +10,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *    - Stephan Wenger      stewe@cs.tu-berlin.de
- *    - Karsten Suehring    suehring@hhi.de
+ *    - Karsten Suehring
  ******************************************************************************
  */
 

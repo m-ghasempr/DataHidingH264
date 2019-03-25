@@ -195,17 +195,8 @@ static inline void update_q_offset8x8(LevelQuantParams **q_params, short *offset
  */
 void free_QOffsets (QuantParameters *p_Quant, InputParameters *p_Inp)
 {
-  if (p_Inp->AdaptRoundingFixed)
-  {
-    free_mem3Dshort(p_Quant->OffsetList8x8);
-    free_mem3Dshort(p_Quant->OffsetList4x4);    
-  }
-  else
-  {
-    free_mem3Dshort(p_Quant->OffsetList8x8);
-    free_mem3Dshort(p_Quant->OffsetList4x4);    
-  }
-
+  free_mem3Dshort(p_Quant->OffsetList8x8);
+  free_mem3Dshort(p_Quant->OffsetList4x4);    
   free_mem2Dshort(p_Quant->OffsetList8x8input);
   free_mem2Dshort(p_Quant->OffsetList4x4input);
 }
@@ -498,7 +489,6 @@ void CalculateOffset4x4Param (VideoParameters *p_Vid)
   QuantParameters *p_Quant = p_Vid->p_Quant;
   int k;  
   int qp_per, qp;
-  short **OffsetList;
   int img_type = ((p_Vid->type == SI_SLICE) ? I_SLICE : (p_Vid->type == SP_SLICE ? P_SLICE : p_Vid->type));
 
   int max_qp_scale = imax(p_Vid->bitdepth_luma_qp_scale, p_Vid->bitdepth_chroma_qp_scale);
@@ -514,7 +504,6 @@ void CalculateOffset4x4Param (VideoParameters *p_Vid)
     {
       k = p_Quant->qp_per_matrix [qp];
       qp_per = Q_BITS + k - OffsetBits;
-      OffsetList = p_Quant->OffsetList4x4[p_Inp->AdaptRoundingFixed ? 0 : qp];
       k = p_Inp->AdaptRoundingFixed ? 0 : qp;
 
       // Intra4x4 luma

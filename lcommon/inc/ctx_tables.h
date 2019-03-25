@@ -8,8 +8,8 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Detlev Marpe                    <marpe@hhi.de>
- *    - Heiko Schwarz                   <hschwarz@hhi.de>
+ *    - Detlev Marpe
+ *    - Heiko Schwarz
  **************************************************************************************
  */
 

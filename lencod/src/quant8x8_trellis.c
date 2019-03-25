@@ -17,7 +17,6 @@
 #include <math.h>
 
 #include "global.h"
-
 #include "image.h"
 #include "mb_access.h"
 #include "vlc.h"
@@ -44,9 +43,9 @@ static void rdoq_8x8_CABAC(Macroblock *currMB, int **tblock, int block_x,int qp_
   double  lambda_md = 0.0;
   int kStart = 0, kStop = 0, noCoeff = 0;
 
-  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
+  lambda_md = p_Vid->lambda_rdoq[p_Vid->type][p_Vid->masterQP]; 
 
-  noCoeff = init_trellis_data_8x8_CABAC(currMB,tblock, block_x, qp_per, qp_rem, q_params_8x8, p_scan, &levelData[0], &kStart, &kStop);
+  noCoeff = init_trellis_data_8x8_CABAC(currMB, tblock, block_x, qp_per, qp_rem, q_params_8x8, p_scan, &levelData[0], &kStart, &kStop);
   est_writeRunLevel_CABAC(currMB, levelData, levelTrellis, LUMA_8x8, lambda_md, kStart, kStop, noCoeff, 0);
 }
 
@@ -66,9 +65,9 @@ static void rdoq_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_y, int bl
   levelDataStruct levelData[4][16]; 
   double lambda_md = 0.0;
   
-  int b8 = ((block_y >> 3)<<1) + (block_x >> 3);
+  int b8 = ((block_y >> 3) << 1) + (block_x >> 3);
 
-  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
+  lambda_md = p_Vid->lambda_rdoq[p_Vid->type][p_Vid->masterQP]; 
 
   init_trellis_data_8x8_CAVLC (currMB, tblock, block_x, qp_per, qp_rem, q_params_8x8, p_scan, levelData);
 
@@ -102,7 +101,7 @@ int quant_8x8_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_
 
   int i,j, coeff_ctr;
 
-  int *m7;
+  int  *m7;
   int   level, run = 0;
   int   nonzero = FALSE;
   int   qp_per = p_Quant->qp_per_matrix[qp];

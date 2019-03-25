@@ -48,6 +48,18 @@ void store_coding_info(VideoParameters *p_Vid, CodingInfo *coding_info)
   coding_info->active_pps     = p_Vid->active_pps;
 }
 
+void store_coding_and_rc_info(VideoParameters *p_Vid, CodingInfo *coding_info)
+{
+  InputParameters *p_Inp = p_Vid->p_Inp;
+
+  store_coding_info( p_Vid, coding_info );
+
+  if ( p_Inp->RCEnable )
+  {
+    rc_save_state( p_Vid, p_Inp );
+  }
+}
+
 void restore_coding_info(VideoParameters *p_Vid, CodingInfo *coding_info)
 {
   p_Vid->type                  = coding_info->type;
@@ -75,13 +87,17 @@ void swap_frame_buffer(VideoParameters *p_Vid, int a, int b)
 
 void frame_picture_mp_exit(VideoParameters *p_Vid, CodingInfo *coding_info)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
+
   p_Vid->p_curr_frm_struct->qp = p_Vid->qp;
   p_Vid->enc_picture=p_Vid->enc_frame_picture[0];
   p_Vid->p_frame_pic = p_Vid->frame_pic[0];
   restore_coding_info(p_Vid, coding_info); 
 
-  if ( p_Vid->p_Inp->RCEnable )
-    rc_restore_state(p_Vid, p_Vid->p_Inp);
+  if ( p_Inp->RCEnable )
+  {
+    rc_restore_state(p_Vid, p_Inp);
+  }
 }
 
 
@@ -99,10 +115,8 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
   int selection;
 
   frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
-  store_coding_info(p_Vid, &coding_info);
+  store_coding_and_rc_info(p_Vid, &coding_info);
 
-  if(p_Inp->RCEnable)
-    rc_save_state(p_Vid, p_Inp);
   if(p_Inp->WPIterMC)
     p_Vid->frameOffsetAvail = 1; 
 
@@ -165,9 +179,7 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
       if (selection)
       {
         swap_frame_buffer(p_Vid, 0, rd_pass); 
-        store_coding_info(p_Vid, &coding_info);
-        if(p_Inp->RCEnable)
-          rc_save_state(p_Vid, p_Inp);
+        store_coding_and_rc_info(p_Vid, &coding_info);
         best_method = EXP_WP;
         apply_wp = 1;
       }
@@ -212,9 +224,7 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
           if (selection)
           {
             swap_frame_buffer(p_Vid, 0, rd_pass); 
-            store_coding_info(p_Vid, &coding_info);
-            if(p_Inp->RCEnable)
-              rc_save_state(p_Vid, p_Inp);
+            store_coding_and_rc_info(p_Vid, &coding_info);
             best_method = EXP_WP;
             apply_wp = 1;
           }
@@ -265,9 +275,7 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     if (selection)
     {
       swap_frame_buffer(p_Vid, 0, rd_pass); 
-      store_coding_info(p_Vid, &coding_info);
-      if(p_Inp->RCEnable)
-        rc_save_state(p_Vid, p_Inp);
+      store_coding_and_rc_info(p_Vid, &coding_info);
       best_method = FRAME_TYPE; 
     }
     // reset frame_type
@@ -303,9 +311,7 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     if (selection)
     {
       swap_frame_buffer(p_Vid, 0, rd_pass); 
-      store_coding_info(p_Vid, &coding_info);
-      if(p_Inp->RCEnable)
-        rc_save_state(p_Vid, p_Inp);
+      store_coding_and_rc_info(p_Vid, &coding_info);
       best_method = DB_OFF; 
     }
 
@@ -345,9 +351,7 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     if (selection)
     {
       swap_frame_buffer(p_Vid, 0, rd_pass); 
-      store_coding_info(p_Vid, &coding_info);
-      if(p_Inp->RCEnable)
-        rc_save_state(p_Vid, p_Inp);
+      store_coding_and_rc_info(p_Vid, &coding_info);
       best_method = FRAME_QP;
     }
 
@@ -372,9 +376,7 @@ void frame_picture_mp_i_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   // initial pass encoding
   frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
-  store_coding_info(p_Vid, &coding_info);
-  if(p_Inp->RCEnable)
-    rc_save_state(p_Vid, p_Inp);
+  store_coding_and_rc_info(p_Vid, &coding_info);
 
   rd_pass++;
   if(rd_pass >= p_Inp->RDPictureMaxPassISlice)
@@ -402,9 +404,7 @@ void frame_picture_mp_i_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     if (selection)
     {
       swap_frame_buffer(p_Vid, 0, rd_pass); 
-      store_coding_info(p_Vid, &coding_info);
-      if(p_Inp->RCEnable)
-        rc_save_state(p_Vid, p_Inp);
+      store_coding_and_rc_info(p_Vid, &coding_info);
     }
 
     rd_pass++;
@@ -433,9 +433,7 @@ void frame_picture_mp_i_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     if ( selection )
     {
       swap_frame_buffer(p_Vid, 0, rd_pass);
-      store_coding_info(p_Vid, &coding_info);
-      if ( p_Inp->RCEnable)
-        rc_save_state(p_Vid, p_Inp);
+      store_coding_and_rc_info(p_Vid, &coding_info);
     }
 
     rd_pass++;
@@ -466,10 +464,8 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
 #endif  
 
   frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
-  store_coding_info(p_Vid, &coding_info);
+  store_coding_and_rc_info(p_Vid, &coding_info);
   
-  if(p_Inp->RCEnable)
-    rc_save_state(p_Vid, p_Inp);
   if(p_Inp->WPIterMC)
     p_Vid->frameOffsetAvail = 1; 
 
@@ -523,9 +519,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
       if (selection)
       {
         swap_frame_buffer(p_Vid, 0, rd_pass); 
-        store_coding_info(p_Vid, &coding_info);
-        if(p_Inp->RCEnable)
-          rc_save_state(p_Vid, p_Inp);
+        store_coding_and_rc_info(p_Vid, &coding_info);
         best_method = IMP_WP; 
         apply_wp = IMP_WP;
       }
@@ -578,9 +572,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
       if (selection)
       {
         swap_frame_buffer(p_Vid, 0, rd_pass); 
-        store_coding_info(p_Vid, &coding_info);
-        if(p_Inp->RCEnable)
-          rc_save_state(p_Vid, p_Inp);
+        store_coding_and_rc_info(p_Vid, &coding_info);
         best_method = EXP_WP;
         apply_wp = EXP_WP;
       }
@@ -621,9 +613,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     if (selection)
     {
       swap_frame_buffer(p_Vid, 0, rd_pass); 
-      store_coding_info(p_Vid, &coding_info);
-      if(p_Inp->RCEnable)
-        rc_save_state(p_Vid, p_Inp);
+      store_coding_and_rc_info(p_Vid, &coding_info);
       best_method = FRAME_QP; 
     }
 
@@ -659,9 +649,7 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     if (selection)
     {
       swap_frame_buffer(p_Vid, 0, rd_pass); 
-      store_coding_info(p_Vid, &coding_info);
-      if(p_Inp->RCEnable)
-        rc_save_state(p_Vid, p_Inp);
+      store_coding_and_rc_info(p_Vid, &coding_info);
       best_method = ALT_DIRECT;
     }
 

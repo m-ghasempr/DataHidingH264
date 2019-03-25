@@ -341,6 +341,12 @@ void wpxAdaptRefNum( Slice *currSlice )
 {
   InputParameters *p_Inp = currSlice->p_Inp;
   VideoParameters *p_Vid = currSlice->p_Vid;
+#if (MVC_EXTENSION_ENABLE)
+  int view_id = p_Vid->view_id;
+#else
+  int view_id = 0;
+#endif
+
   if ( p_Vid->pWPX->curr_wp_rd_pass->algorithm == WP_REGULAR )
   {
     switch( currSlice->slice_type )
@@ -349,17 +355,17 @@ void wpxAdaptRefNum( Slice *currSlice )
     case I_SLICE:
       break;
     case P_SLICE:
-      if ( currSlice->num_ref_idx_active[LIST_0] == ( p_Inp->P_List0_refs * ((currSlice->structure !=0) + 1) ) )
+      if ( currSlice->num_ref_idx_active[LIST_0] == ( p_Inp->P_List0_refs[view_id] * ((currSlice->structure !=0) + 1) ) )
       {
         currSlice->listXsize[LIST_0] = currSlice->num_ref_idx_active[LIST_0] = (char) imax( ((currSlice->structure !=0) + 1), currSlice->num_ref_idx_active[LIST_0] - ((currSlice->structure !=0) + 1) );
       }
       break;
     case B_SLICE:
-      if ( currSlice->num_ref_idx_active[LIST_0] == ( p_Inp->B_List0_refs * ((currSlice->structure !=0) + 1) ) )
+      if ( currSlice->num_ref_idx_active[LIST_0] == ( p_Inp->B_List0_refs[view_id] * ((currSlice->structure !=0) + 1) ) )
       {
         currSlice->listXsize[LIST_0] = currSlice->num_ref_idx_active[LIST_0] = (char) imax( ((currSlice->structure !=0) + 1), currSlice->num_ref_idx_active[LIST_0] - ((currSlice->structure !=0) + 1) );
       }
-      if ( currSlice->num_ref_idx_active[LIST_1] == ( p_Inp->B_List1_refs * ((currSlice->structure !=0) + 1) ) )
+      if ( currSlice->num_ref_idx_active[LIST_1] == ( p_Inp->B_List1_refs[view_id] * ((currSlice->structure !=0) + 1) ) )
       {
         currSlice->listXsize[LIST_1] = currSlice->num_ref_idx_active[LIST_1] = (char) imax( ((currSlice->structure !=0) + 1), currSlice->num_ref_idx_active[LIST_1] - ((currSlice->structure !=0) + 1) );
       }

@@ -25,6 +25,17 @@ static void ClipLambda(double *p_lambda_max, double *p_lambda)
   }
 }
 
+void set_rdoq_lambda( Slice *currSlice )
+{
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  int qp, j = currSlice->slice_type;
+
+  for (qp = -currSlice->bitdepth_luma_qp_scale; qp < 52; qp++)
+  {
+    p_Vid->lambda_rdoq[j][qp] = p_Vid->lambda_md[j][qp];
+  }
+}
+
 void get_implicit_lambda_p_slice(Slice *currSlice)
 {
   VideoParameters *p_Vid = currSlice->p_Vid;
@@ -40,9 +51,9 @@ void get_implicit_lambda_p_slice(Slice *currSlice)
   if(bLimitsLambdaMD)
     CalcMaxLamdaMD(p_Vid, &dMaxLambdaMD);
 
-  for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
+  for (qp = -currSlice->bitdepth_luma_qp_scale; qp < 52; qp++)
   {
-    qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
+    qp_temp = (double)qp + currSlice->bitdepth_luma_qp_scale - SHIFT_QP;
 
     if (p_Inp->NumberBFrames > 0)
     {
@@ -84,9 +95,9 @@ void get_implicit_lambda_b_slice(Slice *currSlice)
   if(bLimitsLambdaMD)
     CalcMaxLamdaMD(p_Vid, &dMaxLambdaMD);
 
-  for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
+  for (qp = -currSlice->bitdepth_luma_qp_scale; qp < 52; qp++)
   {
-    qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
+    qp_temp = (double)qp + currSlice->bitdepth_luma_qp_scale - SHIFT_QP;
 
     if (p_Inp->NumberBFrames > 0)
     {
@@ -137,9 +148,9 @@ void get_implicit_lambda_i_slice(Slice *currSlice)
   if(bLimitsLambdaMD)
     CalcMaxLamdaMD(p_Vid, &dMaxLambdaMD);
 
-  for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
+  for (qp = -currSlice->bitdepth_luma_qp_scale; qp < 52; qp++)
   {
-    qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
+    qp_temp = (double)qp + currSlice->bitdepth_luma_qp_scale - SHIFT_QP;
 
     if(p_Inp->UseRDOQuant && p_Vid->qp==qp)
       lambda_md = 0.57 * pow (2.0, qp_temp/3.0); 
@@ -185,9 +196,9 @@ void get_implicit_lambda_sp_slice(Slice *currSlice)
   if(bLimitsLambdaMD)
     CalcMaxLamdaMD(p_Vid, &dMaxLambdaMD);
 
-  for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
+  for (qp = -currSlice->bitdepth_luma_qp_scale; qp < 52; qp++)
   {
-    qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
+    qp_temp = (double)qp + currSlice->bitdepth_luma_qp_scale - SHIFT_QP;
 
     if(p_Inp->UseRDOQuant && p_Vid->type == I_SLICE && p_Vid->qp==qp)
       lambda_md = 0.57 * pow (2.0, qp_temp/3.0); 
@@ -227,31 +238,54 @@ void get_explicit_lambda(Slice *currSlice)
   //limit lambda for mode decison;
   int bLimitsLambdaMD = ((p_Inp->EnableIPCM > 0) && (IMGTYPE==0));
   double dMaxLambdaMD =0;
+#if (MVC_EXTENSION_ENABLE)
+  double tmp_lambda_md = 0.0;
+#endif
 
   int j = currSlice->slice_type;
 
   if(bLimitsLambdaMD)
     CalcMaxLamdaMD(p_Vid, &dMaxLambdaMD);
 
-  for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
+  for (qp = -currSlice->bitdepth_luma_qp_scale; qp < 52; qp++)
   {
-    qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
+    qp_temp = (double)qp + currSlice->bitdepth_luma_qp_scale - SHIFT_QP;
 
     if (j == B_SLICE && currSlice->nal_reference_idc)
       p_Vid->lambda_md[j][qp] = p_Inp->LambdaWeight[5] * pow (2, qp_temp/3.0);
     else
       p_Vid->lambda_md[j][qp] = p_Inp->LambdaWeight[j] * pow (2, qp_temp/3.0);
+
+#if (MVC_EXTENSION_ENABLE)
+    tmp_lambda_md = p_Vid->lambda_md[j][qp];
+
+    if (currSlice->view_id)
+    {
+      p_Vid->lambda_md[j][qp] = p_Vid->lambda_md[j][qp] * p_Inp->enh_layer_me_lambda_multiplier;
+    }
+#endif
+
     //clip lambda; 
     if(bLimitsLambdaMD)
       ClipLambda(&dMaxLambdaMD, &p_Vid->lambda_md[j][qp]);
 
     SetLambda(p_Vid, j, qp, ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95));
 
+#if (MVC_EXTENSION_ENABLE)
+    if (currSlice->view_id)
+    {
+      p_Vid->lambda_md[j][qp] = tmp_lambda_md * p_Inp->enh_layer_lambda_multiplier;
+      //clip lambda; 
+      if(bLimitsLambdaMD)
+        ClipLambda(&dMaxLambdaMD, &p_Vid->lambda_md[j][qp]);
+      p_Vid->lambda_md[j][qp] *= ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95);
+    }
+#endif
   }
 
   if (j != B_SLICE)
   {
-    for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
+    for (qp = -currSlice->bitdepth_luma_qp_scale; qp < 52; qp++)
       p_Vid->lambda_md[j][qp] *= lambda_scale;
   }
 }
@@ -262,7 +296,6 @@ void get_fixed_lambda(Slice *currSlice)
   VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
   int qp;
-  double qp_temp;
   //limit lambda for mode decison;
   int bLimitsLambdaMD = ((p_Inp->EnableIPCM > 0) && (IMGTYPE==0));
   double dMaxLambdaMD =0;
@@ -272,10 +305,8 @@ void get_fixed_lambda(Slice *currSlice)
   if(bLimitsLambdaMD)
     CalcMaxLamdaMD(p_Vid, &dMaxLambdaMD);
 
-  for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
+  for (qp = -currSlice->bitdepth_luma_qp_scale; qp < 52; qp++)
   {
-    qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
-
     if (j == B_SLICE && currSlice->nal_reference_idc)
       p_Vid->lambda_md[j][qp] = p_Inp->FixedLambda[5];
     else

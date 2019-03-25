@@ -25,7 +25,7 @@
  *
  ********************************************************************************************
 */
-int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n)
+int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n, FILE **f_annexb)
 {
   int BitsWritten = 0;
   int offset = 0;
@@ -35,7 +35,7 @@ int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n)
 
   assert (n != NULL);
   assert (n->forbidden_bit == 0);
-  assert (p_Vid->f_annexb != NULL);
+  assert ((*f_annexb) != NULL);
   assert (n->startcodeprefix_len == 3 || n->startcodeprefix_len == 4);
 
 // printf ("WriteAnnexbNALU: writing %d bytes w/ startcode_len %d\n", n->len+1, n->startcodeprefix_len);
@@ -45,7 +45,7 @@ int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n)
     length = 3;
   }
 
-  if ( length != (int) fwrite (startcode+offset, 1, length, p_Vid->f_annexb))
+  if ( length != (int) fwrite (startcode+offset, 1, length, *f_annexb))
   {
     printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", length);
     exit (-1);
@@ -55,7 +55,7 @@ int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n)
 
   first_byte = (unsigned char) ((n->forbidden_bit << 7) | (n->nal_reference_idc << 5) | n->nal_unit_type);
 
-  if ( 1 != fwrite (&first_byte, 1, 1, p_Vid->f_annexb))
+  if ( 1 != fwrite (&first_byte, 1, 1, *f_annexb))
   {
     printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", 1);
     exit (-1);
@@ -70,7 +70,7 @@ int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n)
     int view_id = p_Vid->p_Inp->MVCFlipViews ? !(n->view_id) : n->view_id;
 
     first_byte = (unsigned char) ((n->svc_extension_flag << 7) | (n->non_idr_flag << 6) | n->priority_id);
-    if ( 1 != fwrite (&first_byte, 1, 1, p_Vid->f_annexb))
+    if ( 1 != fwrite (&first_byte, 1, 1, *f_annexb))
     {
       printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", 1);
       exit (-1);
@@ -78,7 +78,7 @@ int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n)
     BitsWritten += 8;
 
     first_byte = (unsigned char) (view_id >> 2);
-    if ( 1 != fwrite (&first_byte, 1, 1, p_Vid->f_annexb))
+    if ( 1 != fwrite (&first_byte, 1, 1, *f_annexb))
     {
       printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", 1);
       exit (-1);
@@ -86,7 +86,7 @@ int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n)
     BitsWritten += 8;
 
     first_byte = (unsigned char) (((view_id&3) << 6) | (n->temporal_id << 3) | (n->anchor_pic_flag << 2) | (n->inter_view_flag << 1) | n->reserved_one_bit);
-    if ( 1 != fwrite (&first_byte, 1, 1, p_Vid->f_annexb))
+    if ( 1 != fwrite (&first_byte, 1, 1, *f_annexb))
     {
       printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", 1);
       exit (-1);
@@ -95,14 +95,14 @@ int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n)
   }
 #endif
 
-  if (n->len != fwrite (n->buf, 1, n->len, p_Vid->f_annexb))
+  if (n->len != fwrite (n->buf, 1, n->len, *f_annexb))
   {
     printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", n->len);
     exit (-1);
   }
   BitsWritten += n->len * 8;
 
-  fflush (p_Vid->f_annexb);
+  fflush (*f_annexb);
 #if TRACE
   //fprintf (p_Enc->p_trace, "\nAnnex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n\n",
   //  n->startcodeprefix_len == 4?"long":"short", n->len + 1, n->forbidden_bit, n->nal_reference_idc, n->nal_unit_type);
@@ -146,9 +146,9 @@ int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n)
  *
  ********************************************************************************************
 */
-void OpenAnnexbFile (VideoParameters *p_Vid, char *Filename)
+void OpenAnnexbFile (char *Filename, FILE **f_annexb)
 {
-  if ((p_Vid->f_annexb = fopen (Filename, "wb")) == NULL)
+  if (((*f_annexb) = fopen (Filename, "wb")) == NULL)
   {
     printf ("Fatal: cannot open Annex B bytestream file '%s', exit (-1)\n", Filename);
     exit (-1);
@@ -162,12 +162,12 @@ void OpenAnnexbFile (VideoParameters *p_Vid, char *Filename)
  *    Closes the output bit stream file
  *
  * \return
- *    none.  Funtion trerminates the program in case of an error
+ *    none.  Function terminates the program in case of an error
  ********************************************************************************************
 */
-void CloseAnnexbFile(VideoParameters *p_Vid) 
+void CloseAnnexbFile(FILE *f_annexb) 
 {
-  if (fclose (p_Vid->f_annexb))
+  if (fclose (f_annexb))
   {
     printf ("Fatal: cannot close Annex B bytestream file, exit (-1)\n");
     exit (-1);

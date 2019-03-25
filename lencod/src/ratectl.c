@@ -387,3 +387,20 @@ void rc_store_diff(int diffy[16][16], imgpel **p_curImg, int cpix_x,imgpel **pre
   }
 }
 
+void rc_store_diff_16b(int diffy[16][16], imgpel **p_curImg, int cpix_x,imgpel **prediction)
+{
+  int i, j;
+  int *iDst;
+  uint16 *Src1, *Src2;  
+
+  for(j = 0; j < MB_BLOCK_SIZE; j++)
+  {
+    iDst = diffy[j];
+    Src1 = (uint16*)(p_curImg[j]) +cpix_x;
+    Src2 = (uint16*)(prediction[j]);
+    for (i = 0; i < MB_BLOCK_SIZE; i++)
+    {
+      iDst[i] = Src1[i] - Src2[i];
+    }
+  }
+}

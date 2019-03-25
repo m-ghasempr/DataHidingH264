@@ -154,8 +154,7 @@ void interpret_gop_structure(VideoParameters *p_Vid, InputParameters *p_Inp)
             {
               sscanf(p_Inp->ExplicitHierarchyFormat+i,"%d",&dqp);
 
-              p_Vid->gop_structure[coded_frame].slice_qp = 0; //p_Inp->qp[ p_Vid->gop_structure[coded_frame].slice_type ];
-              p_Vid->gop_structure[coded_frame].slice_qp = iClip3(-p_Vid->bitdepth_luma_qp_scale, 51,p_Vid->gop_structure[coded_frame].slice_qp + dqp);
+              p_Vid->gop_structure[coded_frame].slice_qp_off = iClip3(-p_Vid->bitdepth_luma_qp_scale, 51, dqp);
               qp_read = 1;
             }
             else

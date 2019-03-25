@@ -19,7 +19,6 @@
 #include "memalloc.h"
 #include "fast_memory.h"
 
-
 static inline void ResetImage(ImageData *imgOut)
 {
   fast_memset(imgOut->frm_data[0][0], 0, imgOut->format.height[0] * imgOut->format.width[0] * sizeof (imgpel));
@@ -29,7 +28,7 @@ static inline void ResetImage(ImageData *imgOut)
     if (sizeof(imgpel) == sizeof(char))
     {
       fast_memset(imgOut->frm_data[1][0], 128, imgOut->format.height[1] * imgOut->format.width[1] * sizeof (imgpel));
-      fast_memset(imgOut->frm_data[2][0], 128, imgOut->format.height[1] * imgOut->format.width[1] * sizeof (imgpel));
+      fast_memset(imgOut->frm_data[2][0], 128, imgOut->format.height[2] * imgOut->format.width[2] * sizeof (imgpel));
     }
     else
     {
@@ -38,9 +37,9 @@ static inline void ResetImage(ImageData *imgOut)
       for (k = 1; k <=2; k++)
       {
         med_value = (imgpel) (imgOut->format.max_value[k] + 1) >> 1;
-        for (j = 0; j < imgOut->format.height[1]; j++)
+        for (j = 0; j < imgOut->format.height[k]; j++)
         {
-          for (i = 0; i < imgOut->format.width[1]; i++)
+          for (i = 0; i < imgOut->format.width[k]; i++)
           {
             imgOut->frm_data[k][j][i] = med_value;
           }
@@ -58,7 +57,7 @@ static inline void CPImage(ImageData *imgOut, ImageData *imgIn)
   if (imgIn->format.yuv_format != YUV400)
   {
     memcpy(imgOut->frm_data[1][0], imgIn->frm_data[1][0], imgIn->format.height[1] * imgIn->format.width[1] * sizeof (imgpel));
-    memcpy(imgOut->frm_data[2][0], imgIn->frm_data[2][0], imgIn->format.height[1] * imgIn->format.width[1] * sizeof (imgpel));
+    memcpy(imgOut->frm_data[2][0], imgIn->frm_data[2][0], imgIn->format.height[2] * imgIn->format.width[2] * sizeof (imgpel));
   }
 }
 
@@ -70,7 +69,7 @@ static inline void FilterImage(ImageData *imgOut, ImageData *imgIn)
   if (imgIn->format.yuv_format != YUV400)
   {
     memcpy(imgOut->frm_data[1][0], imgIn->frm_data[1][0], imgIn->format.height[1] * imgIn->format.width[1] * sizeof (imgpel));
-    memcpy(imgOut->frm_data[2][0], imgIn->frm_data[2][0], imgIn->format.height[1] * imgIn->format.width[1] * sizeof (imgpel));
+    memcpy(imgOut->frm_data[2][0], imgIn->frm_data[2][0], imgIn->format.height[2] * imgIn->format.width[2] * sizeof (imgpel));
   }
 }
 
@@ -103,28 +102,31 @@ static inline void FilterImageSep(ImageData *imgOut, ImageData *imgIn)
   int max_height = imgOut->format.height[0] - 1;
 
   int **temp_data = new_mem2Dint(imgIn->format.height[0], imgIn->format.width[0]); // temp memory for filtering. Could be allocated once to speed up code
+  imgpel *frm_data = NULL;
 
   // implementation was not optimized. only just implemented as proof of concept
   // horizontal filtering
   for (j = 0; j < imgOut->format.height[0]; j++)
   {
+    frm_data = imgIn->frm_data[0][j];
     for (i = 0; i < imgOut->format.width[0]; i++)
     {
       temp_data[j][i] = 
-        SepFilter[0] * imgIn->frm_data[0][j][iClip3(0, max_width, i - 2)] +
-        SepFilter[1] * imgIn->frm_data[0][j][iClip3(0, max_width, i - 1)] +
-        SepFilter[2] * imgIn->frm_data[0][j][iClip3(0, max_width, i    )] +
-        SepFilter[3] * imgIn->frm_data[0][j][iClip3(0, max_width, i + 1)] +
-        SepFilter[4] * imgIn->frm_data[0][j][iClip3(0, max_width, i + 2)] +
-        SepFilter[5] * imgIn->frm_data[0][j][iClip3(0, max_width, i + 3)];
+        SepFilter[0] * frm_data[iClip3(0, max_width, i - 2)] +
+        SepFilter[1] * frm_data[iClip3(0, max_width, i - 1)] +
+        SepFilter[2] * frm_data[iClip3(0, max_width, i    )] +
+        SepFilter[3] * frm_data[iClip3(0, max_width, i + 1)] +
+        SepFilter[4] * frm_data[iClip3(0, max_width, i + 2)] +
+        SepFilter[5] * frm_data[iClip3(0, max_width, i + 3)];
     }
   }
 
   for (j = 0; j < imgOut->format.height[0]; j++)
   {
+    frm_data = imgOut->frm_data[0][j];
     for (i = 0; i < imgOut->format.width[0]; i++)
     {
-      imgOut->frm_data[0][j][i] = (imgpel) iClip3(0, imgOut->format.max_value[0], rshift_rnd_sign(
+      frm_data[i] = (imgpel) iClip3(0, imgOut->format.max_value[0], rshift_rnd_sign(
         SepFilter[0] * temp_data[iClip3(0, max_height, j - 2)][i] +
         SepFilter[1] * temp_data[iClip3(0, max_height, j - 1)][i] +
         SepFilter[2] * temp_data[iClip3(0, max_height, j    )][i] +
@@ -137,31 +139,34 @@ static inline void FilterImageSep(ImageData *imgOut, ImageData *imgIn)
   if (imgOut->format.yuv_format != YUV400)
   {
     int k;
-    max_width  = imgOut->format.width[1] - 1;
-    max_height = imgOut->format.height[1] - 1;
 
     for (k = 1; k <=2; k++)
     {
+      max_width  = imgOut->format.width[k] - 1;
+      max_height = imgOut->format.height[k] - 1;
+
       // horizontal filtering
-      for (j = 0; j < imgOut->format.height[1]; j++)
+      for (j = 0; j < imgOut->format.height[k]; j++)
       {
-        for (i = 0; i < imgOut->format.width[1]; i++)
+        frm_data = imgIn->frm_data[k][j];
+        for (i = 0; i < imgOut->format.width[k]; i++)
         {
           temp_data[j][i] = 
-            SepFilter[0] * imgIn->frm_data[k][j][iClip3(0, max_width, i - 2)] +
-            SepFilter[1] * imgIn->frm_data[k][j][iClip3(0, max_width, i - 1)] +
-            SepFilter[2] * imgIn->frm_data[k][j][iClip3(0, max_width, i    )] +
-            SepFilter[3] * imgIn->frm_data[k][j][iClip3(0, max_width, i + 1)] +
-            SepFilter[4] * imgIn->frm_data[k][j][iClip3(0, max_width, i + 2)] +
-            SepFilter[5] * imgIn->frm_data[k][j][iClip3(0, max_width, i + 3)];
+            SepFilter[0] * frm_data[iClip3(0, max_width, i - 2)] +
+            SepFilter[1] * frm_data[iClip3(0, max_width, i - 1)] +
+            SepFilter[2] * frm_data[iClip3(0, max_width, i    )] +
+            SepFilter[3] * frm_data[iClip3(0, max_width, i + 1)] +
+            SepFilter[4] * frm_data[iClip3(0, max_width, i + 2)] +
+            SepFilter[5] * frm_data[iClip3(0, max_width, i + 3)];
         }
       }
 
-      for (j = 0; j < imgOut->format.height[1]; j++)
+      for (j = 0; j < imgOut->format.height[k]; j++)
       {
-        for (i = 0; i < imgOut->format.width[1]; i++)
+        frm_data = imgOut->frm_data[k][j];
+        for (i = 0; i < imgOut->format.width[k]; i++)
         {
-          imgOut->frm_data[k][j][i] = (imgpel) iClip3(0, imgOut->format.max_value[k], rshift_rnd_sign(
+          frm_data[i] = (imgpel) iClip3(0, imgOut->format.max_value[k], rshift_rnd_sign(
             SepFilter[0] * temp_data[iClip3(0, max_height, j - 2)][i] +
             SepFilter[1] * temp_data[iClip3(0, max_height, j - 1)][i] +
             SepFilter[2] * temp_data[iClip3(0, max_height, j    )][i] +
@@ -194,9 +199,9 @@ static inline void MuxImages(ImageData *imgOut, ImageData *imgIn0, ImageData *im
     int k;
     for (k = 1; k <=2; k++)
     {
-      for (j = 0; j < imgOut->format.height[1]; j++)
+      for (j = 0; j < imgOut->format.height[k]; j++)
       {
-        for (i = 0; i < imgOut->format.width[1]; i++)
+        for (i = 0; i < imgOut->format.width[k]; i++)
         {
           imgOut->frm_data[k][j][i] = (imgpel) rshift_rnd_sf(imgIn0->frm_data[k][j][i] * (Map->format.max_value[k] - Map->frm_data[k][j][i]) + imgIn1->frm_data[k][j][i] * Map->frm_data[k][j][i], Map->format.bit_depth[k]);
         }
@@ -212,28 +217,8 @@ static inline void YV12toYUV(ImageData *imgOut, ImageData *imgIn)
   if (imgIn->format.yuv_format != YUV400)
   {
     memcpy(imgOut->frm_data[1][0], imgIn->frm_data[2][0], imgIn->format.height[1] * imgIn->format.width[1] * sizeof (imgpel));
-    memcpy(imgOut->frm_data[2][0], imgIn->frm_data[1][0], imgIn->format.height[1] * imgIn->format.width[1] * sizeof (imgpel));
+    memcpy(imgOut->frm_data[2][0], imgIn->frm_data[1][0], imgIn->format.height[2] * imgIn->format.width[2] * sizeof (imgpel));
   }
-}
-
-int init_process_image( VideoParameters *p_Vid, InputParameters *p_Inp)
-{
-  int memory_size = 0;
-  switch( p_Inp->ProcessInput )
-  {
-  default:
-    break;
-  }
-  return memory_size;
-}
-
-void clear_process_image( VideoParameters *p_Vid, InputParameters *p_Inp)
-{
-  switch( p_Inp->ProcessInput )
-  {
-  default:
-    break;
-  }   
 }
 
 void process_image( VideoParameters *p_Vid, InputParameters *p_Inp )

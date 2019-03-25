@@ -8,7 +8,7 @@
  *
  *  \author
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
- *      - Karsten Sühring          <suehring@hhi.de>
+ *      - Karsten Suehring
  *************************************************************************************
  */
 
@@ -24,15 +24,14 @@
  */
 Boolean mb_is_available(int mbAddr, Macroblock *currMB)
 {
-  //VideoParameters *p_Vid = currMB->p_Vid;
-  if ((mbAddr < 0) || (mbAddr > ((int)currMB->p_Slice->dec_picture->PicSizeInMbs - 1))) //if ((mbAddr < 0) || (mbAddr > ((int)p_Vid->dec_picture->PicSizeInMbs - 1)))
+  Slice *currSlice = currMB->p_Slice;
+  if ((mbAddr < 0) || (mbAddr > ((int)currSlice->dec_picture->PicSizeInMbs - 1)))
     return FALSE;
 
   // the following line checks both: slice number and if the mb has been decoded
   if (!currMB->DeblockCall)
   {
-    //if (p_Vid->mb_data[mbAddr].slice_nr != currMB->slice_nr)
-    if (currMB->p_Slice->mb_data[mbAddr].slice_nr != currMB->slice_nr)
+    if (currSlice->mb_data[mbAddr].slice_nr != currMB->slice_nr)
       return FALSE;
   }
 
@@ -49,9 +48,10 @@ Boolean mb_is_available(int mbAddr, Macroblock *currMB)
  */
 void CheckAvailabilityOfNeighbors(Macroblock *currMB)
 {
-  //VideoParameters *p_Vid = currMB->p_Vid;
-  StorablePicture *dec_picture = currMB->p_Slice->dec_picture; //p_Vid->dec_picture;
+  Slice *currSlice = currMB->p_Slice;
+  StorablePicture *dec_picture = currSlice->dec_picture; //p_Vid->dec_picture;
   const int mb_nr = currMB->mbAddrX;
+  BlockPos *PicPos = currMB->p_Vid->PicPos;
 
   if (dec_picture->mb_aff_frame_flag)
   {
@@ -68,20 +68,81 @@ void CheckAvailabilityOfNeighbors(Macroblock *currMB)
   }
   else
   {
+    BlockPos *p_pic_pos = &PicPos[mb_nr    ];
     currMB->mbAddrA = mb_nr - 1;
-    currMB->mbAddrD = mb_nr - dec_picture->PicWidthInMbs - 1;
+    currMB->mbAddrD = currMB->mbAddrA - dec_picture->PicWidthInMbs;
     currMB->mbAddrB = currMB->mbAddrD + 1;
     currMB->mbAddrC = currMB->mbAddrB + 1;
 
 
-    currMB->mbAvailA = (Boolean) (mb_is_available(currMB->mbAddrA, currMB) && ((PicPos[mb_nr    ].x)!=0));
-    currMB->mbAvailD = (Boolean) (mb_is_available(currMB->mbAddrD, currMB) && ((PicPos[mb_nr    ].x)!=0));
-    currMB->mbAvailC = (Boolean) (mb_is_available(currMB->mbAddrC, currMB) && ((PicPos[mb_nr + 1].x)!=0));
+    currMB->mbAvailA = (Boolean) (mb_is_available(currMB->mbAddrA, currMB) && ((p_pic_pos->x)!=0));
+    currMB->mbAvailD = (Boolean) (mb_is_available(currMB->mbAddrD, currMB) && ((p_pic_pos->x)!=0));
+    currMB->mbAvailC = (Boolean) (mb_is_available(currMB->mbAddrC, currMB) && (((p_pic_pos + 1)->x)!=0));
     currMB->mbAvailB = (Boolean) (mb_is_available(currMB->mbAddrB, currMB));        
   }
 
-  currMB->mb_left = (currMB->mbAvailA) ? &(currMB->p_Slice->mb_data[currMB->mbAddrA]) : NULL;
-  currMB->mb_up   = (currMB->mbAvailB) ? &(currMB->p_Slice->mb_data[currMB->mbAddrB]) : NULL;
+  currMB->mb_left = (currMB->mbAvailA) ? &(currSlice->mb_data[currMB->mbAddrA]) : NULL;
+  currMB->mb_up   = (currMB->mbAvailB) ? &(currSlice->mb_data[currMB->mbAddrB]) : NULL;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Checks the availability of neighboring macroblocks of
+ *    the current macroblock for prediction and context determination;
+ ************************************************************************
+ */
+void CheckAvailabilityOfNeighborsNormal(Macroblock *currMB)
+{
+  Slice *currSlice = currMB->p_Slice;
+  StorablePicture *dec_picture = currSlice->dec_picture; //p_Vid->dec_picture;
+  const int mb_nr = currMB->mbAddrX;
+  BlockPos *PicPos = currMB->p_Vid->PicPos;
+
+  BlockPos *p_pic_pos = &PicPos[mb_nr    ];
+  currMB->mbAddrA = mb_nr - 1;
+  currMB->mbAddrD = currMB->mbAddrA - dec_picture->PicWidthInMbs;
+  currMB->mbAddrB = currMB->mbAddrD + 1;
+  currMB->mbAddrC = currMB->mbAddrB + 1;
+
+
+  currMB->mbAvailA = (Boolean) (mb_is_available(currMB->mbAddrA, currMB) && ((p_pic_pos->x)!=0));
+  currMB->mbAvailD = (Boolean) (mb_is_available(currMB->mbAddrD, currMB) && ((p_pic_pos->x)!=0));
+  currMB->mbAvailC = (Boolean) (mb_is_available(currMB->mbAddrC, currMB) && (((p_pic_pos + 1)->x)!=0));
+  currMB->mbAvailB = (Boolean) (mb_is_available(currMB->mbAddrB, currMB));        
+
+
+  currMB->mb_left = (currMB->mbAvailA) ? &(currSlice->mb_data[currMB->mbAddrA]) : NULL;
+  currMB->mb_up   = (currMB->mbAvailB) ? &(currSlice->mb_data[currMB->mbAddrB]) : NULL;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Checks the availability of neighboring macroblocks of
+ *    the current macroblock for prediction and context determination;
+ ************************************************************************
+ */
+void CheckAvailabilityOfNeighborsMBAFF(Macroblock *currMB)
+{
+  Slice *currSlice = currMB->p_Slice;
+  StorablePicture *dec_picture = currSlice->dec_picture; //p_Vid->dec_picture;
+  const int mb_nr = currMB->mbAddrX;
+  BlockPos *PicPos = currMB->p_Vid->PicPos;
+
+  int cur_mb_pair = mb_nr >> 1;
+  currMB->mbAddrA = 2 * (cur_mb_pair - 1);
+  currMB->mbAddrB = 2 * (cur_mb_pair - dec_picture->PicWidthInMbs);
+  currMB->mbAddrC = 2 * (cur_mb_pair - dec_picture->PicWidthInMbs + 1);
+  currMB->mbAddrD = 2 * (cur_mb_pair - dec_picture->PicWidthInMbs - 1);
+
+  currMB->mbAvailA = (Boolean) (mb_is_available(currMB->mbAddrA, currMB) && ((PicPos[cur_mb_pair    ].x)!=0));
+  currMB->mbAvailB = (Boolean) (mb_is_available(currMB->mbAddrB, currMB));
+  currMB->mbAvailC = (Boolean) (mb_is_available(currMB->mbAddrC, currMB) && ((PicPos[cur_mb_pair + 1].x)!=0));
+  currMB->mbAvailD = (Boolean) (mb_is_available(currMB->mbAddrD, currMB) && ((PicPos[cur_mb_pair    ].x)!=0));
+
+  currMB->mb_left = (currMB->mbAvailA) ? &(currSlice->mb_data[currMB->mbAddrA]) : NULL;
+  currMB->mb_up   = (currMB->mbAvailB) ? &(currSlice->mb_data[currMB->mbAddrB]) : NULL;
 }
 
 
@@ -91,7 +152,7 @@ void CheckAvailabilityOfNeighbors(Macroblock *currMB)
  *    returns the x and y macroblock coordinates for a given MbAddress
  ************************************************************************
  */
-void get_mb_block_pos_normal (int mb_addr, short *x, short *y)
+void get_mb_block_pos_normal (BlockPos *PicPos, int mb_addr, short *x, short *y)
 {
   BlockPos *pPos = &PicPos[ mb_addr ];
   *x = (short) pPos->x;
@@ -105,7 +166,7 @@ void get_mb_block_pos_normal (int mb_addr, short *x, short *y)
  *    for mbaff type slices
  ************************************************************************
  */
-void get_mb_block_pos_mbaff (int mb_addr, short *x, short *y)
+void get_mb_block_pos_mbaff (BlockPos *PicPos, int mb_addr, short *x, short *y)
 {
   BlockPos *pPos = &PicPos[ mb_addr >> 1 ];
   *x = (short)  pPos->x;
@@ -120,7 +181,7 @@ void get_mb_block_pos_mbaff (int mb_addr, short *x, short *y)
  */
 void get_mb_pos (VideoParameters *p_Vid, int mb_addr, int mb_size[2], short *x, short *y)
 {
-  p_Vid->get_mb_block_pos(mb_addr, x, y);
+  p_Vid->get_mb_block_pos(p_Vid->PicPos, mb_addr, x, y);
 
   (*x) = (short) ((*x) * mb_size[0]);
   (*y) = (short) ((*y) * mb_size[1]);
@@ -193,7 +254,7 @@ void getNonAffNeighbour(Macroblock *currMB, int xN, int yN, int mb_size[2], Pixe
 
   if (pix->available || currMB->DeblockCall)
   {
-    BlockPos *CurPos = &PicPos[ pix->mb_addr ];
+    BlockPos *CurPos = &(currMB->p_Vid->PicPos[ pix->mb_addr ]);
     pix->x     = (short) (xN & (maxW - 1));
     pix->y     = (short) (yN & (maxH - 1));    
     pix->pos_x = (short) (pix->x + CurPos->x * maxW);

@@ -76,11 +76,12 @@ typedef enum
 //! Field Coding Types
 typedef enum
 {
-  FRAME_CODING,
-  FIELD_CODING,
-  ADAPTIVE_CODING,
-  FRAME_MB_PAIR_CODING
+  FRAME_CODING         = 0,
+  FIELD_CODING         = 1,
+  ADAPTIVE_CODING      = 2,
+  FRAME_MB_PAIR_CODING = 3
 } CodingType;
+
 
 //! definition of H.264 syntax elements
 typedef enum

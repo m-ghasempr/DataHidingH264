@@ -48,7 +48,7 @@
 void InitializeFastFullIntegerSearch (VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int  i, j, k, list;
-  int  search_range = p_Inp->search_range;
+  int  search_range = p_Inp->SearchMode[0] == FAST_FULL_SEARCH ? p_Inp->search_range[0] : p_Inp->search_range[1];
   int  max_pos      = (2*search_range+1) * (2*search_range+1);
   MEFullFast *p_me_ffast = NULL;
    

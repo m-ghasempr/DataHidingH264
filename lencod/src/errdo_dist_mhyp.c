@@ -4,7 +4,7 @@
  * \brief
  *    Expected distortion estimation using multiple decoder based method
  *    refer to the paper "Optimized transmission of H.26L/JVT coded video over packet-lossy networks"
- *	  by T. Stockhammer, T. Wiegand, and S. Wenger in 2002
+ *    by T. Stockhammer, T. Wiegand, and S. Wenger in 2002
  * \date
  *    October 22nd, 2001
  *
@@ -15,8 +15,8 @@
  *    Code revamped July 2008 by:
  *    - Peshala Pahalawatta (ppaha@dolby.com)
  *    - Alexis Tourapis (atour@dolby.com)
- *	  Code modularized to support more distortion estimation algorithms in June 2009 by 
- *	  - Zhifeng Chen (zzchen@dolby.com)
+ *    Code modularized to support more distortion estimation algorithms in June 2009 by 
+ *    - Zhifeng Chen (zzchen@dolby.com)
  *************************************************************************************
  */
 
@@ -62,7 +62,7 @@ distblk errdo_distortion_estimation_multihyp(Macroblock *currMB, int block, int 
   //Refer to the function reset_adaptive_rounding(), 
   //maxplane = (p_Vid->yuv_format == YUV400)?  1 : 3; for p_Vid->ARCofAdj4x4 
   //maxplane = (p_Vid->yuv_format == YUV400)?  1 : (p_Vid->P444_joined ? 3 : 1); for p_Vid->ARCofAdj8x8
-  if (mode >= 4 && mode <= 7)	//to be called by rdcost_for_8x8blocks()
+  if (mode >= 4 && mode <= 7) //to be called by rdcost_for_8x8blocks()
   {
     //===== get residue =====
     // We need the reconstructed prediction residue for the simulated decoders.
@@ -97,7 +97,7 @@ distblk errdo_distortion_estimation_multihyp(Macroblock *currMB, int block, int 
 
     distortion = (distblk) (ddistortion / p_Inp->NoOfDecoders);
   }
-  else if (mode != P8x8)	//to be called by RDCost_for_macroblocks()
+  else if (mode != P8x8)  //to be called by RDCost_for_macroblocks()
   {
     errdo_compute_residue (currMB, &p_Vid->enc_picture->p_curr_img[currMB->pix_y], p_Vid->p_decs->res_img[0], mode == I16MB ? currSlice->mpr_16x16[0][ (short) currMB->i16mode] : currSlice->mb_pred[0], 0, 16);
     for (k = 0; k<p_Inp->NoOfDecoders ;k++)
@@ -131,7 +131,7 @@ distblk errdo_distortion_estimation_multihyp(Macroblock *currMB, int block, int 
       distortion += compute_SSE_cr(&p_Vid->pImgOrg[2][currMB->opix_c_y], &p_Vid->enc_picture->imgUV[1][currMB->pix_c_y], currMB->pix_c_x, currMB->pix_c_x, p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x);
     }
   }
-  else	//to be called by RDCost_for_macroblocks()
+  else  //to be called by RDCost_for_macroblocks()
   {
     for (k = 0; k<p_Inp->NoOfDecoders ;k++)
     {
@@ -605,14 +605,14 @@ void copy_conceal_picture(VideoParameters *p_Vid, StorablePicture *enc_pic, int 
   int mb_error;
   byte** mb_error_map = enc_pic->de_mem->mb_error_map[decoder];
   StorablePicture* refPic;
+  BlockPos *PicPos = p_Vid->PicPos;
 
-  refPic = find_nearest_ref_picture(p_Vid->p_Dpb, enc_pic->poc); //Used for concealment if actual reference pic is not known.
-
+  refPic = find_nearest_ref_picture(p_Vid->p_Dpb_layer[0], enc_pic->poc); //Used for concealment if actual reference pic is not known.
   for (mb = 0; mb < p_Vid->PicSizeInMbs; mb++)
   {
     currMB = &p_Vid->mb_data[mb];
-    currMB->mb_x = PicPos[mb][0];
-    currMB->mb_y = PicPos[mb][1];
+    currMB->mb_x = PicPos[mb].x;
+    currMB->mb_y = PicPos[mb].y;
     mb_error = mb_error_map[currMB->mb_y][currMB->mb_x];
     if (mb_error)
     {      

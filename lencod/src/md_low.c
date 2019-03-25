@@ -51,7 +51,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
 
   imgpel ***temp_img; // to temp store the Y data for 8x8 transform
 
-  int         block, mode, i=0, j;
+  int         block, mode, j;
   RD_PARAMS   enc_mb;
   distblk       bmcost[5] = {DISTBLK_MAX};
   distblk       rd_cost = 0;
@@ -88,7 +88,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
   intra |= RandomIntra (p_Vid, currMB->mbAddrX);    // Forced Pseudo-Random Intra
 #if (MVC_EXTENSION_ENABLE)
   if(p_Inp->num_of_views==2)
-    intra |= (currSlice->num_ref_idx_active[LIST_0]==0 && currSlice->num_ref_idx_active[LIST_1]==0);	// force intra if no ref available
+    intra |= (currSlice->num_ref_idx_active[LIST_0]==0 && currSlice->num_ref_idx_active[LIST_1]==0);  // force intra if no ref available
 #endif
 
   //===== Setup Macroblock encoding parameters =====
@@ -136,7 +136,6 @@ void encode_one_macroblock_low (Macroblock *currMB)
 
           //--- set 4x4 block indizes (for getting MV) ---
           j = (block==1 && mode==2 ? 2 : 0);
-          i = (block==1 && mode==3 ? 2 : 0);
 
           //--- get cost and reference frame for List 0 prediction ---
           bmcost[LIST_0] = DISTBLK_MAX;

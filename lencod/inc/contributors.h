@@ -93,9 +93,9 @@
       Tampere International Center for Signal Processing
       33720 Tampere, Finland
 
-      Karsten Suehring                <suehring@hhi.de>
-      Heiko Schwarz                   <hschwarz@hhi.de>
-      Detlev Marpe                    <marpe@hhi.de>
+      Karsten Suehring                <Karsten.Suehring(at)hhi.fraunhofer.de>
+      Heiko Schwarz
+      Detlev Marpe
       Guido Heising
       Fraunhofer-Institute for Telecommunications
       Heinrich-Hertz-Institut (HHI)
@@ -190,7 +190,7 @@
       Athanasios Leontaris            <aleon@dolby.com>
       Peshala Pahalawatta             <ppaha@dolby.com>
       Yuwen He                        <yhe@dolby.com>  
-	    Yan Ye                          <yye@dolby.com>      
+      Yan Ye                          <yye@dolby.com>
       Dolby Laboratories Inc.
       3601 West Alameda Ave.
       Burbank, CA 91505

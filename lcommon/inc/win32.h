@@ -20,8 +20,8 @@
 # include <string.h>
 # include <assert.h>
 
-#ifdef _OPENMP  // Check OPENMP compatibility
-# define OPENMP
+#if (_MSC_VER >= 1400) || defined(__INTEL_COMPILER) || (__GNUC__  >= 5) // Check OPENMP compatibility
+//# define OPENMP
 # define NUM_THREADS 8
 #endif
 
@@ -97,8 +97,9 @@ typedef unsigned long long  uint64;
 # endif
 #endif
 
-void   gettime(TIME_T* time);
-int64 timediff(TIME_T* start, TIME_T* end);
-int64 timenorm(int64 cur_time);
+extern void   gettime(TIME_T* time);
+extern void   init_time(void);
+extern int64 timediff(TIME_T* start, TIME_T* end);
+extern int64 timenorm(int64 cur_time);
 
 #endif

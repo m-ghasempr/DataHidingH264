@@ -9,7 +9,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *    - Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
- *    - Detlev Marpe                    <marpe@hhi.de>
+ *    - Detlev Marpe
  *    - Stephan Wenger                  <stewe@cs.tu-berlin.de>
  ***************************************************************************
  */
@@ -49,7 +49,7 @@ static const byte NCBP[2][48][2]=
 /*!
  *************************************************************************************
  * \brief
- *    ue_v, writes an ue(v) syntax element, returns the length in bits
+ *    write_ue_v, writes an ue(v) syntax element, returns the length in bits
  *
  * \param tracestring
  *    the string for the trace file
@@ -69,7 +69,7 @@ static const byte NCBP[2][48][2]=
  *
  *************************************************************************************
  */
-int ue_v (char *tracestring, int value, Bitstream *bitstream)
+int write_ue_v (char *tracestring, int value, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
   sym->value1 = value;
@@ -94,7 +94,7 @@ int ue_v (char *tracestring, int value, Bitstream *bitstream)
 /*!
  *************************************************************************************
  * \brief
- *    se_v, writes an se(v) syntax element, returns the length in bits
+ *    write_se_v, writes an se(v) syntax element, returns the length in bits
  *
  * \param tracestring
  *    the string for the trace file
@@ -114,7 +114,7 @@ int ue_v (char *tracestring, int value, Bitstream *bitstream)
  *
  *************************************************************************************
  */
-int se_v (char *tracestring, int value, Bitstream *bitstream)
+int write_se_v (char *tracestring, int value, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
   sym->value1 = value;
@@ -139,7 +139,7 @@ int se_v (char *tracestring, int value, Bitstream *bitstream)
 /*!
  *************************************************************************************
  * \brief
- *    u_1, writes a flag (u(1) syntax element, returns the length in bits,
+ *    write_u_1, writes a flag (u(1) syntax element, returns the length in bits,
  *    always 1
  *
  * \param tracestring
@@ -160,7 +160,7 @@ int se_v (char *tracestring, int value, Bitstream *bitstream)
  *
  *************************************************************************************
  */
-Boolean u_1 (char *tracestring, int value, Bitstream *bitstream)
+Boolean write_u_1 (char *tracestring, int value, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
 
@@ -184,7 +184,7 @@ Boolean u_1 (char *tracestring, int value, Bitstream *bitstream)
 /*!
  *************************************************************************************
  * \brief
- *    u_v, writes a n bit fixed length syntax element, returns the length in bits,
+ *    write_u_v, writes a n bit fixed length syntax element, returns the length in bits,
  *
  * \param n
  *    length in bits
@@ -207,7 +207,7 @@ Boolean u_1 (char *tracestring, int value, Bitstream *bitstream)
  *************************************************************************************
  */
 
-int u_v (int n, char *tracestring, int value, Bitstream *bitstream)
+int write_u_v (int n, char *tracestring, int value, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
 
@@ -1258,7 +1258,7 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *dp, int prof
 
     /* Assert to make sure that the code fits in the VLC */
     /* make sure that we are in High Profile to represent level_prefix > 15 */
-    if (numPrefix > 0 && !IS_FREXT_PROFILE( profile_idc ))
+    if (numPrefix > 0 && !is_FREXT_profile( profile_idc ))
     {
       //error( "level_prefix must be <= 15 except in High Profile\n",  1000 );
       se->len = 0x0000FFFF; // This can be some other big number
@@ -1327,7 +1327,7 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *dp,
 
     /* Assert to make sure that the code fits in the VLC */
     /* make sure that we are in High Profile to represent level_prefix > 15 */
-    if (numPrefix > 0 &&  !IS_FREXT_PROFILE( profile_idc ))
+    if (numPrefix > 0 &&  !is_FREXT_profile( profile_idc ))
     {
       //error( "level_prefix must be <= 15 except in High Profile\n",  1000 );
       se->len = 0x0000FFFF; // This can be some other big number
@@ -1470,4 +1470,100 @@ void writeSVLC_CAVLC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 void writeFlag_CAVLC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 {
   writeSE_Flag(se, dp);
+}
+
+int bs_bitlength(Bitstream *bitstream)
+{
+  return (bitstream->byte_pos*8+(8-bitstream->bits_to_go));
+}
+
+/*!
+************************************************************************
+* \brief
+*    Dummy function for reference picture bit writing
+* \author
+************************************************************************
+*/
+void writeRefPic_Dummy(Macroblock *currMB, SyntaxElement *se, DataPartition *dp )
+{
+  se->len = 0;
+}
+
+/*!
+************************************************************************
+* \brief
+*    Function for writing the bits for the reference index when up to 2 refs are available
+* \author
+************************************************************************
+*/
+void writeRefPic_2Ref_CAVLC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp )
+{
+  writeSE_invFlag( se, dp );
+}
+
+/*!
+************************************************************************
+* \brief
+*    Function for writing the bits for the reference index when  N (N>2) refs are available
+* \author
+************************************************************************
+*/
+void writeRefPic_NRef_CAVLC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp )
+{
+  writeSE_UVLC( se, dp );
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *  Reads bits from the bitstream buffer
+ *
+ * \param buffer
+ *    containing VLC-coded data bits
+ * \param totbitoffset
+ *    bit offset from start of partition
+ * \param info
+ *    returns value of the read bits
+ * \param bitcount
+ *    total bytes in bitstream
+ * \param numbits
+ *    number of bits to read
+ *
+ ************************************************************************
+ */
+int GetBits (byte *buffer,
+             int totbitoffset,
+             int *info, 
+             int bitcount,
+             int numbits)
+{
+  if ((totbitoffset + numbits ) > bitcount) 
+  {
+    return 0;
+  }
+  else
+  {
+    int bitoffset  = 7 - (totbitoffset & 0x07); // bit from start of byte
+    int byteoffset = (totbitoffset >> 3); // byte from start of buffer
+    int bitcounter = numbits;
+    byte *curbyte  = &(buffer[byteoffset]);
+    int inf = 0;
+
+    while (numbits--)
+    {
+      inf <<=1;    
+      inf |= ((*curbyte)>> (bitoffset--)) & 0x01;    
+      if (bitoffset == -1 ) 
+      { //Move onto next byte to get all of numbits
+        curbyte++;
+        bitoffset = 7;
+      }
+      // Above conditional could also be avoided using the following:
+      // curbyte   -= (bitoffset >> 3);
+      // bitoffset &= 0x07;
+    }
+    *info = inf;
+
+    return bitcounter;           // return absolute offset in bit from start of frame
+  }
 }

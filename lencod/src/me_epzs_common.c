@@ -41,7 +41,7 @@ static const char EPZS_OTHER_PREDICTORS[2][20] = { "Disabled", "Enabled" };
 static const char EPZS_SUBPEL_METHOD[3][20]    = { "Full", "Basic", "Enhanced" };
 
 //! Define EPZS Refinement patterns
-static const short pattern_data[5][12][4] =
+static const short pattern_data[7][12][4] =
 {
   { // Small Diamond pattern
     {  0,  4,  3, 3 }, {  4,  0,  0, 3 }, {  0, -4,  1, 3 }, { -4,  0, 2, 3 }
@@ -66,25 +66,6 @@ static const short pattern_data[5][12][4] =
     {  0,  2, 6, 12 }, {  2,  0, 0, 12 }, {  0, -2, 2, 12 }, { -2,  0, 4, 12 }
   }
 };
-
-
-/*!
-************************************************************************
-* \brief
-*    calculate RoundLog2(uiVal)
-************************************************************************
-*/
-static int
-RoundLog2 (int iValue)
-{
-  int iRet = 0;
-  int iValue_square = iValue * iValue;
-  while ((1 << (iRet + 1)) <= iValue_square)
-    ++iRet;
-
-  iRet = (iRet + 1) >> 1;
-  return iRet;
-}
 
 /*!
 ************************************************************************
@@ -181,18 +162,36 @@ EPZSInit (VideoParameters * p_Vid)
   //! pattern needs not be restricted on integer positions only.
 
   //! Allocate memory and assign search patterns
-  p_Vid->sdiamond = allocEPZSpattern (4);
-  assignEPZSpattern (p_Vid->sdiamond, SDIAMOND, TRUE, TRUE, p_Vid->sdiamond);
-  p_Vid->square = allocEPZSpattern (8);
-  assignEPZSpattern (p_Vid->square, SQUARE, TRUE, TRUE, p_Vid->square);
-  p_Vid->ediamond = allocEPZSpattern (12);
-  assignEPZSpattern (p_Vid->ediamond, EDIAMOND, TRUE, TRUE, p_Vid->ediamond);
-  p_Vid->ldiamond = allocEPZSpattern (8);
-  assignEPZSpattern (p_Vid->ldiamond, LDIAMOND, TRUE, TRUE, p_Vid->ldiamond);
-  p_Vid->sbdiamond = allocEPZSpattern (12);
-  assignEPZSpattern (p_Vid->sbdiamond, SBDIAMOND, FALSE, TRUE, p_Vid->sdiamond);
-  p_Vid->pmvfast = allocEPZSpattern (8);
-  assignEPZSpattern (p_Vid->pmvfast, LDIAMOND, FALSE, TRUE, p_Vid->sdiamond);
+  if(!p_Vid->sdiamond)
+  {
+   p_Vid->sdiamond = allocEPZSpattern (4);
+   assignEPZSpattern (p_Vid->sdiamond, SDIAMOND, TRUE, TRUE, p_Vid->sdiamond);
+  }
+  if(!p_Vid->square)
+  {
+   p_Vid->square = allocEPZSpattern (8);
+   assignEPZSpattern (p_Vid->square, SQUARE, TRUE, TRUE, p_Vid->square);
+  }
+  if(!p_Vid->ediamond)
+  {
+   p_Vid->ediamond = allocEPZSpattern (12);
+   assignEPZSpattern (p_Vid->ediamond, EDIAMOND, TRUE, TRUE, p_Vid->ediamond);
+  }
+  if(!p_Vid->ldiamond)
+  {
+   p_Vid->ldiamond = allocEPZSpattern (8);
+   assignEPZSpattern (p_Vid->ldiamond, LDIAMOND, TRUE, TRUE, p_Vid->ldiamond);
+  }
+  if(!p_Vid->sbdiamond)
+  {
+   p_Vid->sbdiamond = allocEPZSpattern (12);
+   assignEPZSpattern (p_Vid->sbdiamond, SBDIAMOND, FALSE, TRUE, p_Vid->sdiamond);
+  }
+  if(!p_Vid->pmvfast)
+  {
+   p_Vid->pmvfast = allocEPZSpattern (8);
+   assignEPZSpattern (p_Vid->pmvfast, LDIAMOND, FALSE, TRUE, p_Vid->sdiamond);
+  }
 
   return memory_size;
 }
@@ -207,12 +206,36 @@ void
 EPZSDelete (VideoParameters * p_Vid)
 {
   // Free search patterns
-  freeEPZSpattern (p_Vid->pmvfast);
-  freeEPZSpattern (p_Vid->sbdiamond);
-  freeEPZSpattern (p_Vid->ldiamond);
-  freeEPZSpattern (p_Vid->ediamond);
-  freeEPZSpattern (p_Vid->sdiamond);
-  freeEPZSpattern (p_Vid->square);
+  if(p_Vid->pmvfast)
+  {
+    freeEPZSpattern (p_Vid->pmvfast);
+    p_Vid->pmvfast = NULL;
+  }
+  if(p_Vid->sbdiamond)
+  {
+    freeEPZSpattern (p_Vid->sbdiamond);
+    p_Vid->sbdiamond = NULL;
+  }
+  if(p_Vid->ldiamond)
+  {
+   freeEPZSpattern (p_Vid->ldiamond);
+   p_Vid->ldiamond = NULL;
+  }
+  if(p_Vid->ediamond)
+  {
+   freeEPZSpattern (p_Vid->ediamond);
+   p_Vid->ediamond = NULL;
+  }
+  if(p_Vid->sdiamond)
+  {
+    freeEPZSpattern (p_Vid->sdiamond);
+    p_Vid->sdiamond = NULL;
+  }
+  if(p_Vid->square)
+  {
+   freeEPZSpattern (p_Vid->square);
+   p_Vid->square = NULL;
+  }
 }
 
 /*!
@@ -241,12 +264,12 @@ allocEPZScolocated (int size_x, int size_y, int mb_adaptive_frame_field_flag)
 
   s->size_x = size_x;
   s->size_y = size_y;
-  get_mem3Dmv (&(s->frame), 2, size_y / BLOCK_SIZE, size_x / BLOCK_SIZE);
+  get_mem3Dmv (&(s->frame), 2, (size_y >> BLOCK_SHIFT), (size_x >> BLOCK_SHIFT));
 
   if (mb_adaptive_frame_field_flag)
   {
-    get_mem3Dmv (&(s->top), 2, size_y / (BLOCK_SIZE * 2), size_x / BLOCK_SIZE);
-    get_mem3Dmv (&(s->bot), 2, size_y / (BLOCK_SIZE * 2), size_x / BLOCK_SIZE);
+    get_mem3Dmv (&(s->top), 2, (size_y >> (BLOCK_SHIFT + 1)), (size_x >> BLOCK_SHIFT));
+    get_mem3Dmv (&(s->bot), 2, (size_y >> (BLOCK_SHIFT + 1)), (size_x >> BLOCK_SHIFT));
   }
 
   s->mb_adaptive_frame_field_flag = mb_adaptive_frame_field_flag;
@@ -376,10 +399,10 @@ EPZSStructInit (Slice * currSlice)
   double chroma_weight =
     p_Inp->ChromaMEEnable ? pel_error_me_cr * p_Inp->ChromaMEWeight * (double) (p_Vid->width_cr * p_Vid->height_cr) /
     (double) (p_Vid->width * p_Vid->height) : 0;
-  int searchlevels = RoundLog2 (p_Inp->search_range) - 1;
+  int searchlevels = RoundLog2 (p_Inp->search_range[p_Vid->view_id]) - 1;
   int searcharray =
-    p_Inp->BiPredMotionEstimation ? (2 * imax (p_Inp->search_range, p_Inp->BiPredMESearchRange) +
-    1) << 2 : (2 * p_Inp->search_range + 1) << 2;
+    p_Inp->BiPredMotionEstimation ? (2 * imax (p_Inp->search_range[p_Vid->view_id], p_Inp->BiPredMESearchRange[p_Vid->view_id]) +
+    1) << 2 : (2 * p_Inp->search_range[p_Vid->view_id] + 1) << 2;
   p_EPZS->p_Vid = p_Vid;
   p_EPZS->BlkCount = 1;
 
@@ -390,11 +413,27 @@ EPZSStructInit (Slice * currSlice)
 
   for (i = 0; i < 8; ++i)
   {
+#if (MVC_EXTENSION_ENABLE)
+    if ( (currSlice->view_id) && (p_Inp->EnableEnhLayerEPZSScalers) )
+    {
+      p_EPZS->medthres[i] = p_Inp->EPZSMedThresScale[currSlice->view_id] * (MED_THRES_BASE[i] * pel_error_me + (int) (MED_THRES_BASE[i] * chroma_weight + 0.5));
+      p_EPZS->maxthres[i] = p_Inp->EPZSMaxThresScale[currSlice->view_id] * (MAX_THRES_BASE[i] * pel_error_me + (int) (MAX_THRES_BASE[i] * chroma_weight + 0.5));
+      p_EPZS->minthres[i] = p_Inp->EPZSMinThresScale[currSlice->view_id] * (MIN_THRES_BASE[i] * pel_error_me + (int) (MIN_THRES_BASE[i] * chroma_weight + 0.5));
+      p_EPZS->subthres[i] = p_Inp->EPZSSubPelThresScale[currSlice->view_id] * (MED_THRES_BASE[i] * pel_error_me + (int) (MED_THRES_BASE[i] * chroma_weight + 0.5));
+    }
+    else
+    {
+      p_EPZS->medthres[i] = p_Inp->EPZSMedThresScale[0] * (MED_THRES_BASE[i] * pel_error_me + (int) (MED_THRES_BASE[i] * chroma_weight + 0.5));
+      p_EPZS->maxthres[i] = p_Inp->EPZSMaxThresScale[0] * (MAX_THRES_BASE[i] * pel_error_me + (int) (MAX_THRES_BASE[i] * chroma_weight + 0.5));
+      p_EPZS->minthres[i] = p_Inp->EPZSMinThresScale[0] * (MIN_THRES_BASE[i] * pel_error_me + (int) (MIN_THRES_BASE[i] * chroma_weight + 0.5));
+      p_EPZS->subthres[i] = p_Inp->EPZSSubPelThresScale[0] * (MED_THRES_BASE[i] * pel_error_me + (int) (MED_THRES_BASE[i] * chroma_weight + 0.5));
+    }
+#else
     p_EPZS->medthres[i] = p_Inp->EPZSMedThresScale * (MED_THRES_BASE[i] * pel_error_me + (int) (MED_THRES_BASE[i] * chroma_weight + 0.5));
     p_EPZS->maxthres[i] = p_Inp->EPZSMaxThresScale * (MAX_THRES_BASE[i] * pel_error_me + (int) (MAX_THRES_BASE[i] * chroma_weight + 0.5));
     p_EPZS->minthres[i] = p_Inp->EPZSMinThresScale * (MIN_THRES_BASE[i] * pel_error_me + (int) (MIN_THRES_BASE[i] * chroma_weight + 0.5));
     p_EPZS->subthres[i] = p_Inp->EPZSSubPelThresScale * (MED_THRES_BASE[i] * pel_error_me + (int) (MED_THRES_BASE[i] * chroma_weight + 0.5));
-
+#endif
     up_scale(&p_EPZS->medthres[i]);
     up_scale(&p_EPZS->maxthres[i]);
     up_scale(&p_EPZS->minthres[i]);
@@ -406,12 +445,16 @@ EPZSStructInit (Slice * currSlice)
   //! based on neighborhood
   p_EPZS->window_predictor = allocEPZSpattern (searchlevels * 8);
   p_EPZS->window_predictor_ext = allocEPZSpattern (searchlevels * 20);
-  EPZSWindowPredictorInit ((short) p_Inp->search_range, p_EPZS->window_predictor, 0);
-  EPZSWindowPredictorInit ((short) p_Inp->search_range, p_EPZS->window_predictor_ext, 1);
+  EPZSWindowPredictorInit ((short) p_Inp->search_range[p_Vid->view_id], p_EPZS->window_predictor, 0);
+  EPZSWindowPredictorInit ((short) p_Inp->search_range[p_Vid->view_id], p_EPZS->window_predictor_ext, 1);
 
   //! Also assing search predictor memory
   // maxwindow + spatial + blocktype + temporal + memspatial
+#if (MVC_EXTENSION_ENABLE)
+  p_EPZS->predictor = allocEPZSpattern (searchlevels * 20 + 5 + 5 + 9 * (p_Inp->EPZSTemporal[0] | p_Inp->EPZSTemporal[1]) + 3 * (p_Inp->EPZSSpatialMem));
+#else
   p_EPZS->predictor = allocEPZSpattern (searchlevels * 20 + 5 + 5 + 9 * (p_Inp->EPZSTemporal) + 3 * (p_Inp->EPZSSpatialMem));
+#endif
 
   //! Finally assign memory for all other elements
   //! (distortion, EPZSMap, and temporal predictors)
@@ -432,8 +475,14 @@ EPZSStructInit (Slice * currSlice)
 #endif
   }
 
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->EPZSTemporal[currSlice->view_id] ) 
+#else
   if (p_Inp->EPZSTemporal)
+#endif
+  {
     p_EPZS->p_colocated = allocEPZScolocated (p_Vid->width, p_Vid->height, p_Vid->active_sps->mb_adaptive_frame_field_flag);
+  }
 
   switch (p_Inp->EPZSPattern)
   {
@@ -495,7 +544,11 @@ EPZSStructDelete (Slice * currSlice)
 {
   InputParameters *p_Inp = currSlice->p_Inp;
   EPZSParameters *p_EPZS = currSlice->p_EPZS;
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->EPZSTemporal[currSlice->view_id])
+#else
   if (p_Inp->EPZSTemporal)
+#endif
     freeEPZScolocated (p_EPZS->p_colocated);
 
   //free_offset_mem2Dshort(EPZSMap, searcharray, (searcharray>>1), (searcharray>>1));
@@ -541,7 +594,6 @@ EPZSSliceInit (Slice * currSlice)
   StorablePicture *fs, *fs_top, *fs_bottom;
   StorablePicture *fs1, *fs_top1, *fs_bottom1, *fsx;
   EPZSParameters *p_EPZS = currSlice->p_EPZS;
-  PicMotionParamsOld *p_motion = NULL;
   int i, j, k, jj, jdiv, loffset;
   int prescale, iTRb, iTRp;
   int list = (currSlice->slice_type == B_SLICE) ? LIST_1 : LIST_0;
@@ -585,7 +637,11 @@ EPZSSliceInit (Slice * currSlice)
     }
   }
 
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->EPZSTemporal[currSlice->view_id])
+#else
   if (p_Inp->EPZSTemporal)
+#endif
   {
     MotionVector **MotionVector0 = p->frame[LIST_0];
     MotionVector **MotionVector1 = p->frame[LIST_1];
@@ -682,8 +738,6 @@ EPZSSliceInit (Slice * currSlice)
         }
       }
     }
-
-    p_motion = &fs->motion;
 
     if (!currSlice->active_sps->frame_mbs_only_flag)
     {
@@ -1054,7 +1108,8 @@ EPZSSliceInit (Slice * currSlice)
             fsx = fs;
             loffset = 0;
           }
-          if (fsx->mv_info[j][i].ref_pic[LIST_0] != NULL)
+          //if (fsx->mv_info[j][i].ref_pic[LIST_0] != NULL)
+          if (fsx->mv_info[j][i].ref_pic[LIST_0] != NULL && (!p_Vid->view_id || ((fsx->ref_pic_na[0]<0 || fsx->mv_info[j][i].ref_idx[LIST_0] != fsx->ref_pic_na[0]))))
           {
             for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0]); ++iref)
             {
@@ -1065,7 +1120,6 @@ EPZSSliceInit (Slice * currSlice)
                 break;
               }
             }
-
             compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, &fsx->mv_info[j][i].mv[LIST_0], invmv_precision);
           }
           else
@@ -1098,6 +1152,7 @@ EPZSSliceInit (Slice * currSlice)
       }
     }
   }
+
 }
 
 
@@ -1467,7 +1522,6 @@ EPZSTemporalPredictors (Macroblock *currMB,                 //! <-- Currrent Mac
   MotionVector *cur_mv = &point[*prednum].motion;
 
   *prednum += add_predictor (cur_mv, col_mv[o_block_y][o_block_x], mvScale, 8);
-
   if (min_mcost > stopCriterion && ref < 2)
   {
     int block_available[4];
@@ -1476,7 +1530,6 @@ EPZSTemporalPredictors (Macroblock *currMB,                 //! <-- Currrent Mac
     if (block_available[2])
     {
       *prednum += add_predictor (&point[*prednum].motion, col_mv[o_block_y][o_block_x - 1], mvScale, 8);
-
       //Up_Left
       if (block_available[3])
       {
@@ -1715,9 +1768,33 @@ EPZSOutputStats (InputParameters * p_Inp, FILE * stat, short stats_file)
     fprintf (stat, " EPZS Pattern                 : %s\n", EPZS_PATTERN[p_Inp->EPZSPattern]);
     fprintf (stat, " EPZS Dual Pattern            : %s\n", EPZS_DUAL_PATTERN[p_Inp->EPZSDual]);
     fprintf (stat, " EPZS Fixed Predictors        : %s\n", EPZS_FIXED_PREDICTORS[p_Inp->EPZSFixed]);
+#if (MVC_EXTENSION_ENABLE)
+    if (p_Inp->num_of_views == 2)
+    {
+      fprintf (stat, " BL EPZS Temporal Predictors  : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSTemporal[0]]);
+      fprintf (stat, " EL EPZS Temporal Predictors  : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSTemporal[1]]);
+    }
+    else
+    {
+      fprintf (stat, " EPZS Temporal Predictors     : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSTemporal[0]]);
+    }
+#else
     fprintf (stat, " EPZS Temporal Predictors     : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSTemporal]);
+#endif
     fprintf (stat, " EPZS Spatial Predictors      : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSSpatialMem]);
+#if (MVC_EXTENSION_ENABLE)
+    if ( (p_Inp->num_of_views == 2) && (p_Inp->EnableEnhLayerEPZSScalers) )
+    {
+      fprintf (stat, " BL EPZS Threshold Multipliers     : (%d %d %d)\n", p_Inp->EPZSMedThresScale[0], p_Inp->EPZSMinThresScale[0], p_Inp->EPZSMaxThresScale[0]);
+      fprintf (stat, " EL EPZS Threshold Multipliers     : (%d %d %d)\n", p_Inp->EPZSMedThresScale[1], p_Inp->EPZSMinThresScale[1], p_Inp->EPZSMaxThresScale[1]);
+    }
+    else
+    {
+      fprintf (stat, " EPZS Threshold Multipliers   : (%d %d %d)\n", p_Inp->EPZSMedThresScale[0], p_Inp->EPZSMinThresScale[0], p_Inp->EPZSMaxThresScale[0]);
+    }
+#else
     fprintf (stat, " EPZS Threshold Multipliers   : (%d %d %d)\n", p_Inp->EPZSMedThresScale, p_Inp->EPZSMinThresScale, p_Inp->EPZSMaxThresScale);
+#endif
     fprintf (stat, " EPZS Subpel ME               : %s\n", EPZS_SUBPEL_METHOD[p_Inp->EPZSSubPelME]);
     fprintf (stat, " EPZS Subpel ME BiPred        : %s\n", EPZS_SUBPEL_METHOD[p_Inp->EPZSSubPelMEBiPred]);
   }
@@ -1726,9 +1803,33 @@ EPZSOutputStats (InputParameters * p_Inp, FILE * stat, short stats_file)
     fprintf (stat, " EPZS Pattern                      : %s\n", EPZS_PATTERN[p_Inp->EPZSPattern]);
     fprintf (stat, " EPZS Dual Pattern                 : %s\n", EPZS_DUAL_PATTERN[p_Inp->EPZSDual]);
     fprintf (stat, " EPZS Fixed Predictors             : %s\n", EPZS_FIXED_PREDICTORS[p_Inp->EPZSFixed]);
+#if (MVC_EXTENSION_ENABLE)
+    if (p_Inp->num_of_views == 2)
+    {
+      fprintf (stat, " BL EPZS Temporal Predictors       : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSTemporal[0]]);
+      fprintf (stat, " EL EPZS Temporal Predictors       : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSTemporal[1]]);
+    }
+    else
+    {
+      fprintf (stat, " EPZS Temporal Predictors          : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSTemporal[0]]);
+    }
+#else
     fprintf (stat, " EPZS Temporal Predictors          : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSTemporal]);
+#endif
     fprintf (stat, " EPZS Spatial Predictors           : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSSpatialMem]);
-    fprintf (stat, " EPZS Threshold Multipliers        : (%d %d %d)\n", p_Inp->EPZSMedThresScale, p_Inp->EPZSMinThresScale, p_Inp->EPZSMaxThresScale);
+#if (MVC_EXTENSION_ENABLE)
+    if ( (p_Inp->num_of_views == 2) && (p_Inp->EnableEnhLayerEPZSScalers) )
+    {
+      fprintf (stat, " BL EPZS Threshold Multipliers     : (%d %d %d)\n", p_Inp->EPZSMedThresScale[0], p_Inp->EPZSMinThresScale[0], p_Inp->EPZSMaxThresScale[0]);
+      fprintf (stat, " EL EPZS Threshold Multipliers     : (%d %d %d)\n", p_Inp->EPZSMedThresScale[1], p_Inp->EPZSMinThresScale[1], p_Inp->EPZSMaxThresScale[1]);
+    }
+    else
+    {
+      fprintf (stat, " EPZS Threshold Multipliers   : (%d %d %d)\n", p_Inp->EPZSMedThresScale[0], p_Inp->EPZSMinThresScale[0], p_Inp->EPZSMaxThresScale[0]);
+    }
+#else
+    fprintf (stat, " EPZS Threshold Multipliers   : (%d %d %d)\n", p_Inp->EPZSMedThresScale, p_Inp->EPZSMinThresScale, p_Inp->EPZSMaxThresScale);
+#endif
     fprintf (stat, " EPZS Subpel ME                    : %s\n", EPZS_SUBPEL_METHOD[p_Inp->EPZSSubPelME]);
     fprintf (stat, " EPZS Subpel ME BiPred             : %s\n", EPZS_SUBPEL_METHOD[p_Inp->EPZSSubPelMEBiPred]);
   }

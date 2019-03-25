@@ -1,3 +1,10 @@
+Changes in Version JM 18.0 (since JM 17.2)
+------------------------------------------
+- MVC decoded picture buffer separation (YHe/AT)
+- move MVC parameters into a separate config file (KS)
+- add MS Visual Studio 2010 work spaces (AT/KS)
+- bug fixes (see bug tracker)
+
 Changes in Version JM 17.2 (since JM 17.1)
 ------------------------------------------
 - encoder: fix memory leak for picture based RD-decision (YY)
@@ -1376,7 +1383,9 @@ Bug Fixes
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 People:
-KS      Karsten Suehring        suehring@hhi.de
+KS      Karsten Suehring        Karsten.Suehring (at) hhi.fraunhofer.de
+AT      Alexis Michael Tourapis alexismt@ieee.org
+
 AF      Arild Fuldseth          arild.fuldseth@tandberg.no
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AL      Athanasios Leontaris    athanasios.leontaris@dolby.com
@@ -1384,7 +1393,6 @@ AJ      Anthony Joch            anthony@ubvideo.com
 AM      Alan MacDonald          newslists@warpzillion.com
 AS      Albert Simpson          ASimpson@amphion.com
 ASe     Andrew Segall           asegall@sharplabs.com
-AT      Alexis Michael Tourapis alexismt@ieee.org
 AW      Armand Wemelsfelder     wemel@planet.nl
 BH      Barry Haskell           bhaskell@apple.com
 BJ      Byeungwoo Jeon          bjeon@yurim.skku.ac.kr
@@ -1401,19 +1409,19 @@ DC      Doug Chin               dougchin@sandvideo.com
 DD      Dmitriy Demin           Dmitriy.Demin@Sun.COM
 DH      Dzung Hoang             dzung.hoang@conexant.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
-DM      Detlev Marpe            marpe@hhi.de
+DM      Detlev Marpe
 DT      Dong Tian               tian@cs.tut.fi
 DW      Dong Wang               Dong.Wang@bristol.ac.uk
 EM      Ehsan Maani             emaan@dolby.com
 ES      Eric Setton             esetton@stanford.edu
 FB      Frank Bossen            bossen@docomolabs-usa.com
-GB      Gabi Blaetterman        blaetter@hhi.de
+GB      Gabi Blaetterman
 GC      Guy Cote                guy@videolocus.com
 GM      Gunnar Marten           gunnar_marten@web.de
 GrC     Greg Conklin            gregc@real.com
 GS      Gary Sullivan           garysull@microsoft.com
 FW      Feng Wu                 fengwu@microsoft.com
-HS      Heiko Schwarz           hschwarz@hhi.de
+HS      Heiko Schwarz
 HY      Haoping Yu              haoping.yu@thomson.net
 HZ      Huipin Zhang            hzhang@mobilygen.com
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
@@ -1487,7 +1495,7 @@ SY      Steve Yao               steveyao@sandvideo.com
 SZ      Steve Zeng              stevezeng@rogers.com
 TB      Tomás Brandão           tomas.brandao@iscte.pt
 TH      Till Hallbach           halbach@tele.ntnu.no
-THi     Tobias Hinz             hinz@hhi.de
+THi     Tobias Hinz
 TK      Thomas Kunlin           thomas.kunlin@st.com
 TN      Takahiro Nishi          nishi.takahiro@jp.panasonic.com
 TO      Tobias Oelbaum          drehvial@gmx.net
@@ -1495,7 +1503,7 @@ TP      Tom Pycke               tom.pycke@ugent.be
 TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp
 TSh     Tamar Shoham            Tamar.Shoham@comverse.com
 TSt     Thomas Stockhammer      stockhammer@lnt.ei.tum.de
-TW      Thomas Wiegand          wiegand@hhi.de
+TW      Thomas Wiegand
 TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 TWa     Toby Walker             tobyw@usrl.sony.com
 VG      Valeri George           valeri.george@hhi.fraunhofer.de

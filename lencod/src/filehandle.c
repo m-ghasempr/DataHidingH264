@@ -8,7 +8,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Thomas Stockhammer            <stockhammer@ei.tum.de>
- *      - Detlev Marpe                  <marpe@hhi.de>
+ *      - Detlev Marpe
  ***************************************************************************************
  */
 
@@ -37,7 +37,8 @@
 void error(char *text, int code)
 {
   fprintf(stderr, "%s\n", text);
-  flush_dpb(p_Enc->p_Vid->p_Dpb, &p_Enc->p_Inp->output);
+  flush_dpb(p_Enc->p_Vid->p_Dpb_layer[0], &p_Enc->p_Inp->output);
+  flush_dpb(p_Enc->p_Vid->p_Dpb_layer[1], &p_Enc->p_Inp->output);
   exit(code);
 }
 
@@ -53,7 +54,7 @@ int write_PPS(VideoParameters *p_Vid, int len, int PPS_id)
   NALU_t *nalu;
   nalu = NULL;
   nalu = GeneratePic_parameter_set_NALU (p_Vid, PPS_id);
-  len += p_Vid->WriteNALU (p_Vid, nalu);
+  len += p_Vid->WriteNALU (p_Vid, nalu, p_Vid->f_out);
   FreeNALU (nalu);
 
   return len;
@@ -73,17 +74,19 @@ int start_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   switch(p_Inp->of_mode)
   {
-    case PAR_OF_ANNEXB:
-      OpenAnnexbFile (p_Vid, p_Inp->outfile);
-      p_Vid->WriteNALU = WriteAnnexbNALU;
-      break;
-    case PAR_OF_RTP:
-      OpenRTPFile (p_Vid, p_Inp->outfile);
-      p_Vid->WriteNALU = WriteRTPNALU;
-      break;
-    default:
-      snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", p_Inp->of_mode);
-      error(errortext,1);
+  case PAR_OF_ANNEXB:      
+    p_Vid->WriteNALU = WriteAnnexbNALU;
+    p_Vid->f_out = &p_Vid->f_annexb;
+    OpenAnnexbFile (p_Inp->outfile, p_Vid->f_out);
+    break;
+  case PAR_OF_RTP:      
+    p_Vid->WriteNALU = WriteRTPNALU;
+    p_Vid->f_out = &p_Vid->f_rtp;
+    OpenRTPFile (p_Inp->outfile, p_Vid->f_out);
+    break;
+  default:
+    snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", p_Inp->of_mode);
+    error(errortext,1);
   }
 
   // Access Unit Delimiter NALU
@@ -99,16 +102,16 @@ int start_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   nalu = NULL;
   nalu = GenerateSeq_parameter_set_NALU (p_Vid);
-  len += p_Vid->WriteNALU (p_Vid, nalu);
+  len += p_Vid->WriteNALU (p_Vid, nalu, p_Vid->f_out);
   FreeNALU (nalu);
 
 #if (MVC_EXTENSION_ENABLE)
-  if(p_Inp->num_of_views==2)
+  if(p_Vid->num_of_layers==2)
   {
     int bits;
     nalu = NULL;
     nalu = GenerateSubsetSeq_parameter_set_NALU (p_Vid);
-    bits = p_Vid->WriteNALU (p_Vid, nalu);
+    bits = p_Vid->WriteNALU (p_Vid, nalu, p_Vid->f_out);
     len += bits;
     p_Vid->p_Stats->bit_ctr_parametersets_n_v[1] = bits;
     FreeNALU (nalu);
@@ -129,7 +132,7 @@ int start_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
   {
     nalu = NULL;
     nalu = GenerateSEImessage_NALU(p_Inp);
-    len += p_Vid->WriteNALU (p_Vid, nalu);
+    len += p_Vid->WriteNALU (p_Vid, nalu, p_Vid->f_out);
     FreeNALU (nalu);
   }
 
@@ -154,7 +157,7 @@ int end_of_stream(VideoParameters *p_Vid)
   nalu->nal_reference_idc   = 0;
   nalu->nal_unit_type       = NALU_TYPE_EOSTREAM;
   nalu->len = 0;
-  bits = p_Vid->WriteNALU (p_Vid, nalu);
+  bits = p_Vid->WriteNALU (p_Vid, nalu, p_Vid->f_out);
   
   p_Vid->p_Stats->bit_ctr_parametersets += bits;
   FreeNALU (nalu);
@@ -187,15 +190,15 @@ int rewrite_paramsets(VideoParameters *p_Vid)
 
   nalu = NULL;
   nalu = GenerateSeq_parameter_set_NALU (p_Vid);
-  len += p_Vid->WriteNALU (p_Vid, nalu);
+  len += p_Vid->WriteNALU (p_Vid, nalu, p_Vid->f_out);
   FreeNALU (nalu);
 
 #if (MVC_EXTENSION_ENABLE)
-  if(p_Inp->num_of_views==2)
+  if(p_Vid->num_of_layers==2)
   {
     int bits;
     nalu = GenerateSubsetSeq_parameter_set_NALU (p_Vid);
-    bits = p_Vid->WriteNALU (p_Vid, nalu);
+    bits = p_Vid->WriteNALU (p_Vid, nalu, p_Vid->f_out);
     len += bits;
     p_Vid->p_Stats->bit_ctr_parametersets_n_v[1] = bits;
     FreeNALU (nalu);
@@ -212,7 +215,7 @@ int rewrite_paramsets(VideoParameters *p_Vid)
   {
     nalu = NULL;
     nalu = GenerateSEImessage_NALU(p_Inp);
-    len += p_Vid->WriteNALU (p_Vid, nalu);
+    len += p_Vid->WriteNALU (p_Vid, nalu, p_Vid->f_out);
     FreeNALU (nalu);
   }
 
@@ -243,10 +246,10 @@ int terminate_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
   switch(p_Inp->of_mode)
   {
   case PAR_OF_ANNEXB:
-    CloseAnnexbFile(p_Vid);
+    CloseAnnexbFile(*p_Vid->f_out);
     break;
   case PAR_OF_RTP:
-    CloseRTPFile(p_Vid);
+    CloseRTPFile(*p_Vid->f_out);
     return 0;
   default:
     snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", p_Inp->of_mode);

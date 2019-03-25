@@ -212,9 +212,9 @@ void ProfileCheck(InputParameters *p_Inp)
 
   if (p_Inp->redundant_pic_flag)
   {
-    if ((p_Inp->ProfileIDC != BASELINE) && (p_Inp->ProfileIDC != EXTENDED))
+    if (p_Inp->ProfileIDC != BASELINE)
     {
-      snprintf(errortext, ET_SIZE, "Redundant pictures are only allowed in Baseline (ProfileIDC = 66) and Extended (ProfileIDC = 88) profiles.");
+      snprintf(errortext, ET_SIZE, "Redundant pictures are only allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
   }

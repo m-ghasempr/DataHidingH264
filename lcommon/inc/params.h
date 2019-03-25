@@ -34,13 +34,17 @@ struct inp_par_enc
   int frame_skip;                       //!< number of frames to skip in input sequence (e.g 2 takes frame 0,3,6,9...)
   int jumpd;                            /*!< number of frames to skip in input sequence including intermediate pictures 
                                              (e.g 2 takes frame 0,3,6,9...) */
-  int DisableSubpelME;                  //!< Disable sub-pixel motion estimation
-  int search_range;                     /*!< search range - integer pel search and 16x16 blocks.  The search window is
+  int DisableSubpelME[2];               //!< Disable sub-pixel motion estimation
+  int search_range[2];                  /*!< search range - integer pel search and 16x16 blocks.  The search window is
                                              generally around the predicted vector. Max vector is 2xmcrange.  */
   int num_ref_frames;                   //!< number of reference frames to be used
-  int P_List0_refs;                     //!< number of reference picture in list 0 in P pictures
-  int B_List0_refs;                     //!< number of reference picture in list 0 in B pictures
-  int B_List1_refs;                     //!< number of reference picture in list 1 in B pictures
+  int P_List0_refs[2];                  //!< number of reference picture in list 0 in P pictures
+  int B_List0_refs[2];                  //!< number of reference picture in list 0 in B pictures
+  int B_List1_refs[2];                  //!< number of reference picture in list 1 in B pictures
+  int num_ref_frames_org;
+  int P_List0_refs_org[2];                  //!< number of reference picture in list 0 in P pictures
+  int B_List0_refs_org[2];                  //!< number of reference picture in list 0 in B pictures
+  int B_List1_refs_org[2];                  //!< number of reference picture in list 1 in B pictures
   int Log2MaxFNumMinus4;                //!< value of syntax element log2_max_frame_num
   int Log2MaxPOCLsbMinus4;              //!< value of syntax element log2_max_pic_order_cnt_lsb_minus4
 
@@ -64,20 +68,25 @@ struct inp_par_enc
   int  MultiSourceData;
   VideoDataFile   input_file2;          //!< Input video file2
   VideoDataFile   input_file3;          //!< Input video file3
-#if (MVC_EXTENSION_ENABLE)
   int num_of_views;                     //!< number of views to encode (1=1view, 2=2views)
+#if (MVC_EXTENSION_ENABLE)
+  char View1ConfigName[FILE_NAME_SIZE];    //!<Filename for View1 configuration
+  int EnhLayerDFDisableIdc[2][NUM_SLICE_TYPES];
+  int EnhLayerDFAlpha     [2][NUM_SLICE_TYPES];
+  int EnhLayerDFBeta      [2][NUM_SLICE_TYPES];
   int MVCInterViewReorder;              //!< Reorder References according to interview pictures
   int MVCFlipViews;                     //!< Reverse the order of the views in the bitstream (view 1 has VOIdx 0 and view 1 has VOIdx 0)
   int MVCInterViewForceB;               //!< Force B slices for enhancement layer
   int View1QPOffset;                    //!< QP offset during rate control for View 1
   int enable_inter_view_flag;           //!< Enables inter_view_flag (allows pictures that are to be used for inter-view only prediction)
-#endif
+  double enh_layer_lambda_multiplier;   //!< Weight lambda for enhancement layer
+  double enh_layer_me_lambda_multiplier;//!< Weight ME lambda for enhancement layer
 
+#endif
   VideoDataFile   input_file1;          //!< Input video file1
   char outfile       [FILE_NAME_SIZE];  //!< H.264 compressed output bitstream
   char ReconFile     [FILE_NAME_SIZE];  //!< Reconstructed Pictures (view 0 for MVC profile)
   char ReconFile2    [FILE_NAME_SIZE];  //!< Reconstructed Pictures (view 1)
-
   char TraceFile     [FILE_NAME_SIZE];  //!< Trace Outputs
   char StatsFile     [FILE_NAME_SIZE];  //!< Stats File
   char QmatrixFile   [FILE_NAME_SIZE];  //!< Q matrix cfg file
@@ -116,7 +125,7 @@ struct inp_par_enc
   int BiPredMotionEstimation;           //!< Use of Bipredictive motion estimation
   int BiPredSearch[4];                  //!< Bipredictive motion estimation for modes 16x16, 16x8, 8x16, and 8x8  
   int BiPredMERefinements;              //!< Max number of Iterations for Bi-predictive motion estimation
-  int BiPredMESearchRange;              //!< Search range of Bi-predictive motion estimation
+  int BiPredMESearchRange[2];           //!< Search range of Bi-predictive motion estimation
   int BiPredMESubPel;                   //!< Use of subpixel refinement for Bi-predictive motion estimation
 
   // SP/SI Pictures
@@ -168,7 +177,11 @@ struct inp_par_enc
   int of_mode;                       //!< Specifies the mode of the output file
   int partition_mode;                //!< Specifies the mode of data partitioning
 
-  int InterSearch[2][8];
+// #if (MVC_EXTENSION_ENABLE)
+  int SepViewInterSearch;
+  int View1NoResidueRDO;
+// #endif
+  int InterSearch[2][2][8];
 
   int DisableIntra4x4;
   int DisableIntra16x16;
@@ -179,7 +192,7 @@ struct inp_par_enc
   int FastIntra8x8;
   int FastIntraChroma;
 
-  int DisableIntraInInter;
+  int DisableIntraInInter[2];
   int IntraDisableInterOnly;
   int Intra4x4ParDisable;
   int Intra4x4DiagDisable;
@@ -198,6 +211,7 @@ struct inp_par_enc
   int rdopt;
   int de;     //!< the algorithm to estimate the distortion in the decoder
   int I16rdo; 
+  int MDReference[2];
   int subMBCodingState;
   int Distortion[TOTAL_DIST_TYPES];
   double VisualResWavPSNR;
@@ -234,7 +248,7 @@ struct inp_par_enc
 
   // Chroma interpolation and buffering
   int ChromaMCBuffer;
-  Boolean ChromaMEEnable;
+  int ChromaMEEnable;
   int ChromaMEWeight;
   int MEErrorMetric[3];
   int ModeDecisionMetric;
@@ -295,7 +309,7 @@ struct inp_par_enc
   int    SetMVYLimit;
 
   // Search Algorithm
-  SearchType SearchMode;
+  SearchType SearchMode[2];
   
   // UMHEX related parameters
   int UMHexDSR;
@@ -305,17 +319,30 @@ struct inp_par_enc
   int EPZSPattern;
   int EPZSDual;
   int EPZSFixed;
-  int EPZSTemporal;
+#if (MVC_EXTENSION_ENABLE)
+  int EPZSTemporal[2];
+#else
+  int EPZSTemporal;  
+#endif
   int EPZSSpatialMem;
   int EPZSBlockType;
+#if (MVC_EXTENSION_ENABLE)
+  int EnableEnhLayerEPZSScalers;
+  int EPZSMinThresScale[2];
+  int EPZSMaxThresScale[2];
+  int EPZSMedThresScale[2];
+  int EPZSSubPelThresScale[2];
+#else
   int EPZSMinThresScale;
   int EPZSMaxThresScale;
   int EPZSMedThresScale;
+  int EPZSSubPelThresScale;
+#endif
   int EPZSSubPelGrid;
   int EPZSSubPelME;
   int EPZSSubPelMEBiPred;
-  int EPZSSubPelThresScale;
 
+  int  MinIDRDistance;
   // Lambda Params
   int UseExplicitLambdaParams;
   int UpdateLambdaChromaME;
@@ -361,6 +388,9 @@ struct inp_par_enc
   int PreferDispOrder;       //!< Prefer display order when building the prediction structure as opposed to coding order
   int PreferPowerOfTwo;      //!< Prefer prediction structures that have lengths expressed as powers of two
   int FrmStructBufferLength; //!< Number of frames that is populated every time populate_frm_struct is called
+  // support for "soft" 3:2 pulldown
+  int rc_cpb_size;
+  int SEIVUI32Pulldown;                //!< Enable 3:2 pulldown through VUI and SEI metadata signalling. Three methods are supported.
 
   int separate_colour_plane_flag;
   double WeightY;
@@ -380,7 +410,7 @@ struct inp_par_enc
   VUIParameters VUI;
   // end of VUI parameters
 
-  int  MinIDRDistance;
+  // LZL additions
   int stdRange;                         //!< 1 - standard range, 0 - full range
   int videoCode;                        //!< 1 - 709, 3 - 601:  See VideoCode in io_tiff.
 };

@@ -586,8 +586,6 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
     mb_available_up_left = pix_d.available ? p_Vid->intra_block[pix_d.mb_addr] : 0;
   }
 
-  //set_intrapred_chroma(currMB, &mb_available_left[0], &mb_available_up, &mb_available_up_left);
-
   if (mb_up)
     *mb_up = mb_available_up;
   if (mb_left)
@@ -654,8 +652,8 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
             }
             else if (mb_available_left[0])
             {
-            int pos_x = pix_a.pos_x;
-            int pos_y = pix_a.pos_y + block_y; 
+              int pos_x = pix_a.pos_x;
+              int pos_y = pix_a.pos_y + block_y; 
 
               for (i = 0; i < BLOCK_SIZE; i++)  
                 s2 += image[pos_y++][pos_x];
@@ -1069,13 +1067,13 @@ void intra_chroma_RD_decision (Macroblock *currMB, RD_PARAMS *enc_mb)
 
   if(p_Inp->UseConstrainedIntraPred)
   {
-    mb_available_up = pix_c.available ? p_Vid->intra_block[pix_c.mb_addr] : 0;
-    mb_available_left = pix_d.available ? p_Vid->intra_block[pix_d.mb_addr]: 0;
-    mb_available_up_left  = pix_b.available ? p_Vid->intra_block[pix_b.mb_addr]: 0;
+    mb_available_up      = pix_c.available ? p_Vid->intra_block[pix_c.mb_addr] : 0;
+    mb_available_left    = pix_d.available ? p_Vid->intra_block[pix_d.mb_addr] : 0;
+    mb_available_up_left = pix_b.available ? p_Vid->intra_block[pix_b.mb_addr] : 0;
   }
 
   //printf("af pix_a %d %d\n", pix_a.pos_x, pix_a.pos_y);
-  for (mode=DC_PRED_8; mode<=PLANE_8; ++mode)
+  for (mode = DC_PRED_8; mode <= PLANE_8; ++mode)
   {
     if ((mode==VERT_PRED_8 && !mb_available_up) ||
       (mode==HOR_PRED_8 && (!mb_available_left)) ||
@@ -1090,6 +1088,7 @@ void intra_chroma_RD_decision (Macroblock *currMB, RD_PARAMS *enc_mb)
       int pos_y = pix_a.pos_y;
       image = p_Vid->pImgOrg[uv];
       curr_mpr_16x16 = currSlice->mpr_16x16[uv];
+
       for (block_y=0; block_y<cr_MB_y; block_y+=4)
       {
         for (block_x=0; block_x<cr_MB_x; block_x+=4)

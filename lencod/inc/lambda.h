@@ -26,5 +26,6 @@ extern void get_implicit_lambda_i_slice (Slice *currSlice);
 extern void get_implicit_lambda_sp_slice(Slice *currSlice);
 extern void get_explicit_lambda         (Slice *currSlice);
 extern void get_fixed_lambda            (Slice *currSlice);
+extern void set_rdoq_lambda             (Slice *currSlice);
 
 #endif

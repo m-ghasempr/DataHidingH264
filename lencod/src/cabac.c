@@ -7,7 +7,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Detlev Marpe                    <marpe@hhi.de>
+ *    - Detlev Marpe
  **************************************************************************************
  */
 
@@ -367,10 +367,7 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
  */
 void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx)
 {
-  if( enco_ctx == NULL )
-    return;
-
-  free( enco_ctx );
+  free_pointer( enco_ctx );
 }
 
 /*!
@@ -382,10 +379,7 @@ void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx)
  */
 void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx)
 {
-  if( enco_ctx == NULL )
-    return;
-
-  free( enco_ctx );
+  free_pointer( enco_ctx );
 }
 
 
@@ -973,7 +967,7 @@ void writeIntraPredMode_CABAC(SyntaxElement *se, DataPartition *dp)
  *    parameter of a given MB.
  ****************************************************************************
  */
-void writeRefPic_P_CABAC(SyntaxElement *se, DataPartition *dp)
+void writeRefPic_P_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 {
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);
@@ -981,7 +975,7 @@ void writeRefPic_P_CABAC(SyntaxElement *se, DataPartition *dp)
   VideoParameters *p_Vid = dp->p_Vid;
   PicMotionParams **motion = p_Vid->enc_picture->mv_info;
   MotionInfoContexts  *ctx    = currSlice->mot_ctx;
-  Macroblock          *currMB = &p_Vid->mb_data[p_Vid->current_mb_nr];
+
   int                 addctx  = 0;
 
   int   a = 0, b = 0;
@@ -1039,7 +1033,7 @@ void writeRefPic_P_CABAC(SyntaxElement *se, DataPartition *dp)
  *    parameter of a given MB.
  ****************************************************************************
  */
-void writeRefPic_B_CABAC(SyntaxElement *se, DataPartition *dp)
+void writeRefPic_B_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 {
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);
@@ -1047,7 +1041,6 @@ void writeRefPic_B_CABAC(SyntaxElement *se, DataPartition *dp)
   VideoParameters *p_Vid = dp->p_Vid;
   PicMotionParams **motion = p_Vid->enc_picture->mv_info;
   MotionInfoContexts  *ctx    = currSlice->mot_ctx;
-  Macroblock          *currMB = &p_Vid->mb_data[p_Vid->current_mb_nr];
   int                 addctx  = 0;
 
   int   a = 0, b = 0;
@@ -1339,14 +1332,13 @@ void writeCBP_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
   TextureInfoContexts *ctx = currSlice->tex_ctx;
 
   int a0 = 0, a1 = 0, b0 = 0, b1 = 0;
-  int curr_cbp_ctx, curr_cbp_idx;
+  int curr_cbp_ctx;
   int cbp = se->value1; // symbol to encode
   int cbp_bit;
   int b8;
 
   for (b8=0; b8<4; ++b8)
   {
-    curr_cbp_idx = (currMB->b8x8[b8].mode == IBLOCK ? 0 : 1);
     writeCBP_BIT_CABAC (currMB, b8, cbp&(1<<b8), cbp, eep_dp, ctx);
   }
 

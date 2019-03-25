@@ -27,22 +27,22 @@
 
 
 
-static void GetStrengthVerMBAff    (byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int mvlimit);
-static void GetStrengthHorMBAff    (byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int mvlimit);
-static void EdgeLoopLumaVerMBAff   (ColorPlane pl, imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int width);
-static void EdgeLoopLumaHorMBAff   (ColorPlane pl, imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int width);
-static void EdgeLoopChromaVerMBAff (imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int width, int uv);
-static void EdgeLoopChromaHorMBAff (imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int width, int uv);
+static void get_strength_ver_MBAff     (byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int mvlimit);
+static void get_strength_hor_MBAff     (byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int mvlimit);
+static void edge_loop_luma_ver_MBAff   (ColorPlane pl, imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge);
+static void edge_loop_luma_hor_MBAff   (ColorPlane pl, imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int width);
+static void edge_loop_chroma_ver_MBAff (imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int uv);
+static void edge_loop_chroma_hor_MBAff (imgpel** Img, byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int width, int uv);
 
 
 void set_loop_filter_functions_mbaff(VideoParameters *p_Vid)
 {
-  p_Vid->GetStrengthVer    = GetStrengthVerMBAff;
-  p_Vid->GetStrengthHor    = GetStrengthHorMBAff;
-  p_Vid->EdgeLoopLumaVer   = EdgeLoopLumaVerMBAff;
-  p_Vid->EdgeLoopLumaHor   = EdgeLoopLumaHorMBAff;
-  p_Vid->EdgeLoopChromaVer = EdgeLoopChromaVerMBAff;
-  p_Vid->EdgeLoopChromaHor = EdgeLoopChromaHorMBAff;
+  p_Vid->GetStrengthVer    = get_strength_ver_MBAff;
+  p_Vid->GetStrengthHor    = get_strength_hor_MBAff;
+  p_Vid->EdgeLoopLumaVer   = edge_loop_luma_ver_MBAff;
+  p_Vid->EdgeLoopLumaHor   = edge_loop_luma_hor_MBAff;
+  p_Vid->EdgeLoopChromaVer = edge_loop_chroma_ver_MBAff;
+  p_Vid->EdgeLoopChromaHor = edge_loop_chroma_hor_MBAff;
 }
 
 /*!
@@ -51,7 +51,7 @@ void set_loop_filter_functions_mbaff(VideoParameters *p_Vid)
  *    returns a buffer of 16 Strength values for one stripe in a mb (for MBAFF)
  *********************************************************************************************
  */
-static void GetStrengthVerMBAff(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int mvlimit)
+static void get_strength_ver_MBAff(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int mvlimit)
 {
   short  blkP, blkQ, idx;
   short  blk_x, blk_x2, blk_y, blk_y2 ;
@@ -105,7 +105,7 @@ static void GetStrengthVerMBAff(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, i
           }
           else
           {
-            p_Vid->get_mb_block_pos (MbQ->mbAddrX, &mb_x, &mb_y);
+            p_Vid->get_mb_block_pos (p_Vid->PicPos, MbQ->mbAddrX, &mb_x, &mb_y);
             blk_y  = (short) ((mb_y<<2) + (blkQ >> 2));
             blk_x  = (short) ((mb_x<<2) + (blkQ  & 3));
             blk_y2 = (short) (pixP.pos_y >> 2);
@@ -169,7 +169,7 @@ static void GetStrengthVerMBAff(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, i
  *    returns a buffer of 16 Strength values for one stripe in a mb (for MBAFF)
  *********************************************************************************************
  */
-static void GetStrengthHorMBAff(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int mvlimit)
+static void get_strength_hor_MBAff(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int edge, int mvlimit)
 {
   short  blkP, blkQ, idx;
   short  blk_x, blk_x2, blk_y, blk_y2 ;
@@ -222,7 +222,7 @@ static void GetStrengthHorMBAff(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, i
           }
           else
           {
-            p_Vid->get_mb_block_pos (MbQ->mbAddrX, &mb_x, &mb_y);
+            p_Vid->get_mb_block_pos (p_Vid->PicPos, MbQ->mbAddrX, &mb_x, &mb_y);
             blk_y  = (short) ((mb_y<<2) + (blkQ >> 2));
             blk_x  = (short) ((mb_x<<2) + (blkQ  & 3));
             blk_y2 = (short) (pixP.pos_y >> 2);
@@ -289,7 +289,7 @@ static void GetStrengthHorMBAff(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, i
  *    Filters 16 pel block edge of Super MB Frame coded MBs
  *****************************************************************************************
  */
-static void EdgeLoopLumaVerMBAff(ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width)
+static void edge_loop_luma_ver_MBAff(ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge)
 {
   int      pel, ap = 0, aq = 0, Strng ;
   int      C0, tc0, dif;
@@ -416,7 +416,7 @@ static void EdgeLoopLumaVerMBAff(ColorPlane pl, imgpel** Img, byte Strength[16],
  *    Filters 16 pel block edge of Super MB Frame coded MBs
  *****************************************************************************************
  */
-static void EdgeLoopLumaHorMBAff(ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width)
+static void edge_loop_luma_hor_MBAff(ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width)
 {
   int      pel, ap = 0, aq = 0, Strng ;
   int      incP, incQ;
@@ -545,7 +545,7 @@ static void EdgeLoopLumaHorMBAff(ColorPlane pl, imgpel** Img, byte Strength[16],
 *    Filters chroma block edge for MBAFF types
 *****************************************************************************************
  */
-static void EdgeLoopChromaVerMBAff(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width, int uv)
+static void edge_loop_chroma_ver_MBAff(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int uv)
 {
   int      pel, Strng ;
   int      C0, tc0, dif;
@@ -629,7 +629,7 @@ static void EdgeLoopChromaVerMBAff(imgpel** Img, byte Strength[16], Macroblock *
 *    Filters chroma block edge for MBAFF types
 *****************************************************************************************
  */
-static void EdgeLoopChromaHorMBAff(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width, int uv)
+static void edge_loop_chroma_hor_MBAff(imgpel** Img, byte Strength[16], Macroblock *MbQ, int edge, int width, int uv)
 {
   int      pel, Strng ;
   int      incP, incQ;

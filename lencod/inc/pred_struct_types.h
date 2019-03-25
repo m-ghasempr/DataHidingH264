@@ -38,7 +38,7 @@ typedef struct pred_struct_frm
   int slice_type;
   int nal_ref_idc;
   int layer; // the lower the higher the priority
-  int slice_qp;
+  int slice_qp_off;
   int random_access;
   int temporal_layer; 
 } PredStructFrm;
@@ -66,6 +66,7 @@ typedef struct pic_struct
 {
   int idr_flag;
   int nal_ref_idc;
+  int random_access; // to support open GOPs
   int num_slices;
   SliceStructure *p_Slice;
 } PicStructure;

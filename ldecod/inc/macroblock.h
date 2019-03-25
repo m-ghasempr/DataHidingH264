@@ -138,8 +138,8 @@ static const unsigned char cofuv_blk_y[3][8][4] =
     { 2, 2, 3, 3}}
 };
 
-
-extern void setup_slice_methods(Slice *currSlice);
+extern void setup_slice_methods_mbaff(Slice *currSlice);
+extern void setup_slice_methods      (Slice *currSlice);
 extern void get_neighbors(Macroblock *currMB, PixelPos *block, int mb_x, int mb_y, int blockshape_x);
 
 extern void start_macroblock     (Slice *currSlice, Macroblock **currMB);

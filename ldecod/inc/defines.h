@@ -9,7 +9,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *     - Detlev Marpe
- *     - Karsten Sühring                 <suehring@hhi.de> 
+ *     - Karsten Suehring
  *     - Alexis Michael Tourapis         <alexismt@ieee.org> 
  *   
  *
@@ -17,7 +17,6 @@
  *    21. March 2001
  **************************************************************************
  */
-
 
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
@@ -30,8 +29,8 @@
 # define TRACE           0     //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-#define JM                  "17 (FRExt)"
-#define VERSION             "17.2"
+#define JM                  "18 (FRExt)"
+#define VERSION             "18.0"
 #define EXT_VERSION         "(FRExt)"
 
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
@@ -45,15 +44,13 @@
 #define JCOST_CALC_SCALEUP        1    //!< 1: J = (D<<LAMBDA_ACCURACY_BITS)+Lambda*R; 0: J = D + ((Lambda*R+Rounding)>>LAMBDA_ACCURACY_BITS)
 #define DISABLE_ERC               1    //!< Disable any error concealment processes
 #define JM_PARALLEL_DEBLOCK       0    //!< Enables Parallel Deblocking
+#define SIMULCAST_ENABLE          0    //!< to test the decoder
 
 #define MVC_EXTENSION_ENABLE      1    //!< enable support for the Multiview High Profile
 
-#if (MVC_EXTENSION_ENABLE)
 #define MVC_INIT_VIEW_ID          -1
 #define MAX_VIEW_NUM              1024   
 #define BASE_VIEW_IDX             0
-#define FREEPTR(ptr) { if(ptr) {free(ptr); (ptr)=NULL;} }
-#endif
 
 #include "typedefs.h"
 
@@ -69,6 +66,7 @@
 #define MCBUF_LUMA_PAD_Y        12
 #define MCBUF_CHROMA_PAD_X      16
 #define MCBUF_CHROMA_PAD_Y      8
+#define MAX_NUM_DPB_LAYERS      2
 
 //AVC Profile IDC definitions
 typedef enum {

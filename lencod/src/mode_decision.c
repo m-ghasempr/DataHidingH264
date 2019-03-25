@@ -70,14 +70,12 @@ void end_encode_one_macroblock(Macroblock *currMB)
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
 
-  int bslice = (currSlice->slice_type == B_SLICE);
-
   update_qp_cbp(currMB);
 
   if ( (currSlice->mb_aff_frame_flag)
     && (currMB->mbAddrX & 0x01)
-    && (currMB->mb_type ? 0:((bslice) ? !currMB->cbp:1))  // bottom is skip
-    && ((currMB->PrevMB)->mb_type ? 0:((bslice) ? !(currMB->PrevMB)->cbp:1))
+    && (currMB->mb_type ? 0:(((currSlice->slice_type == B_SLICE)) ? !currMB->cbp:1))  // bottom is skip
+    && ((currMB->PrevMB)->mb_type ? 0:(((currSlice->slice_type == B_SLICE)) ? !(currMB->PrevMB)->cbp:1))
     && !(field_flag_inference(currMB) == currMB->mb_field)) // top is skip
   {
     currSlice->rddata->min_rdcost = 1e30;  // don't allow coding of a MB pair as skip if wrong inference
@@ -88,11 +86,11 @@ void end_encode_one_macroblock(Macroblock *currMB)
   currSlice->rddata->min_dcost  = (double)currMB->min_dcost;
   currSlice->rddata->min_rate   = (double)currMB->min_rate;
 
-  if(p_Inp->SearchMode == UM_HEX)
+  if(p_Inp->SearchMode[p_Vid->view_id] == UM_HEX)
   {
     UMHEX_skip_intrabk_SAD(currMB, currSlice->listXsize[currMB->list_offset]);
   }
-  else if(p_Inp->SearchMode == UM_HEX_SIMPLE)
+  else if(p_Inp->SearchMode[p_Vid->view_id] == UM_HEX_SIMPLE)
   {
     smpUMHEX_skip_intrabk_SAD(currMB);
   }
@@ -115,34 +113,35 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra)
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_Slice;
-  int bslice = (currSlice->slice_type == B_SLICE);
+#if (MVC_EXTENSION_ENABLE)
+  int *InterSearch = p_Inp->InterSearch[(p_Vid->num_of_layers > 1) ? currSlice->view_id : 0][(currSlice->slice_type == B_SLICE)];
+#else
+  int *InterSearch = p_Inp->InterSearch[0][(currSlice->slice_type == B_SLICE)];
+#endif  
 
   int l,k;
 
   enc_mb->curr_mb_field = (short) ((currSlice->mb_aff_frame_flag)&&(currMB->mb_field));
 
   // Set valid modes  
-  enc_mb->valid[I8MB]  = (short) ((!p_Inp->DisableIntraInInter || intra )?   p_Inp->Transform8x8Mode : 0);
-  enc_mb->valid[I4MB]  = (short) ((!p_Inp->DisableIntraInInter || intra )? ((p_Inp->Transform8x8Mode == 2) ? 0 : 1) : 0);
+  enc_mb->valid[I8MB]  = (short) ((!p_Inp->DisableIntraInInter[p_Vid->view_id] || intra )?   p_Inp->Transform8x8Mode : 0);
+  enc_mb->valid[I4MB]  = (short) ((!p_Inp->DisableIntraInInter[p_Vid->view_id] || intra )? ((p_Inp->Transform8x8Mode == 2) ? 0 : 1) : 0);
   enc_mb->valid[I4MB]  = (short) ((!p_Inp->DisableIntra4x4  ) ? enc_mb->valid[I4MB] : 0);
-  enc_mb->valid[I16MB] = (short) ((!p_Inp->DisableIntraInInter || intra )? 1 : 0);
+  enc_mb->valid[I16MB] = (short) ((!p_Inp->DisableIntraInInter[p_Vid->view_id] || intra )? 1 : 0);
   enc_mb->valid[I16MB] = (short) ((!p_Inp->DisableIntra16x16) ? enc_mb->valid[I16MB] : 0);
-  enc_mb->valid[IPCM]  = (short) ((!p_Inp->DisableIntraInInter || intra )? p_Inp->EnableIPCM : 0);
+  enc_mb->valid[IPCM]  = (short) ((!p_Inp->DisableIntraInInter[p_Vid->view_id] || intra )? (p_Inp->EnableIPCM>0? 1:0) : 0);
   enc_mb->valid[SI4MB] = 0;
   //enc_mb->valid[SI4MB] = (short) (currSlice->slice_type == SI_SLICE);
   //enc_mb->valid[SI4MB] = (short) ( p_Inp->DisableIntra4x4 ? 0 : enc_mb->valid[SI4MB]);
 
-  enc_mb->valid[0]     = (short) (!intra && p_Inp->InterSearch[bslice][0]);
-  if(enc_mb->valid[0] && !p_Inp->direct_spatial_mv_pred_flag && currSlice->slice_type == B_SLICE && 
-    (currSlice->mb_aff_frame_flag || (p_Vid->structure==FRAME && !currSlice->listX[LIST_1][0]->coded_frame) || (p_Vid->structure!=FRAME && currSlice->listX[LIST_1][0]->coded_frame)))
-     enc_mb->valid[0] = 0;
-  enc_mb->valid[1]     = (short) (!intra && p_Inp->InterSearch[bslice][1]);
-  enc_mb->valid[2]     = (short) (!intra && p_Inp->InterSearch[bslice][2]);
-  enc_mb->valid[3]     = (short) (!intra && p_Inp->InterSearch[bslice][3]);
-  enc_mb->valid[4]     = (short) (!intra && p_Inp->InterSearch[bslice][4]);
-  enc_mb->valid[5]     = (short) (!intra && p_Inp->InterSearch[bslice][5] && !(p_Inp->Transform8x8Mode==2));
-  enc_mb->valid[6]     = (short) (!intra && p_Inp->InterSearch[bslice][6] && !(p_Inp->Transform8x8Mode==2));
-  enc_mb->valid[7]     = (short) (!intra && p_Inp->InterSearch[bslice][7] && !(p_Inp->Transform8x8Mode==2));
+  enc_mb->valid[0]     = (short) (!intra && InterSearch[0]);
+  enc_mb->valid[1]     = (short) (!intra && InterSearch[1]);
+  enc_mb->valid[2]     = (short) (!intra && InterSearch[2]);
+  enc_mb->valid[3]     = (short) (!intra && InterSearch[3]);
+  enc_mb->valid[4]     = (short) (!intra && InterSearch[4]);
+  enc_mb->valid[5]     = (short) (!intra && InterSearch[5] && !(p_Inp->Transform8x8Mode==2));
+  enc_mb->valid[6]     = (short) (!intra && InterSearch[6] && !(p_Inp->Transform8x8Mode==2));
+  enc_mb->valid[7]     = (short) (!intra && InterSearch[7] && !(p_Inp->Transform8x8Mode==2));
   enc_mb->valid[P8x8]  = (short) (enc_mb->valid[4] || enc_mb->valid[5] || enc_mb->valid[6] || enc_mb->valid[7]);
 
 
@@ -189,13 +188,8 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra)
   enc_mb->lambda_mdfp = LAMBDA_FACTOR(enc_mb->lambda_md);
   //#endif
 
-  enc_mb->lambda_me[F_PEL] = p_Vid->lambda_me[currSlice->slice_type][p_Vid->masterQP][F_PEL];
-  enc_mb->lambda_me[H_PEL] = p_Vid->lambda_me[currSlice->slice_type][p_Vid->masterQP][H_PEL];
-  enc_mb->lambda_me[Q_PEL] = p_Vid->lambda_me[currSlice->slice_type][p_Vid->masterQP][Q_PEL];
-
-  enc_mb->lambda_mf[F_PEL] = p_Vid->lambda_mf[currSlice->slice_type][p_Vid->masterQP][F_PEL];
-  enc_mb->lambda_mf[H_PEL] = p_Vid->lambda_mf[currSlice->slice_type][p_Vid->masterQP][H_PEL];
-  enc_mb->lambda_mf[Q_PEL] = p_Vid->lambda_mf[currSlice->slice_type][p_Vid->masterQP][Q_PEL];
+  memcpy(enc_mb->lambda_me, p_Vid->lambda_me[currSlice->slice_type][p_Vid->masterQP], 3 * sizeof(double));
+  memcpy(enc_mb->lambda_mf, p_Vid->lambda_mf[currSlice->slice_type][p_Vid->masterQP], 3 * sizeof(int));
 
   if (!currSlice->mb_aff_frame_flag)
   {
@@ -246,18 +240,32 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra)
   // reset chroma intra predictor to default
   currMB->c_ipred_mode = DC_PRED_8;
 
-  if(p_Inp->SearchMode == UM_HEX)
+
+  if(p_Inp->SearchMode[p_Vid->view_id] == UM_HEX)
   {
     UMHEX_decide_intrabk_SAD(currMB);
     UMHEX_DefineThresholdMB(p_Vid, p_Inp);
   }
-  else if (p_Inp->SearchMode == UM_HEX_SIMPLE)
+  else if (p_Inp->SearchMode[p_Vid->view_id] == UM_HEX_SIMPLE)
   {
     smpUMHEX_decide_intrabk_SAD(currMB);
   }
 
 }
 
+void update_mcost(Slice *currSlice, int ref_lambda, short ref, int cur_list, distblk mcost, distblk *bmcost, char *best_ref)
+{
+  if (mcost < *bmcost)
+  {
+    mcost += ref_cost(currSlice, ref_lambda, ref, cur_list);
+
+    if (mcost < *bmcost)
+    {
+      *bmcost   = mcost;
+      *best_ref = (char)ref;
+    }
+  }
+}
 /*!
 *************************************************************************************
 * \brief
@@ -271,30 +279,47 @@ void list_prediction_cost(Macroblock *currMB, int list, int block, int mode, RD_
   InputParameters *p_Inp = currMB->p_Inp;
 
   short ref;
-  distblk mcost;
   int cur_list = list < BI_PRED ? currMB->list_offset + list : currMB->list_offset;
   int ref_lambda = (p_Inp->rdopt) ? enc_mb->lambda_mf[Q_PEL] :  enc_mb->lambda_mf[Q_PEL] >> 2;
 
   //--- get cost and reference frame for forward prediction ---
   if (list < BI_PRED)
   {
-    for (ref=0; ref < currSlice->listXsize[cur_list]; ref++)
+    distblk **motion_cost = p_Vid->motion_cost[mode][list];
+
+    int sp_indicator = (p_Inp->sp2_frame_indicator || p_Inp->sp_output_indicator);
+
+    if (!p_Vid->checkref || list)
     {
-      if (!p_Vid->checkref || list || ref==0 || (p_Inp->RestrictRef && CheckReliabilityOfRef (currMB, block, list, ref, mode)))
+      if (p_Inp->sp2_frame_indicator == 0 && p_Inp->sp_output_indicator == 0)
       {
-        // limit the number of reference frames to 1 when switching SP frames are used
-        if((!p_Inp->sp2_frame_indicator && !p_Inp->sp_output_indicator)||
-          ((p_Inp->sp2_frame_indicator || p_Inp->sp_output_indicator) && (currSlice->slice_type != P_SLICE && currSlice->slice_type != SP_SLICE))||
-          ((p_Inp->sp2_frame_indicator || p_Inp->sp_output_indicator) && ((currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE) &&(ref==0))))
+        for (ref = 0; ref < currSlice->listXsize[cur_list]; ref++)
         {
-          mcost  = ref_cost(currSlice, ref_lambda, (short) ref, cur_list);
-
-          mcost += p_Vid->motion_cost[mode][list][ref][block];
-
-          if (mcost < bmcost[list])
+          update_mcost(currSlice, ref_lambda, ref, cur_list, motion_cost[ref][block], &bmcost[list], &best_ref[list]);
+        }
+      }
+      else
+      {
+        for (ref = 0; ref < currSlice->listXsize[cur_list]; ref++)
+        {
+          // limit the number of reference frames to 1 when switching SP frames are used
+          if((((currSlice->slice_type != P_SLICE && currSlice->slice_type != SP_SLICE)) || (ref == 0)))
           {
-            bmcost[list]   = mcost;
-            best_ref[list] = (char)ref;
+            update_mcost(currSlice, ref_lambda, ref, cur_list, motion_cost[ref][block], &bmcost[list], &best_ref[list]);
+          }
+        }
+      }
+    }
+    else
+    {
+      for (ref = 0; ref < currSlice->listXsize[cur_list]; ref++)
+      {
+        if (ref == 0 || (p_Inp->RestrictRef && CheckReliabilityOfRef (currMB, block, list, ref, mode)))
+        {
+          // limit the number of reference frames to 1 when switching SP frames are used
+          if( !(sp_indicator) || (((currSlice->slice_type != P_SLICE && currSlice->slice_type != SP_SLICE))|| (ref == 0)))
+          {
+            update_mcost(currSlice, ref_lambda, ref, cur_list, motion_cost[ref][block], &bmcost[list], &best_ref[list]);
           }
         }
       }
@@ -304,7 +329,8 @@ void list_prediction_cost(Macroblock *currMB, int list, int block, int mode, RD_
   {
     if (p_Vid->active_pps->weighted_bipred_idc == 1)
     {
-      int weight_sum = currSlice->wbp_weight[0][(int) best_ref[LIST_0]][(int) best_ref[LIST_1]][0] + currSlice->wbp_weight[1][(int) best_ref[LIST_0]][(int) best_ref[LIST_1]][0];
+      int weight_sum = currSlice->wbp_weight[0][(int) best_ref[LIST_0]][(int) best_ref[LIST_1]][0] + 
+        currSlice->wbp_weight[1][(int) best_ref[LIST_0]][(int) best_ref[LIST_1]][0];
 
       if (weight_sum < -128 ||  weight_sum > 127)
       {
@@ -462,11 +488,23 @@ void compute_mode_RD_cost(Macroblock *currMB,
 
     // Encode with no coefficients. Currently only for direct. This could be extended to all other modes as in example.
     //if (bslice && mode < P8x8 && (*inter_skip == 0) && enc_mb->valid[mode] && currMB->cbp && (currMB->cbp&15) != 15 && !p_Inp->nobskip
-    if (bslice && mode == 0 && (*inter_skip == 0) && enc_mb->valid[mode] && currMB->cbp && (currMB->cbp&15) != 15 && !p_Inp->nobskip
-    && !(currMB->qp_scaled[0] == 0 && p_Vid->lossless_qpprime_flag==1) )
-    {
+    if ( (bslice && mode == 0 && (*inter_skip == 0) && enc_mb->valid[mode] && currMB->cbp && (currMB->cbp&15) != 15 && !p_Inp->nobskip
+    && !(currMB->qp_scaled[0] == 0 && p_Vid->active_sps->lossless_qpprime_flag==1) )
+    )
+    { 
       currSlice->NoResidueDirect = 1;
-
+      if(mode == P8x8)
+      {
+        RD_8x8DATA *t8x8_data = currMB->luma_transform_size_8x8_flag ? p_RDO->tr8x8 : p_RDO->tr4x4;
+        p_Vid->b8x8info->best[P8x8][0] = t8x8_data->part[0];
+        p_Vid->b8x8info->best[P8x8][1] = t8x8_data->part[1];
+        p_Vid->b8x8info->best[P8x8][2] = t8x8_data->part[2];
+        p_Vid->b8x8info->best[P8x8][3] = t8x8_data->part[3];
+        if(p_Inp->Transform8x8Mode == 1 && currMB->valid_8x8 && currMB->valid_4x4)
+        {
+          RestoreMV8x8(currSlice, (!currMB->luma_transform_size_8x8_flag));
+        }
+      }
       if (CheckPredictionParams(currMB, p_Vid->b8x8info, mode) == TRUE)
       {
         if (RDCost_for_macroblocks (currMB, enc_mb->lambda_mdfp, mode))
@@ -479,6 +517,13 @@ void compute_mode_RD_cost(Macroblock *currMB,
             reset_adaptive_rounding_direct(p_Vid);
 
           store_macroblock_parameters (currMB, mode);
+        }
+      }
+      if(mode == P8x8)
+      {
+        if(p_Inp->Transform8x8Mode == 1 && currMB->valid_8x8 && currMB->valid_4x4)
+        {
+          RestoreMV8x8(currSlice, 0);
         }
       }
     }
@@ -529,7 +574,7 @@ void adjust_mb16x16_cost(Macroblock *currMB, distblk cost)
   p_Vid->mb16x16_cost = (double) cost;
   p_Vid->mb16x16_cost_frame[currMB->mbAddrX] = p_Vid->mb16x16_cost;
 #if JCOST_CALC_SCALEUP
-  p_RDO->lambda_mf_factor = (p_Vid->mb16x16_cost < CALM_MF_FACTOR_THRESHOLD*(1<<LAMBDA_ACCURACY_BITS))
+  p_RDO->lambda_mf_factor = (p_Vid->mb16x16_cost < CALM_MF_FACTOR_THRESHOLD * (1 << LAMBDA_ACCURACY_BITS))
   ? 1.0
   : sqrt(p_Vid->mb16x16_cost / (CALM_MF_FACTOR_THRESHOLD*(1<<LAMBDA_ACCURACY_BITS) * p_Vid->lambda_mf_factor[currSlice->slice_type][p_Vid->qp]));
 #else
@@ -618,12 +663,11 @@ int transform_termination_control(Macroblock* currMB, int mode)
   //if (p_Inp->Transform8x8Mode==1 && currMB->cbp!=0)
   if (p_Inp->Transform8x8Mode == 1)
   {
-    int bslice = currSlice->slice_type == B_SLICE;
     //=========== try the 8x8 transform with mb_types 16x16,16x8, 8x16, 8x8, and DIRECT 16x16 ===========
     if (currMB->luma_transform_size_8x8_flag == FALSE && 
-      ((mode >= 1 && mode <= 3) || (bslice && mode == 0 && p_Vid->active_sps->direct_8x8_inference_flag) || (mode == P8x8)))
+      ((mode >= 1 && mode <= 3) || ((currSlice->slice_type == B_SLICE) && mode == 0 && p_Vid->active_sps->direct_8x8_inference_flag) || (mode == P8x8)))
         //if (currMB->luma_transform_size_8x8_flag == FALSE && 
-      //((mode >= 1 && mode <= 3) || (bslice && mode == 0 && active_sps->direct_8x8_inference_flag)))
+      //((mode >= 1 && mode <= 3) || ((currSlice->slice_type == B_SLICE) && mode == 0 && active_sps->direct_8x8_inference_flag)))
     {
       //try with 8x8 transform size
       currMB->luma_transform_size_8x8_flag = TRUE;

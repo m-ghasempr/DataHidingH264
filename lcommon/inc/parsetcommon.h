@@ -54,8 +54,8 @@ typedef struct
 {
   Boolean      aspect_ratio_info_present_flag;                   // u(1)
   unsigned int aspect_ratio_idc;                                 // u(8)
-  unsigned short sar_width;                                        // u(16)
-  unsigned short sar_height;                                       // u(16)
+  unsigned short sar_width;                                      // u(16)
+  unsigned short sar_height;                                     // u(16)
   Boolean      overscan_info_present_flag;                       // u(1)
   Boolean      overscan_appropriate_flag;                        // u(1)
   Boolean      video_signal_type_present_flag;                   // u(1)
@@ -130,11 +130,14 @@ typedef struct
   int       pic_init_qs_minus26;                              // se(v)
   int       chroma_qp_index_offset;                           // se(v)
 
+  int       cb_qp_index_offset;                               // se(v)
+  int       cr_qp_index_offset;                               // se(v)
   int       second_chroma_qp_index_offset;                    // se(v)
 
   Boolean   deblocking_filter_control_present_flag;           // u(1)
   Boolean   constrained_intra_pred_flag;                      // u(1)
   Boolean   redundant_pic_cnt_present_flag;                   // u(1)
+  Boolean   vui_pic_parameters_flag;                          // u(1)
 } pic_parameter_set_rbsp_t;
 
 
@@ -150,6 +153,7 @@ typedef struct
   Boolean   constrained_set3_flag;                                // u(1)
 #if (MVC_EXTENSION_ENABLE)
   Boolean   constrained_set4_flag;                                // u(1)
+  Boolean   constrained_set5_flag;                                // u(2)
 #endif
   unsigned  int level_idc;                                        // u(8)
   unsigned  int seq_parameter_set_id;                             // ue(v)
@@ -169,60 +173,61 @@ typedef struct
   // if( pic_order_cnt_type == 0 )
   unsigned int log2_max_pic_order_cnt_lsb_minus4;                 // ue(v)
   // else if( pic_order_cnt_type == 1 )
-    Boolean delta_pic_order_always_zero_flag;               // u(1)
-    int     offset_for_non_ref_pic;                         // se(v)
-    int     offset_for_top_to_bottom_field;                 // se(v)
-    unsigned int num_ref_frames_in_pic_order_cnt_cycle;          // ue(v)
-    // for( i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++ )
-      int   offset_for_ref_frame[MAXnum_ref_frames_in_pic_order_cnt_cycle];   // se(v)
+  Boolean delta_pic_order_always_zero_flag;               // u(1)
+  int     offset_for_non_ref_pic;                         // se(v)
+  int     offset_for_top_to_bottom_field;                 // se(v)
+  unsigned int num_ref_frames_in_pic_order_cnt_cycle;          // ue(v)
+  // for( i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++ )
+  int   offset_for_ref_frame[MAXnum_ref_frames_in_pic_order_cnt_cycle];   // se(v)
   unsigned int num_ref_frames;                                   // ue(v)
   Boolean   gaps_in_frame_num_value_allowed_flag;             // u(1)
   unsigned int pic_width_in_mbs_minus1;                          // ue(v)
   unsigned int pic_height_in_map_units_minus1;                   // ue(v)
   Boolean   frame_mbs_only_flag;                              // u(1)
   // if( !frame_mbs_only_flag )
-    Boolean   mb_adaptive_frame_field_flag;                   // u(1)
+  Boolean   mb_adaptive_frame_field_flag;                   // u(1)
   Boolean   direct_8x8_inference_flag;                        // u(1)
   Boolean   frame_cropping_flag;                              // u(1)
-    unsigned int frame_cropping_rect_left_offset;                // ue(v)
-    unsigned int frame_cropping_rect_right_offset;               // ue(v)
-    unsigned int frame_cropping_rect_top_offset;                 // ue(v)
-    unsigned int frame_cropping_rect_bottom_offset;              // ue(v)
+  unsigned int frame_crop_left_offset;                // ue(v)
+  unsigned int frame_crop_right_offset;               // ue(v)
+  unsigned int frame_crop_top_offset;                 // ue(v)
+  unsigned int frame_crop_bottom_offset;              // ue(v)
   Boolean   vui_parameters_present_flag;                      // u(1)
-    vui_seq_parameters_t vui_seq_parameters;                  // vui_seq_parameters_t
-    unsigned  separate_colour_plane_flag;                       // u(1)
+  vui_seq_parameters_t vui_seq_parameters;                  // vui_seq_parameters_t
+  unsigned  separate_colour_plane_flag;                       // u(1)
 #if (MVC_EXTENSION_ENABLE)
-    int max_dec_frame_buffering;
+  int max_dec_frame_buffering;
 #endif
+  int lossless_qpprime_flag;
 } seq_parameter_set_rbsp_t;
 
 #if (MVC_EXTENSION_ENABLE)
 typedef struct mvcvui_tag
 {
-   int num_ops_minus1;
-   char *temporal_id;
-   int *num_target_output_views_minus1;
-   int **view_id;
-   char *timing_info_present_flag;
-   int *num_units_in_tick;
-   int *time_scale;
-   char *fixed_frame_rate_flag;
-   char *nal_hrd_parameters_present_flag;
-   char *vcl_hrd_parameters_present_flag;
-   char *low_delay_hrd_flag;
-   char *pic_struct_present_flag;
+  int num_ops_minus1;
+  char *temporal_id;
+  int *num_target_output_views_minus1;
+  int **view_id;
+  char *timing_info_present_flag;
+  int *num_units_in_tick;
+  int *time_scale;
+  char *fixed_frame_rate_flag;
+  char *nal_hrd_parameters_present_flag;
+  char *vcl_hrd_parameters_present_flag;
+  char *low_delay_hrd_flag;
+  char *pic_struct_present_flag;
 
-    //hrd parameters;
-    char cpb_cnt_minus1;
-	char bit_rate_scale;
-	char cpb_size_scale;
-	int bit_rate_value_minus1[32];
-	int cpb_size_value_minus1[32];
-	char cbr_flag[32];
-	char initial_cpb_removal_delay_length_minus1;
-    char cpb_removal_delay_length_minus1;
-	char dpb_output_delay_length_minus1;
-	char time_offset_length;
+  //hrd parameters;
+  char cpb_cnt_minus1;
+  char bit_rate_scale;
+  char cpb_size_scale;
+  int bit_rate_value_minus1[32];
+  int cpb_size_value_minus1[32];
+  char cbr_flag[32];
+  char initial_cpb_removal_delay_length_minus1;
+  char cpb_removal_delay_length_minus1;
+  char dpb_output_delay_length_minus1;
+  char time_offset_length;
 }MVCVUI_t;
 
 typedef struct
@@ -255,8 +260,6 @@ typedef struct
   MVCVUI_t  MVCVUIParams;
 } subset_seq_parameter_set_rbsp_t;
 
-subset_seq_parameter_set_rbsp_t *AllocSubsetSPS (void);
-void FreeSubsetSPS (subset_seq_parameter_set_rbsp_t *subset_sps);
 #endif
 
 pic_parameter_set_rbsp_t *AllocPPS (void);

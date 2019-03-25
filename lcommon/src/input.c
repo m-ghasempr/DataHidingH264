@@ -8,7 +8,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *     - Karsten Sühring                 <suehring@hhi.de>
+ *     - Karsten Suehring
  *     - Alexis Michael Tourapis         <alexismt@ieee.org>
  *     
  *************************************************************************************
@@ -22,6 +22,7 @@
 #include "input.h"
 #include "img_io.h"
 #include "memalloc.h"
+#include "fast_memory.h"
 
 void buf2img_basic    ( imgpel** imgX, unsigned char* buf, int size_x, int size_y, int o_size_x, int o_size_y, int symbol_size_in_bytes, int bitshift);
 void buf2img_endian   ( imgpel** imgX, unsigned char* buf, int size_x, int size_y, int o_size_x, int o_size_y, int symbol_size_in_bytes, int bitshift);
@@ -109,7 +110,7 @@ void fillPlane ( imgpel** imgX,                 //!< Pointer to image plane
 
   if (sizeof(imgpel) == sizeof(char))
   {
-    memset(imgX[0], nVal, size_y * size_x);
+    fast_memset(imgX[0], nVal, size_y * size_x);
   }
   else
   {
@@ -236,6 +237,7 @@ void buf2img_bitshift ( imgpel** imgX,           //!< Pointer to image plane
 
   uint16 tmp16, ui16;
   unsigned long  tmp32, ui32;
+
   // This test should be done once.
   if (((symbol_size_in_bytes << 3) - bitshift) > (sizeof(imgpel)<< 3))
   {
@@ -438,8 +440,9 @@ void buf2img_basic (imgpel** imgX,            //!< Pointer to image plane
       iminwidth  =  ( (dst_offset_x + iminwidth ) > o_size_x  ) ? (o_size_x  - dst_offset_x) : iminwidth;
       iminheight =  ( (dst_offset_y + iminheight) > o_size_y )  ? (o_size_y - dst_offset_y) : iminheight;
 
-      for (j = 0; j < iminheight; j++) {
-        memcpy(&imgX[j + dst_offset_y][dst_offset_x], &(temp_buf[(j + offset_y) * size_x + offset_x]), iminwidth * sizeof(imgpel));
+      for (j = 0; j < iminheight; j++) 
+      {
+        memcpy(&imgX[j + dst_offset_y][dst_offset_x], &(temp_buf[(j + offset_y) * size_x + offset_x]), iminwidth * symbol_size_in_bytes);
       }
       for (j=0; j < iminheight; j++)
       {        
@@ -590,76 +593,76 @@ int read_one_frame (VideoParameters *p_Vid, VideoDataFile *input_file, int Frame
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
   int file_read = 0;
-	unsigned int symbol_size_in_bytes = source->pic_unit_size_shift3;
+  unsigned int symbol_size_in_bytes = source->pic_unit_size_shift3;
 
-	const int bytes_y = source->size_cmp[0] * symbol_size_in_bytes;
-	const int bytes_uv = source->size_cmp[1] * symbol_size_in_bytes;
-	int bit_scale;  
+  const int bytes_y = source->size_cmp[0] * symbol_size_in_bytes;
+  const int bytes_uv = source->size_cmp[1] * symbol_size_in_bytes;
+  int bit_scale;  
 
-	Boolean rgb_input = (Boolean) (source->color_model == CM_RGB && source->yuv_format == YUV444);
+  Boolean rgb_input = (Boolean) (source->color_model == CM_RGB && source->yuv_format == YUV444);
 
-	if (input_file->is_concatenated == 0)
-	{    
-		if (input_file->vdtype == VIDEO_TIFF)
+  if (input_file->is_concatenated == 0)
+  {    
+    if (input_file->vdtype == VIDEO_TIFF)
     {
-			file_read = ReadTIFFImage     (p_Inp, input_file, FrameNoInFile, source, p_Vid->buf);
+      file_read = ReadTIFFImage     (p_Inp, input_file, FrameNoInFile, source, p_Vid->buf);
     }
-		else
+    else
     {
-			file_read = ReadFrameSeparate (p_Inp, input_file, FrameNoInFile, HeaderSize, source, p_Vid->buf);
+      file_read = ReadFrameSeparate (p_Inp, input_file, FrameNoInFile, HeaderSize, source, p_Vid->buf);
     }
-	}
-	else
-	{
-		file_read = ReadFrameConcatenated (p_Inp, input_file, FrameNoInFile, HeaderSize, source, p_Vid->buf);
-	}
+  }
+  else
+  {
+    file_read = ReadFrameConcatenated (p_Inp, input_file, FrameNoInFile, HeaderSize, source, p_Vid->buf);
+  }
   if ( !file_read )
   {
     return 0;
   }
 
-	// Deinterleave input source
-	if (input_file->is_interleaved)
-	{
-		deinterleave ( &p_Vid->buf, &p_Vid->ibuf, source, symbol_size_in_bytes);
-	}
+  // Deinterleave input source
+  if (input_file->is_interleaved)
+  {
+    deinterleave ( &p_Vid->buf, &p_Vid->ibuf, source, symbol_size_in_bytes);
+  }
 
-	bit_scale = source->bit_depth[0] - output->bit_depth[0];  
+  bit_scale = source->bit_depth[0] - output->bit_depth[0];  
 
-	if(rgb_input)
-		p_Vid->buf2img(pImage[0], p_Vid->buf + bytes_y, source->width[0], source->height[0], output->width[0], output->height[0], symbol_size_in_bytes, bit_scale);
-	else
-		p_Vid->buf2img(pImage[0], p_Vid->buf, source->width[0], source->height[0], output->width[0], output->height[0], symbol_size_in_bytes, bit_scale);
+  if(rgb_input)
+    p_Vid->buf2img(pImage[0], p_Vid->buf + bytes_y, source->width[0], source->height[0], output->width[0], output->height[0], symbol_size_in_bytes, bit_scale);
+  else
+    p_Vid->buf2img(pImage[0], p_Vid->buf, source->width[0], source->height[0], output->width[0], output->height[0], symbol_size_in_bytes, bit_scale);
 
 #if (DEBUG_BITDEPTH)
-	MaskMSBs(pImage[0], ((1 << output->bit_depth[0]) - 1), output->width[0], output->height[0]);
+  MaskMSBs(pImage[0], ((1 << output->bit_depth[0]) - 1), output->width[0], output->height[0]);
 #endif
 
-	if (p_Vid->yuv_format != YUV400)
-	{
-		bit_scale = source->bit_depth[1] - output->bit_depth[1];
+  if (p_Vid->yuv_format != YUV400)
+  {
+    bit_scale = source->bit_depth[1] - output->bit_depth[1];
 #if (ALLOW_GRAYSCALE)
-		if (!p_Inp->grayscale) 
+    if (!p_Inp->grayscale) 
 #endif
-		{
-			if(rgb_input)
-				p_Vid->buf2img(pImage[1], p_Vid->buf + bytes_y + bytes_uv, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
-			else 
-				p_Vid->buf2img(pImage[1], p_Vid->buf + bytes_y, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
+    {
+      if(rgb_input)
+        p_Vid->buf2img(pImage[1], p_Vid->buf + bytes_y + bytes_uv, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
+      else 
+        p_Vid->buf2img(pImage[1], p_Vid->buf + bytes_y, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
 
-			bit_scale = source->bit_depth[2] - output->bit_depth[2];
-			if(rgb_input)
-				p_Vid->buf2img(pImage[2], p_Vid->buf, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
-			else
-				p_Vid->buf2img(pImage[2], p_Vid->buf + bytes_y + bytes_uv, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
-		}
+      bit_scale = source->bit_depth[2] - output->bit_depth[2];
+      if(rgb_input)
+        p_Vid->buf2img(pImage[2], p_Vid->buf, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
+      else
+        p_Vid->buf2img(pImage[2], p_Vid->buf + bytes_y + bytes_uv, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
+    }
 #if (DEBUG_BITDEPTH)
-		MaskMSBs(pImage[1], ((1 << output->bit_depth[1]) - 1), output->width[1], output->height[1]);
-		MaskMSBs(pImage[2], ((1 << output->bit_depth[2]) - 1), output->width[1], output->height[1]);
+    MaskMSBs(pImage[1], ((1 << output->bit_depth[1]) - 1), output->width[1], output->height[1]);
+    MaskMSBs(pImage[2], ((1 << output->bit_depth[2]) - 1), output->width[1], output->height[1]);
 #endif
-	}
+  }
 
-	return file_read;
+  return file_read;
 }
 
 /*!

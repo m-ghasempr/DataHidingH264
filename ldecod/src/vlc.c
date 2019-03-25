@@ -8,7 +8,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *    - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
- *    - Detlev Marpe                    <marpe@hhi.de>
+ *    - Detlev Marpe
  *    - Gabi Blaettermann
  ************************************************************************
  */
@@ -31,7 +31,7 @@
 /*!
  *************************************************************************************
  * \brief
- *    ue_v, reads an ue(v) syntax element, the length in bits is stored in
+ *    read_ue_v, reads an ue(v) syntax element, the length in bits is stored in
  *    the global p_Dec->UsedBits variable
  *
  * \param tracestring
@@ -45,7 +45,7 @@
  *
  *************************************************************************************
  */
-int ue_v (char *tracestring, Bitstream *bitstream)
+int read_ue_v (char *tracestring, Bitstream *bitstream, int *used_bits)
 {
   SyntaxElement symbol;
 
@@ -54,7 +54,7 @@ int ue_v (char *tracestring, Bitstream *bitstream)
   symbol.mapping = linfo_ue;   // Mapping rule
   SYMTRACESTRING(tracestring);
   readSyntaxElement_VLC (&symbol, bitstream);
-  p_Dec->UsedBits+=symbol.len;
+  *used_bits+=symbol.len;
   return symbol.value1;
 }
 
@@ -62,7 +62,7 @@ int ue_v (char *tracestring, Bitstream *bitstream)
 /*!
  *************************************************************************************
  * \brief
- *    ue_v, reads an se(v) syntax element, the length in bits is stored in
+ *    read_ue_v, reads an se(v) syntax element, the length in bits is stored in
  *    the global p_Dec->UsedBits variable
  *
  * \param tracestring
@@ -76,7 +76,7 @@ int ue_v (char *tracestring, Bitstream *bitstream)
  *
  *************************************************************************************
  */
-int se_v (char *tracestring, Bitstream *bitstream)
+int read_se_v (char *tracestring, Bitstream *bitstream, int *used_bits)
 {
   SyntaxElement symbol;
 
@@ -85,7 +85,7 @@ int se_v (char *tracestring, Bitstream *bitstream)
   symbol.mapping = linfo_se;   // Mapping rule: signed integer
   SYMTRACESTRING(tracestring);
   readSyntaxElement_VLC (&symbol, bitstream);
-  p_Dec->UsedBits+=symbol.len;
+  *used_bits+=symbol.len;
   return symbol.value1;
 }
 
@@ -93,7 +93,7 @@ int se_v (char *tracestring, Bitstream *bitstream)
 /*!
  *************************************************************************************
  * \brief
- *    ue_v, reads an u(v) syntax element, the length in bits is stored in
+ *    read_ue_v, reads an u(v) syntax element, the length in bits is stored in
  *    the global p_Dec->UsedBits variable
  *
  * \param LenInBits
@@ -110,7 +110,7 @@ int se_v (char *tracestring, Bitstream *bitstream)
  *
  *************************************************************************************
  */
-int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
+int read_u_v (int LenInBits, char*tracestring, Bitstream *bitstream, int *used_bits)
 {
   SyntaxElement symbol;
   symbol.inf = 0;
@@ -121,7 +121,7 @@ int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
   symbol.len = LenInBits;
   SYMTRACESTRING(tracestring);
   readSyntaxElement_FLC (&symbol, bitstream);
-  p_Dec->UsedBits+=symbol.len;
+  *used_bits+=symbol.len;
 
   return symbol.inf;
 }
@@ -129,7 +129,7 @@ int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
 /*!
  *************************************************************************************
  * \brief
- *    i_v, reads an i(v) syntax element, the length in bits is stored in
+ *    read_i_v, reads an i(v) syntax element, the length in bits is stored in
  *    the global p_Dec->UsedBits variable
  *
  * \param LenInBits
@@ -146,7 +146,7 @@ int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
  *
  *************************************************************************************
  */
-int i_v (int LenInBits, char*tracestring, Bitstream *bitstream)
+int read_i_v (int LenInBits, char*tracestring, Bitstream *bitstream, int *used_bits)
 {
   SyntaxElement symbol;
   symbol.inf = 0;
@@ -157,7 +157,7 @@ int i_v (int LenInBits, char*tracestring, Bitstream *bitstream)
   symbol.len = LenInBits;
   SYMTRACESTRING(tracestring);
   readSyntaxElement_FLC (&symbol, bitstream);
-  p_Dec->UsedBits+=symbol.len;
+  *used_bits+=symbol.len;
 
   // can be negative
   symbol.inf = -( symbol.inf & (1 << (LenInBits - 1)) ) | symbol.inf;
@@ -169,7 +169,7 @@ int i_v (int LenInBits, char*tracestring, Bitstream *bitstream)
 /*!
  *************************************************************************************
  * \brief
- *    ue_v, reads an u(1) syntax element, the length in bits is stored in
+ *    read_ue_v, reads an u(1) syntax element, the length in bits is stored in
  *    the global p_Dec->UsedBits variable
  *
  * \param tracestring
@@ -183,9 +183,9 @@ int i_v (int LenInBits, char*tracestring, Bitstream *bitstream)
  *
  *************************************************************************************
  */
-Boolean u_1 (char *tracestring, Bitstream *bitstream)
+Boolean read_u_1 (char *tracestring, Bitstream *bitstream, int *used_bits)
 {
-  return (Boolean) u_v (1, tracestring, bitstream);
+  return (Boolean) read_u_v (1, tracestring, bitstream, used_bits);
 }
 
 
@@ -389,7 +389,7 @@ int readSyntaxElement_VLC(SyntaxElement *sym, Bitstream *currStream)
  *    map it to the corresponding syntax element
  ************************************************************************
  */
-int readSyntaxElement_UVLC(Macroblock *currMB, SyntaxElement *sym, struct datapartition *dP)
+int readSyntaxElement_UVLC(Macroblock *currMB, SyntaxElement *sym, struct datapartition_dec *dP)
 {
   return (readSyntaxElement_VLC(sym, dP->bitstream));
 }

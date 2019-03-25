@@ -6,8 +6,8 @@
  *    Rate-Distortion optimized mode decision
  *
  * \author
- *    - Heiko Schwarz              <hschwarz@hhi.de>
- *    - Valeri George              <george@hhi.de>
+ *    - Heiko Schwarz
+ *    - Valeri George
  *    - Lowell Winger              <lwinger@lsil.com>
  *    - Alexis Michael Tourapis    <alexismt@ieee.org>
  * \date

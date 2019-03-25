@@ -1,4 +1,4 @@
-    
+
 /*!
  ***************************************************************************
  * \file md_distortion.c
@@ -195,7 +195,6 @@ distblk distortionSSE(Macroblock *currMB)
     printf("Overflow: %s : %d \n MB: %d, Value: %lf\n", __FILE__, __LINE__, currMB->mbAddrX, (distortionY * p_Inp->WeightY + distortionCr[0] * p_Inp->WeightCb + distortionCr[1] * p_Inp->WeightCr));
     exit(-1);
   }
-#endif  //end;
+#endif //end;
   return (distblk)( distortionY * p_Inp->WeightY + distortionCr[0] * p_Inp->WeightCb + distortionCr[1] * p_Inp->WeightCr );
 }
-

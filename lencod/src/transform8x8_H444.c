@@ -37,6 +37,7 @@
 #include "md_common.h"
 #include "intra8x8.h"
 #include "rdopt_coding_state.h"
+#include "blk_prediction.h"
 
 /*!
  *************************************************************************************
@@ -50,7 +51,7 @@ int mode_decision_for_I8x8_blocks_JM_Low444 (Macroblock *currMB, int b8, int lam
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_Slice;
 
-  int     ipmode, best_ipmode = 0, i, j, dummy;
+  int     ipmode, best_ipmode = 0, j, dummy;
   distblk   cost;
   int     nonzero = 0;
   int     block_x     = (b8 & 0x01) << 3;
@@ -64,8 +65,8 @@ int mode_decision_for_I8x8_blocks_JM_Low444 (Macroblock *currMB, int b8, int lam
   int     mb_block_y  = (currMB->block_y) + ((b8 >> 1) << 1);
   int     mb_block_x  = (currMB->block_x) + ((b8 & 0x01) << 1);
 
-  imgpel    *img_org, *img_prd;
-  int       *residual;
+  //imgpel    *img_org, *img_prd;
+  //int       *residual;
   int left_available, up_available, all_available;
   int    **mb_ores = currSlice->mb_ores[0]; 
   imgpel **mb_pred = currSlice->mb_pred[0];
@@ -151,6 +152,7 @@ int mode_decision_for_I8x8_blocks_JM_Low444 (Macroblock *currMB, int b8, int lam
     {
       currMB->cr_cbp[k] = 0; 
       select_plane(p_Vid, k);
+      /*
       for (j=0; j<8; j++)
       {
         for (i=0; i<8; i++)
@@ -159,6 +161,9 @@ int mode_decision_for_I8x8_blocks_JM_Low444 (Macroblock *currMB, int b8, int lam
           currSlice->mb_ores[k][block_y+j][block_x+i] = p_Vid->pImgOrg[k][currMB->pix_y + block_y + j][currMB->pix_x + block_x + i] - currSlice->mpr_8x8[k][best_ipmode][j][i];
         }
       }
+      */
+      copy_image_data_8x8(&currSlice->mb_pred[k][block_y], currSlice->mpr_8x8[k][best_ipmode], block_x, 0);
+      compute_residue(&(p_Vid->pImgOrg[k][currMB->pix_y+block_y]), &currSlice->mb_pred[k][block_y], &currSlice->mb_ores[k][block_y], block_x, currMB->pix_x+block_x, 8, 8);
 
       currMB->ipmode_DPCM = (short) best_ipmode; 
       if (currMB->residual_transform_quant_luma_8x8(currMB, k, b8, &dummy, 1))
@@ -175,6 +180,7 @@ int mode_decision_for_I8x8_blocks_JM_Low444 (Macroblock *currMB, int b8, int lam
     memset(&p_Vid->ipredmode8x8[j][mb_block_x], best_ipmode, 2 * sizeof(char));
 
   // get prediction and prediction error
+  /*
   for (j = block_y; j < block_y + 8; j++)
   {
     memcpy(&mb_pred[j][block_x],currSlice->mpr_8x8[0][best_ipmode][j - block_y], 8 * sizeof(imgpel));
@@ -186,6 +192,8 @@ int mode_decision_for_I8x8_blocks_JM_Low444 (Macroblock *currMB, int b8, int lam
       *residual++ = *img_org++ - *img_prd++;
     }
   }
+  */
+  generate_pred_error_8x8(&p_Vid->pCurImg[currMB->opix_y+block_y], currSlice->mpr_8x8[0][best_ipmode], &mb_pred[block_y], &mb_ores[block_y], pic_opix_x, block_x);
 
   currMB->ipmode_DPCM = (short) best_ipmode;
   nonzero = currMB->residual_transform_quant_luma_8x8 (currMB, PLANE_Y, b8, &dummy, 1);    
@@ -205,7 +213,7 @@ int mode_decision_for_I8x8_blocks_JM_High444 (Macroblock *currMB, int b8, int la
   Slice *currSlice = currMB->p_Slice;
   RDOPTStructure  *p_RDO = currSlice->p_RDO;
 
-  int     ipmode, best_ipmode = 0, i, j, dummy;
+  int     ipmode, best_ipmode = 0, j, dummy;
   int     c_nz, nonzero = 0; 
   distblk  rdcost = 0;
   distblk  min_rdcost  = DISTBLK_MAX;
@@ -349,7 +357,8 @@ int mode_decision_for_I8x8_blocks_JM_High444 (Macroblock *currMB, int b8, int la
     for (k = PLANE_U; k <= PLANE_V; k++)
     {
       currMB->cr_cbp[k] = 0; 
-      select_plane(p_Vid, k);                  
+      select_plane(p_Vid, k);
+      /*
       for (j=0; j<8; j++)
       {
         for (i=0; i<8; i++)
@@ -358,6 +367,8 @@ int mode_decision_for_I8x8_blocks_JM_High444 (Macroblock *currMB, int b8, int la
           currSlice->mb_ores[k][block_y+j][block_x+i] = p_Vid->pImgOrg[k][currMB->pix_y + block_y + j][currMB->pix_x + block_x + i] - currSlice->mpr_8x8[k][best_ipmode][j][i];
         }
       }
+      */
+      generate_pred_error_8x8(&p_Vid->pImgOrg[k][currMB->pix_y + block_y], currSlice->mpr_8x8[k][best_ipmode], &currSlice->mb_pred[k][block_y], &currSlice->mb_ores[k][block_y], currMB->pix_x + block_x, block_x);
       currMB->ipmode_DPCM = (short) best_ipmode; 
 
       if (currMB->residual_transform_quant_luma_8x8(currMB, k, b8, &dummy, 1))

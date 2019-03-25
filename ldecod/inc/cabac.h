@@ -36,6 +36,7 @@ extern void readB8_typeInfo_CABAC_b_slice   (Macroblock *currMB, SyntaxElement *
 extern void readIntraPredMode_CABAC         (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readRefFrame_CABAC              (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void read_MVD_CABAC                  (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void read_mvd_CABAC_mbaff            (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void read_CBP_CABAC                  (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readRunLevel_CABAC              (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void read_dQuant_CABAC               (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
@@ -45,7 +46,7 @@ extern void read_skip_flag_CABAC_b_slice    (Macroblock *currMB, SyntaxElement *
 extern void readFieldModeInfo_CABAC         (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readMB_transform_size_flag_CABAC(Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 
-extern void readIPCM_CABAC(Slice *currSlice, struct datapartition *dP);
+extern void readIPCM_CABAC(Slice *currSlice, struct datapartition_dec *dP);
 
 extern int  cabac_startcode_follows(Slice *currSlice, int eos_bit);
 

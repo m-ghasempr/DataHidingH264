@@ -77,7 +77,6 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
   MotionVector pred = pad_MVs (*pred_mv, mv_block);
   MotionVector tmp = *mv, cand = center;
 
-
   ++p_EPZS->BlkCount;
   if (p_EPZS->BlkCount == 0)
     ++p_EPZS->BlkCount;
@@ -117,12 +116,6 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
     {
       *p_motion = tmp;
     }
-
-    // This is unecessary since we exit here only if this is 
-    // considered a bad predictor. This instead makes things slower
-    //if ((ref == 0) || (*prevSad > min_mcost))
-      // *prevSad = min_mcost;
-
     return min_mcost;
   }
 
@@ -163,14 +156,19 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
     //! Add Spatial Predictors in predictor list.
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
-    invalid_refs = EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, 
+    invalid_refs = EPZSSpatialPredictors (p_EPZS, mv_block, 
       list, currMB->list_offset, ref, motion);
 
     if (p_Inp->EPZSSpatialMem)
       EPZSSpatialMemPredictors (p_EPZS, mv_block, cur_list, &prednum, ref_picture->size_x >> 2);
 
     // Temporal predictors
+#if (MVC_EXTENSION_ENABLE)
+    if ( p_Inp->EPZSTemporal[currSlice->view_id] )
+#else
+    // Temporal predictors
     if (p_Inp->EPZSTemporal)
+#endif
     {
       EPZSTemporalPredictors (currMB, ref_picture, p_EPZS, mv_block, &prednum, stopCriterion, min_mcost);
     }
@@ -189,7 +187,8 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
     //&& (p_Inp->EPZSFixed > 1 || (p_Inp->EPZSFixed && currSlice->slice_type == P_SLICE)));
     //conditionEPZS = ((min_mcost > stopCriterion) && ((ref < 2 && blocktype < 4)
     conditionEPZS = ((min_mcost > 3 * stopCriterion) && ((ref < 2 && blocktype < 4) || (ref < 1 && blocktype == 4)
-      || ((currSlice->structure != FRAME || currMB->list_offset) && ref < 3))
+      || ((currSlice->structure != FRAME || currMB->list_offset)
+      && ref < 3))
       && (p_Inp->EPZSFixed > 1 || (p_Inp->EPZSFixed && currSlice->slice_type == P_SLICE)));
 
     if (conditionEPZS)
@@ -369,14 +368,11 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
             *p_motion = tmp;
           }
 
-          //if ((*prevSad > min_mcost))
-            //*prevSad = min_mcost;
-
           return min_mcost;
         }
 
         //! Check Second best predictor with EPZS pattern
-        conditionEPZS = (checkMedian == TRUE) 
+        conditionEPZS = (checkMedian == TRUE)
           && (ref == 0 || (ref > 0 && min_mcost < 2 * *prevSad))
           && (min_mcost > (( 3 * stopCriterion) >> 1)) && (p_Inp->EPZSDual > 0);
 
@@ -509,7 +505,6 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,    // <--  current Macrob
     }
     return min_mcost;
   }
-
 
   //! If p_EPZS->medthres satisfied, then terminate, otherwise generate Predictors
   //! Condition could be strengthened by consideration distortion of adjacent partitions.
@@ -781,6 +776,8 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,    // <--  current Macrob
 * \brief
 *    FAST Motion Estimation using EPZS
 *    AMT/HYC
+* \return 
+*    minimum motion cost after search
 ***********************************************************************
 */
 distblk                                                   //  ==> minimum motion cost after search

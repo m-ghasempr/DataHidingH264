@@ -191,7 +191,7 @@ void rdoq_dc_cr_CAVLC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, 
   levelDataStruct levelData[16];
   double  lambda_md = 0.0;
 
-  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
+  lambda_md = p_Vid->lambda_rdoq[p_Vid->type][p_Vid->masterQP]; 
 
   init_trellis_data_DC_cr_CAVLC(currMB, tblock, qp_per, qp_rem, q_params_4x4, p_scan, &levelData[0]);
   est_RunLevel_CAVLC(currMB, levelData, levelTrellis, CHROMA_DC, 0, 0, p_Vid->num_cdc_coeff, lambda_md);
@@ -213,7 +213,7 @@ void rdoq_dc_cr_CABAC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, 
   double  lambda_md = 0.0;
   int kStart=0, kStop=0, noCoeff = 0, estBits;
 
-  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
+  lambda_md = p_Vid->lambda_rdoq[p_Vid->type][p_Vid->masterQP]; 
 
   noCoeff = init_trellis_data_DC_cr_CABAC(currMB, tblock, qp_per, qp_rem, q_params_4x4, p_scan, &levelData[0], &kStart, &kStop);
   estBits = est_write_and_store_CBP_block_bit(currMB, type);

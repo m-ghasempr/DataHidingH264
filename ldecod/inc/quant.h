@@ -157,8 +157,8 @@ static const int A[4][4] = {
 
 // exported functions
 // quantization initialization
-extern void init_qp_process (VideoParameters *p_Vid);
-extern void free_qp_matrices(VideoParameters *p_Vid);
+extern void init_qp_process (CodingParameters *cps);
+extern void free_qp_matrices(CodingParameters *cps);
 
 // For Q-matrix
 extern void assign_quant_params   (Slice *currslice);

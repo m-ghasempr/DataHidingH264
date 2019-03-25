@@ -8,7 +8,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *      - Karsten Suehring                  <suehring@hhi.de>
+ *      - Karsten Suehring
  *************************************************************************************
  */
 
@@ -21,25 +21,32 @@ static LARGE_INTEGER freq;
 
 void gettime(TIME_T* time)
 {
+#ifndef TIMING_DISABLE
   QueryPerformanceCounter(time);
+#endif
 }
 
 int64 timediff(TIME_T* start, TIME_T* end)
 {
+#ifndef TIMING_DISABLE
   return (int64)((end->QuadPart - start->QuadPart));
+#else
+  return 0;
+#endif
+}
+
+void init_time(void)
+{
+  QueryPerformanceFrequency(&freq);
 }
 
 int64 timenorm(int64  cur_time)
 {
-  static int first = 1;
-
-  if(first) 
-  {
-    QueryPerformanceFrequency(&freq);
-    first = 0;
-  }
-
+#ifndef TIMING_DISABLE
   return (int64)(cur_time * 1000 /(freq.QuadPart));
+#else
+  return 1;
+#endif
 }
 
 #else
@@ -49,6 +56,10 @@ static struct timezone tz;
 void gettime(TIME_T* time)
 {
   gettimeofday(time, &tz);
+}
+
+void init_time(void)
+{
 }
 
 int64 timediff(TIME_T* start, TIME_T* end)

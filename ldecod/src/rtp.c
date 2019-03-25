@@ -110,9 +110,9 @@ int RTPReadPacket (RTPpacket_t *p, int bitstream);
  *    none
  ************************************************************************
  */
-void OpenRTPFile (VideoParameters *p_Vid, char *fn)
+void OpenRTPFile (char *fn, int *p_BitStreamFile)
 {
-  if ((p_Vid->BitStreamFile = open(fn, OPENFLAGS_READ)) == -1)
+  if (((*p_BitStreamFile) = open(fn, OPENFLAGS_READ)) == -1)
   {
     snprintf (errortext, ET_SIZE, "Cannot open RTP file '%s'", fn);
     error(errortext,500);
@@ -126,12 +126,12 @@ void OpenRTPFile (VideoParameters *p_Vid, char *fn)
  *    Closes the bit stream file
  ************************************************************************
  */
-void CloseRTPFile(VideoParameters *p_Vid)
+void CloseRTPFile(int *p_BitStreamFile)
 {
-  if (p_Vid->BitStreamFile != -1)
+  if ((*p_BitStreamFile) != -1)
   {
-    close(p_Vid->BitStreamFile);
-    p_Vid->BitStreamFile = - 1;
+    close(*p_BitStreamFile);
+    (*p_BitStreamFile) = - 1;
   }
 }
 
@@ -151,7 +151,7 @@ void CloseRTPFile(VideoParameters *p_Vid)
  ************************************************************************
  */
 
-int GetRTPNALU (VideoParameters *p_Vid, NALU_t *nalu)
+int GetRTPNALU (VideoParameters *p_Vid, NALU_t *nalu, int BitStreamFile)
 {
   static uint16 first_call = 1;  //!< triggers sequence number initialization on first call
   static uint16 old_seq = 0;     //!< store the last RTP sequence number for loss detection
@@ -166,7 +166,7 @@ int GetRTPNALU (VideoParameters *p_Vid, NALU_t *nalu)
   if ((p->payload=malloc (MAXRTPPACKETSIZE))== NULL)
     no_mem_exit ("GetRTPNALU-3");
 
-  ret = RTPReadPacket (p, p_Vid->BitStreamFile);
+  ret = RTPReadPacket (p, BitStreamFile);
   nalu->forbidden_bit = 1;
   nalu->len = 0;
 

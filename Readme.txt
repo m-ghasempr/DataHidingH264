@@ -7,10 +7,10 @@ The latest version of this software can be obtained from:
 
 For reporting bugs please use the JM bug tracking system located at:
 
-  https://ipbt.hhi.de
+  https://ipbt.hhi.fraunhofer.de
 
 
-Please send comments and additions to suehring@hhi.de and alexis.tourapis@dolby.com
+Please send comments and additions to Karsten.Suehring (at) hhi.fraunhofer.de and alexis.tourapis@dolby.com
 
 ======================================================================================
 NOTE: This file contains only a quick overview.
@@ -32,11 +32,12 @@ NOTE: This file contains only a quick overview.
 1.1 Windows
 -----------
   
-  Workspaces for MS Visual C++ 2003/2005/2008 are provided with the names 
+  Workspaces for MS Visual C++ 2003/2005/2008/2010 are provided with the names 
 
-    jm_vc7.sln  - MS Visual C++ 2003
-    jm_vc8.sln  - MS Visual C++ 2005
-    jm_vc9.sln  - MS Visual C++ 2008
+    jm_vc7.sln   - MS Visual C++ 2003
+    jm_vc8.sln   - MS Visual C++ 2005
+    jm_vc9.sln   - MS Visual C++ 2008
+    jm_vc10.sln  - MS Visual C++ 2010
 
   These contain encoder and decoder projects.
 

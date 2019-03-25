@@ -5,7 +5,7 @@
  *     Report related files()
  *  \author
  *   Main contributors (see contributors.h for copyright, address and affiliation details)
- *   - Karsten Suehring                <suehring@hhi.de>
+ *   - Karsten Suehring
  *   - Alexis Michael Tourapis         <alexismt@ieee.org>
  ***********************************************************************
  */
@@ -296,16 +296,31 @@ void report_stats(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters
   else
     fprintf(p_stat," Error robustness             : Off\n");
 
-  fprintf(p_stat,  " Search range                 : %d\n", p_Inp->search_range);
+  fprintf(p_stat,  " Search range                 : %d\n", p_Inp->search_range[0]);
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->SepViewInterSearch )
+  {
+    fprintf(p_stat,  " Search range (view 1)        : %d\n", p_Inp->search_range[1]);
+  }
+#endif
 
-  fprintf(p_stat,   " Total number of references   : %d\n", p_Inp->num_ref_frames);
-  fprintf(p_stat,   " References for P slices      : %d\n", p_Inp->P_List0_refs ? p_Inp->P_List0_refs : p_Inp->num_ref_frames);
+  fprintf(p_stat,   " Total number of references   : %d\n", p_Inp->num_ref_frames_org);
+  fprintf(p_stat,   " References for P slices      : %d\n", p_Inp->P_List0_refs_org[0] ? p_Inp->P_List0_refs_org[0] : p_Inp->num_ref_frames_org);
 
   if (p_Stats->frame_ctr[B_SLICE]!=0)
   {
-    fprintf(p_stat, " List0 refs for B slices      : %d\n", p_Inp->B_List0_refs ? p_Inp->B_List0_refs : p_Inp->num_ref_frames);
-    fprintf(p_stat, " List1 refs for B slices      : %d\n", p_Inp->B_List1_refs ? p_Inp->B_List1_refs : p_Inp->num_ref_frames);
+    fprintf(p_stat, " List0 refs for B slices      : %d\n", p_Inp->B_List0_refs_org[0] ? p_Inp->B_List0_refs_org[0] : p_Inp->num_ref_frames_org);
+    fprintf(p_stat, " List1 refs for B slices      : %d\n", p_Inp->B_List1_refs_org[0] ? p_Inp->B_List1_refs_org[0] : p_Inp->num_ref_frames_org);
   }
+
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Vid->num_of_layers > 1 )
+  {
+    fprintf(p_stat,   " View 1 refs for P slices     : %d\n", p_Inp->P_List0_refs_org[1] ? p_Inp->P_List0_refs_org[1] : p_Inp->num_ref_frames_org);
+    fprintf(p_stat,   " View 1 L0 refs for B slices  : %d\n", p_Inp->B_List0_refs_org[1] ? p_Inp->B_List0_refs_org[1] : p_Inp->num_ref_frames_org);
+    fprintf(p_stat,   " View 1 L1 refs for B slices  : %d\n", p_Inp->B_List1_refs_org[1] ? p_Inp->B_List1_refs_org[1] : p_Inp->num_ref_frames_org);
+  }
+#endif
 
   fprintf(p_stat,   " Profile/Level IDC            : (%d,%d)\n", p_Inp->ProfileIDC, p_Inp->LevelIDC);
   if (p_Inp->symbol_mode == CAVLC)
@@ -316,7 +331,7 @@ void report_stats(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters
   if (p_Inp->MbInterlace)
     fprintf(p_stat, " MB Field Coding : On \n");
 
-  if (p_Inp->SearchMode == EPZS)
+  if (p_Inp->SearchMode[0] == EPZS || p_Inp->SearchMode[1] == EPZS)
   {
     EPZSOutputStats(p_Inp, p_stat, 1);
   }
@@ -538,7 +553,7 @@ void report_log(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *
   fprintf(p_log,"  %3d  |%3d |", p_Inp->intra_period, p_Stats->NumberBFrames);
 
 
-  switch( p_Inp->SearchMode ) 
+  switch( p_Inp->SearchMode[0] ) 
   {
   case UM_HEX:
     fprintf(p_log,"  HEX |");
@@ -556,10 +571,40 @@ void report_log(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *
     fprintf(p_log,"  FS  |");
     break;
   }
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->SepViewInterSearch )
+  {
+    switch( p_Inp->SearchMode[1] ) 
+    {
+    case UM_HEX:
+      fprintf(p_log,"  HEX |");
+      break;
+    case UM_HEX_SIMPLE:
+      fprintf(p_log," SHEX |");
+      break;
+    case EPZS:
+      fprintf(p_log," EPZS |");
+      break;
+    case FAST_FULL_SEARCH:
+      fprintf(p_log,"  FFS |");
+      break;
+    default:
+      fprintf(p_log,"  FS  |");
+      break;
+    }
+  }
+#endif
 
   fprintf(p_log,"  %1d%1d%1d |", p_Inp->MEErrorMetric[F_PEL], p_Inp->MEErrorMetric[H_PEL], p_Inp->MEErrorMetric[Q_PEL]);
 
-  fprintf(p_log," %3d | %2d  |", p_Inp->search_range, p_Inp->num_ref_frames );
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->SepViewInterSearch )
+  {
+    fprintf(p_log," %3d (%3d) | %2d  |", p_Inp->search_range[0], p_Inp->search_range[1], p_Inp->num_ref_frames );
+  }
+  else
+#endif
+  fprintf(p_log," %3d | %2d  |", p_Inp->search_range[0], p_Inp->num_ref_frames );
 
   fprintf(p_log," %5.2f|", p_Vid->framerate);
 
@@ -925,11 +970,11 @@ void report( VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_S
     p_Stats->bit_ctr_emulationprevention += p_Stats->bit_use_stuffingBits[i];
   }
 #if (MVC_EXTENSION_ENABLE)
-  if ( p_Inp->num_of_views == 2 )
+  if ( p_Vid->num_of_layers == 2 )
   {
     for (i = 0; i < 5; i++)
     {
-      p_Stats->bit_ctr_emulationprevention_v[p_Vid->view_id] += p_Stats->bit_use_stuffingBits[i];
+      p_Stats->bit_ctr_emulationprevention_v[p_Vid->dpb_layer_id] += p_Stats->bit_use_stuffingBits[i];
     }
   }
 #endif
@@ -1053,13 +1098,27 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
       fprintf(stdout," Error robustness                  : On\n");
     else
       fprintf(stdout," Error robustness                  : Off\n");
-    fprintf(stdout,  " Search range                      : %d\n", p_Inp->search_range);
+    fprintf(stdout,  " Search range                      : %d\n", p_Inp->search_range[0]);
+#if (MVC_EXTENSION_ENABLE)
+    if ( p_Inp->SepViewInterSearch )
+    {
+      fprintf(stdout,  " Search range (view 1)             : %d\n", p_Inp->search_range[1]);
+    }
+#endif
 
-    fprintf(stdout,  " Total number of references        : %d\n", p_Inp->num_ref_frames);
-    fprintf(stdout,  " References for P slices           : %d\n", p_Inp->P_List0_refs ? p_Inp->P_List0_refs : p_Inp->num_ref_frames);
+    fprintf(stdout,  " Total number of references        : %d\n", p_Inp->num_ref_frames_org);
+    fprintf(stdout,  " References for P slices           : %d\n", p_Inp->P_List0_refs_org[0] ? p_Inp->P_List0_refs_org[0] : p_Inp->num_ref_frames_org);
     fprintf(stdout,  " References for B slices (L0, L1)  : %d, %d\n", 
-      p_Inp->B_List0_refs ? p_Inp->B_List0_refs : p_Inp->num_ref_frames, 
-      p_Inp->B_List1_refs ? p_Inp->B_List1_refs : p_Inp->num_ref_frames);
+      p_Inp->B_List0_refs_org[0] ? p_Inp->B_List0_refs_org[0] : p_Inp->num_ref_frames_org, 
+      p_Inp->B_List1_refs_org[0] ? p_Inp->B_List1_refs_org[0] : p_Inp->num_ref_frames_org);
+
+    if ( p_Vid->num_of_layers > 1 )
+    {
+      fprintf(stdout,  " View 1 refs for P slices          : %d\n", p_Inp->P_List0_refs_org[1] ? p_Inp->P_List0_refs_org[1] : p_Inp->num_ref_frames_org);
+      fprintf(stdout,  " View 1 refs for B slices (L0, L1) : %d, %d\n", 
+        p_Inp->B_List0_refs_org[1] ? p_Inp->B_List0_refs_org[1] : p_Inp->num_ref_frames_org, 
+        p_Inp->B_List1_refs_org[1] ? p_Inp->B_List1_refs_org[1] : p_Inp->num_ref_frames_org);
+    }
 
     // Sequence Type
     fprintf(stdout,  " Sequence type                     :");
@@ -1106,19 +1165,38 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
 
     fprintf(stdout,  " Profile/Level IDC                 : (%d,%d)\n", p_Inp->ProfileIDC, p_Inp->LevelIDC);
 
-    if (p_Inp->SearchMode == UM_HEX)
+    if (p_Inp->SearchMode[0] == UM_HEX)
       fprintf(stdout,  " Motion Estimation Scheme          : HEX\n");
-    else if (p_Inp->SearchMode == UM_HEX_SIMPLE)
+    else if (p_Inp->SearchMode[0] == UM_HEX_SIMPLE)
       fprintf(stdout,  " Motion Estimation Scheme          : SHEX\n");
-    else if (p_Inp->SearchMode == EPZS)
+    else if (p_Inp->SearchMode[0] == EPZS)
     {
       fprintf(stdout,  " Motion Estimation Scheme          : EPZS\n");
       EPZSOutputStats(p_Inp, stdout, 0);
     }
-    else if (p_Inp->SearchMode == FAST_FULL_SEARCH)
+    else if (p_Inp->SearchMode[0] == FAST_FULL_SEARCH)
       fprintf(stdout,  " Motion Estimation Scheme          : Fast Full Search\n");
     else
       fprintf(stdout,  " Motion Estimation Scheme          : Full Search\n");
+
+#if (MVC_EXTENSION_ENABLE)
+    if ( p_Inp->SepViewInterSearch )
+    {
+      if (p_Inp->SearchMode[1] == UM_HEX)
+        fprintf(stdout,  " Motion Estimation Scheme          : HEX\n");
+      else if (p_Inp->SearchMode[1] == UM_HEX_SIMPLE)
+        fprintf(stdout,  " Motion Estimation Scheme          : SHEX\n");
+      else if (p_Inp->SearchMode[1] == EPZS)
+      {
+        fprintf(stdout,  " Motion Estimation Scheme          : EPZS\n");
+        EPZSOutputStats(p_Inp, stdout, 0);
+      }
+      else if (p_Inp->SearchMode[1] == FAST_FULL_SEARCH)
+        fprintf(stdout,  " Motion Estimation Scheme          : Fast Full Search\n");
+      else
+        fprintf(stdout,  " Motion Estimation Scheme          : Full Search\n");
+    }
+#endif
 
     if (p_Inp->full_search == 2)
       fprintf(stdout," Search range restrictions         : none\n");

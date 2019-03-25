@@ -16,8 +16,8 @@
  *    Code revamped July 2008 by:
  *    - Peshala Pahalawatta (ppaha@dolby.com)
  *    - Alexis Tourapis (atour@dolby.com)
- *	  Code modularized to support more distortion estimation algorithms in June 2009 by 
- *	  - Zhifeng Chen (zzchen@dolby.com)
+ *      Code modularized to support more distortion estimation algorithms in June 2009 by 
+ *     - Zhifeng Chen (zzchen@dolby.com)
  *************************************************************************************
  */
 
@@ -255,12 +255,7 @@ void free_errdo_mem(VideoParameters *p_Vid)
     p_Vid->p_decs->second_moment_pred      = NULL;
   }
 
-
-  if ( p_Vid->p_decs != NULL )
-  {
-    free( p_Vid->p_decs );
-    p_Vid->p_decs = NULL;
-  }
+  free_pointer( p_Vid->p_decs );
 }
 
 /*!
@@ -339,7 +334,7 @@ void errdo_compute_residue (Macroblock *currMB, imgpel **imgY, int **res_img, im
  * \param 
  *
  * \note
- *	  For lln algorithm, we need to consider akip and direct?
+ *    For lln algorithm, we need to consider akip and direct?
  *
  *************************************************************************************
  */
@@ -364,12 +359,12 @@ void errdo_store_best_b8x8(Macroblock *currMB, int transform8x8, int block)
  *************************************************************************************
  * \brief
  *    get the best 8x8 block of estimated distortion. Original code seems to have problem. Why not get p_Vid->p_decs->dec_mb_pred_best8x8?
- *	  But since there is errdo_get_best_P8x8() in SetCoeffAndReconstruction8x8(), errdo_get_best_b8x8 seems not necessary.
+ *    But since there is errdo_get_best_P8x8() in SetCoeffAndReconstruction8x8(), errdo_get_best_b8x8 seems not necessary.
  *
  * \param 
  *
  * \note
- *	  For lln algorithm, we need to consider skip and direct?
+ *    For lln algorithm, we need to consider skip and direct?
  *    This function seems not necessary since we have errdo_get_best_P8x8
  *************************************************************************************
  */
@@ -693,11 +688,7 @@ void errdo_free_storable_picture(StorablePicture* s)
   }
   for (nplane = 0; nplane < 3; nplane++)
   {
-    if (p->p_dec_img[nplane])
-    {  
-      free(p->p_dec_img[nplane]);
-      p->p_dec_img[nplane] = NULL;
-    }
+    free_pointer(p->p_dec_img[nplane]);
   }
   if (p->mb_error_map)
   {
@@ -736,10 +727,6 @@ void errdo_free_storable_picture(StorablePicture* s)
     p->p_second_moment[nplane] = NULL;
   }
 
-  if (s->de_mem)
-  {
-    free(s->de_mem);
-    s->de_mem   = NULL;
-  }
+  free_pointer(s->de_mem);
 }
 

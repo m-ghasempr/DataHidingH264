@@ -1,4 +1,3 @@
-
 /*!
  ***********************************************************************
  *  \file
@@ -9,7 +8,7 @@
  *
  *  \author
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
- *      - Karsten Sühring          <suehring@hhi.de>
+ *      - Karsten Suehring
  *      - Alexis Michael Tourapis  <alexismt@ieee.org>
  
  *      - Jill Boyce               <jill.boyce@thomson.net>
@@ -29,7 +28,6 @@
 typedef struct pic_motion_params_old
 {
   byte *      mb_field;      //!< field macroblock indicator
-
 } PicMotionParamsOld;
 
 //! definition of pic motion parameters
@@ -39,7 +37,7 @@ typedef struct pic_motion_params
   MotionVector             mv[2];       //!< motion vector  
   char                     ref_idx[2];  //!< reference picture   [list][subblock_y][subblock_x]
   //byte                   mb_field;    //!< field macroblock indicator
-  //byte                   field_frame; //!< indicates if co_located is field or frame. Will be removed at some point
+  byte                     slice_no;
 } PicMotionParams;
 
 //! definition a picture (field or frame)
@@ -78,16 +76,15 @@ typedef struct storable_picture
 
   imgpel **     imgY;         //!< Y picture component
   imgpel ***    imgUV;        //!< U and V picture components
-  imgpel ***    img_comp;     //!< Y,U, and V components
 
+  imgpel **     outY;         //!< Y picture component
+  imgpel **     outUV[2];        //!< U and V picture components
 
   struct pic_motion_params **mv_info;          //!< Motion info
   struct pic_motion_params **JVmv_info[MAX_PLANE];          //!< Motion info
 
   struct pic_motion_params_old  motion;              //!< Motion info  
   struct pic_motion_params_old  JVmotion[MAX_PLANE]; //!< Motion info for 4:4:4 independent mode decoding
-
-  short **     slice_id;      //!< reference picture   [mb_x][mb_y]
 
   struct storable_picture *top_field;     // for mb aff, if frame for referencing the top field
   struct storable_picture *bottom_field;  // for mb aff, if frame for referencing the bottom field
@@ -102,10 +99,10 @@ typedef struct storable_picture
   int         chroma_format_idc;
   int         frame_mbs_only_flag;
   int         frame_cropping_flag;
-  int         frame_cropping_rect_left_offset;
-  int         frame_cropping_rect_right_offset;
-  int         frame_cropping_rect_top_offset;
-  int         frame_cropping_rect_bottom_offset;
+  int         frame_crop_left_offset;
+  int         frame_crop_right_offset;
+  int         frame_crop_top_offset;
+  int         frame_crop_bottom_offset;
   int         qp;
   int         chroma_qp_offset[2];
   int         slice_qp_delta;
@@ -120,6 +117,7 @@ typedef struct storable_picture
   int         tonemapped_bit_depth;  
   imgpel*     tone_mapping_lut;                //!< tone mapping look up table
 
+  int         proc_flag;
 #if (MVC_EXTENSION_ENABLE)
   int         view_id;
   int         inter_view_flag;
@@ -133,8 +131,9 @@ typedef struct storable_picture
   int no_ref;
   int iCodingType;
   //
-  char listXsize[2];
-  struct storable_picture **listX[2];
+  char listXsize[MAX_NUM_SLICES][2];
+  struct storable_picture **listX[MAX_NUM_SLICES][2];
+  int         layer_id;
 } StorablePicture;
 
 typedef StorablePicture *StorablePicturePtr;
@@ -178,7 +177,7 @@ typedef struct frame_store
   int       inter_view_flag[2];
   int       anchor_pic_flag[2];
 #endif
-  
+  int       layer_id;
 } FrameStore;
 
 
@@ -190,6 +189,7 @@ typedef struct decoded_picture_buffer
   FrameStore  **fs;
   FrameStore  **fs_ref;
   FrameStore  **fs_ltref;
+  FrameStore  **fs_ilref; // inter-layer reference (for multi-layered codecs)
   unsigned      size;
   unsigned      used_size;
   unsigned      ref_frames_in_buffer;
@@ -206,35 +206,37 @@ typedef struct decoded_picture_buffer
   int           num_ref_frames;
 
   FrameStore   *last_picture;
+  unsigned     used_size_il;
+  int          layer_id;
+
+  //DPB related function;
+
 } DecodedPictureBuffer;
 
-extern void              init_dpb(VideoParameters *p_Vid, DecodedPictureBuffer *p_Dpb);
-extern void              re_init_dpb(VideoParameters *p_Vid, DecodedPictureBuffer *p_Dpb);
+
+extern void              init_dpb(VideoParameters *p_Vid, DecodedPictureBuffer *p_Dpb, int type);
+extern void              re_init_dpb(VideoParameters *p_Vid, DecodedPictureBuffer *p_Dpb, int type);
 extern void              free_dpb(DecodedPictureBuffer *p_Dpb);
 extern FrameStore*       alloc_frame_store(void);
 extern void              free_frame_store (FrameStore* f);
-extern StorablePicture*  alloc_storable_picture(VideoParameters *p_Vid, PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
+extern StorablePicture*  alloc_storable_picture(VideoParameters *p_Vid, PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr, int is_output);
 extern void              free_storable_picture (StorablePicture* p);
 extern void              store_picture_in_dpb(DecodedPictureBuffer *p_Dpb, StorablePicture* p);
 extern StorablePicture*  get_short_term_pic (DecodedPictureBuffer *p_Dpb, int picNum);
 extern StorablePicture*  get_long_term_pic  (DecodedPictureBuffer *p_Dpb, int LongtermPicNum);
 
 #if (MVC_EXTENSION_ENABLE)
-extern void             flush_dpb(DecodedPictureBuffer *p_Dpb, int curr_view_id);
+extern void             idr_memory_management(DecodedPictureBuffer *p_Dpb, StorablePicture* p);
+extern void             flush_dpbs(DecodedPictureBuffer **p_Dpb, int nLayers);
 extern int              GetMaxDecFrameBuffering(VideoParameters *p_Vid);
 extern void             append_interview_list(DecodedPictureBuffer *p_Dpb, 
-                                              PictureStructure currPicStructure, 
-                                              int list_idx, 
-                                              FrameStore **list,
-                                              int *listXsize, 
-                                              int currPOC, 
-                                              int curr_view_id, 
-                                              int anchor_pic_flag);
-extern void             update_ref_list(DecodedPictureBuffer *p_Dpb, int curr_view_id);
-extern void             update_ltref_list(DecodedPictureBuffer *p_Dpb, int curr_view_id);
-#else
-extern void             flush_dpb(DecodedPictureBuffer *p_Dpb);
+                                              PictureStructure currPicStructure, int list_idx, 
+                                              FrameStore **list, int *listXsize, int currPOC, 
+                                              int curr_view_id, int anchor_pic_flag);
+extern void             update_ref_list(DecodedPictureBuffer *p_Dpb);
+extern void             update_ltref_list(DecodedPictureBuffer *p_Dpb);
 #endif
+extern void             flush_dpb(DecodedPictureBuffer *p_Dpb);
 extern void             init_lists(Slice *currSlice);
 extern void             init_lists_p_slice(Slice *currSlice);
 extern void             init_lists_b_slice(Slice *currSlice);
@@ -258,8 +260,12 @@ extern void compute_colocated (Slice *currSlice, StorablePicture **listX[6]);
 
 extern void gen_pic_list_from_frame_list(PictureStructure currStructure, FrameStore **fs_list, int list_idx, StorablePicture **list, char *list_size, int long_term);
 
-
+extern int init_img_data(VideoParameters *p_Vid, ImageData *p_ImgData, seq_parameter_set_rbsp_t *sps);
+extern void free_img_data(VideoParameters *p_Vid, ImageData *p_ImgData);
 extern void pad_dec_picture(VideoParameters *p_Vid, StorablePicture *dec_picture);
 extern void pad_buf(imgpel *pImgBuf, int iWidth, int iHeight, int iStride, int iPadX, int iPadY);
+extern void process_picture_in_dpb_s(VideoParameters *p_Vid, StorablePicture *p_pic);
+extern StorablePicture * clone_storable_picture( VideoParameters *p_Vid, StorablePicture *p_pic );
+extern void store_proc_picture_in_dpb(DecodedPictureBuffer *p_Dpb, StorablePicture* p);
 #endif
 

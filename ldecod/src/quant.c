@@ -83,40 +83,40 @@ int quant8_org[64] = { //to be use if no q matrix is chosen
  *    Initiate quantization process arrays
  ***********************************************************************
  */
-void init_qp_process(VideoParameters *p_Vid)
+void init_qp_process(CodingParameters *cps)
 {
-  int bitdepth_qp_scale = imax(p_Vid->bitdepth_luma_qp_scale,p_Vid->bitdepth_chroma_qp_scale);
+  int bitdepth_qp_scale = imax(cps->bitdepth_luma_qp_scale, cps->bitdepth_chroma_qp_scale);
   int i;
 
   // We should allocate memory outside of this process since maybe we will have a change of SPS 
   // and we may need to recreate these. Currently should only support same bitdepth
-  if (p_Vid->qp_per_matrix == NULL)
-    if ((p_Vid->qp_per_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
-      no_mem_exit("init_qp_process: p_Vid->qp_per_matrix");
+  if (cps->qp_per_matrix == NULL)
+    if ((cps->qp_per_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
+      no_mem_exit("init_qp_process: cps->qp_per_matrix");
 
-  if (p_Vid->qp_rem_matrix == NULL)
-    if ((p_Vid->qp_rem_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
-      no_mem_exit("init_qp_process: p_Vid->qp_rem_matrix");
+  if (cps->qp_rem_matrix == NULL)
+    if ((cps->qp_rem_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
+      no_mem_exit("init_qp_process: cps->qp_rem_matrix");
 
   for (i = 0; i < MAX_QP + bitdepth_qp_scale + 1; i++)
   {
-    p_Vid->qp_per_matrix[i] = i / 6;
-    p_Vid->qp_rem_matrix[i] = i % 6;
+    cps->qp_per_matrix[i] = i / 6;
+    cps->qp_rem_matrix[i] = i % 6;
   }
 }
 
-void free_qp_matrices(VideoParameters *p_Vid)
+void free_qp_matrices(CodingParameters *cps)
 {
-  if (p_Vid->qp_per_matrix != NULL)
+  if (cps->qp_per_matrix != NULL)
   {
-    free (p_Vid->qp_per_matrix);
-    p_Vid->qp_per_matrix = NULL;
+    free (cps->qp_per_matrix);
+    cps->qp_per_matrix = NULL;
   }
 
-  if (p_Vid->qp_rem_matrix != NULL)
+  if (cps->qp_rem_matrix != NULL)
   {
-    free (p_Vid->qp_rem_matrix);
-    p_Vid->qp_rem_matrix = NULL;
+    free (cps->qp_rem_matrix);
+    cps->qp_rem_matrix = NULL;
   }
 }
 

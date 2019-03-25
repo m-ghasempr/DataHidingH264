@@ -46,6 +46,8 @@ extern CSobj *create_coding_state  (InputParameters *p_Inp);       //!< create s
 
 extern void init_coding_state_methods(Slice *currSlice);  //!< Init methods given entropy coding
 
+extern void store_coding_state_cavlc (Macroblock *currMB, CSobj *cs);
+extern void reset_coding_state_cavlc (Macroblock *currMB, CSobj *cs);
 
 #endif
 

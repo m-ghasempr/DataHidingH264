@@ -1084,17 +1084,17 @@ void perform_mc(Macroblock* currMB, int decoder, ColorPlane pl, StorablePicture 
   if (pred_dir != 2)
   {
     //===== Single List Prediction =====
-	  short ref_idx = mv_info[j4][i4].ref_idx[pred_dir];
+    short ref_idx = mv_info[j4][i4].ref_idx[pred_dir];
     short ref_idx_wp = ref_idx;
     MotionVector  **mv_array = currSlice->all_mv[pred_dir][ref_idx][l0_mode];
     StorablePicture **list = currSlice->listX[currMB->list_offset + pred_dir];
-    
+
     vec1_x = i4 * mv_mul + mv_array[j][i].mv_x;
     vec1_y = j4 * mv_mul + mv_array[j][i].mv_y;
 
-	get_block_luma (currMB, decoder, pl, dec_picture, list[ref_idx], vec1_x, vec1_y, block_size_x, block_size_y, tmp_block_l0); 
+    get_block_luma (currMB, decoder, pl, dec_picture, list[ref_idx], vec1_x, vec1_y, block_size_x, block_size_y, tmp_block_l0); 
 
-	if (apply_weights)
+    if (apply_weights)
     {
       if (currMB->mb_field)
       {
@@ -1247,7 +1247,7 @@ void perform_mc_concealment(Macroblock* currMB, int decoder, ColorPlane pl, Stor
   if (pred_dir != 2)
   {
     //===== Single List Prediction =====
-	  short ref_idx = mv_info[j4][i4].ref_idx[pred_dir];
+    short ref_idx = mv_info[j4][i4].ref_idx[pred_dir];
     short ref_idx_wp = ref_idx;
     PicMotionParams **motion = dec_picture->mv_info;
     //MotionVector **mv_array = dec_picture->motion.mv[pred_dir];

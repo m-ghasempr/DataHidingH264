@@ -74,7 +74,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   if(!currMB->luma_transform_size_8x8_flag)
   {
     //===== forward transform, Quantization, inverse Quantization, inverse transform, Reconstruction =====
-    if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->lossless_qpprime_flag == 1) ))
+    if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->active_sps->lossless_qpprime_flag == 1) ))
     {
       int block_y, block_x;
 
@@ -146,7 +146,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   }
 
   if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
-    ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0)&&
+    ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0)&&
     !(currSlice->slice_type == SI_SLICE || (currSlice->slice_type == SP_SLICE && p_Vid->sp2_frame_indicator == TRUE )))// last set of conditions
     // cannot skip when perfect reconstruction is as in switching pictures or SI pictures
   {
@@ -169,7 +169,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   for (uv = PLANE_U; uv <= PLANE_V; ++uv)
   {
     if (currSlice->NoResidueDirect != 1 && !skipped && currSlice->coeff_cost_cr[uv] <= _LUMA_COEFF_COST_ &&
-      (currMB->qp_scaled[uv]!=0 || p_Vid->lossless_qpprime_flag==0))// last set of conditions
+      (currMB->qp_scaled[uv]!=0 || p_Vid->active_sps->lossless_qpprime_flag==0))// last set of conditions
     {
       currSlice->coeff_cost_cr[uv] = 0;
       currSlice->cmp_cbp[uv] &= (63 - cbp_mask);
@@ -228,7 +228,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
       //===== compute prediction residual ======            
       compute_residue (&p_Vid->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
     }
-
+    
     for (byy=0, block_y=mb_y; block_y<mb_y+8; byy+=4, block_y+=4)
     {
       for (bxx=0, block_x=mb_x; block_x<mb_x+8; bxx+=4, block_x+=4)
@@ -256,7 +256,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
         select_plane(p_Vid, PLANE_Y);
 
         //===== forward transform, Quantization, inverse Quantization, inverse transform, Reconstruction =====
-        if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->lossless_qpprime_flag == 1) ))
+        if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->active_sps->lossless_qpprime_flag == 1) ))
         {
           //===== forward transform, Quantization, inverse Quantization, inverse transform, Reconstruction =====
           nonzero = currMB->residual_transform_quant_luma_4x4 (currMB, PLANE_Y, block_x, block_y, &coeff_cost, 0);
@@ -343,7 +343,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
   }
 
   if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
-    ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0)&&
+    ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0)&&
     !(currSlice->slice_type == SI_SLICE || (currSlice->slice_type == SP_SLICE && p_Vid->sp2_frame_indicator == TRUE )))// last set of conditions
     // cannot skip when perfect reconstruction is as in switching pictures or SI pictures
   {
@@ -353,7 +353,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
   for (uv = PLANE_U; uv <= PLANE_V; ++uv)
   {
     if (currSlice->NoResidueDirect != 1 && !skipped && currSlice->coeff_cost_cr[uv] <= _LUMA_COEFF_COST_ &&
-      (currMB->qp_scaled[uv]!=0 || p_Vid->lossless_qpprime_flag==0))// last set of conditions
+      (currMB->qp_scaled[uv]!=0 || p_Vid->active_sps->lossless_qpprime_flag==0))// last set of conditions
     {
       currSlice->coeff_cost_cr[uv] = 0;
       currSlice->cmp_cbp[uv] &= (63 - cbp_mask);
@@ -421,7 +421,7 @@ void luma_residual_coding_p444 (Macroblock *currMB)
   }
 
   if ((is_skip || 
-    (sum_cnt_nonz[0] <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0))) &&
+    (sum_cnt_nonz[0] <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0))) &&
     !(currSlice->slice_type == SI_SLICE || (currSlice->slice_type == SP_SLICE && p_Vid->sp2_frame_indicator == TRUE )))// last set of conditions
     //cannot skip if SI or switching SP frame perfect reconstruction is needed
   {
@@ -448,7 +448,7 @@ void luma_residual_coding_p444 (Macroblock *currMB)
   for (uv = PLANE_U; uv <= PLANE_V; ++uv)
   {
     if(is_skip || (sum_cnt_nonz[uv] <= _LUMA_MB_COEFF_COST_ &&
-      ((currMB->qp_scaled[uv])!=0 ||p_Vid->lossless_qpprime_flag==0)))
+      ((currMB->qp_scaled[uv])!=0 ||p_Vid->active_sps->lossless_qpprime_flag==0)))
     {
       currSlice->cmp_cbp[uv] &= 0xfffff0 ;
       currSlice->cur_cbp_blk[uv] &= 0xff0000 ;

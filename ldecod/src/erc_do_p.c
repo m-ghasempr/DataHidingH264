@@ -87,7 +87,7 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
     if ( errorVar->nOfCorruptedSegments )
     {
       if (chroma_format_idc != YUV400)
-        predMB = (imgpel *) malloc ( (256 + (p_Vid->mb_cr_size_x * p_Vid->mb_cr_size_y)*2) * sizeof (imgpel));
+        predMB = (imgpel *) malloc ( (256 + (p_Vid->mb_cr_size)*2) * sizeof (imgpel));
       else
         predMB = (imgpel *) malloc(256 * sizeof (imgpel));
 
@@ -1148,10 +1148,11 @@ static void copy_to_conceal(StorablePicture *src, StorablePicture *dst, VideoPar
   dst->chroma_format_idc = src->chroma_format_idc;
   dst->frame_mbs_only_flag = src->frame_mbs_only_flag;
   dst->frame_cropping_flag = src->frame_cropping_flag;
-  dst->frame_cropping_rect_left_offset = src->frame_cropping_rect_left_offset;
-  dst->frame_cropping_rect_right_offset = src->frame_cropping_rect_right_offset;
-  dst->frame_cropping_rect_bottom_offset = src->frame_cropping_rect_bottom_offset;
-  dst->frame_cropping_rect_top_offset = src->frame_cropping_rect_top_offset;
+  dst->frame_crop_left_offset = src->frame_crop_left_offset;
+  dst->frame_crop_right_offset = src->frame_crop_right_offset;
+  dst->frame_crop_bottom_offset = src->frame_crop_bottom_offset;
+  dst->frame_crop_top_offset = src->frame_crop_top_offset;
+
   dst->qp = src->qp;
   dst->slice_qp_delta = src->slice_qp_delta;
 
@@ -1189,9 +1190,13 @@ static void copy_to_conceal(StorablePicture *src, StorablePicture *dst, VideoPar
     scale = (p_Vid->conceal_slice_type == B_SLICE) ? 2 : 1;
 
     if(p_Vid->conceal_slice_type == B_SLICE)
-      init_lists_for_non_reference_loss(p_Vid->p_Dpb, dst->slice_type, p_Vid->ppSliceList[0]->structure);
+    {
+      init_lists_for_non_reference_loss(
+        p_Vid->p_Dpb_layer[0],
+        dst->slice_type, p_Vid->ppSliceList[0]->structure);
+    }
     else
-      init_lists(p_Vid->ppSliceList[0]); //p_Vid->currentSlice);
+      p_Vid->ppSliceList[0]->init_lists(p_Vid->ppSliceList[0]); //p_Vid->currentSlice);
 
     multiplier = BLOCK_SIZE;
 
@@ -1316,7 +1321,7 @@ void conceal_lost_frames(DecodedPictureBuffer *p_Dpb, Slice *pSlice)
 
   while (CurrFrameNum != UnusedShortTermFrameNum)
   {
-    picture = alloc_storable_picture (p_Vid, FRAME, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr);
+    picture = alloc_storable_picture (p_Vid, FRAME, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, 1);
 
     picture->coded_frame = 1;
     picture->pic_num = UnusedShortTermFrameNum;
@@ -1343,11 +1348,7 @@ void conceal_lost_frames(DecodedPictureBuffer *p_Dpb, Slice *pSlice)
     {
       picture->slice_type = I_SLICE;
       picture->idr_flag = TRUE;
-#if (MVC_EXTENSION_ENABLE)
-      flush_dpb(p_Dpb, p_Vid->ppSliceList[0]->view_id);
-#else
       flush_dpb(p_Dpb);
-#endif
       picture->top_poc= 0;
       picture->bottom_poc=picture->top_poc;
       picture->frame_poc=picture->top_poc;
@@ -1355,7 +1356,7 @@ void conceal_lost_frames(DecodedPictureBuffer *p_Dpb, Slice *pSlice)
       p_Vid->last_ref_pic_poc = picture->poc;
     }
 
-    store_picture_in_dpb(p_Vid->p_Dpb, picture);
+    store_picture_in_dpb(p_Vid->p_Dpb_layer[0], picture);
 
     picture=NULL;
 
@@ -1748,7 +1749,7 @@ void conceal_non_ref_pics(DecodedPictureBuffer *p_Dpb, int diff)
     p_Dpb->used_size = p_Dpb->size;
     if((p_Vid->pocs_in_dpb[i+1] - p_Vid->pocs_in_dpb[i]) > p_Vid->poc_gap)
     {
-      conceal_to_picture = alloc_storable_picture (p_Vid, FRAME, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr);
+      conceal_to_picture = alloc_storable_picture (p_Vid, FRAME, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, 1);
 
       missingpoc = p_Vid->pocs_in_dpb[i] + p_Vid->poc_gap;
       // Diagnostics
@@ -1856,7 +1857,7 @@ void write_lost_ref_after_idr(DecodedPictureBuffer *p_Dpb, int pos)
   if(p_Vid->last_out_fs->frame == NULL)
   {
     p_Vid->last_out_fs->frame = alloc_storable_picture (p_Vid, FRAME, p_Vid->width, p_Vid->height,
-      p_Vid->width_cr, p_Vid->height_cr);
+      p_Vid->width_cr, p_Vid->height_cr, 1);
     p_Vid->last_out_fs->is_used = 3;
   }
 

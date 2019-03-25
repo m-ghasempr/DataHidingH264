@@ -115,8 +115,13 @@ extern int   predict_nnz       (Macroblock *currMB, int block_type, int i,int j)
 extern int   predict_nnz_chroma(Macroblock *currMB, int i,int j);
 
 extern void set_modes_and_reframe (Macroblock* currMB, int b8, short* p_dir, int list_mode[2], char *list_ref_idx);
+extern void set_modes_and_reframe_i_slice (Macroblock* currMB, int b8, short* p_dir, int list_mode[2], char *list_ref_idx);
 extern void set_modes_and_reframe_b_slice (Macroblock* currMB, int b8, short* p_dir, int list_mode[2], char *list_ref_idx);
 extern void set_modes_and_reframe_p_slice (Macroblock* currMB, int b8, short* p_dir, int list_mode[2], char *list_ref_idx);
+extern Macroblock *alloc_mbs(VideoParameters *p_Vid, int mb_num, int layers);
+extern void free_mbs(Macroblock *pMBs, int mb_num);
+extern void setup_mbs(Macroblock *pMBs, int mb_num, int layer_id);
+
 
 
 #endif

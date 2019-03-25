@@ -126,10 +126,8 @@ extern void arideco_start_decoding(DecodingEnvironmentPtr eep, unsigned char *co
 extern int  arideco_bits_read(DecodingEnvironmentPtr dep);
 extern void arideco_done_decoding(DecodingEnvironmentPtr dep);
 extern void biari_init_context (int qp, BiContextTypePtr ctx, const char* ini);
-extern unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct );
+extern unsigned int biari_decode_symbol(DecodingEnvironment *dep, BiContextType *bi_ct );
 extern unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep);
 extern unsigned int biari_decode_final(DecodingEnvironmentPtr dep);
-extern unsigned int getbyte(DecodingEnvironmentPtr dep);
-extern unsigned int getword(DecodingEnvironmentPtr dep);
 #endif  // BIARIDECOD_H_
 

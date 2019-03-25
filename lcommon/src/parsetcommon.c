@@ -144,10 +144,10 @@ int sps_is_equal(seq_parameter_set_rbsp_t *sps1, seq_parameter_set_rbsp_t *sps2)
   if (!equal) return equal;
   if (sps1->frame_cropping_flag)
   {
-    equal &= (sps1->frame_cropping_rect_left_offset == sps2->frame_cropping_rect_left_offset);
-    equal &= (sps1->frame_cropping_rect_right_offset == sps2->frame_cropping_rect_right_offset);
-    equal &= (sps1->frame_cropping_rect_top_offset == sps2->frame_cropping_rect_top_offset);
-    equal &= (sps1->frame_cropping_rect_bottom_offset == sps2->frame_cropping_rect_bottom_offset);
+    equal &= (sps1->frame_crop_left_offset == sps2->frame_crop_left_offset);
+    equal &= (sps1->frame_crop_right_offset == sps2->frame_crop_right_offset);
+    equal &= (sps1->frame_crop_top_offset == sps2->frame_crop_top_offset);
+    equal &= (sps1->frame_crop_bottom_offset == sps2->frame_crop_bottom_offset);
   }
   equal &= (sps1->vui_parameters_present_flag == sps2->vui_parameters_present_flag);
 

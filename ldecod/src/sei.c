@@ -8,7 +8,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *    - Dong Tian        <tian@cs.tut.fi>
- *    - Karsten Suehring <suehring@hhi.de>
+ *    - Karsten Suehring
  ************************************************************************
  */
 
@@ -25,7 +25,7 @@
 
 
 // #define PRINT_BUFFERING_PERIOD_INFO    // uncomment to print buffering period SEI info
-// #define PRINT_PCITURE_TIMING_INFO      // uncomment to print picture timing SEI info
+// #define PRINT_PICTURE_TIMING_INFO      // uncomment to print picture timing SEI info
 // #define WRITE_MAP_IMAGE                // uncomment to write spare picture map
 // #define PRINT_SUBSEQUENCE_INFO         // uncomment to print sub-sequence SEI info
 // #define PRINT_SUBSEQUENCE_LAYER_CHAR   // uncomment to print sub-sequence layer characteristics SEI info
@@ -228,13 +228,13 @@ void interpret_spare_pic( byte* payload, int size, VideoParameters *p_Vid )
   buf->streamBuffer = payload;
   buf->frame_bitoffset = 0;
 
-  target_frame_num = ue_v("SEI: target_frame_num", buf);
+  target_frame_num = read_ue_v("SEI: target_frame_num", buf, &p_Dec->UsedBits);
 
 #ifdef WRITE_MAP_IMAGE
   printf( "target_frame_num is %d\n", target_frame_num );
 #endif
 
-  num_spare_pics = 1 + ue_v("SEI: num_spare_pics_minus1", buf);
+  num_spare_pics = 1 + read_ue_v("SEI: num_spare_pics_minus1", buf, &p_Dec->UsedBits);
 
 #ifdef WRITE_MAP_IMAGE
   printf( "num_spare_pics is %d\n", num_spare_pics );
@@ -252,13 +252,13 @@ void interpret_spare_pic( byte* payload, int size, VideoParameters *p_Vid )
     else
       CandidateSpareFrameNum = SpareFrameNum;
 
-    delta_spare_frame_num = ue_v("SEI: delta_spare_frame_num", buf);
+    delta_spare_frame_num = read_ue_v("SEI: delta_spare_frame_num", buf, &p_Dec->UsedBits);
 
     SpareFrameNum = CandidateSpareFrameNum - delta_spare_frame_num;
     if( SpareFrameNum < 0 )
       SpareFrameNum = MAX_FN + SpareFrameNum;
 
-    ref_area_indicator = ue_v("SEI: ref_area_indicator", buf);
+    ref_area_indicator = read_ue_v("SEI: ref_area_indicator", buf, &p_Dec->UsedBits);
 
     switch ( ref_area_indicator )
     {
@@ -271,7 +271,7 @@ void interpret_spare_pic( byte* payload, int size, VideoParameters *p_Vid )
       for (y=0; y<p_Vid->height >> 4; y++)
         for (x=0; x<p_Vid->width >> 4; x++)
         {
-          map[i][y][x] = (byte) u_1("SEI: ref_mb_indicator", buf);
+          map[i][y][x] = (byte) read_u_1("SEI: ref_mb_indicator", buf, &p_Dec->UsedBits);
         }
       break;
     case 2:   // The map is compressed
@@ -294,7 +294,7 @@ void interpret_spare_pic( byte* payload, int size, VideoParameters *p_Vid )
 
           if (no_bit0<0)
           {
-            no_bit0 = ue_v("SEI: zero_run_length", buf);
+            no_bit0 = read_ue_v("SEI: zero_run_length", buf, &p_Dec->UsedBits);
           }
           if (no_bit0>0) 
             map[i][y][x] = (byte) bit0;
@@ -452,7 +452,7 @@ void interpret_subsequence_info( byte* payload, int size, VideoParameters *p_Vid
 {
   Bitstream* buf;
   int sub_seq_layer_num, sub_seq_id, first_ref_pic_flag, leading_non_ref_pic_flag, last_pic_flag,
-      sub_seq_frame_num_flag, sub_seq_frame_num;
+    sub_seq_frame_num_flag, sub_seq_frame_num;
 
   buf = malloc(sizeof(Bitstream));
   buf->bitstream_length = size;
@@ -461,15 +461,15 @@ void interpret_subsequence_info( byte* payload, int size, VideoParameters *p_Vid
 
   p_Dec->UsedBits = 0;
 
-  sub_seq_layer_num        = ue_v("SEI: sub_seq_layer_num"       , buf);
-  sub_seq_id               = ue_v("SEI: sub_seq_id"              , buf);
-  first_ref_pic_flag       = u_1 ("SEI: first_ref_pic_flag"      , buf);
-  leading_non_ref_pic_flag = u_1 ("SEI: leading_non_ref_pic_flag", buf);
-  last_pic_flag            = u_1 ("SEI: last_pic_flag"           , buf);
-  sub_seq_frame_num_flag   = u_1 ("SEI: sub_seq_frame_num_flag"  , buf);
+  sub_seq_layer_num        = read_ue_v("SEI: sub_seq_layer_num"       , buf, &p_Dec->UsedBits);
+  sub_seq_id               = read_ue_v("SEI: sub_seq_id"              , buf, &p_Dec->UsedBits);
+  first_ref_pic_flag       = read_u_1 ("SEI: first_ref_pic_flag"      , buf, &p_Dec->UsedBits);
+  leading_non_ref_pic_flag = read_u_1 ("SEI: leading_non_ref_pic_flag", buf, &p_Dec->UsedBits);
+  last_pic_flag            = read_u_1 ("SEI: last_pic_flag"           , buf, &p_Dec->UsedBits);
+  sub_seq_frame_num_flag   = read_u_1 ("SEI: sub_seq_frame_num_flag"  , buf, &p_Dec->UsedBits);
   if (sub_seq_frame_num_flag)
   {
-    sub_seq_frame_num        = ue_v("SEI: sub_seq_frame_num"       , buf);
+    sub_seq_frame_num        = read_ue_v("SEI: sub_seq_frame_num"       , buf, &p_Dec->UsedBits);
   }
 
 #ifdef PRINT_SUBSEQUENCE_INFO
@@ -518,7 +518,7 @@ void interpret_subsequence_layer_characteristics_info( byte* payload, int size, 
 
   p_Dec->UsedBits = 0;
 
-  num_sub_layers = 1 + ue_v("SEI: num_sub_layers_minus1", buf);
+  num_sub_layers = 1 + read_ue_v("SEI: num_sub_layers_minus1", buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_SUBSEQUENCE_LAYER_CHAR
   printf("Sub-sequence layer characteristics SEI message\n");
@@ -527,9 +527,9 @@ void interpret_subsequence_layer_characteristics_info( byte* payload, int size, 
 
   for (i=0; i<num_sub_layers; i++)
   {
-    accurate_statistics_flag = u_1(   "SEI: accurate_statistics_flag", buf);
-    average_bit_rate         = u_v(16,"SEI: average_bit_rate"        , buf);
-    average_frame_rate       = u_v(16,"SEI: average_frame_rate"      , buf);
+    accurate_statistics_flag = read_u_1(   "SEI: accurate_statistics_flag", buf, &p_Dec->UsedBits);
+    average_bit_rate         = read_u_v(16,"SEI: average_bit_rate"        , buf, &p_Dec->UsedBits);
+    average_frame_rate       = read_u_v(16,"SEI: average_frame_rate"      , buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_SUBSEQUENCE_LAYER_CHAR
     printf("layer %d: accurate_statistics_flag = %ld \n", i, accurate_statistics_flag);
@@ -569,9 +569,9 @@ void interpret_subsequence_characteristics_info( byte* payload, int size, VideoP
 
   p_Dec->UsedBits = 0;
 
-  sub_seq_layer_num = ue_v("SEI: sub_seq_layer_num", buf);
-  sub_seq_id        = ue_v("SEI: sub_seq_id", buf);
-  duration_flag     = u_1 ("SEI: duration_flag", buf);
+  sub_seq_layer_num = read_ue_v("SEI: sub_seq_layer_num", buf, &p_Dec->UsedBits);
+  sub_seq_id        = read_ue_v("SEI: sub_seq_id", buf, &p_Dec->UsedBits);
+  duration_flag     = read_u_1 ("SEI: duration_flag", buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_SUBSEQUENCE_CHAR
   printf("Sub-sequence characteristics SEI message\n");
@@ -582,13 +582,13 @@ void interpret_subsequence_characteristics_info( byte* payload, int size, VideoP
 
   if ( duration_flag )
   {
-    sub_seq_duration = u_v (32, "SEI: duration_flag", buf);
+    sub_seq_duration = read_u_v (32, "SEI: duration_flag", buf, &p_Dec->UsedBits);
 #ifdef PRINT_SUBSEQUENCE_CHAR
     printf("sub_seq_duration = %ld\n", sub_seq_duration);
 #endif
   }
 
-  average_rate_flag = u_1 ("SEI: average_rate_flag", buf);
+  average_rate_flag = read_u_1 ("SEI: average_rate_flag", buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_SUBSEQUENCE_CHAR
   printf("average_rate_flag = %d\n", average_rate_flag);
@@ -596,9 +596,9 @@ void interpret_subsequence_characteristics_info( byte* payload, int size, VideoP
 
   if ( average_rate_flag )
   {
-    accurate_statistics_flag = u_1 (    "SEI: accurate_statistics_flag", buf);
-    average_bit_rate         = u_v (16, "SEI: average_bit_rate", buf);
-    average_frame_rate       = u_v (16, "SEI: average_frame_rate", buf);
+    accurate_statistics_flag = read_u_1 (    "SEI: accurate_statistics_flag", buf, &p_Dec->UsedBits);
+    average_bit_rate         = read_u_v (16, "SEI: average_bit_rate", buf, &p_Dec->UsedBits);
+    average_frame_rate       = read_u_v (16, "SEI: average_frame_rate", buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_SUBSEQUENCE_CHAR
     printf("accurate_statistics_flag = %d\n", accurate_statistics_flag);
@@ -607,7 +607,7 @@ void interpret_subsequence_characteristics_info( byte* payload, int size, VideoP
 #endif
   }
 
-  num_referenced_subseqs  = ue_v("SEI: num_referenced_subseqs", buf);
+  num_referenced_subseqs  = read_ue_v("SEI: num_referenced_subseqs", buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_SUBSEQUENCE_CHAR
   printf("num_referenced_subseqs = %d\n", num_referenced_subseqs);
@@ -615,9 +615,9 @@ void interpret_subsequence_characteristics_info( byte* payload, int size, VideoP
 
   for (i=0; i<num_referenced_subseqs; i++)
   {
-    ref_sub_seq_layer_num  = ue_v("SEI: ref_sub_seq_layer_num", buf);
-    ref_sub_seq_id         = ue_v("SEI: ref_sub_seq_id", buf);
-    ref_sub_seq_direction  = u_1 ("SEI: ref_sub_seq_direction", buf);
+    ref_sub_seq_layer_num  = read_ue_v("SEI: ref_sub_seq_layer_num", buf, &p_Dec->UsedBits);
+    ref_sub_seq_id         = read_ue_v("SEI: ref_sub_seq_id", buf, &p_Dec->UsedBits);
+    ref_sub_seq_direction  = read_u_1 ("SEI: ref_sub_seq_direction", buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_SUBSEQUENCE_CHAR
     printf("ref_sub_seq_layer_num = %d\n", ref_sub_seq_layer_num);
@@ -658,11 +658,11 @@ void interpret_scene_information( byte* payload, int size, VideoParameters *p_Vi
 
   p_Dec->UsedBits = 0;
 
-  scene_id              = ue_v("SEI: scene_id"             , buf);
-  scene_transition_type = ue_v("SEI: scene_transition_type", buf);
+  scene_id              = read_ue_v("SEI: scene_id"             , buf, &p_Dec->UsedBits);
+  scene_transition_type = read_ue_v("SEI: scene_transition_type", buf, &p_Dec->UsedBits);
   if ( scene_transition_type > 3 )
   {
-    second_scene_id     = ue_v("SEI: scene_transition_type", buf);;
+    second_scene_id     = read_ue_v("SEI: scene_transition_type", buf, &p_Dec->UsedBits);
   }
 
 #ifdef PRINT_SCENE_INFORMATION
@@ -850,18 +850,18 @@ void interpret_pan_scan_rect_info( byte* payload, int size, VideoParameters *p_V
 
   p_Dec->UsedBits = 0;
 
-  pan_scan_rect_id = ue_v("SEI: pan_scan_rect_id", buf);
+  pan_scan_rect_id = read_ue_v("SEI: pan_scan_rect_id", buf, &p_Dec->UsedBits);
 
-  pan_scan_rect_cancel_flag = u_1("SEI: pan_scan_rect_cancel_flag", buf);
+  pan_scan_rect_cancel_flag = read_u_1("SEI: pan_scan_rect_cancel_flag", buf, &p_Dec->UsedBits);
   if (!pan_scan_rect_cancel_flag) 
   {
-    pan_scan_cnt_minus1 = ue_v("SEI: pan_scan_cnt_minus1", buf);
+    pan_scan_cnt_minus1 = read_ue_v("SEI: pan_scan_cnt_minus1", buf, &p_Dec->UsedBits);
     for (i = 0; i <= pan_scan_cnt_minus1; i++) 
     {
-      pan_scan_rect_left_offset   = se_v("SEI: pan_scan_rect_left_offset"  , buf);
-      pan_scan_rect_right_offset  = se_v("SEI: pan_scan_rect_right_offset" , buf);
-      pan_scan_rect_top_offset    = se_v("SEI: pan_scan_rect_top_offset"   , buf);
-      pan_scan_rect_bottom_offset = se_v("SEI: pan_scan_rect_bottom_offset", buf);
+      pan_scan_rect_left_offset   = read_se_v("SEI: pan_scan_rect_left_offset"  , buf, &p_Dec->UsedBits);
+      pan_scan_rect_right_offset  = read_se_v("SEI: pan_scan_rect_right_offset" , buf, &p_Dec->UsedBits);
+      pan_scan_rect_top_offset    = read_se_v("SEI: pan_scan_rect_top_offset"   , buf, &p_Dec->UsedBits);
+      pan_scan_rect_bottom_offset = read_se_v("SEI: pan_scan_rect_bottom_offset", buf, &p_Dec->UsedBits);
 #ifdef PRINT_PAN_SCAN_RECT
       printf("Pan scan rectangle SEI message %d/%d\n", i, pan_scan_cnt_minus1);
       printf("pan_scan_rect_id            = %d\n", pan_scan_rect_id);
@@ -871,7 +871,7 @@ void interpret_pan_scan_rect_info( byte* payload, int size, VideoParameters *p_V
       printf("pan_scan_rect_bottom_offset = %d\n", pan_scan_rect_bottom_offset);
 #endif
     }
-    pan_scan_rect_repetition_period = ue_v("SEI: pan_scan_rect_repetition_period", buf);
+    pan_scan_rect_repetition_period = read_ue_v("SEI: pan_scan_rect_repetition_period", buf, &p_Dec->UsedBits);
   }
 
   free (buf);
@@ -909,10 +909,10 @@ void interpret_recovery_point_info( byte* payload, int size, VideoParameters *p_
 
   p_Dec->UsedBits = 0;
 
-  recovery_frame_cnt       = ue_v(    "SEI: recovery_frame_cnt"      , buf);
-  exact_match_flag         = u_1 (    "SEI: exact_match_flag"        , buf);
-  broken_link_flag         = u_1 (    "SEI: broken_link_flag"        , buf);
-  changing_slice_group_idc = u_v ( 2, "SEI: changing_slice_group_idc", buf);
+  recovery_frame_cnt       = read_ue_v(    "SEI: recovery_frame_cnt"      , buf, &p_Dec->UsedBits);
+  exact_match_flag         = read_u_1 (    "SEI: exact_match_flag"        , buf, &p_Dec->UsedBits);
+  broken_link_flag         = read_u_1 (    "SEI: broken_link_flag"        , buf, &p_Dec->UsedBits);
+  changing_slice_group_idc = read_u_v ( 2, "SEI: changing_slice_group_idc", buf, &p_Dec->UsedBits);
 
   p_Vid->recovery_point = 1;
   p_Vid->recovery_frame_cnt = recovery_frame_cnt;
@@ -950,10 +950,8 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Vid
   int original_field_pic_flag, original_bottom_field_flag;
 
   DecRefPicMarking_t *tmp_drpm;
-
   DecRefPicMarking_t *old_drpm;
-  int old_idr_flag , old_no_output_of_prior_pics_flag, old_long_term_reference_flag , old_adaptive_ref_pic_buffering_flag;
-
+  int old_idr_flag, old_no_output_of_prior_pics_flag, old_long_term_reference_flag , old_adaptive_ref_pic_buffering_flag;
 
   Bitstream* buf;
 
@@ -964,15 +962,15 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Vid
 
   p_Dec->UsedBits = 0;
 
-  original_idr_flag     = u_1 (    "SEI: original_idr_flag"    , buf);
-  original_frame_num    = ue_v(    "SEI: original_frame_num"   , buf);
+  original_idr_flag     = read_u_1 (    "SEI: original_idr_flag"    , buf, &p_Dec->UsedBits);
+  original_frame_num    = read_ue_v(    "SEI: original_frame_num"   , buf, &p_Dec->UsedBits);
 
   if ( !p_Vid->active_sps->frame_mbs_only_flag )
   {
-    original_field_pic_flag = u_1 ( "SEI: original_field_pic_flag", buf);
+    original_field_pic_flag = read_u_1 ( "SEI: original_field_pic_flag", buf, &p_Dec->UsedBits);
     if ( original_field_pic_flag )
     {
-      original_bottom_field_flag = u_1 ( "SEI: original_bottom_field_flag", buf);
+      original_bottom_field_flag = read_u_1 ( "SEI: original_bottom_field_flag", buf, &p_Dec->UsedBits);
     }
   }
 
@@ -1089,7 +1087,7 @@ void interpret_full_frame_freeze_info( byte* payload, int size, VideoParameters 
   buf->streamBuffer = payload;
   buf->frame_bitoffset = 0;
 
-  full_frame_freeze_repetition_period  = ue_v(    "SEI: full_frame_freeze_repetition_period"   , buf);
+  full_frame_freeze_repetition_period  = read_ue_v(    "SEI: full_frame_freeze_repetition_period"   , buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_FULL_FRAME_FREEZE_INFO
   printf("full_frame_freeze_repetition_period = %d\n", full_frame_freeze_repetition_period);
@@ -1156,7 +1154,7 @@ void interpret_full_frame_snapshot_info( byte* payload, int size, VideoParameter
 
   p_Dec->UsedBits = 0;
 
-  snapshot_id = ue_v("SEI: snapshot_id", buf);
+  snapshot_id = read_ue_v("SEI: snapshot_id", buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_FULL_FRAME_SNAPSHOT_INFO
   printf("Full-frame snapshot SEI message\n");
@@ -1194,8 +1192,8 @@ void interpret_progressive_refinement_start_info( byte* payload, int size, Video
 
   p_Dec->UsedBits = 0;
 
-  progressive_refinement_id   = ue_v("SEI: progressive_refinement_id"  , buf);
-  num_refinement_steps_minus1 = ue_v("SEI: num_refinement_steps_minus1", buf);
+  progressive_refinement_id   = read_ue_v("SEI: progressive_refinement_id"  , buf, &p_Dec->UsedBits);
+  num_refinement_steps_minus1 = read_ue_v("SEI: num_refinement_steps_minus1", buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_PROGRESSIVE_REFINEMENT_START_INFO
   printf("Progressive refinement segment start SEI message\n");
@@ -1235,7 +1233,7 @@ void interpret_progressive_refinement_end_info( byte* payload, int size, VideoPa
 
   p_Dec->UsedBits = 0;
 
-  progressive_refinement_id   = ue_v("SEI: progressive_refinement_id"  , buf);
+  progressive_refinement_id   = read_ue_v("SEI: progressive_refinement_id"  , buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_PROGRESSIVE_REFINEMENT_END_INFO
   printf("Progressive refinement segment end SEI message\n");
@@ -1276,7 +1274,7 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
 
   p_Dec->UsedBits = 0;
 
-  num_slice_groups_minus1   = ue_v("SEI: num_slice_groups_minus1"  , buf);
+  num_slice_groups_minus1   = read_ue_v("SEI: num_slice_groups_minus1"  , buf, &p_Dec->UsedBits);
   sliceGroupSize = CeilLog2( num_slice_groups_minus1 + 1 );
 #ifdef PRINT_MOTION_CONST_SLICE_GROUP_SET_INFO
   printf("Motion-constrained slice group set SEI message\n");
@@ -1286,14 +1284,14 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
   for (i=0; i<=num_slice_groups_minus1;i++)
   {
 
-    slice_group_id   = u_v (sliceGroupSize, "SEI: slice_group_id" , buf)    ;
+    slice_group_id   = read_u_v (sliceGroupSize, "SEI: slice_group_id" , buf, &p_Dec->UsedBits);
 #ifdef PRINT_MOTION_CONST_SLICE_GROUP_SET_INFO
     printf("slice_group_id            = %d\n", slice_group_id);
 #endif
   }
 
-  exact_match_flag   = u_1("SEI: exact_match_flag"  , buf);
-  pan_scan_rect_flag = u_1("SEI: pan_scan_rect_flag"  , buf);
+  exact_match_flag   = read_u_1("SEI: exact_match_flag"  , buf, &p_Dec->UsedBits);
+  pan_scan_rect_flag = read_u_1("SEI: pan_scan_rect_flag"  , buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_MOTION_CONST_SLICE_GROUP_SET_INFO
   printf("exact_match_flag         = %d\n", exact_match_flag);
@@ -1302,7 +1300,7 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
 
   if (pan_scan_rect_flag)
   {
-    pan_scan_rect_id = ue_v("SEI: pan_scan_rect_id"  , buf);
+    pan_scan_rect_id = read_ue_v("SEI: pan_scan_rect_id"  , buf, &p_Dec->UsedBits);
 #ifdef PRINT_MOTION_CONST_SLICE_GROUP_SET_INFO
     printf("pan_scan_rect_id         = %d\n", pan_scan_rect_id);
 #endif
@@ -1347,27 +1345,27 @@ void interpret_film_grain_characteristics_info( byte* payload, int size, VideoPa
   buf->streamBuffer = payload;
   buf->frame_bitoffset = 0;
 
-  film_grain_characteristics_cancel_flag = u_1("SEI: film_grain_characteristics_cancel_flag", buf);
+  film_grain_characteristics_cancel_flag = read_u_1("SEI: film_grain_characteristics_cancel_flag", buf, &p_Dec->UsedBits);
 #ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
   printf("film_grain_characteristics_cancel_flag = %d\n", film_grain_characteristics_cancel_flag);
 #endif
   if(!film_grain_characteristics_cancel_flag)
   {
 
-    model_id                                    = u_v(2, "SEI: model_id", buf);
-    separate_colour_description_present_flag    = u_1("SEI: separate_colour_description_present_flag", buf);
+    model_id                                    = read_u_v(2, "SEI: model_id", buf, &p_Dec->UsedBits);
+    separate_colour_description_present_flag    = read_u_1("SEI: separate_colour_description_present_flag", buf, &p_Dec->UsedBits);
 #ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
     printf("model_id = %d\n", model_id);
     printf("separate_colour_description_present_flag = %d\n", separate_colour_description_present_flag);
 #endif
     if (separate_colour_description_present_flag)
     {
-      film_grain_bit_depth_luma_minus8          = u_v(3, "SEI: film_grain_bit_depth_luma_minus8", buf);
-      film_grain_bit_depth_chroma_minus8        = u_v(3, "SEI: film_grain_bit_depth_chroma_minus8", buf);
-      film_grain_full_range_flag                = u_v(1, "SEI: film_grain_full_range_flag", buf);
-      film_grain_colour_primaries               = u_v(8, "SEI: film_grain_colour_primaries", buf);
-      film_grain_transfer_characteristics       = u_v(8, "SEI: film_grain_transfer_characteristics", buf);
-      film_grain_matrix_coefficients            = u_v(8, "SEI: film_grain_matrix_coefficients", buf);
+      film_grain_bit_depth_luma_minus8          = read_u_v(3, "SEI: film_grain_bit_depth_luma_minus8", buf, &p_Dec->UsedBits);
+      film_grain_bit_depth_chroma_minus8        = read_u_v(3, "SEI: film_grain_bit_depth_chroma_minus8", buf, &p_Dec->UsedBits);
+      film_grain_full_range_flag                = read_u_v(1, "SEI: film_grain_full_range_flag", buf, &p_Dec->UsedBits);
+      film_grain_colour_primaries               = read_u_v(8, "SEI: film_grain_colour_primaries", buf, &p_Dec->UsedBits);
+      film_grain_transfer_characteristics       = read_u_v(8, "SEI: film_grain_transfer_characteristics", buf, &p_Dec->UsedBits);
+      film_grain_matrix_coefficients            = read_u_v(8, "SEI: film_grain_matrix_coefficients", buf, &p_Dec->UsedBits);
 #ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
       printf("film_grain_bit_depth_luma_minus8 = %d\n", film_grain_bit_depth_luma_minus8);
       printf("film_grain_bit_depth_chroma_minus8 = %d\n", film_grain_bit_depth_chroma_minus8);
@@ -1377,15 +1375,15 @@ void interpret_film_grain_characteristics_info( byte* payload, int size, VideoPa
       printf("film_grain_matrix_coefficients = %d\n", film_grain_matrix_coefficients);
 #endif
     }
-    blending_mode_id                            = u_v(2, "SEI: blending_mode_id", buf);
-    log2_scale_factor                           = u_v(4, "SEI: log2_scale_factor", buf);
+    blending_mode_id                            = read_u_v(2, "SEI: blending_mode_id", buf, &p_Dec->UsedBits);
+    log2_scale_factor                           = read_u_v(4, "SEI: log2_scale_factor", buf, &p_Dec->UsedBits);
 #ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
     printf("blending_mode_id = %d\n", blending_mode_id);
     printf("log2_scale_factor = %d\n", log2_scale_factor);
 #endif
     for (c = 0; c < 3; c ++)
     {
-      comp_model_present_flag[c]                = u_1("SEI: comp_model_present_flag", buf);
+      comp_model_present_flag[c]                = read_u_1("SEI: comp_model_present_flag", buf, &p_Dec->UsedBits);
 #ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
       printf("comp_model_present_flag = %d\n", comp_model_present_flag[c]);
 #endif
@@ -1393,30 +1391,30 @@ void interpret_film_grain_characteristics_info( byte* payload, int size, VideoPa
     for (c = 0; c < 3; c ++)
       if (comp_model_present_flag[c])
       {
-        num_intensity_intervals_minus1          = u_v(8, "SEI: num_intensity_intervals_minus1", buf);
-        num_model_values_minus1                 = u_v(3, "SEI: num_model_values_minus1", buf);
+        num_intensity_intervals_minus1          = read_u_v(8, "SEI: num_intensity_intervals_minus1", buf, &p_Dec->UsedBits);
+        num_model_values_minus1                 = read_u_v(3, "SEI: num_model_values_minus1", buf, &p_Dec->UsedBits);
 #ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
         printf("num_intensity_intervals_minus1 = %d\n", num_intensity_intervals_minus1);
         printf("num_model_values_minus1 = %d\n", num_model_values_minus1);
 #endif
         for (i = 0; i <= num_intensity_intervals_minus1; i ++)
         {
-          intensity_interval_lower_bound        = u_v(8, "SEI: intensity_interval_lower_bound", buf);
-          intensity_interval_upper_bound        = u_v(8, "SEI: intensity_interval_upper_bound", buf);
+          intensity_interval_lower_bound        = read_u_v(8, "SEI: intensity_interval_lower_bound", buf, &p_Dec->UsedBits);
+          intensity_interval_upper_bound        = read_u_v(8, "SEI: intensity_interval_upper_bound", buf, &p_Dec->UsedBits);
 #ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
           printf("intensity_interval_lower_bound = %d\n", intensity_interval_lower_bound);
           printf("intensity_interval_upper_bound = %d\n", intensity_interval_upper_bound);
 #endif
           for (j = 0; j <= num_model_values_minus1; j++)
           {
-            comp_model_value                    = se_v("SEI: comp_model_value", buf);
+            comp_model_value                    = read_se_v("SEI: comp_model_value", buf, &p_Dec->UsedBits);
 #ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
             printf("comp_model_value = %d\n", comp_model_value);
 #endif
           }
         }
       }
-    film_grain_characteristics_repetition_period = ue_v("SEI: film_grain_characteristics_repetition_period", buf);
+    film_grain_characteristics_repetition_period = read_ue_v("SEI: film_grain_characteristics_repetition_period", buf, &p_Dec->UsedBits);
 #ifdef PRINT_FILM_GRAIN_CHARACTERISTICS_INFO
     printf("film_grain_characteristics_repetition_period = %d\n", film_grain_characteristics_repetition_period);
 #endif
@@ -1453,15 +1451,15 @@ void interpret_deblocking_filter_display_preference_info( byte* payload, int siz
   buf->streamBuffer = payload;
   buf->frame_bitoffset = 0;
 
-  deblocking_display_preference_cancel_flag             = u_1("SEI: deblocking_display_preference_cancel_flag", buf);
+  deblocking_display_preference_cancel_flag             = read_u_1("SEI: deblocking_display_preference_cancel_flag", buf, &p_Dec->UsedBits);
 #ifdef PRINT_DEBLOCKING_FILTER_DISPLAY_PREFERENCE_INFO
   printf("deblocking_display_preference_cancel_flag = %d\n", deblocking_display_preference_cancel_flag);
 #endif
   if(!deblocking_display_preference_cancel_flag)
   {
-    display_prior_to_deblocking_preferred_flag            = u_1("SEI: display_prior_to_deblocking_preferred_flag", buf);
-    dec_frame_buffering_constraint_flag                   = u_1("SEI: dec_frame_buffering_constraint_flag", buf);
-    deblocking_display_preference_repetition_period       = ue_v("SEI: deblocking_display_preference_repetition_period", buf);
+    display_prior_to_deblocking_preferred_flag            = read_u_1("SEI: display_prior_to_deblocking_preferred_flag", buf, &p_Dec->UsedBits);
+    dec_frame_buffering_constraint_flag                   = read_u_1("SEI: dec_frame_buffering_constraint_flag", buf, &p_Dec->UsedBits);
+    deblocking_display_preference_repetition_period       = read_ue_v("SEI: deblocking_display_preference_repetition_period", buf, &p_Dec->UsedBits);
 #ifdef PRINT_DEBLOCKING_FILTER_DISPLAY_PREFERENCE_INFO
     printf("display_prior_to_deblocking_preferred_flag = %d\n", display_prior_to_deblocking_preferred_flag);
     printf("dec_frame_buffering_constraint_flag = %d\n", dec_frame_buffering_constraint_flag);
@@ -1502,29 +1500,29 @@ void interpret_stereo_video_info_info( byte* payload, int size, VideoParameters 
   buf->streamBuffer = payload;
   buf->frame_bitoffset = 0;
 
-  field_views_flags = u_1("SEI: field_views_flags", buf);
+  field_views_flags = read_u_1("SEI: field_views_flags", buf, &p_Dec->UsedBits);
 #ifdef PRINT_STEREO_VIDEO_INFO_INFO
   printf("field_views_flags = %d\n", field_views_flags);
 #endif
   if (field_views_flags)
   {
-    top_field_is_left_view_flag         = u_1("SEI: top_field_is_left_view_flag", buf);
+    top_field_is_left_view_flag         = read_u_1("SEI: top_field_is_left_view_flag", buf, &p_Dec->UsedBits);
 #ifdef PRINT_STEREO_VIDEO_INFO_INFO
     printf("top_field_is_left_view_flag = %d\n", top_field_is_left_view_flag);
 #endif
   }
   else
   {
-    current_frame_is_left_view_flag     = u_1("SEI: current_frame_is_left_view_flag", buf);
-    next_frame_is_second_view_flag      = u_1("SEI: next_frame_is_second_view_flag", buf);
+    current_frame_is_left_view_flag     = read_u_1("SEI: current_frame_is_left_view_flag", buf, &p_Dec->UsedBits);
+    next_frame_is_second_view_flag      = read_u_1("SEI: next_frame_is_second_view_flag", buf, &p_Dec->UsedBits);
 #ifdef PRINT_STEREO_VIDEO_INFO_INFO
     printf("current_frame_is_left_view_flag = %d\n", current_frame_is_left_view_flag);
     printf("next_frame_is_second_view_flag = %d\n", next_frame_is_second_view_flag);
 #endif
   }
 
-  left_view_self_contained_flag         = u_1("SEI: left_view_self_contained_flag", buf);
-  right_view_self_contained_flag        = u_1("SEI: right_view_self_contained_flag", buf);
+  left_view_self_contained_flag         = read_u_1("SEI: left_view_self_contained_flag", buf, &p_Dec->UsedBits);
+  right_view_self_contained_flag        = read_u_1("SEI: right_view_self_contained_flag", buf, &p_Dec->UsedBits);
 #ifdef PRINT_STEREO_VIDEO_INFO_INFO
   printf("left_view_self_contained_flag = %d\n", left_view_self_contained_flag);
   printf("right_view_self_contained_flag = %d\n", right_view_self_contained_flag);
@@ -1600,7 +1598,7 @@ void interpret_buffering_period_info( byte* payload, int size, VideoParameters *
 
   p_Dec->UsedBits = 0;
 
-  seq_parameter_set_id   = ue_v("SEI: seq_parameter_set_id"  , buf);
+  seq_parameter_set_id   = read_ue_v("SEI: seq_parameter_set_id"  , buf, &p_Dec->UsedBits);
 
   sps = &p_Vid->SeqParSet[seq_parameter_set_id];
 
@@ -1619,8 +1617,8 @@ void interpret_buffering_period_info( byte* payload, int size, VideoParameters *
     {
       for (k=0; k<sps->vui_seq_parameters.nal_hrd_parameters.cpb_cnt_minus1+1; k++)
       {
-        initial_cpb_removal_delay        = u_v(sps->vui_seq_parameters.nal_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay"        , buf);
-        initial_cpb_removal_delay_offset = u_v(sps->vui_seq_parameters.nal_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay_offset" , buf);
+        initial_cpb_removal_delay        = read_u_v(sps->vui_seq_parameters.nal_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay"        , buf, &p_Dec->UsedBits);
+        initial_cpb_removal_delay_offset = read_u_v(sps->vui_seq_parameters.nal_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay_offset" , buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_BUFFERING_PERIOD_INFO
         printf("nal initial_cpb_removal_delay[%d]        = %d\n", k, initial_cpb_removal_delay);
@@ -1633,8 +1631,8 @@ void interpret_buffering_period_info( byte* payload, int size, VideoParameters *
     {
       for (k=0; k<sps->vui_seq_parameters.vcl_hrd_parameters.cpb_cnt_minus1+1; k++)
       {
-        initial_cpb_removal_delay        = u_v(sps->vui_seq_parameters.vcl_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay"        , buf);
-        initial_cpb_removal_delay_offset = u_v(sps->vui_seq_parameters.vcl_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay_offset" , buf);
+        initial_cpb_removal_delay        = read_u_v(sps->vui_seq_parameters.vcl_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay"        , buf, &p_Dec->UsedBits);
+        initial_cpb_removal_delay_offset = read_u_v(sps->vui_seq_parameters.vcl_hrd_parameters.initial_cpb_removal_delay_length_minus1+1, "SEI: initial_cpb_removal_delay_offset" , buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_BUFFERING_PERIOD_INFO
         printf("vcl initial_cpb_removal_delay[%d]        = %d\n", k, initial_cpb_removal_delay);
@@ -1696,7 +1694,7 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
   p_Dec->UsedBits = 0;
 
 
-#ifdef PRINT_PCITURE_TIMING_INFO
+#ifdef PRINT_PICTURE_TIMING_INFO
   printf("Picture timing SEI message\n");
 #endif
 
@@ -1724,9 +1722,9 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
     if ((active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag)||
       (active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag))
     {
-      cpb_removal_delay = u_v(cpb_removal_len, "SEI: cpb_removal_delay" , buf);
-      dpb_output_delay  = u_v(dpb_output_len,  "SEI: dpb_output_delay"  , buf);
-#ifdef PRINT_PCITURE_TIMING_INFO
+      cpb_removal_delay = read_u_v(cpb_removal_len, "SEI: cpb_removal_delay" , buf, &p_Dec->UsedBits);
+      dpb_output_delay  = read_u_v(dpb_output_len,  "SEI: dpb_output_delay"  , buf, &p_Dec->UsedBits);
+#ifdef PRINT_PICTURE_TIMING_INFO
       printf("cpb_removal_delay = %d\n",cpb_removal_delay);
       printf("dpb_output_delay  = %d\n",dpb_output_delay);
 #endif
@@ -1744,8 +1742,8 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
 
   if (picture_structure_present_flag)
   {
-    picture_structure = u_v(4, "SEI: pic_struct" , buf);
-#ifdef PRINT_PCITURE_TIMING_INFO
+    picture_structure = read_u_v(4, "SEI: pic_struct" , buf, &p_Dec->UsedBits);
+#ifdef PRINT_PICTURE_TIMING_INFO
     printf("picture_structure = %d\n",picture_structure);
 #endif
     switch (picture_structure)
@@ -1770,21 +1768,21 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
     }
     for (i=0; i<NumClockTs; i++)
     {
-      clock_time_stamp_flag = u_1("SEI: clock_time_stamp_flag"  , buf);
-#ifdef PRINT_PCITURE_TIMING_INFO
+      clock_time_stamp_flag = read_u_1("SEI: clock_time_stamp_flag"  , buf, &p_Dec->UsedBits);
+#ifdef PRINT_PICTURE_TIMING_INFO
       printf("clock_time_stamp_flag = %d\n",clock_time_stamp_flag);
 #endif
       if (clock_time_stamp_flag)
       {
-        ct_type               = u_v(2, "SEI: ct_type"               , buf);
-        nuit_field_based_flag = u_1(   "SEI: nuit_field_based_flag" , buf);
-        counting_type         = u_v(5, "SEI: counting_type"         , buf);
-        full_timestamp_flag   = u_1(   "SEI: full_timestamp_flag"   , buf);
-        discontinuity_flag    = u_1(   "SEI: discontinuity_flag"    , buf);
-        cnt_dropped_flag      = u_1(   "SEI: cnt_dropped_flag"      , buf);
-        nframes               = u_v(8, "SEI: nframes"               , buf);
+        ct_type               = read_u_v(2, "SEI: ct_type"               , buf, &p_Dec->UsedBits);
+        nuit_field_based_flag = read_u_1(   "SEI: nuit_field_based_flag" , buf, &p_Dec->UsedBits);
+        counting_type         = read_u_v(5, "SEI: counting_type"         , buf, &p_Dec->UsedBits);
+        full_timestamp_flag   = read_u_1(   "SEI: full_timestamp_flag"   , buf, &p_Dec->UsedBits);
+        discontinuity_flag    = read_u_1(   "SEI: discontinuity_flag"    , buf, &p_Dec->UsedBits);
+        cnt_dropped_flag      = read_u_1(   "SEI: cnt_dropped_flag"      , buf, &p_Dec->UsedBits);
+        nframes               = read_u_v(8, "SEI: nframes"               , buf, &p_Dec->UsedBits);
 
-#ifdef PRINT_PCITURE_TIMING_INFO
+#ifdef PRINT_PICTURE_TIMING_INFO
         printf("ct_type               = %d\n",ct_type);
         printf("nuit_field_based_flag = %d\n",nuit_field_based_flag);
         printf("full_timestamp_flag   = %d\n",full_timestamp_flag);
@@ -1794,10 +1792,10 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
 #endif
         if (full_timestamp_flag)
         {
-          seconds_value         = u_v(6, "SEI: seconds_value"   , buf);
-          minutes_value         = u_v(6, "SEI: minutes_value"   , buf);
-          hours_value           = u_v(5, "SEI: hours_value"     , buf);
-#ifdef PRINT_PCITURE_TIMING_INFO
+          seconds_value         = read_u_v(6, "SEI: seconds_value"   , buf, &p_Dec->UsedBits);
+          minutes_value         = read_u_v(6, "SEI: minutes_value"   , buf, &p_Dec->UsedBits);
+          hours_value           = read_u_v(5, "SEI: hours_value"     , buf, &p_Dec->UsedBits);
+#ifdef PRINT_PICTURE_TIMING_INFO
           printf("seconds_value = %d\n",seconds_value);
           printf("minutes_value = %d\n",minutes_value);
           printf("hours_value   = %d\n",hours_value);
@@ -1805,30 +1803,30 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
         }
         else
         {
-          seconds_flag          = u_1(   "SEI: seconds_flag" , buf);
-#ifdef PRINT_PCITURE_TIMING_INFO
+          seconds_flag          = read_u_1(   "SEI: seconds_flag" , buf, &p_Dec->UsedBits);
+#ifdef PRINT_PICTURE_TIMING_INFO
           printf("seconds_flag = %d\n",seconds_flag);
 #endif
           if (seconds_flag)
           {
-            seconds_value         = u_v(6, "SEI: seconds_value"   , buf);
-            minutes_flag          = u_1(   "SEI: minutes_flag" , buf);
-#ifdef PRINT_PCITURE_TIMING_INFO
+            seconds_value         = read_u_v(6, "SEI: seconds_value"   , buf, &p_Dec->UsedBits);
+            minutes_flag          = read_u_1(   "SEI: minutes_flag" , buf, &p_Dec->UsedBits);
+#ifdef PRINT_PICTURE_TIMING_INFO
             printf("seconds_value = %d\n",seconds_value);
             printf("minutes_flag  = %d\n",minutes_flag);
 #endif
             if(minutes_flag)
             {
-              minutes_value         = u_v(6, "SEI: minutes_value"   , buf);
-              hours_flag            = u_1(   "SEI: hours_flag" , buf);
-#ifdef PRINT_PCITURE_TIMING_INFO
+              minutes_value         = read_u_v(6, "SEI: minutes_value"   , buf, &p_Dec->UsedBits);
+              hours_flag            = read_u_1(   "SEI: hours_flag" , buf, &p_Dec->UsedBits);
+#ifdef PRINT_PICTURE_TIMING_INFO
               printf("minutes_value = %d\n",minutes_value);
               printf("hours_flag    = %d\n",hours_flag);
 #endif
               if(hours_flag)
               {
-                hours_value           = u_v(5, "SEI: hours_value"     , buf);
-#ifdef PRINT_PCITURE_TIMING_INFO
+                hours_value           = read_u_v(5, "SEI: hours_value"     , buf, &p_Dec->UsedBits);
+#ifdef PRINT_PICTURE_TIMING_INFO
                 printf("hours_value   = %d\n",hours_value);
 #endif
               }
@@ -1844,10 +1842,10 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
           else
             time_offset_length = 24;
           if (time_offset_length)
-            time_offset = i_v(time_offset_length, "SEI: time_offset"   , buf);
+            time_offset = read_i_v(time_offset_length, "SEI: time_offset"   , buf, &p_Dec->UsedBits);
           else
             time_offset = 0;
-#ifdef PRINT_PCITURE_TIMING_INFO
+#ifdef PRINT_PICTURE_TIMING_INFO
           printf("time_offset   = %d\n",time_offset);
 #endif
         }
@@ -1856,8 +1854,8 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
   }
 
   free (buf);
-#ifdef PRINT_PCITURE_TIMING_INFO
-#undef PRINT_PCITURE_TIMING_INFO
+#ifdef PRINT_PICTURE_TIMING_INFO
+#undef PRINT_PICTURE_TIMING_INFO
 #endif
 }
 
@@ -1889,23 +1887,23 @@ void interpret_frame_packing_arrangement_info( byte* payload, int size, VideoPar
   printf("Frame packing arrangement SEI message\n");
 #endif
 
-  seiFramePackingArrangement.frame_packing_arrangement_id = (unsigned int)ue_v( "SEI: frame_packing_arrangement_id", buf );
-  seiFramePackingArrangement.frame_packing_arrangement_cancel_flag = u_1( "SEI: frame_packing_arrangement_cancel_flag", buf );
+  seiFramePackingArrangement.frame_packing_arrangement_id = (unsigned int)read_ue_v( "SEI: frame_packing_arrangement_id", buf, &p_Dec->UsedBits );
+  seiFramePackingArrangement.frame_packing_arrangement_cancel_flag = read_u_1( "SEI: frame_packing_arrangement_cancel_flag", buf, &p_Dec->UsedBits );
 #ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
   printf("frame_packing_arrangement_id                 = %d\n", seiFramePackingArrangement.frame_packing_arrangement_id);
   printf("frame_packing_arrangement_cancel_flag        = %d\n", seiFramePackingArrangement.frame_packing_arrangement_cancel_flag);
 #endif
   if ( seiFramePackingArrangement.frame_packing_arrangement_cancel_flag == FALSE )
   {
-    seiFramePackingArrangement.frame_packing_arrangement_type = (unsigned char)u_v( 7, "SEI: frame_packing_arrangement_type", buf );
-    seiFramePackingArrangement.quincunx_sampling_flag         = u_1( "SEI: quincunx_sampling_flag", buf );
-    seiFramePackingArrangement.content_interpretation_type    = (unsigned char)u_v( 6, "SEI: content_interpretation_type", buf );
-    seiFramePackingArrangement.spatial_flipping_flag          = u_1( "SEI: spatial_flipping_flag", buf );
-    seiFramePackingArrangement.frame0_flipped_flag            = u_1( "SEI: frame0_flipped_flag", buf );
-    seiFramePackingArrangement.field_views_flag               = u_1( "SEI: field_views_flag", buf );
-    seiFramePackingArrangement.current_frame_is_frame0_flag   = u_1( "SEI: current_frame_is_frame0_flag", buf );
-    seiFramePackingArrangement.frame0_self_contained_flag     = u_1( "SEI: frame0_self_contained_flag", buf );
-    seiFramePackingArrangement.frame1_self_contained_flag     = u_1( "SEI: frame1_self_contained_flag", buf );
+    seiFramePackingArrangement.frame_packing_arrangement_type = (unsigned char)read_u_v( 7, "SEI: frame_packing_arrangement_type", buf, &p_Dec->UsedBits );
+    seiFramePackingArrangement.quincunx_sampling_flag         = read_u_1( "SEI: quincunx_sampling_flag", buf, &p_Dec->UsedBits );
+    seiFramePackingArrangement.content_interpretation_type    = (unsigned char)read_u_v( 6, "SEI: content_interpretation_type", buf, &p_Dec->UsedBits );
+    seiFramePackingArrangement.spatial_flipping_flag          = read_u_1( "SEI: spatial_flipping_flag", buf, &p_Dec->UsedBits );
+    seiFramePackingArrangement.frame0_flipped_flag            = read_u_1( "SEI: frame0_flipped_flag", buf, &p_Dec->UsedBits );
+    seiFramePackingArrangement.field_views_flag               = read_u_1( "SEI: field_views_flag", buf, &p_Dec->UsedBits );
+    seiFramePackingArrangement.current_frame_is_frame0_flag   = read_u_1( "SEI: current_frame_is_frame0_flag", buf, &p_Dec->UsedBits );
+    seiFramePackingArrangement.frame0_self_contained_flag     = read_u_1( "SEI: frame0_self_contained_flag", buf, &p_Dec->UsedBits );
+    seiFramePackingArrangement.frame1_self_contained_flag     = read_u_1( "SEI: frame1_self_contained_flag", buf, &p_Dec->UsedBits );
 #ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
     printf("frame_packing_arrangement_type    = %d\n", seiFramePackingArrangement.frame_packing_arrangement_type);
     printf("quincunx_sampling_flag            = %d\n", seiFramePackingArrangement.quincunx_sampling_flag);
@@ -1919,10 +1917,10 @@ void interpret_frame_packing_arrangement_info( byte* payload, int size, VideoPar
 #endif
     if ( seiFramePackingArrangement.quincunx_sampling_flag == FALSE && seiFramePackingArrangement.frame_packing_arrangement_type != 5 )
     {
-      seiFramePackingArrangement.frame0_grid_position_x = (unsigned char)u_v( 4, "SEI: frame0_grid_position_x", buf );
-      seiFramePackingArrangement.frame0_grid_position_y = (unsigned char)u_v( 4, "SEI: frame0_grid_position_y", buf );
-      seiFramePackingArrangement.frame1_grid_position_x = (unsigned char)u_v( 4, "SEI: frame1_grid_position_x", buf );
-      seiFramePackingArrangement.frame1_grid_position_y = (unsigned char)u_v( 4, "SEI: frame1_grid_position_y", buf );
+      seiFramePackingArrangement.frame0_grid_position_x = (unsigned char)read_u_v( 4, "SEI: frame0_grid_position_x", buf, &p_Dec->UsedBits );
+      seiFramePackingArrangement.frame0_grid_position_y = (unsigned char)read_u_v( 4, "SEI: frame0_grid_position_y", buf, &p_Dec->UsedBits );
+      seiFramePackingArrangement.frame1_grid_position_x = (unsigned char)read_u_v( 4, "SEI: frame1_grid_position_x", buf, &p_Dec->UsedBits );
+      seiFramePackingArrangement.frame1_grid_position_y = (unsigned char)read_u_v( 4, "SEI: frame1_grid_position_y", buf, &p_Dec->UsedBits );
 #ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
       printf("frame0_grid_position_x      = %d\n", seiFramePackingArrangement.frame0_grid_position_x);
       printf("frame0_grid_position_y      = %d\n", seiFramePackingArrangement.frame0_grid_position_y);
@@ -1930,14 +1928,14 @@ void interpret_frame_packing_arrangement_info( byte* payload, int size, VideoPar
       printf("frame1_grid_position_y      = %d\n", seiFramePackingArrangement.frame1_grid_position_y);
 #endif
     }
-    seiFramePackingArrangement.frame_packing_arrangement_reserved_byte = (unsigned char)u_v( 8, "SEI: frame_packing_arrangement_reserved_byte", buf );
-    seiFramePackingArrangement.frame_packing_arrangement_repetition_period = (unsigned int)ue_v( "SEI: frame_packing_arrangement_repetition_period", buf );
+    seiFramePackingArrangement.frame_packing_arrangement_reserved_byte = (unsigned char)read_u_v( 8, "SEI: frame_packing_arrangement_reserved_byte", buf, &p_Dec->UsedBits );
+    seiFramePackingArrangement.frame_packing_arrangement_repetition_period = (unsigned int)read_ue_v( "SEI: frame_packing_arrangement_repetition_period", buf, &p_Dec->UsedBits );
 #ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
     printf("frame_packing_arrangement_reserved_byte          = %d\n", seiFramePackingArrangement.frame_packing_arrangement_reserved_byte);
     printf("frame_packing_arrangement_repetition_period      = %d\n", seiFramePackingArrangement.frame_packing_arrangement_repetition_period);
 #endif
   }
-  seiFramePackingArrangement.frame_packing_arrangement_extension_flag = u_1( "SEI: frame_packing_arrangement_extension_flag", buf );
+  seiFramePackingArrangement.frame_packing_arrangement_extension_flag = read_u_1( "SEI: frame_packing_arrangement_extension_flag", buf, &p_Dec->UsedBits );
 #ifdef PRINT_FRAME_PACKING_ARRANGEMENT_INFO
   printf("frame_packing_arrangement_extension_flag          = %d\n", seiFramePackingArrangement.frame_packing_arrangement_extension_flag);
 #endif
@@ -1996,8 +1994,8 @@ void interpret_tone_mapping( byte* payload, int size, VideoParameters *p_Vid )
   buf->streamBuffer = payload;
   buf->frame_bitoffset = 0;
 
-  seiToneMappingTmp.tone_map_id = ue_v("SEI: tone_map_id", buf);
-  seiToneMappingTmp.tone_map_cancel_flag = (unsigned char) u_1("SEI: tone_map_cancel_flag", buf);
+  seiToneMappingTmp.tone_map_id = read_ue_v("SEI: tone_map_id", buf, &p_Dec->UsedBits);
+  seiToneMappingTmp.tone_map_cancel_flag = (unsigned char) read_u_1("SEI: tone_map_cancel_flag", buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_TONE_MAPPING
   printf("Tone-mapping SEI message\n");
@@ -2010,10 +2008,10 @@ void interpret_tone_mapping( byte* payload, int size, VideoParameters *p_Vid )
 
   if (!seiToneMappingTmp.tone_map_cancel_flag) 
   {
-    seiToneMappingTmp.tone_map_repetition_period  = ue_v(  "SEI: tone_map_repetition_period", buf);
-    seiToneMappingTmp.coded_data_bit_depth        = (unsigned char)u_v (8,"SEI: coded_data_bit_depth"      , buf);
-    seiToneMappingTmp.sei_bit_depth               = (unsigned char)u_v (8,"SEI: sei_bit_depth"             , buf);
-    seiToneMappingTmp.model_id                    = ue_v(  "SEI: model_id"                  , buf);
+    seiToneMappingTmp.tone_map_repetition_period  = read_ue_v(  "SEI: tone_map_repetition_period", buf, &p_Dec->UsedBits);
+    seiToneMappingTmp.coded_data_bit_depth        = (unsigned char)read_u_v (8,"SEI: coded_data_bit_depth"      , buf, &p_Dec->UsedBits);
+    seiToneMappingTmp.sei_bit_depth               = (unsigned char)read_u_v (8,"SEI: sei_bit_depth"             , buf, &p_Dec->UsedBits);
+    seiToneMappingTmp.model_id                    = read_ue_v(  "SEI: model_id"                  , buf, &p_Dec->UsedBits);
 
 #ifdef PRINT_TONE_MAPPING
     printf("tone_map_repetition_period = %d\n", seiToneMappingTmp.tone_map_repetition_period);
@@ -2027,16 +2025,16 @@ void interpret_tone_mapping( byte* payload, int size, VideoParameters *p_Vid )
 
     if (seiToneMappingTmp.model_id == 0) 
     { // linear mapping with clipping
-      seiToneMappingTmp.min_value   = u_v (32,"SEI: min_value", buf);
-      seiToneMappingTmp.max_value   = u_v (32,"SEI: min_value", buf);
+      seiToneMappingTmp.min_value   = read_u_v (32,"SEI: min_value", buf, &p_Dec->UsedBits);
+      seiToneMappingTmp.max_value   = read_u_v (32,"SEI: min_value", buf, &p_Dec->UsedBits);
 #ifdef PRINT_TONE_MAPPING
       printf("min_value = %d, max_value = %d\n", seiToneMappingTmp.min_value, seiToneMappingTmp.max_value);
 #endif
     }
     else if (seiToneMappingTmp.model_id == 1) 
     { // sigmoidal mapping
-      seiToneMappingTmp.sigmoid_midpoint = u_v (32,"SEI: sigmoid_midpoint", buf);
-      seiToneMappingTmp.sigmoid_width    = u_v (32,"SEI: sigmoid_width", buf);
+      seiToneMappingTmp.sigmoid_midpoint = read_u_v (32,"SEI: sigmoid_midpoint", buf, &p_Dec->UsedBits);
+      seiToneMappingTmp.sigmoid_width    = read_u_v (32,"SEI: sigmoid_width", buf, &p_Dec->UsedBits);
 #ifdef PRINT_TONE_MAPPING
       printf("sigmoid_midpoint = %d, sigmoid_width = %d\n", seiToneMappingTmp.sigmoid_midpoint, seiToneMappingTmp.sigmoid_width);
 #endif
@@ -2045,7 +2043,7 @@ void interpret_tone_mapping( byte* payload, int size, VideoParameters *p_Vid )
     { // user defined table mapping
       for (i=0; i<max_output_num; i++) 
       {
-        seiToneMappingTmp.start_of_coded_interval[i] = u_v((((seiToneMappingTmp.coded_data_bit_depth+7)>>3)<<3), "SEI: start_of_coded_interval"  , buf);
+        seiToneMappingTmp.start_of_coded_interval[i] = read_u_v((((seiToneMappingTmp.coded_data_bit_depth+7)>>3)<<3), "SEI: start_of_coded_interval"  , buf, &p_Dec->UsedBits);
 #ifdef PRINT_TONE_MAPPING // too long to print
         //printf("start_of_coded_interval[%d] = %d\n", i, seiToneMappingTmp.start_of_coded_interval[i]);
 #endif
@@ -2053,7 +2051,7 @@ void interpret_tone_mapping( byte* payload, int size, VideoParameters *p_Vid )
     }
     else if (seiToneMappingTmp.model_id == 3) 
     {  // piece-wise linear mapping
-      seiToneMappingTmp.num_pivots = u_v (16,"SEI: num_pivots", buf);
+      seiToneMappingTmp.num_pivots = read_u_v (16,"SEI: num_pivots", buf, &p_Dec->UsedBits);
 #ifdef PRINT_TONE_MAPPING
       printf("num_pivots = %d\n", seiToneMappingTmp.num_pivots);
 #endif
@@ -2064,8 +2062,8 @@ void interpret_tone_mapping( byte* payload, int size, VideoParameters *p_Vid )
 
       for (i=1; i < seiToneMappingTmp.num_pivots+1; i++) 
       {
-        seiToneMappingTmp.coded_pivot_value[i] = u_v( (((seiToneMappingTmp.coded_data_bit_depth+7)>>3)<<3), "SEI: coded_pivot_value", buf);
-        seiToneMappingTmp.sei_pivot_value[i] = u_v( (((seiToneMappingTmp.sei_bit_depth+7)>>3)<<3), "SEI: sei_pivot_value", buf);
+        seiToneMappingTmp.coded_pivot_value[i] = read_u_v( (((seiToneMappingTmp.coded_data_bit_depth+7)>>3)<<3), "SEI: coded_pivot_value", buf, &p_Dec->UsedBits);
+        seiToneMappingTmp.sei_pivot_value[i] = read_u_v( (((seiToneMappingTmp.sei_bit_depth+7)>>3)<<3), "SEI: sei_pivot_value", buf, &p_Dec->UsedBits);
 #ifdef PRINT_TONE_MAPPING
         printf("coded_pivot_value[%d] = %d, sei_pivot_value[%d] = %d\n", i, seiToneMappingTmp.coded_pivot_value[i], i, seiToneMappingTmp.sei_pivot_value[i]);
 #endif
@@ -2205,18 +2203,18 @@ void interpret_post_filter_hints_info( byte* payload, int size, VideoParameters 
 
   p_Dec->UsedBits = 0;
 
-  filter_hint_size_y = ue_v("SEI: filter_hint_size_y", buf); // interpret post-filter hint SEI here
-  filter_hint_size_x = ue_v("SEI: filter_hint_size_x", buf); // interpret post-filter hint SEI here
-  filter_hint_type   = u_v(2, "SEI: filter_hint_type", buf); // interpret post-filter hint SEI here
+  filter_hint_size_y = read_ue_v("SEI: filter_hint_size_y", buf, &p_Dec->UsedBits); // interpret post-filter hint SEI here
+  filter_hint_size_x = read_ue_v("SEI: filter_hint_size_x", buf, &p_Dec->UsedBits); // interpret post-filter hint SEI here
+  filter_hint_type   = read_u_v(2, "SEI: filter_hint_type", buf, &p_Dec->UsedBits); // interpret post-filter hint SEI here
 
   get_mem3Dint (&filter_hint, 3, filter_hint_size_y, filter_hint_size_x);
 
   for (color_component = 0; color_component < 3; color_component ++)
     for (cy = 0; cy < filter_hint_size_y; cy ++)
       for (cx = 0; cx < filter_hint_size_x; cx ++)
-        filter_hint[color_component][cy][cx] = se_v("SEI: filter_hint", buf); // interpret post-filter hint SEI here
+        filter_hint[color_component][cy][cx] = read_se_v("SEI: filter_hint", buf, &p_Dec->UsedBits); // interpret post-filter hint SEI here
 
-  additional_extension_flag = u_1("SEI: additional_extension_flag", buf); // interpret post-filter hint SEI here
+  additional_extension_flag = read_u_1("SEI: additional_extension_flag", buf, &p_Dec->UsedBits); // interpret post-filter hint SEI here
 
 #ifdef PRINT_POST_FILTER_HINT_INFO
   printf(" Post-filter hint SEI message\n");

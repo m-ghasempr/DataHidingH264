@@ -9,7 +9,7 @@
  *
  *  \author
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
- *      - Karsten Sühring                 <suehring@hhi.de>
+ *      - Karsten Suehring
  *      - Alexis Tourapis                 <alexismt@ieee.org>
  *
  ************************************************************************
@@ -40,6 +40,11 @@ static inline int imin(int a, int b)
   return ((a) < (b)) ? (a) : (b);
 }
 
+static inline int imin3(int a, int b, int c)
+{
+  return ((a) < (b)) ? imin(a, c) : imin(b, c);
+}
+
 static inline int imax(int a, int b)
 {
   return ((a) > (b)) ? (a) : (b);
@@ -52,7 +57,7 @@ static inline int imedian(int a,int b,int c)
     if (b > c) 
       return(b); // a > b > c
     else if (a > c) 
-	    return(c); // a > c > b
+      return(c); // a > c > b
     else 
       return(a); // c > a > b
   }
@@ -61,7 +66,7 @@ static inline int imedian(int a,int b,int c)
     if (a > c) 
       return(a); // b > a > c
     else if (b > c)
-	    return(c); // b > c > a
+      return(c); // b > c > a
     else
       return(b);  // c > b > a
   }
@@ -293,33 +298,21 @@ static inline int CheckCost(int64 mcost, int64 min_mcost)
 static inline void down_scale(distblk *pblkdistCost) 
 {
 #if JCOST_CALC_SCALEUP
-#if (IMGTYPE < 2)
   *pblkdistCost = (*pblkdistCost)>>LAMBDA_ACCURACY_BITS;
-#else
-  *pblkdistCost = (*pblkdistCost)/(1<<LAMBDA_ACCURACY_BITS);
-#endif
 #endif
 }
 
 static inline void up_scale(distblk *pblkdistCost) 
 {
 #if JCOST_CALC_SCALEUP
-#if (IMGTYPE < 2)
   *pblkdistCost = (*pblkdistCost)<<LAMBDA_ACCURACY_BITS;
-#else
-  *pblkdistCost = (*pblkdistCost)*(1<<LAMBDA_ACCURACY_BITS);
-#endif
 #endif
 }
 
 static inline distblk dist_scale(distblk blkdistCost) 
 {
 #if JCOST_CALC_SCALEUP
-#if (IMGTYPE < 2)
   return ((blkdistCost)<<LAMBDA_ACCURACY_BITS);
-#else
-  return ((blkdistCost) *((distblk) (1<<LAMBDA_ACCURACY_BITS));
-#endif
 #else
   return (blkdistCost);
 #endif
@@ -328,14 +321,36 @@ static inline distblk dist_scale(distblk blkdistCost)
 static inline int dist_down(distblk blkdistCost) 
 {
 #if JCOST_CALC_SCALEUP
-#if (IMGTYPE < 2)
   return ((int)((blkdistCost)>>LAMBDA_ACCURACY_BITS));
-#else
-  return ((int)(blkdistCost/((distblk) (1<<LAMBDA_ACCURACY_BITS))));
-#endif
 #else
   return ((int)blkdistCost);
 #endif
+}
+
+/*!
+************************************************************************
+* \brief
+*    calculate RoundLog2(uiVal)
+************************************************************************
+*/
+static inline int RoundLog2 (int iValue)
+{
+  int iRet = 0;
+  int iValue_square = iValue * iValue;
+  while ((1 << (iRet + 1)) <= iValue_square)
+    ++iRet;
+
+  iRet = (iRet + 1) >> 1;
+  return iRet;
+}
+
+static inline void free_pointer(void *pointer)
+{
+  if (pointer != NULL)
+  {
+    free(pointer);
+    pointer = NULL;
+  }
 }
 
 # if !(defined(WIN32) || defined(WIN64)) && (__STDC_VERSION__ < 199901L)

@@ -80,7 +80,10 @@ int estSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc)//, DataPartition *th
 
 int cmp(const void *arg1, const void *arg2)
 {
-  return (((levelDataStruct *)arg2)->levelDouble - ((levelDataStruct *)arg1)->levelDouble);
+  if(((levelDataStruct *)arg2)->levelDouble != ((levelDataStruct *)arg1)->levelDouble)
+    return (((levelDataStruct *)arg2)->levelDouble - ((levelDataStruct *)arg1)->levelDouble);
+  else
+    return (((levelDataStruct *)arg1)->coeff_ctr - ((levelDataStruct *)arg2)->coeff_ctr);
 }
 
 /*!
@@ -207,7 +210,6 @@ int est_CAVLC_bits (VideoParameters *p_Vid, int level_to_enc[16], int sign_to_en
     { 1,1}}
   };
 
-
   max_coeff_num = ( (block_type == CHROMA_DC) ? p_Vid->num_cdc_coeff : 
   ( (block_type == LUMA_INTRA16x16AC || block_type == CB_INTRA16x16AC || block_type == CR_INTRA16x16AC || block_type == CHROMA_AC) ? 15 : 16) );
 
@@ -251,22 +253,7 @@ int est_CAVLC_bits (VideoParameters *p_Vid, int level_to_enc[16], int sign_to_en
 
   if (!cdc)
   {
-    if (nnz < 2)
-    {
-      numcoeff_vlc = 0;
-    }
-    else if (nnz < 4)
-    {
-      numcoeff_vlc = 1;
-    }
-    else if (nnz < 8)
-    {
-      numcoeff_vlc = 2;
-    }
-    else 
-    {
-      numcoeff_vlc = 3;
-    }
+    numcoeff_vlc = (nnz < 2) ? 0 : ((nnz < 4) ? 1 : ((nnz < 8) ? 2 : 3));
   }
   else
   {
@@ -405,7 +392,7 @@ void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *lev
     nnz = predict_nnz_chroma(currMB, currMB->subblock_x >> 2, (currMB->subblock_y >> 2) + 4);
 
   for (coeff_ctr=0;coeff_ctr < coeff_num;coeff_ctr++)
-  {	 
+  { 
     levelTrellis[coeff_ctr] = 0;
 
     for(k=0; k < dataLevel->noLevels; k++)
@@ -432,7 +419,6 @@ void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *lev
   {
     //sort the coefficients based on their absolute value
     qsort(levelData, lastnonzero + 1, sizeof(levelDataStruct), cmp);
-
     dataLevel = &levelData[lastnonzero];
 
     for(coeff_ctr = lastnonzero; coeff_ctr >= 0; coeff_ctr--) // go over all coeff
@@ -445,18 +431,17 @@ void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *lev
 
       lagrAcc -= dataLevel->errLevel[dataLevel->noLevels-1];
       for(cstat=0; cstat<dataLevel->noLevels; cstat++) // go over all states of cur coeff k
-      {		
+      {
         level_to_enc[dataLevel->coeff_ctr] = dataLevel->level[cstat];
         lagr = lagrAcc + dataLevel->errLevel[cstat];
-
         lagr += lambda * est_CAVLC_bits( p_Vid, level_to_enc, sign_to_enc, nnz, block_type);
-
         if(cstat==0 || lagr<minlagr)
-        {		
-          minlagr = lagr;		
+        {
+          minlagr = lagr;
           bestcstat = cstat;
         }
       }
+
       lagrAcc += dataLevel->errLevel[bestcstat];
       level_to_enc[dataLevel->coeff_ctr] = dataLevel->level[bestcstat];
       dataLevel--;
@@ -479,7 +464,7 @@ void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *lev
 *    Initialize levelData 
 ****************************************************************************
 */
-void init_trellis_data_4x4_CAVLC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, LevelQuantParams **q_params_4x4,
+void init_trellis_data_4x4_CAVLC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, LevelQuantParams **q_params,
                                  const byte *p_scan, levelDataStruct *dataLevel, int type)
 {
   Slice *currSlice = currMB->p_Slice;
@@ -488,7 +473,7 @@ void init_trellis_data_4x4_CAVLC(Macroblock *currMB, int **tblock, int block_x, 
   int end_coeff_ctr = ( ( type == LUMA_4x4 ) ? 16 : 15 );
   int q_bits = Q_BITS + qp_per; 
   int q_offset = ( 1 << (q_bits - 1) );
-  int level, lowerInt, k;
+  int scaled_coeff, level, lowerInt, k;
   double err, estErr;
 
 
@@ -513,10 +498,11 @@ void init_trellis_data_4x4_CAVLC(Macroblock *currMB, int **tblock, int block_x, 
     {
       estErr = ((double) estErr4x4[qp_rem][j][i]) / currSlice->norm_factor_4x4;
 
-      dataLevel->levelDouble = iabs(*m7 * q_params_4x4[j][i].ScaleComp);
-      level = (dataLevel->levelDouble >> q_bits);
+      scaled_coeff = iabs(*m7) * q_params[j][i].ScaleComp;
+      dataLevel->levelDouble = scaled_coeff;
+      level = (scaled_coeff >> q_bits);
 
-      lowerInt = (((int)dataLevel->levelDouble - (level << q_bits)) < q_offset )? 1 : 0;
+      lowerInt = ((scaled_coeff - (level << q_bits)) < q_offset )? 1 : 0;
       
       dataLevel->level[0] = 0;
       if (level == 0 && lowerInt == 1)
@@ -542,14 +528,14 @@ void init_trellis_data_4x4_CAVLC(Macroblock *currMB, int **tblock, int block_x, 
 
       for (k = 0; k < dataLevel->noLevels; k++)
       {
-        err = (double)(dataLevel->level[k] << q_bits) - (double)dataLevel->levelDouble;
+        err = (double)(dataLevel->level[k] << q_bits) - (double)scaled_coeff;
         dataLevel->errLevel[k] = (err * err * estErr); 
       }
 
       if(dataLevel->noLevels == 1)
         dataLevel->pre_level = 0;
       else
-        dataLevel->pre_level = (iabs (*m7) * q_params_4x4[j][i].ScaleComp + q_params_4x4[j][i].OffsetComp) >> q_bits;
+        dataLevel->pre_level = (iabs (*m7) * q_params[j][i].ScaleComp + q_params[j][i].OffsetComp) >> q_bits;
       dataLevel->sign = isign(*m7);
     }
     dataLevel++;
@@ -563,14 +549,14 @@ void init_trellis_data_4x4_CAVLC(Macroblock *currMB, int **tblock, int block_x, 
 ****************************************************************************
 */
 void init_trellis_data_DC_CAVLC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, 
-                         LevelQuantParams *q_params_4x4, const byte *p_scan, 
+                         LevelQuantParams *q_params, const byte *p_scan, 
                          levelDataStruct *dataLevel)
 {
   Slice *currSlice = currMB->p_Slice;
   int i, j, coeff_ctr, end_coeff_ctr = 16;
   int q_bits   = Q_BITS + qp_per + 1; 
   int q_offset = ( 1 << (q_bits - 1) );
-  int level, lowerInt, k;
+  int scaled_coeff, level, lowerInt, k;
   int *m7;
   double err, estErr = (double) estErr4x4[qp_rem][0][0] / currSlice->norm_factor_4x4; // note that we could also use int64
 
@@ -592,10 +578,11 @@ void init_trellis_data_DC_CAVLC(Macroblock *currMB, int **tblock, int qp_per, in
     }
     else
     {
-      dataLevel->levelDouble = iabs(*m7 * q_params_4x4->ScaleComp);
-      level = (dataLevel->levelDouble >> q_bits);
+      scaled_coeff = iabs(*m7) * q_params->ScaleComp;
+      dataLevel->levelDouble = scaled_coeff;
+      level = (scaled_coeff >> q_bits);
 
-      lowerInt=( ((int)dataLevel->levelDouble - (level<<q_bits)) < q_offset )? 1 : 0;
+      lowerInt=( (scaled_coeff - (level<<q_bits)) < q_offset )? 1 : 0;
 
       dataLevel->level[0] = 0;    
       if (level == 0 && lowerInt == 1)
@@ -621,14 +608,14 @@ void init_trellis_data_DC_CAVLC(Macroblock *currMB, int **tblock, int qp_per, in
 
       for (k = 0; k < dataLevel->noLevels; k++)
       {
-        err = (double)(dataLevel->level[k] << q_bits) - (double)dataLevel->levelDouble;
+        err = (double)(dataLevel->level[k] << q_bits) - (double)scaled_coeff;
         dataLevel->errLevel[k] = (err * err * estErr); 
       }
 
       if(dataLevel->noLevels == 1)
         dataLevel->pre_level = 0;
       else
-        dataLevel->pre_level = (iabs (*m7) * q_params_4x4->ScaleComp + q_params_4x4->OffsetComp) >> q_bits;
+        dataLevel->pre_level = (iabs (*m7) * q_params->ScaleComp + q_params->OffsetComp) >> q_bits;
       dataLevel->sign = isign(*m7);
     }
     dataLevel++;
@@ -641,7 +628,7 @@ void init_trellis_data_DC_CAVLC(Macroblock *currMB, int **tblock, int qp_per, in
 *    Initialize levelData 
 ****************************************************************************
 */
-void init_trellis_data_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, LevelQuantParams **q_params_8x8, 
+void init_trellis_data_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, LevelQuantParams **q_params, 
                                  const byte *p_scan, levelDataStruct levelData[4][16])
 {
   Slice *currSlice = currMB->p_Slice;
@@ -650,7 +637,7 @@ void init_trellis_data_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_x, 
   int q_bits   = Q_BITS_8 + qp_per;
   int q_offset = ( 1 << (q_bits - 1) );
   double err, estErr;
-  int level, lowerInt, k;
+  int scaled_coeff, level, lowerInt, k;
   
   levelDataStruct *dataLevel = &levelData[0][0];  
 
@@ -678,10 +665,11 @@ void init_trellis_data_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_x, 
       {
         estErr = (double) estErr8x8[qp_rem][j][i] / currSlice->norm_factor_8x8;
 
-        dataLevel->levelDouble = iabs(*m7 * q_params_8x8[j][i].ScaleComp);
-        level = (dataLevel->levelDouble >> q_bits);
+        scaled_coeff = iabs(*m7) * q_params[j][i].ScaleComp;
+        dataLevel->levelDouble = scaled_coeff;
+        level = (scaled_coeff >> q_bits);
 
-        lowerInt = (((int)dataLevel->levelDouble - (level << q_bits)) < q_offset ) ? 1 : 0;
+        lowerInt = ((scaled_coeff - (level << q_bits)) < q_offset ) ? 1 : 0;
 
         dataLevel->level[0] = 0;
         if (level == 0 && lowerInt == 1)
@@ -716,14 +704,14 @@ void init_trellis_data_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_x, 
 
         for (k = 0; k < dataLevel->noLevels; k++)
         {
-          err = (double)(dataLevel->level[k] << q_bits) - (double)dataLevel->levelDouble;
+          err = (double)(dataLevel->level[k] << q_bits) - (double)scaled_coeff;
           dataLevel->errLevel[k] = err * err * estErr; 
         }
 
         if(dataLevel->noLevels == 1)
           dataLevel->pre_level = 0;
         else
-          dataLevel->pre_level = (iabs (*m7) * q_params_8x8[j][i].ScaleComp + q_params_8x8[j][i].OffsetComp) >> q_bits;
+          dataLevel->pre_level = (iabs (*m7) * q_params[j][i].ScaleComp + q_params[j][i].OffsetComp) >> q_bits;
         dataLevel->sign = isign(*m7);
       }
     }

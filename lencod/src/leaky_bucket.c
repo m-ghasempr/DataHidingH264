@@ -304,10 +304,10 @@ void calc_buffer(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   write_buffer(p_Inp, NumberLeakyBuckets, Rmin, Bmin, Fmin);
 
-  free(buffer_frame);
-  free(Rmin);
-  free(Bmin);
-  free(Fmin);
+  free_pointer(buffer_frame);
+  free_pointer(Rmin);
+  free_pointer(Bmin);
+  free_pointer(Fmin);
   return;
 }
 #endif

@@ -9,8 +9,9 @@
  *
  *  \author
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
- *      - Karsten Sühring          <suehring@hhi.de>
+ *      - Karsten Suehring
  *      - Alexis Michael Tourapis  <alexismt@ieee.org>
+ *      - Yuwen He                 <yhe@dolby.com>
  ***********************************************************************
  */
 #ifndef _MBUFFER_H_
@@ -111,10 +112,10 @@ typedef struct storable_picture
   int         chroma_shift_x;
   int         frame_mbs_only_flag;
   int         frame_cropping_flag;
-  int         frame_cropping_rect_left_offset;
-  int         frame_cropping_rect_right_offset;
-  int         frame_cropping_rect_top_offset;
-  int         frame_cropping_rect_bottom_offset;
+  int         frame_crop_left_offset;
+  int         frame_crop_right_offset;
+  int         frame_crop_top_offset;
+  int         frame_crop_bottom_offset;
 
   PictureStats p_stats;
   StatParameters stats;
@@ -127,6 +128,7 @@ typedef struct storable_picture
   int         anchor_pic_flag[2];
 #endif
   int  bInterpolated;
+  int  ref_pic_na[6];
 } StorablePicture;
 
 typedef StorablePicture *StorablePicturePtr;
@@ -183,13 +185,14 @@ typedef struct frame_store FrameStore;
 
 
 //! Decoded Picture Buffer
-struct decoded_picture_buffer
+typedef struct decoded_picture_buffer
 {
   VideoParameters *p_Vid;
   InputParameters *p_Inp;
   FrameStore  **fs;
   FrameStore  **fs_ref;
   FrameStore  **fs_ltref;
+  FrameStore  **fs_ilref;
   int           num_ref_frames;
   unsigned      size;
   unsigned      used_size;
@@ -204,9 +207,11 @@ struct decoded_picture_buffer
   int           init_done;
 
   FrameStore   *last_picture;
-};
+  int           layer_id;
+  unsigned      used_size_il;
 
-typedef struct decoded_picture_buffer DecodedPictureBuffer;
+  FrameFormat   storage_format;
+  }DecodedPictureBuffer;
 
 extern void             init_dpb                  (VideoParameters *p_Vid, DecodedPictureBuffer *dpb);
 extern void             free_dpb                  (DecodedPictureBuffer *p_Dpb);
@@ -232,13 +237,15 @@ extern void             fill_frame_num_gap        (VideoParameters *p_Vid, Frame
 extern ColocatedParams* alloc_colocated           (int size_x, int size_y,int mb_adaptive_frame_field_flag);
 extern void             free_colocated            (ColocatedParams* p);
 extern void             compute_colocated         (Slice *currSlice, StorablePicture **listX[6]);
+extern void             reorder_short_term(Slice *currSlice, DecodedPictureBuffer *p_Dpb, int cur_list, int picNumLX, int *refIdxLX);
 
 #if (MVC_EXTENSION_ENABLE)
 void update_ref_list(DecodedPictureBuffer *p_Dpb);
 void update_ltref_list(DecodedPictureBuffer *p_Dpb);
 void check_num_ref(DecodedPictureBuffer *p_Dpb);
+extern void replace_top_proc_pic_with_frame(DecodedPictureBuffer *p_Dpb, StorablePicture* p);
+extern void store_proc_picture_in_dpb(DecodedPictureBuffer *p_Dpb, StorablePicture* p, FrameFormat *output);
 #endif
 
-extern void ChangeLists(Slice *currSlice);
 #endif
 

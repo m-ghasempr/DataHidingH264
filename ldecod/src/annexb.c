@@ -14,21 +14,21 @@
 
 #include "global.h"
 #include "annexb.h"
-#include "memalloc.h"
+#include "memalloc.h" 
 #include "fast_memory.h"
 
 static const int IOBUFFERSIZE = 512*1024; //65536;
 
-void malloc_annex_b(VideoParameters *p_Vid)
+void malloc_annex_b(VideoParameters *p_Vid, ANNEXB_t **p_annex_b)
 {
-  if ( (p_Vid->annex_b = (ANNEXB_t *) calloc(1, sizeof(ANNEXB_t))) == NULL)
+  if ( ((*p_annex_b) = (ANNEXB_t *) calloc(1, sizeof(ANNEXB_t))) == NULL)
   {
     snprintf(errortext, ET_SIZE, "Memory allocation for Annex_B file failed");
     error(errortext,100);
   }
-  if ((p_Vid->annex_b->Buf = (byte*) malloc(p_Vid->nalu->max_size)) == NULL)
+  if (((*p_annex_b)->Buf = (byte*) malloc(p_Vid->nalu->max_size)) == NULL)
   {
-    error("GetAnnexbNALU: Buf", 101);
+    error("malloc_annex_b: Buf", 101);
   }
 }
 
@@ -44,12 +44,12 @@ void init_annex_b(ANNEXB_t *annex_b)
   annex_b->nextstartcodebytes = 0;
 }
 
-void free_annex_b(VideoParameters *p_Vid)
+void free_annex_b(ANNEXB_t **p_annex_b)
 {
-  free(p_Vid->annex_b->Buf);
-  p_Vid->annex_b->Buf = NULL;
-  free(p_Vid->annex_b);
-  p_Vid->annex_b = NULL;  
+  free((*p_annex_b)->Buf);
+  (*p_annex_b)->Buf = NULL;
+  free(*p_annex_b);
+  *p_annex_b = NULL;  
 }
 
 /*!
@@ -143,9 +143,8 @@ static inline int FindStartCode (unsigned char *Buf, int zeros_in_startcode)
  ************************************************************************
  */
 
-int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
+int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu, ANNEXB_t *annex_b)
 {
-  ANNEXB_t *annex_b = p_Vid->annex_b;
   int i;
   int info2 = 0, info3 = 0, pos = 0;
   int StartCodeFound = 0;
@@ -304,9 +303,8 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
  *    none
  ************************************************************************
  */
-void OpenAnnexBFile (VideoParameters *p_Vid, char *fn)
+void OpenAnnexBFile (char *fn, ANNEXB_t *annex_b)
 {
-  ANNEXB_t *annex_b = p_Vid->annex_b;
   if (NULL != annex_b->iobuffer)
   {
     error ("OpenAnnexBFile: tried to open Annex B file twice",500);
@@ -334,9 +332,8 @@ void OpenAnnexBFile (VideoParameters *p_Vid, char *fn)
  *    Closes the bit stream file
  ************************************************************************
  */
-void CloseAnnexBFile(VideoParameters *p_Vid)
+void CloseAnnexBFile(ANNEXB_t *annex_b)
 {
-  ANNEXB_t *annex_b = p_Vid->annex_b;
   if (annex_b->BitStreamFile != -1)
   {
     close(annex_b->BitStreamFile);
