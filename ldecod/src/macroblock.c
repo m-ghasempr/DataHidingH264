@@ -4726,7 +4726,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                       j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + mv_array[jf][ifx][1];
                   }
 
-                  j1 += list[ref_idx]->chroma_vector_adjustment;
+                  if (active_sps->chroma_format_idc == 1)
+                    j1 += list[ref_idx]->chroma_vector_adjustment;
 
                   ii0=max (0, min (i1/f1_x,   img->width_cr-1));
                   jj0=max (0, min (j1/f1_y,   max_y_cr));
@@ -4808,7 +4809,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                           j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + fw_mv_array[jf][ifx][1];
                       }
 
-                      j1 += listX[0+list_offset][fw_refframe]->chroma_vector_adjustment;
+                      if (active_sps->chroma_format_idc == 1)
+                        j1 += listX[0+list_offset][fw_refframe]->chroma_vector_adjustment;
                     
                       ii0=max (0, min (i1/f1_x,   img->width_cr-1));
                       jj0=max (0, min (j1/f1_y,   max_y_cr));
@@ -4841,7 +4843,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                         else
                           j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + bw_mv_array[jf][ifx][1];
                       }
-                      j1 += listX[1+list_offset][bw_refframe]->chroma_vector_adjustment;
+                      if (active_sps->chroma_format_idc == 1)
+                        j1 += listX[1+list_offset][bw_refframe]->chroma_vector_adjustment;
 
                       ii0=max (0, min (i1/f1_x,   img->width_cr-1));
                       jj0=max (0, min (j1/f1_y,   max_y_cr));
@@ -4883,7 +4886,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                         j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + fw_mv_array[jf][ifx][1];
                     }
 
-                    j1 += listX[0+list_offset][fw_refframe]->chroma_vector_adjustment;
+                    if (active_sps->chroma_format_idc == 1)
+                      j1 += listX[0+list_offset][fw_refframe]->chroma_vector_adjustment;
 
                     ii0=max (0, min (i1/f1_x,   img->width_cr-1));
                     jj0=max (0, min (j1/f1_y,   max_y_cr));
@@ -4914,7 +4918,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                         j1=((img->pix_c_y-img->mb_cr_size_y)/2 + jj + joff)*f1_y + bw_mv_array[jf][ifx][1];
                     }
 
-                    j1 += listX[1+list_offset][bw_refframe]->chroma_vector_adjustment;
+                    if (active_sps->chroma_format_idc == 1)
+                      j1 += listX[1+list_offset][bw_refframe]->chroma_vector_adjustment;
 
                     ii0=max (0, min (i1/f1_x,   img->width_cr-1));
                     jj0=max (0, min (j1/f1_y,   max_y_cr));

@@ -1,5 +1,11 @@
+Changes in Version JM 10.1 (since JM 10.0)
+------------------------------------------
+- encoder/decoder: apply chroma motion vector adjustment only for 4:2:0 (SZ/KS)
+- encoder: write vlc run if last mb is skipped ()
+
+
 Changes in Version JM 10.0 (since JM 9.8)
-------------------------------------
+-----------------------------------------
 - encoder: simplified UMHexagonS fast motion estimation [JVT-P021] (XY)
 - encoder: EPZS fast motion estimation [JVT-P026] (AT)
 - encoder: fix reference picture reordering problem (AT)
@@ -1094,6 +1100,7 @@ SeS	Sergey A. Sablin	sergey@elecard.net.ru
 SSu	Shijun Sun		ssun@sharplabs.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
 SY      Steve Yao               steveyao@sandvideo.com
+SZ      Steve Zeng              stevezeng@rogers.com
 TH      Till Hallbach           halbach@tele.ntnu.no
 THi	Tobias Hinz		hinz@hhi.de
 TK      Thomas Kunlin           thomas.kunlin@st.com
@@ -1118,6 +1125,7 @@ YH	Yu-Wen Huang		YW_Huang@mtk.com.tw
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             wyk@ieee.org
+YX      Yanjun Xu               yxu@sarnoff.com
 ZH	Zhou Heng		zhou_heng@yahoo.com
 ZL      Li Zhang                zhangli@jdl.ac.cn
 ZX      Z. Xue                  jon_xz@yahoo.com

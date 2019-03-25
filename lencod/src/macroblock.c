@@ -1605,7 +1605,8 @@ void OneComponentChromaPrediction4x4 (int*        mpred,      //!< array to stor
       ii   = (i + img->opix_c_x)*f1_x + mvb[0];
       jj   = jpos + mvb[1];
 
-      jj  += list[ref]->chroma_vector_adjustment;
+      if (active_sps->chroma_format_idc == 1)
+        jj  += list[ref]->chroma_vector_adjustment;
 
       ii0  = Clip3 (0, max_x_cr, ii/f1_x);
       jj0  = Clip3 (0, max_y_cr, jj/f1_y);
@@ -2548,7 +2549,7 @@ int writeMBLayer (int rdopt, int *coeff_rate)
         img->nz_coeff [img->current_mb_nr][i][j]=0;
 
 
-    if(img->current_mb_nr == (int)img->PicSizeInMbs)
+    if(FmoGetNextMBNr(img->current_mb_nr) == -1 && img->cod_counter>0)
     {
       // Put out run
       currSE->value1  = img->cod_counter;
