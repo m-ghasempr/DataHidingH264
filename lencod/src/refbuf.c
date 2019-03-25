@@ -14,176 +14,58 @@
 
 #include "refbuf.h"
 
-/*!
- ************************************************************************
- * \brief
- *    Reference buffer write routines
- ************************************************************************
- */
-void PutPel_14 (pel_t **Pic, int y, int x, pel_t val)
-{
-  Pic [y][x] = val;
-}
-
-void PutPel_11 (pel_t *Pic, int pel_pos, pel_t val)
-{
-  Pic [pel_pos] = val;
-}
-
-/*!
- ************************************************************************
- * \note
- *    The following functions returning line are NOT reentrant!  Use a buffer
- *    provided by the caller to change that (but it costs a memcpy()...
- ************************************************************************
- */
-static pel_t line[16];
-
-pel_t *FastLine16Y_11 (pel_t *Pic, int y, int x, int height, int width)
-{
-  return &Pic [y*width+x];
-}
-
-
-pel_t *UMVLine16Y_11 (pel_t *Pic, int y, int x, int height, int width)
-{
-  int i, maxx;
-  pel_t *Picy;
-
-  Picy = &Pic [max(0,min(height-1,y)) * width];
-
-  if (x < 0) {                    // Left edge ?
-
-    maxx = min(0,x+16);
-    for (i = x; i < maxx; i++)
-      line[i-x] = Picy [0];       // Replicate left edge pixel
-
-    maxx = x+16;
-    for (i = 0; i < maxx; i++)    // Copy non-edge pixels
-      line[i-x] = Picy [i];
-  }
-  else if (x > width-16)  {  // Right edge ?
-
-    maxx = width;
-    for (i = x; i < maxx; i++)
-      line[i-x] = Picy [i];       // Copy non-edge pixels
-
-    maxx = x+16;
-    for (i = max(width,x); i < maxx; i++)
-      line[i-x] = Picy [width-1];  // Replicate right edge pixel
-  }
-  else                            // No edge
-    return &Picy [x];
-
-  return line;
-}
-
-
-pel_t *FastLineX (int dummy, pel_t* Pic, int y, int x, int height, int width)
-{
-  return Pic + y*width + x;
-}
-
-static pel_t umv_line[2][16];
-
-pel_t *UMVLineX_impl (int size, pel_t* Pic, int y, int x, int height, int width, int line_idx)
-{
-  int i;
-  pel_t *Picy;
-
-  Picy = Pic + max(0,min(height-1,y)) * width;
-
-  if (x < 0)                            // Left edge
-  {   
-    for (i = x; i < min(0,x+size); i++)
-    {
-      umv_line[line_idx][i-x] = Picy [0];             // Replicate left edge pixel
-    }
-
-    memcpy(&umv_line[line_idx][min(-x,15)],Picy,max(x+size,0) * sizeof(pel_t)); // Copy non-edge pixels
-  }
-  else if (x > width-size)         // Right edge
-  {
-    memcpy(umv_line[line_idx],&Picy[x], max((width - x),0) * sizeof(pel_t)); // Copy non-edge pixels
-    for (i = max(width,x); i < x+size; i++)
-    {
-      umv_line[line_idx][i-x] = Picy [width-1];  // Replicate right edge pixel
-    }
-  }
-  else                                  // No edge
-  {
-    return Picy + x;
-  }
-
-  return umv_line[line_idx];
-}
-
-pel_t *UMVLineX (int size, pel_t* Pic, int y, int x, int height, int width)
-{
-  return UMVLineX_impl (size, Pic, y, x, height, width, 0);
-}
-
-pel_t *UMVLineX2 (int size, pel_t* Pic, int y, int x, int height, int width)
-{
-  return UMVLineX_impl (size, Pic, y, x, height, width, 1);
-}
-
 
 /*!
  ************************************************************************
  * \brief
- *    Reference buffer, 1/4 pel
+ *    Yields a pel line _pointer_ from one of the 16 sub-images
+ *    Input does not require subpixel image indices
  ************************************************************************
  */
-pel_t UMVPelY_14 (pel_t **Pic, int y, int x, int height4, int width4)
-{
-  int ypos = (y < 0 ? y&3 : (y >  height4 ? height4+(y&3) : y));
-  int xpos = (x < 0 ? x&3 : (x >  width4 ? width4+(x&3) : x));
-
-  return Pic [ypos][xpos];
+imgpel *FastLine4X (imgpel ****Pic, int y, int x) {
+  return &(Pic[(y & 0x03)][(x & 0x03)][y >> 2][x >> 2]);
 }
-
-pel_t FastPelY_14 (pel_t **Pic, int y, int x, int height, int width)
-{
-  return Pic [y][x];
-}
-
-
-
-pel_t *FastLine4X (pel_t **Pic, int y, int x, int height, int width)
-{
-  return &Pic [y][x];
-}
-
-static pel_t line4[2][64];
 
 /*!
  ************************************************************************
  * \brief
- *    Reference buffer, 1/4 pel
+ *    Yields a pel line _pointer_ from one of the 16 sub-images
+ *    Input does not require subpixel image indices
  ************************************************************************
  */
-pel_t *UMVLine4X_impl (pel_t **Pic, int y, int x, int height4, int width4, int line_idx)
-{
-  int i, xx;
+imgpel *UMVLine4X (imgpel ****Pic, int y, int x) {
+  int xpos = iClip3( 0, width_pad , x >> 2);
+  int ypos = iClip3( 0, height_pad, y >> 2);
 
-  int xpos, ypos = (y < 0 ? y&3 : (y >  height4 ? height4+(y&3) : y));
-
-  for (i=0; i< 64; i+=4)
-  {
-    xx = x + i;
-    xpos = (xx < 0 ? (xx) &3 : ((xx) >  width4 ? width4+((xx) &3) : (xx) ));
-    line4[line_idx][i] = Pic [ypos][xpos];
-  }
-  return line4[line_idx];
+  return &(Pic[(y & 0x03)][(x & 0x03)][ypos][xpos]);
 }
 
-pel_t *UMVLine4X (pel_t **Pic, int y, int x, int height4, int width4)
-{
-  return UMVLine4X_impl (Pic, y, x, height4, width4, 0);
+/*!
+ ************************************************************************
+ * \brief
+ *    Yields a pel line _pointer_ from one of the 16 (4:4:4), 32 (4:2:2),
+ *    or 64 (4:2:0) sub-images
+ *    Input does not require subpixel image indices
+ ************************************************************************
+ */
+imgpel *UMVLine8X_chroma (imgpel ****Pic, int y, int x) {
+  int xpos  = iClip3 (0, width_pad_cr , x >> chroma_shift_x); 
+  int ypos  = iClip3 (0, height_pad_cr, y >> chroma_shift_y);
+  
+  return &(Pic[y & chroma_mask_mv_y][x & chroma_mask_mv_x][ypos][xpos]);
 }
 
-pel_t *UMVLine4X2 (pel_t **Pic, int y, int x, int height4, int width4)
-{
-  return UMVLine4X_impl (Pic, y, x, height4, width4, 1);
+/*!
+ ************************************************************************
+ * \brief
+ *    Yields a pel line _pointer_ from one of the 16 (4:4:4), 32 (4:2:2),
+ *    or 64 (4:2:0) sub-images
+ *    Input does not require subpixel image indices
+ ************************************************************************
+ */
+imgpel *FastLine8X_chroma (imgpel ****Pic, int y, int x) {
+	return &(Pic[y & chroma_mask_mv_y][x & chroma_mask_mv_x][y >> chroma_shift_y][x >> chroma_shift_x]);
 }
+
+
+

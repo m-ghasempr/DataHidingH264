@@ -369,17 +369,17 @@ void biari_init_context (struct img_par* img, BiContextTypePtr ctx, const int* i
 {
   int pstate;
 
-  pstate = ((ini[0]* max(0,img->qp) )>>4) + ini[1];
-  pstate = min (max ( 1, pstate), 126);
+  pstate = ((ini[0]* imax(0,img->qp) )>>4) + ini[1];
+  pstate = iClip3(1, 126, pstate);
 
   if ( pstate >= 64 )
   {
-    ctx->state  = pstate - 64;
+    ctx->state  = (unsigned short) (pstate - 64);
     ctx->MPS    = 1;
   }
   else
   {
-    ctx->state  = 63 - pstate;
+    ctx->state  = (unsigned short) (63 - pstate);
     ctx->MPS    = 0;
   }
 }

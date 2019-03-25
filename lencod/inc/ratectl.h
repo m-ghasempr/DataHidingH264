@@ -18,129 +18,63 @@
 #ifndef _RATE_CTL_H_
 #define _RATE_CTL_H_
 
+/* generic rate control variables */
+typedef struct {
+  // RC flags
+  int TopFieldFlag;
+  int FieldControl;
+  int FieldFrame;
+  int NoGranularFieldRC;
+  // bits stats
+  int NumberofHeaderBits; 
+  int NumberofTextureBits;
+  int NumberofBasicUnitHeaderBits;
+  int NumberofBasicUnitTextureBits;  
+  // frame stats
+  int NumberofCodedBFrame; 
+  int NumberofCodedPFrame;
+  int NumberofGOP;
+  int TotalQpforPPicture;
+  int NumberofPPicture;
+  // MAD stats
+  int64  TotalMADBasicUnit;
+  int   *MADofMB;
+  // buffer and budget
+  int64 CurrentBufferFullness; //LIZG 25/10/2002
+  int   RemainingBits;
+  // bit allocations for RC_MODE_3
+  int   RCPSliceBits;
+  int   RCISliceBits;
+  int   RCBSliceBits[RC_MAX_TEMPORAL_LEVELS];
+  int   temporal_levels;
+  int   hierNb[RC_MAX_TEMPORAL_LEVELS];
+  int   NPslice;
+  int   NIslice;
+} rc_generic;
 
-#define MIN(a,b)  (((a)<(b)) ? (a) : (b))//LIZG 28/10/2002
-#define MAX(a,b)  (((a)<(b)) ? (b) : (a))//LIZG 28/10/2002
+// macroblock activity 
+int    diffy[16][16];
+int    qp_mbaff[2][2], qp_mbaff[2][2];
+int    delta_qp_mbaff[2][2], delta_qp_mbaff[2][2];
 
-double bit_rate; 
-double frame_rate;
-double GAMMAP;//LIZG, JVT019r1
-double BETAP;//LIZG, JVT019r1
-
-int RC_MAX_QUANT;//LIZG 28/10/2002
-int RC_MIN_QUANT;//LIZG 28/10/2002
-
-double BufferSize; //LIZG 25/10/2002
-double GOPTargetBufferLevel;
-double CurrentBufferFullness; //LIZG 25/10/2002
-double TargetBufferLevel;//LIZG 25/10/2002
-double PreviousBit_Rate;//LIZG  25/10/2002
-double AWp;
-double AWb;
-int MyInitialQp;
-int PAverageQp;
-
-/*LIZG JVT50V2 distortion prediction model*/
-/*coefficients of the prediction model*/
-double PreviousPictureMAD;
-double MADPictureC1;
-double MADPictureC2;
-double PMADPictureC1;
-double PMADPictureC2;
-/* LIZG JVT50V2 picture layer MAD */
-Boolean PictureRejected[21];
-double PPictureMAD[21];
-double PictureMAD[21];
-double ReferenceMAD[21];
-
-/*quadratic rate-distortion model*/
-Boolean   m_rgRejected[21];
-double  m_rgQp[21];
-double m_rgRp[21];
-double m_X1;
-double m_X2;
-int m_Qc;
-double m_Qstep;
-int m_Qp;
-int Pm_Qp;
-int PreAveMBHeader;
-int CurAveMBHeader;
-int PPreHeader;
-int PreviousQp1;
-int PreviousQp2;
-int NumberofBFrames;
-/*basic unit layer rate control*/
-int TotalFrameQP;
-int NumberofBasicUnit;
-int PAveHeaderBits1;
-int PAveHeaderBits2;
-int PAveHeaderBits3;
-int PAveFrameQP;
-int TotalNumberofBasicUnit;
-int CodedBasicUnit;
-double MINVALUE;
-double CurrentFrameMAD;
-double CurrentBUMAD;
-double TotalBUMAD;
-double PreviousFrameMAD;
-int m_Hp;
-int m_windowSize;
-int MADm_windowSize;
-int DDquant;
-int MBPerRow;
-double AverageMADPreviousFrame;
-int TotalBasicUnitBits;
-int QPLastPFrame;
-int QPLastGOP;
-//int MADn_windowSize;
-//int n_windowSize;
-
-double Pm_rgQp[20];
-double Pm_rgRp[20];
-double Pm_X1;
-double Pm_X2;
-int Pm_Hp;
-/* adaptive field/frame coding*/
-int FieldQPBuffer;
-int FrameQPBuffer;
-int FrameAveHeaderBits;
-int FieldAveHeaderBits;
-double *BUPFMAD;
-double *BUCFMAD;
-double *FCBUCFMAD;
-double *FCBUPFMAD;
-
-Boolean GOPOverdue;
-
-
-//comput macroblock activity for rate control
-int diffy[16][16];
-int diffyy[16][16];
-int diffy8[16][16];//for P8X8 mode 
-
-extern int64 Iprev_bits;
-extern int64 Pprev_bits;
-
-void rc_alloc(void);
-void rc_free(void);
-
-void rc_init_seq(void);
-void rc_init_GOP(int np, int nb);
-void rc_update_pict_frame(int nbits);
-void rc_init_pict(int fieldpic,int topfield, int targetcomputation);
-void rc_update_pict(int nbits);
-void setbitscount(int nbits);
-
-int updateQuantizationParameter(int topfield);
-void updateRCModel (void);
-void updateMADModel (void);
-Boolean skipThisFrame (void);
-void RCModelEstimator (int n_windowSize);
-void MADModelEstimator (int n_windowSize);
-double calc_MAD(void);
-double ComputeFrameMAD(void);
-int Qstep2QP( double Qstep );
+// generic functions
+int    Qstep2QP( double Qstep );
 double QP2Qstep( int QP );
+int    calc_MAD( void );
+double ComputeFrameMAD( void );
+void   update_rc(Macroblock *currMB, short best_mode);
+
+// rate control functions
+// init/copy
+void generic_alloc( rc_generic **prc );
+void generic_free( rc_generic **prc );
+void copy_rc_generic( rc_generic *dst, rc_generic *src );
+
+// rate control CURRENT pointers
+rc_generic   *generic_RC;
+// rate control object pointers for RDPictureDecision buffering...
+rc_generic   *generic_RC_init,   *generic_RC_best;
+
 
 #endif
 

@@ -146,7 +146,7 @@ int se_v (char *tracestring, int value, Bitstream *bitstream)
  *
  *************************************************************************************
  */
-int u_1 (char *tracestring, int value, Bitstream *bitstream)
+Boolean u_1 (char *tracestring, int value, Bitstream *bitstream)
 {
   SyntaxElement symbol, *sym=&symbol;
 
@@ -163,7 +163,7 @@ int u_1 (char *tracestring, int value, Bitstream *bitstream)
   trace2out (sym);
 #endif
 
-  return (sym->len);
+  return ((Boolean) sym->len);
 }
 
 
@@ -268,7 +268,7 @@ void se_linfo(int se, int dummy, int *len,int *info)
   {
     sign=1;
   }
-  n=absm(se) << 1;
+  n=iabs(se) << 1;
 
   //  n+1 is the number in the code table.  Based on this we find length and info
   
@@ -348,7 +348,7 @@ void levrun_linfo_c2x2(int level,int run,int *len,int *info)
   {
     sign=1;
   }
-  levabs=absm(level);
+  levabs=iabs(level);
   if (levabs <= LEVRUN[run])
   {
     n=NTAB[levabs-1][run]+1;
@@ -408,7 +408,7 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
   else
     sign=0;
 
-  levabs=absm(level);
+  levabs=iabs(level);
   if (levabs <= LEVRUN[run])
   {
     n=NTAB[levabs-1][run]+1;
@@ -474,7 +474,7 @@ void levrun_linfo_intra(int level,int run,int *len,int *info)
   else
     sign=0;
 
-  levabs=absm(level);
+  levabs=iabs(level);
   if (levabs <= LEVRUN[run])
   {
     n=NTAB[levabs-1][run]+1;
@@ -1130,31 +1130,57 @@ int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart)
  *    write VLC for Coeff Level (VLC1)
  ************************************************************************
  */
-int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPart)
+int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPart, int profile_idc)
 {
-  int level, levabs, sign;
-
-  level = se->value1;
-  levabs = absm(level);
-  sign = (level < 0 ? 1 : 0);
-
+  int level = se->value1; 
+  int levabs = iabs(level);
+  int sign = (level < 0 ? 1 : 0);
   
   if (levabs < 8)
   {
     se->len = levabs * 2 + sign - 1;
     se->inf = 1;
   }
-  else if (levabs < 8+8)
+  else if (levabs < 16) //8+8)
   {
     // escape code1
-    se->len = 14 + 1 + 4;
+    //se->len = 14 + 1 + 4;
+    se->len = 19;
     se->inf = (1 << 4) | ((levabs - 8) << 1) | sign;
   }
   else
   {
+    int iLength = 28, numPrefix = 15; 
+    int iCodeword, addbit, offset;
+    int levabsm16 = levabs-16;
+
     // escape code2
-    se->len = 14 + 2 + 12;
-    se->inf = (0x1 << 12) | ((levabs - 16)<< 1) | sign;
+    if ((levabsm16) > (1<<11))
+    {
+      numPrefix++;
+      while ((levabsm16) > (1<<(numPrefix-3))-4096)
+      {
+        numPrefix++;
+      }
+    }
+
+    addbit  = numPrefix - 15;
+    iLength += (addbit<<1);
+    offset = (2048<<addbit)-2048;
+
+    iCodeword = (1<<(12+addbit))|((levabsm16)<<1)|sign;
+
+    /* Assert to make sure that the code fits in the VLC */
+    /* make sure that we are in High Profile to represent level_prefix > 15 */
+    if (numPrefix > 15 && profile_idc < 100)
+    {
+      //error( "level_prefix must be <= 15 except in High Profile\n",  1000 );
+      se->len = 0x0000FFFF; // This can be some other big number
+      se->inf = iCodeword;
+      return (se->len);
+    }
+    se->len = iLength;
+    se->inf = iCodeword;
   }
 
 
@@ -1180,14 +1206,15 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPar
  *    write VLC for Coeff Level
  ************************************************************************
  */
-int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *this_dataPart)
+int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *this_dataPart, int profile_idc)
 {
+  int addbit, offset;
   int iCodeword;
   int iLength;
 
   int level = se->value1;
 
-  int levabs = absm(level);
+  int levabs = iabs(level);
   int sign = (level < 0 ? 1 : 0);  
 
   int shift = vlc-1;
@@ -1205,8 +1232,34 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
   }
   else
   {
+    int levabsesc = levabs-escape;
+
     iLength = 28;
-    iCodeword = (1<<12)|((levabs-escape)<<1)|sign;
+    numPrefix = 15;
+
+    if ((levabsesc) > (1<<11))
+    {
+      numPrefix++;
+      while ((levabsesc) > (1<<(numPrefix-3))-4096)
+      {
+        numPrefix++;
+      }
+    }
+
+    addbit  = numPrefix - 15;
+    iLength += (addbit<<1);
+    offset = (2048<<addbit)-2048;
+
+    iCodeword = (1<<(12+addbit))|((levabsesc-offset)<<1)|sign;
+    /* Assert to make sure that the code fits in the VLC */
+    /* make sure that we are in High Profile to represent level_prefix > 15 */
+    if (numPrefix > 15 &&  profile_idc < 100)
+    {
+      //error( "level_prefix must be <= 15 except in High Profile\n",  1000 );
+      se->len = 0x0000FFFF; // This can be some other big number
+      se->inf = iCodeword;  
+      return (se->len);
+    }
   }
   se->len = iLength;
   se->inf = iCodeword;

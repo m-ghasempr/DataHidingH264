@@ -365,8 +365,8 @@ int RTPReadPacket (RTPpacket_t *p, FILE *bits)
       printf ("Errors reported by DecomposePacket(), exit\n");
       exit (-700);
     }
-    assert (p->pt == H26LPAYLOADTYPE);
-    assert (p->ssrc == 0x12345678);
+    assert (p->pt == H264PAYLOADTYPE);
+    assert (p->ssrc == H264SSRC);
   return p->packlen;
 }
 

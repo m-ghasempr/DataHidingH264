@@ -35,12 +35,17 @@ InputParameters configinput;
 
 
 #ifdef INCLUDED_BY_CONFIGFILE_C
-
+// Mapping_Map Syntax:
+// {NAMEinConfigFile,  &configinput.VariableName, Type, InitialValue, LimitType, MinLimit, MaxLimit}
+// Types : {0:int, 1:text, 2: double}
+// LimitType: {0:none, 1:both, 2:minimum, 3: QP based}
+// We could separate this based on types to make it more flexible and allow also defaults for text types.
 Mapping Map[] = {
     {"ProfileIDC",               &configinput.ProfileIDC,                   0,   (double) PROFILE_IDC,      0,  0.0,              0.0              },
     {"LevelIDC",                 &configinput.LevelIDC,                     0,   (double) LEVEL_IDC,        0,  0.0,              0.0              },
     {"FrameRate",                &configinput.FrameRate,                    2,   (double) INIT_FRAME_RATE,  1,  0.0,            100.0              },
     {"IDRIntraEnable",           &configinput.idr_enable,                   0,   0.0,                       1,  0.0,              1.0              },
+    {"ResendSPS",                &configinput.ResendSPS,                    0,   0.0,                       1,  0.0,              1.0              },
     {"StartFrame",               &configinput.start_frame,                  0,   0.0,                       2,  0.0,              0.0              },
     {"IntraPeriod",              &configinput.intra_period,                 0,   0.0,                       2,  0.0,              0.0              },
     {"EnableOpenGOP",            &configinput.EnableOpenGOP,                0,   0.0,                       1,  0.0,              1.0              },
@@ -49,7 +54,6 @@ Mapping Map[] = {
     {"QPPSlice",                 &configinput.qpN,                          0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP  },
     {"QPBSlice",                 &configinput.qpB,                          0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP  },
     {"FrameSkip",                &configinput.jumpd,                        0,   0.0,                       2,  0.0,              0.0              },
-    {"UseHadamard",              &configinput.hadamard,                     0,   0.0,                       1,  0.0,              2.0              },
     {"DisableSubpelME",          &configinput.DisableSubpelME,              0,   0.0,                       1,  0.0,              1.0              },
     {"SearchRange",              &configinput.search_range,                 0,   16.0,                      2,  0.0,              0.0              },
     {"NumberReferenceFrames",    &configinput.num_ref_frames,               0,   1.0,                       1,  1.0,             16.0              },
@@ -59,6 +63,8 @@ Mapping Map[] = {
     {"Log2MaxFNumMinus4",        &configinput.Log2MaxFNumMinus4,            0,   0.0,                       1, -1.0,             12.0              },
     {"Log2MaxPOCLsbMinus4",      &configinput.Log2MaxPOCLsbMinus4,          0,   2.0,                       1, -1.0,             12.0              },
     {"GenerateMultiplePPS",      &configinput.GenerateMultiplePPS,          0,   0.0,                       1,  0.0,              1.0              },
+    {"Generate_SEIVUI",          &configinput.Generate_SEIVUI,              0,   0.0,                       1,  0.0,              1.0              },    
+    {"SEIMessageText",           &configinput.SEIMessageText,               1,   0.0,                       0,  0.0,              0.0              },
     {"ResendPPS",                &configinput.ResendPPS,                    0,   0.0,                       1,  0.0,              1.0              },
     {"SourceWidth",              &configinput.img_width,                    0,   176.0,                     2, 16.0,              0.0              },
     {"SourceHeight",             &configinput.img_height,                   0,   144.0,                     2, 16.0,              0.0              },
@@ -74,6 +80,7 @@ Mapping Map[] = {
     {"DisposableP",              &configinput.DisposableP,                  0,   0.0,                       1,  0.0,              1.0              },
     {"DispPQPOffset",            &configinput.DispPQPOffset,                0,   0.0,                       0,-51.0,             51.0              },
     {"NumberBFrames",            &configinput.successive_Bframe,            0,   0.0,                       2,  0.0,              0.0              },
+    {"PReplaceBSlice",           &configinput.PReplaceBSlice,               0,   0.0,                       1,  0.0,              1.0              },
     {"BRefPicQPOffset",          &configinput.qpBRSOffset,                  0,   0.0,                       0,-51.0,             51.0              },
     {"DirectModeType",           &configinput.direct_spatial_mv_pred_flag,  0,   0.0,                       1,  0.0,              1.0              },
     {"DirectInferenceFlag",      &configinput.directInferenceFlag,          0,   0.0,                       1,  0.0,              1.0              },
@@ -119,6 +126,8 @@ Mapping Map[] = {
     {"ChangeQPStart",            &configinput.qp2start,                     0,   0.0,                       2,  0.0,              0.0              },
 #endif
     {"RDOptimization",           &configinput.rdopt,                        0,   0.0,                       1,  0.0,              3.0              },
+    {"CtxAdptLagrangeMult",      &configinput.CtxAdptLagrangeMult,          0,   0.0,                       1,  0.0,              1.0              },
+    {"FastCrIntraDecision",      &configinput.FastCrIntraDecision,          0,   0.0,                       1,  0.0,              1.0              },
     {"DisableThresholding",      &configinput.disthres,                     0,   0.0,                       1,  0.0,              1.0              },
     {"DisableBSkipRDO",          &configinput.nobskip,                      0,   0.0,                       1,  0.0,              1.0              },
     {"LossRateA",                &configinput.LossRateA,                    0,   0.0,                       2,  0.0,              0.0              },
@@ -132,7 +141,7 @@ Mapping Map[] = {
     {"LeakyBucketParamFile",     &configinput.LeakyBucketParamFile,         1,   0.0,                       0,  0.0,              0.0              },
 #endif
     {"PicInterlace",             &configinput.PicInterlace,                 0,   0.0,                       1,  0.0,              2.0              },
-    {"MbInterlace",              &configinput.MbInterlace,                  0,   0.0,                       1,  0.0,              2.0              },
+    {"MbInterlace",              &configinput.MbInterlace,                  0,   0.0,                       1,  0.0,              3.0              },
 
     {"IntraBottom",              &configinput.IntraBottom,                  0,   0.0,                       1,  0.0,              1.0              },
 
@@ -157,7 +166,8 @@ Mapping Map[] = {
     {"ExplicitHierarchyFormat",  &configinput.ExplicitHierarchyFormat,      1,   0.0,                       0,  0.0,              0.0              },
     {"ReferenceReorder",         &configinput.ReferenceReorder,             0,   0.0,                       1,  0.0,              1.0              },
     {"PocMemoryManagement",      &configinput.PocMemoryManagement,          0,   0.0,                       1,  0.0,              1.0              },
-
+    
+    //Bipredicting Motion Estimation parameters
     {"BiPredMotionEstimation",   &configinput.BiPredMotionEstimation,       0,   0.0,                       1,  0.0,              1.0              },
     {"BiPredMERefinements",      &configinput.BiPredMERefinements,          0,   0.0,                       1,  0.0,              5.0              },
     {"BiPredMESearchRange",      &configinput.BiPredMESearchRange,          0,   8.0,                       2,  0.0,              0.0              },
@@ -197,7 +207,15 @@ Mapping Map[] = {
     {"InitialQP",                &configinput.SeinitialQP,                  0,   0.0,                       3,  (double) MIN_QP,  (double) MAX_QP  },
     {"BasicUnit",                &configinput.basicunit,                    0,   0.0,                       2,  0.0,              0.0              },
     {"ChannelType",              &configinput.channel_type,                 0,   0.0,                       1,  0.0,              1.0              },
-
+    {"RCUpdateMode",             &configinput.RCUpdateMode,                 0,   0.0,                       1,  0.0,              4.0              },
+    {"RCISliceBitRatio",         &configinput.RCISliceBitRatio,             2,   1.0,                       1,  0.0,              1.0              },
+    {"RCBSliceBitRatio0",        &configinput.RCBSliceBitRatio[0],          2,   0.5,                       1,  0.0,              1.0              },
+    {"RCBSliceBitRatio1",        &configinput.RCBSliceBitRatio[1],          2,   0.25,                      1,  0.0,              1.0              },
+    {"RCBSliceBitRatio2",        &configinput.RCBSliceBitRatio[2],          2,   0.25,                      1,  0.0,              1.0              },
+    {"RCBSliceBitRatio3",        &configinput.RCBSliceBitRatio[3],          2,   0.25,                      1,  0.0,              1.0              },
+    {"RCBSliceBitRatio4",        &configinput.RCBSliceBitRatio[4],          2,   0.25,                      1,  0.0,              1.0              },
+    {"RCBoverPRatio",            &configinput.RCBoverPRatio,                2,   0.45,                      1,  0.0,              1000.0           },
+    {"RCIoverPRatio",            &configinput.RCIoverPRatio,                2,   3.80,                      1,  0.0,              1000.0           },
     // Q_Matrix
     {"QmatrixFile",              &configinput.QmatrixFile,                  1,   0.0,                       0,  0.0,              0.0              },
     {"ScalingMatrixPresentFlag", &configinput.ScalingMatrixPresentFlag,     0,   0.0,                       1,  0.0,              3.0              },
@@ -209,21 +227,26 @@ Mapping Map[] = {
     {"ScalingListPresentFlag5",  &configinput.ScalingListPresentFlag[5],    0,   0.0,                       1,  0.0,              3.0              },
     {"ScalingListPresentFlag6",  &configinput.ScalingListPresentFlag[6],    0,   0.0,                       1,  0.0,              3.0              },
     {"ScalingListPresentFlag7",  &configinput.ScalingListPresentFlag[7],    0,   0.0,                       1,  0.0,              3.0              },
-
     // Fast ME enable
-    {"UseFME",                   &configinput.FMEnable,                     0,   0.0,                       1,  0.0,              3.0              },
-    {"FMEDSR",                   &configinput.DynamicSearchRange,           0,   1.0,                       1,  0.0,              1.0              },//Dynamic Search Range. added by xxz
-    {"FMEScale",                 &configinput.FMEScale,                     0,   1.0,                       0,  0.0,              0.0              },//added by xxz
-    {"EPZSPattern",              &configinput.EPZSPattern,                  0,   2.0,                       1,  0.0,              3.0              },
-    {"EPZSDualRefinement",       &configinput.EPZSDual,                     0,   3.0,                       1,  0.0,              4.0              },
+    {"SearchMode",               &configinput.SearchMode,                   0,   0.0,                       1, -1.0,              3.0              },
+    // Parameters for UMHEX control
+    {"UMHexDSR",                 &configinput.UMHexDSR,                     0,   1.0,                       1,  0.0,              1.0              },
+    {"UMHexScale",               &configinput.UMHexScale,                   0,   1.0,                       0,  0.0,              0.0              },
+    // Parameters for EPZS control
+    {"EPZSPattern",              &configinput.EPZSPattern,                  0,   2.0,                       1,  0.0,              5.0              },
+    {"EPZSDualRefinement",       &configinput.EPZSDual,                     0,   3.0,                       1,  0.0,              6.0              },
     {"EPZSFixedPredictors",      &configinput.EPZSFixed,                    0,   2.0,                       1,  0.0,              2.0              },
     {"EPZSTemporal",             &configinput.EPZSTemporal,                 0,   1.0,                       1,  0.0,              1.0              },
     {"EPZSSpatialMem",           &configinput.EPZSSpatialMem,               0,   1.0,                       1,  0.0,              1.0              },
     {"EPZSMinThresScale",        &configinput.EPZSMinThresScale,            0,   0.0,                       0,  0.0,              0.0              },
-    {"EPZSMaxThresScale",        &configinput.EPZSMaxThresScale,            0,   1.0,                       0,  0.0,              0.0              },
+    {"EPZSMaxThresScale",        &configinput.EPZSMaxThresScale,            0,   2.0,                       0,  0.0,              0.0              },
     {"EPZSMedThresScale",        &configinput.EPZSMedThresScale,            0,   1.0,                       0,  0.0,              0.0              },
     {"EPZSSubPelME",             &configinput.EPZSSubPelME,                 0,   1.0,                       1,  0.0,              1.0              },
+    {"EPZSSubPelMEBiPred",       &configinput.EPZSSubPelMEBiPred,           0,   1.0,                       1,  0.0,              1.0              },
+    {"EPZSSubPelGrid",           &configinput.EPZSSubPelGrid,               0,   0.0,                       1,  0.0,              1.0              },
     {"EPZSSubPelThresScale",     &configinput.EPZSSubPelThresScale,         0,   2.0,                       0,  0.0,              0.0              },
+    
+    // Chroma QP Offset
     {"ChromaQPOffset",           &configinput.chroma_qp_index_offset,       0,   0.0,                       1,-51.0,             51.0              },
 
     // Fidelity Range Extensions
@@ -237,18 +260,21 @@ Mapping Map[] = {
     // Lossless Coding
     {"QPPrimeYZeroTransformBypassFlag", &configinput.lossless_qpprime_y_zero_flag,      0,   0.0,           1,  0.0,              1.0              },
 
-    // Residue Color Transform
-    {"ResidueTransformFlag",     &configinput.residue_transform_flag ,      0,   0.0,                       1,  0.0,              1.0              },
-
     // Explicit Lambda Usage
     {"UseExplicitLambdaParams",  &configinput.UseExplicitLambdaParams,      0,   0.0,                       1,  0.0,              3.0              },
-    {"LambdaWeightPslice",       &configinput.LambdaWeight[0],              2,   0.68,                      2,  0.0,              0.0              },
+    {"FixedLambdaPslice",        &configinput.FixedLambda[0],               2,   0.1,                       2,  0.0,              0.0              },
+    {"FixedLambdaBslice",        &configinput.FixedLambda[1],               2,   0.1,                       2,  0.0,              0.0              },
+    {"FixedLambdaIslice",        &configinput.FixedLambda[2],               2,   0.1,                       2,  0.0,              0.0              },
+    {"FixedLambdaSPslice",       &configinput.FixedLambda[3],               2,   0.1,                       2,  0.0,              0.0              },
+    {"FixedLambdaSIslice",       &configinput.FixedLambda[4],               2,   0.1,                       2,  0.0,              0.0              },
+    {"FixedLambdaRefBslice",     &configinput.FixedLambda[5],               2,   0.1,                       2,  0.0,              0.0              },
+
+	{"LambdaWeightPslice",       &configinput.LambdaWeight[0],              2,   0.68,                      2,  0.0,              0.0              },
     {"LambdaWeightBslice",       &configinput.LambdaWeight[1],              2,   2.00,                      2,  0.0,              0.0              },
     {"LambdaWeightIslice",       &configinput.LambdaWeight[2],              2,   0.65,                      2,  0.0,              0.0              },
     {"LambdaWeightSPslice",      &configinput.LambdaWeight[3],              2,   1.50,                      2,  0.0,              0.0              },
     {"LambdaWeightSIslice",      &configinput.LambdaWeight[4],              2,   0.65,                      2,  0.0,              0.0              },
     {"LambdaWeightRefBslice",    &configinput.LambdaWeight[5],              2,   1.50,                      2,  0.0,              0.0              },
-    
     {"QOffsetMatrixFile",        &configinput.QOffsetMatrixFile,            1,   0.0,                       0,  0.0,              0.0              },
     {"OffsetMatrixPresentFlag",  &configinput.OffsetMatrixPresentFlag,      0,   0.0,                       1,  0.0,              1.0              },
 
@@ -260,12 +286,27 @@ Mapping Map[] = {
     {"AdaptiveRounding",         &configinput.AdaptiveRounding,             0,   0.0,                       1,  0.0,              1.0              },
     {"AdaptRndPeriod",           &configinput.AdaptRndPeriod,               0,  16.0,                       2,  0.0,              0.0              },
     {"AdaptRndChroma",           &configinput.AdaptRndChroma,               0,   0.0,                       1,  0.0,              1.0              },
-    {"AdaptRndWFactorIRef",      &configinput.AdaptRndWFactor[1][I_SLICE],  0,   4.0,                       1,  0.0,           1024.0              },
-    {"AdaptRndWFactorPRef",      &configinput.AdaptRndWFactor[1][P_SLICE],  0,   4.0,                       1,  0.0,           1024.0              },
-    {"AdaptRndWFactorBRef",      &configinput.AdaptRndWFactor[1][B_SLICE],  0,   4.0,                       1,  0.0,           1024.0              },
-    {"AdaptRndWFactorINRef",     &configinput.AdaptRndWFactor[0][I_SLICE],  0,   4.0,                       1,  0.0,           1024.0              },
-    {"AdaptRndWFactorPNRef",     &configinput.AdaptRndWFactor[0][P_SLICE],  0,   4.0,                       1,  0.0,           1024.0              },
-    {"AdaptRndWFactorBNRef",     &configinput.AdaptRndWFactor[0][B_SLICE],  0,   4.0,                       1,  0.0,           1024.0              },
+    {"AdaptRndWFactorIRef",      &configinput.AdaptRndWFactor[1][I_SLICE],  0,   4.0,                       1,  0.0,           4096.0              },
+    {"AdaptRndWFactorPRef",      &configinput.AdaptRndWFactor[1][P_SLICE],  0,   4.0,                       1,  0.0,           4096.0              },
+    {"AdaptRndWFactorBRef",      &configinput.AdaptRndWFactor[1][B_SLICE],  0,   4.0,                       1,  0.0,           4096.0              },
+    {"AdaptRndWFactorINRef",     &configinput.AdaptRndWFactor[0][I_SLICE],  0,   4.0,                       1,  0.0,           4096.0              },
+    {"AdaptRndWFactorPNRef",     &configinput.AdaptRndWFactor[0][P_SLICE],  0,   4.0,                       1,  0.0,           4096.0              },
+    {"AdaptRndWFactorBNRef",     &configinput.AdaptRndWFactor[0][B_SLICE],  0,   4.0,                       1,  0.0,           4096.0              },
+
+    {"AdaptRndCrWFactorIRef",    &configinput.AdaptRndCrWFactor[1][I_SLICE],0,   4.0,                       1,  0.0,           4096.0              },
+    {"AdaptRndCrWFactorPRef",    &configinput.AdaptRndCrWFactor[1][P_SLICE],0,   4.0,                       1,  0.0,           4096.0              },
+    {"AdaptRndCrWFactorBRef",    &configinput.AdaptRndCrWFactor[1][B_SLICE],0,   4.0,                       1,  0.0,           4096.0              },
+    {"AdaptRndCrWFactorINRef",   &configinput.AdaptRndCrWFactor[0][I_SLICE],0,   4.0,                       1,  0.0,           4096.0              },
+    {"AdaptRndCrWFactorPNRef",   &configinput.AdaptRndCrWFactor[0][P_SLICE],0,   4.0,                       1,  0.0,           4096.0              },
+    {"AdaptRndCrWFactorBNRef",   &configinput.AdaptRndCrWFactor[0][B_SLICE],0,   4.0,                       1,  0.0,           4096.0              },
+
+    {"VUISupport",               &configinput.VUISupport,                   0,   0.0,                       1,  0.0,              1.0              },
+    {"ChromaMCBuffer",           &configinput.ChromaMCBuffer,               0,   0.0,                       1,  0.0,              1.0              },
+    {"ChromaMEEnable",           &configinput.ChromaMEEnable,               0,   0.0,                       1,  0.0,              2.0              },
+    {"MEDistortionFPel",         &configinput.MEErrorMetric[F_PEL],         0,   0.0,                       1,  0.0,              2.0              },
+    {"MEDistortionHPel",         &configinput.MEErrorMetric[H_PEL],         0,   0.0,                       1,  0.0,              2.0              },
+    {"MEDistortionQPel",         &configinput.MEErrorMetric[Q_PEL],         0,   0.0,                       1,  0.0,              2.0              },
+    {"MDDistortion",             &configinput.ModeDecisionMetric,           0,   2.0,                       1,  0.0,              2.0              },
 
     {NULL,                       NULL,                                     -1,   0.0,                       0,  0.0,              0.0              }
 };

@@ -25,14 +25,14 @@ ADDINCDIR= ../lcommon/inc
 CC=     $(shell which gcc)
 
 LIBS=   -lm
-FLAGS=  -ffloat-store -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
-
+CFLAGS= -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing
+FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64 
 ifdef DBG
 SUFFIX= .dbg
 FLAGS+= -g
 else
 SUFFIX=
-FLAGS+= -O2
+FLAGS+= -O3
 endif
 
 OBJSUF= .o$(SUFFIX)

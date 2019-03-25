@@ -31,7 +31,7 @@ struct img_par *erc_img;
 
 // picture error concealment
 // concealment_head points to first node in list, concealment_end points to 
-// last node in list. Initialise both to NULL, meaning no nodes in list yet
+// last node in list. Initialize both to NULL, meaning no nodes in list yet
 struct concealment_node *concealment_head = NULL;
 struct concealment_node *concealment_end = NULL;
 
@@ -568,7 +568,7 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
   int b8, b4;
   int yuv = dec_picture->chroma_format_idc - 1;
   
-  int ref_frame = max (mv[2], 0); // !!KS: quick fix, we sometimes seem to get negative ref_pic here, so restrict to zero an above
+  int ref_frame = imax (mv[2], 0); // !!KS: quick fix, we sometimes seem to get negative ref_pic here, so restrict to zero an above
 
   /* Update coordinates of the current concealed macroblock */
   img->mb_x = x/MB_BLOCK_SIZE;
@@ -598,15 +598,16 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
 
       for(ii=0;ii<BLOCK_SIZE;ii++)
         for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-          img->mpr[ii+ioff][jj+joff]=tmp_block[ii][jj];
+          img->mpr[jj+joff][ii+ioff]=tmp_block[jj][ii];
     }
   }
 
-  for (i = 0; i < 16; i++)
+  
+  for (j = 0; j < 16; j++)
   {
-    for (j = 0; j < 16; j++)
+    for (i = 0; i < 16; i++)
     {
-      pMB[i*16+j] = img->mpr[j][i];
+      pMB[j*16+i] = img->mpr[j][i];
     }
   }
   pMB += 256;
@@ -644,17 +645,17 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
               i1=(i4+ii)*f1_x + mv[0];
               j1=(j4+jj)*f1_y + mv[1];
             
-              ii0=max (0, min (i1/f1_x,   dec_picture->size_x_cr-1));
-              jj0=max (0, min (j1/f1_y,   dec_picture->size_y_cr-1));
-              ii1=max (0, min ((i1+f2_x)/f1_x, dec_picture->size_x_cr-1));
-              jj1=max (0, min ((j1+f2_y)/f1_y, dec_picture->size_y_cr-1));
+              ii0=iClip3 (0, dec_picture->size_x_cr-1, i1/f1_x);
+              jj0=iClip3 (0, dec_picture->size_y_cr-1, j1/f1_y);
+              ii1=iClip3 (0, dec_picture->size_x_cr-1, ((i1+f2_x)/f1_x));
+              jj1=iClip3 (0, dec_picture->size_y_cr-1, ((j1+f2_y)/f1_y));
             
               if1=(i1 & f2_x);
               jf1=(j1 & f2_y);
               if0=f1_x-if1;
               jf0=f1_y-jf1;
             
-              img->mpr[ii+ioff][jj+joff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
+              img->mpr[jj+joff][ii+ioff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
                                           if1*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii1]+
                                           if0*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii0]+
                                           if1*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
@@ -663,11 +664,11 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
         }
       }
 
-      for (i = 0; i < 8; i++)
+      for (j = 0; j < 8; j++)
       {
-        for (j = 0; j < 8; j++)
+        for (i = 0; i < 8; i++)
         {
-          pMB[i*8+j] = img->mpr[j][i];
+          pMB[j*8+i] = img->mpr[j][i];
         }
       }
       pMB += 64;
@@ -884,17 +885,17 @@ static void buildPredblockRegionYUV(struct img_par *img, int32 *mv,
 
     get_block(ref_frame, listX[list], vec1_x,vec1_y,img,tmp_block);
 
+    for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
     for(ii=0;ii<BLOCK_SIZE;ii++)
-        for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-            img->mpr[ii][jj]=tmp_block[ii][jj];
+      img->mpr[jj][ii]=tmp_block[jj][ii];
 
 
-    for (i = 0; i < 4; i++)
+    for (j = 0; j < 4; j++)
     {
-        for (j = 0; j < 4; j++)
-        {
-            pMB[i*4+j] = img->mpr[j][i];
-        }
+      for (i = 0; i < 4; i++)
+      {
+        pMB[j*4+i] = img->mpr[j][i];
+      }
     }
     pMB += 16;
 
@@ -927,29 +928,29 @@ static void buildPredblockRegionYUV(struct img_par *img, int32 *mv,
                     i1=(i4+ii)*f1_x + mv[0];
                     j1=(j4+jj)*f1_y + mv[1];
 
-                    ii0=max (0, min (i1/f1_x,   dec_picture->size_x_cr-1));
-                    jj0=max (0, min (j1/f1_y,   dec_picture->size_y_cr-1));
-                    ii1=max (0, min ((i1+f2_x)/f1_x, dec_picture->size_x_cr-1));
-                    jj1=max (0, min ((j1+f2_y)/f1_y, dec_picture->size_y_cr-1));
+                    ii0=iClip3 (0, dec_picture->size_x_cr-1, i1/f1_x);
+                    jj0=iClip3 (0, dec_picture->size_y_cr-1, j1/f1_y);
+                    ii1=iClip3 (0, dec_picture->size_x_cr-1, ((i1+f2_x)/f1_x));
+                    jj1=iClip3 (0, dec_picture->size_y_cr-1, ((j1+f2_y)/f1_y));
 
                     if1=(i1 & f2_x);
                     jf1=(j1 & f2_y);
                     if0=f1_x-if1;
                     jf0=f1_y-jf1;
 
-                    img->mpr[ii][jj]=(if0*jf0*listX[list][ref_frame]->imgUV[uv][jj0][ii0]+
+                    img->mpr[jj][ii]=(if0*jf0*listX[list][ref_frame]->imgUV[uv][jj0][ii0]+
                         if1*jf0*listX[list][ref_frame]->imgUV[uv][jj0][ii1]+
                         if0*jf1*listX[list][ref_frame]->imgUV[uv][jj1][ii0]+
                         if1*jf1*listX[list][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
                 }
             }
 
-            for (i = 0; i < 2; i++)
+            for (j = 0; j < 2; j++)
             {
-                for (j = 0; j < 2; j++)
-                {
-                    pMB[i*2+j] = img->mpr[j][i];
-                }
+              for (i = 0; i < 2; i++)
+              {
+                pMB[j*2+i] = img->mpr[j][i];
+              }
             }
             pMB += 4;
 
@@ -1483,8 +1484,8 @@ void init_lists_for_non_reference_loss(int currSliceType, PictureStructure currP
 
 
     // set max size
-    listXsize[0] = min (listXsize[0], (int)active_sps->num_ref_frames);
-    listXsize[1] = min (listXsize[1], (int)active_sps->num_ref_frames);
+    listXsize[0] = imin (listXsize[0], (int)active_sps->num_ref_frames);
+    listXsize[1] = imin (listXsize[1], (int)active_sps->num_ref_frames);
 
     listXsize[1] = 0;
     // set the unused list entries to NULL

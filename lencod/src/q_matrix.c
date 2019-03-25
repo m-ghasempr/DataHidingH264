@@ -142,7 +142,7 @@ int CheckParameterName (char *s, int *type)
   }
 
   return -1;
-};
+}
 
 /*!
  ***********************************************************************
@@ -509,7 +509,7 @@ void CalculateQuantParam(void)
       for(j=0; j<4; j++)
         for(i=0; i<4; i++)
         {
-          temp = (i<<2)+j;
+          temp = (j<<2)+i;
           if((!present[0]) || UseDefaultScalingMatrix4x4Flag[0])
           {
             LevelScale4x4Luma[1][k][j][i]         = (quant_coef[k][j][i]<<4)/Quant_intra_default[temp];
@@ -601,12 +601,12 @@ void CalculateQuant8Param()
     if(active_sps->seq_scaling_matrix_present_flag)
       for(i=0; i<2; i++)
         present[i] = active_sps->seq_scaling_list_present_flag[i+6];
-
-    if(active_pps->pic_scaling_matrix_present_flag)
-      for(i=0; i<2; i++)
-        present[i] |= active_pps->pic_scaling_list_present_flag[i+6];
+      
+      if(active_pps->pic_scaling_matrix_present_flag)
+        for(i=0; i<2; i++)
+          present[i] |= active_pps->pic_scaling_list_present_flag[i+6];
   }
-
+  
   if(no_q_matrix==TRUE)
   {
     for(k=0; k<6; k++)
@@ -626,7 +626,7 @@ void CalculateQuant8Param()
       for(j=0; j<8; j++)
         for(i=0; i<8; i++)
         {
-          temp = (i<<3)+j;
+          temp = (j<<3)+i;
           if((!present[0]) || UseDefaultScalingMatrix8x8Flag[0])
           {
             LevelScale8x8Luma[1][k][j][i]    = (quant_coef8[k][j][i]<<4)/Quant8_intra_default[temp];

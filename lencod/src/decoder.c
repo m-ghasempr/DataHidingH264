@@ -114,12 +114,6 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
         for (j=0; j<4; j++)
         for (i=0; i<4; i++)
         {
-          /*
-          if (decs->RefBlock[j][i] != UMVPelY_14 (mref[ref_inx],
-                                                  (block_y*4+j)*4+mv[1][by][bx],
-                                                  (block_x*4+i)*4+mv[0][by][bx]))
-          ref_inx = (img->number-ref-1)%img->num_ref_frames;
-          */
           decs->decY[decoder][block_y*4+j][block_x*4+i] = resY_tmp[by*4+j][bx*4+i] + decs->RefBlock[j][i];
         }
       }
@@ -228,51 +222,51 @@ byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
   maxold_y = img->height-1;
 
   if (dx == 0 && dy == 0) { /* fullpel position */
-    result = imY[max(0,min(maxold_y,y_pos))][max(0,min(maxold_x,x_pos))];
+    result = imY[iClip3(0,maxold_y,y_pos)][iClip3(0,maxold_x,x_pos)];
   }
   else { /* other positions */
 
     if (dy == 0) {
 
-      pres_y = max(0,min(maxold_y,y_pos));
+      pres_y = iClip3(0,maxold_y,y_pos);
       for(x=-2;x<4;x++) {
-        pres_x = max(0,min(maxold_x,x_pos+x));
+        pres_x = iClip3(0,maxold_x,x_pos+x);
         result += imY[pres_y][pres_x]*COEF[x+2];
       }
 
-      result = max(0, min(img->max_imgpel_value, (result+16)/32));
+      result = iClip3(0, img->max_imgpel_value, (result+16)/32);
 
       if (dx == 1) {
-        result = (result + imY[pres_y][max(0,min(maxold_x,x_pos))])/2;
+        result = (result + imY[pres_y][iClip3(0,maxold_x,x_pos)])/2;
       }
       else if (dx == 3) {
-        result = (result + imY[pres_y][max(0,min(maxold_x,x_pos+1))])/2;
+        result = (result + imY[pres_y][iClip3(0,maxold_x,x_pos+1)])/2;
       }
     }
     else if (dx == 0) {
 
-      pres_x = max(0,min(maxold_x,x_pos));
+      pres_x = iClip3(0,maxold_x,x_pos);
       for(y=-2;y<4;y++) {
-        pres_y = max(0,min(maxold_y,y_pos+y));
+        pres_y = iClip3(0,maxold_y,y_pos+y);
         result += imY[pres_y][pres_x]*COEF[y+2];
       }
 
-      result = max(0, min(img->max_imgpel_value, (result+16)/32));
+      result = iClip3(0, img->max_imgpel_value, (result+16)/32);
 
       if (dy == 1) {
-        result = (result + imY[max(0,min(maxold_y,y_pos))][pres_x])/2;
+        result = (result + imY[iClip3(0,maxold_y,y_pos)][pres_x])/2;
       }
       else if (dy == 3) {
-        result = (result + imY[max(0,min(maxold_y,y_pos+1))][pres_x])/2;
+        result = (result + imY[iClip3(0,maxold_y,y_pos+1)][pres_x])/2;
       }
     }
     else if (dx == 2) {
 
       for(y=-2;y<4;y++) {
         result = 0;
-        pres_y = max(0,min(maxold_y,y_pos+y));
+        pres_y = iClip3(0,maxold_y,y_pos+y);
         for(x=-2;x<4;x++) {
-          pres_x = max(0,min(maxold_x,x_pos+x));
+          pres_x = iClip3(0,maxold_x,x_pos+x);
           result += imY[pres_y][pres_x]*COEF[x+2];
         }
         tmp_res[y+2] = result;
@@ -283,22 +277,22 @@ byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
         result += tmp_res[y+2]*COEF[y+2];
       }
 
-      result = max(0, min(img->max_imgpel_value, (result+512)/1024));
+      result = iClip3(0, img->max_imgpel_value, (result+512)/1024);
 
       if (dy == 1) {
-        result = (result + max(0, min(img->max_imgpel_value, (tmp_res[2]+16)/32)))/2;
+        result = (result + iClip3(0, img->max_imgpel_value, (tmp_res[2]+16)/32))/2;
       }
       else if (dy == 3) {
-        result = (result + max(0, min(img->max_imgpel_value, (tmp_res[3]+16)/32)))/2;
+        result = (result + iClip3(0, img->max_imgpel_value, (tmp_res[3]+16)/32))/2;
       }
     }
     else if (dy == 2) {
 
       for(x=-2;x<4;x++) {
         result = 0;
-        pres_x = max(0,min(maxold_x,x_pos+x));
+        pres_x = iClip3(0,maxold_x,x_pos+x);
         for(y=-2;y<4;y++) {
-          pres_y = max(0,min(maxold_y,y_pos+y));
+          pres_y = iClip3(0,maxold_y,y_pos+y);
           result += imY[pres_y][pres_x]*COEF[y+2];
         }
         tmp_res[x+2] = result;
@@ -309,38 +303,38 @@ byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
         result += tmp_res[x+2]*COEF[x+2];
       }
 
-      result = max(0, min(img->max_imgpel_value, (result+512)/1024));
+      result = iClip3(0, img->max_imgpel_value, (result+512)/1024);
 
       if (dx == 1) {
-        result = (result + max(0, min(img->max_imgpel_value, (tmp_res[2]+16)/32)))/2;
+        result = (result + iClip3(0, img->max_imgpel_value, (tmp_res[2]+16)/32))/2;
       }
       else {
-        result = (result + max(0, min(img->max_imgpel_value, (tmp_res[3]+16)/32)))/2;
+        result = (result + iClip3(0, img->max_imgpel_value, (tmp_res[3]+16)/32))/2;
       }
     }
     else {
 
       result = 0;
       pres_y = dy == 1 ? y_pos : y_pos+1;
-      pres_y = max(0,min(maxold_y,pres_y));
+      pres_y = iClip3(0,maxold_y,pres_y);
 
       for(x=-2;x<4;x++) {
-        pres_x = max(0,min(maxold_x,x_pos+x));
+        pres_x = iClip3(0,maxold_x,x_pos+x);
         result += imY[pres_y][pres_x]*COEF[x+2];
       }
 
-      result1 = max(0, min(img->max_imgpel_value, (result+16)/32));
+      result1 = iClip3(0, img->max_imgpel_value, (result+16)/32);
 
       result = 0;
       pres_x = dx == 1 ? x_pos : x_pos+1;
-      pres_x = max(0,min(maxold_x,pres_x));
+      pres_x = iClip3(0,maxold_x,pres_x);
 
       for(y=-2;y<4;y++) {
-        pres_y = max(0,min(maxold_y,y_pos+y));
+        pres_y = iClip3(0,maxold_y,y_pos+y);
         result += imY[pres_y][pres_x]*COEF[y+2];
       }
 
-      result2 = max(0, min(img->max_imgpel_value, (result+16)/32));
+      result2 = iClip3(0, img->max_imgpel_value, (result+16)/32);
       result = (result1+result2)/2;
     }
   }
@@ -516,8 +510,8 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
   int pos_y = mb_y*MB_BLOCK_SIZE, pos_x = mb_x*MB_BLOCK_SIZE;
   int mv[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int resY[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
-  int copy  = (decs->dec_mb_mode[mb_x][mb_y]==0 && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
-  int inter = (((decs->dec_mb_mode[mb_x][mb_y]>=1 && decs->dec_mb_mode[mb_x][mb_y]<=3) || decs->dec_mb_mode[mb_x][mb_y]==P8x8) && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
+  int copy  = (decs->dec_mb_mode[mb_y][mb_x]==0 && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
+  int inter = (((decs->dec_mb_mode[mb_y][mb_x]>=1 && decs->dec_mb_mode[mb_y][mb_x]<=3) || decs->dec_mb_mode[mb_y][mb_x]==P8x8) && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
   short ***tmp_mv = enc_picture->mv[LIST_0];
   
   switch(s_map[mb_y][mb_x])

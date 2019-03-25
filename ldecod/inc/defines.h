@@ -24,6 +24,8 @@
 #define TRACE           0                   //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
+// Dump dbp for debug purposes
+#define DUMP_DPB        0
 //#define PAIR_FIELDS_IN_OUTPUT
 
 //#define MAX_NUM_SLICES 150
@@ -70,12 +72,6 @@
 
 //#define _LEAKYBUCKET_
 
-#define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
-
-#define Clip1(a)            ((a)>img->max_imgpel_value?img->max_imgpel_value:((a)<0?0:(a)))
-#define Clip1_Chr(a)        ((a)>img->max_imgpel_value_uv?img->max_imgpel_value_uv:((a)<0?0:(a)))
-#define Clip3(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
-
 #define P8x8    8
 #define I4MB    9
 #define I16MB   10
@@ -103,7 +99,8 @@
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
-
+#define MB_BLOCK_PIXELS 256    // MB_BLOCK_SIZE * MB_BLOCK_SIZE
+#define BLOCK_MULTIPLE  4      // (MB_BLOCK_SIZE/BLOCK_SIZE)
 
 #define NO_INTRA_PMODE  9        //!< #intra prediction modes
 /* 4x4 intra prediction modes */
@@ -141,12 +138,6 @@
 
 #define INVALIDINDEX  (-135792468)
 
-#if !defined(WIN32) || defined(__GNUC__)
-#define max(a, b)      ((a) > (b) ? (a) : (b))  //!< Macro returning max value
-#define min(a, b)      ((a) < (b) ? (a) : (b))  //!< Macro returning min value
-#endif
-
-
 #define MVPRED_MEDIAN   0
 #define MVPRED_L        1
 #define MVPRED_U        2
@@ -156,7 +147,6 @@
 #define DECODE_MB       1
 //#define DECODE_MB_BFRAME 2
 
-#define BLOCK_MULTIPLE      (MB_BLOCK_SIZE/BLOCK_SIZE)
 
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix

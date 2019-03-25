@@ -25,7 +25,11 @@
 #define TRACE           0                   //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
+#define GET_METIME      1       //!< Enables or disables ME computation time
+#define DUMP_DPB        0       //!< Dump dbp for debug purposes
 typedef unsigned char byte;    //!< byte type definition
+
+#define RC_MAX_TEMPORAL_LEVELS   5
 
 //#define BEST_NZ_COEFF	1		// yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
 
@@ -35,20 +39,8 @@ typedef unsigned char byte;    //!< byte type definition
 #define FREXT_Hi422     122      //!< YUV 4:2:2/10 "High 4:2:2"
 #define FREXT_Hi444     144      //!< YUV 4:4:4/12 "High 4:4:4"
 
-#define YUV400 0
-#define YUV420 1
-#define YUV422 2
-#define YUV444 3
-
-enum {
-  LIST_0 = 0,
-  LIST_1 = 1,
-  BI_PRED = 2,
-  BI_PRED_L0 = 3,
-  BI_PRED_L1 = 4
-};
-
 #define ZEROSNR 1
+
 // CAVLC
 #define LUMA              0
 #define LUMA_INTRA16x16DC 1
@@ -74,8 +66,6 @@ enum {
 #define NUM_BLOCK_TYPES 10
 
 
-#define _FAST_FULL_ME_
-
 #define _FULL_SEARCH_RANGE_
 #define _ADAPT_LAST_GROUP_
 #define _CHANGE_QP_
@@ -90,17 +80,12 @@ enum {
 #define _LUMA_MB_COEFF_COST_    5 //!< threshold for luma coeffs of inter Macroblocks
 #define _LUMA_8x8_COEFF_COST_   5 //!< threshold for luma coeffs of 8x8 Inter Partition
 
-#define IMG_PAD_SIZE            4 //!< Number of pixels padded around the reference frame (>=4)
-#define IMG_PAD_SIZE_TIMES4    16 //!< Number of pixels padded around the reference frame in subpel units(>=16)
+#define IMG_PAD_SIZE           20 //!< Number of pixels padded around the reference frame (>=4)
+#define IMG_PAD_SIZE_TIMES4    80 //!< Number of pixels padded around the reference frame in subpel units(>=16)
 
-#define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
 
 #define INVALIDINDEX  (-135792468)
-
-#define Clip1(a)            ((a)>img->max_imgpel_value?img->max_imgpel_value:((a)<0?0:(a)))
-#define Clip1_Chr(a)        ((a)>img->max_imgpel_value_uv?img->max_imgpel_value_uv:((a)<0?0:(a)))
-#define Clip3(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
 
 #define P8x8    8
 #define I4MB    9
@@ -116,6 +101,7 @@ enum {
 #define  LAMBDA_FACTOR(lambda)        ((int)((double)(1<<LAMBDA_ACCURACY_BITS)*lambda+0.5))
 #define  WEIGHTED_COST(factor,bits)   (((factor)*(bits))>>LAMBDA_ACCURACY_BITS)
 #define  MV_COST(f,s,cx,cy,px,py)     (WEIGHTED_COST(f,mvbits[((cx)<<(s))-px]+mvbits[((cy)<<(s))-py]))
+#define  MV_COST_SMP(f,cx,cy,px,py)     (WEIGHTED_COST(f,mvbits[cx-px]+mvbits[cy-py]))
 #define  REF_COST(f,ref,list_offset) (WEIGHTED_COST(f,((listXsize[list_offset]<=1)? 0:refbits[(ref)])))
 
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB || (MB)->mb_type==IPCM)
@@ -143,7 +129,13 @@ enum {
 
 #define BLOCK_SHIFT     2
 #define BLOCK_SIZE      4
+#define BLOCK_SIZE8x8   8
 #define MB_BLOCK_SIZE   16
+#define MB_BLOCK_SHIFT  4
+
+// These variables relate to the subpel accuracy supported by the software (1/4)
+#define BLOCK_SIZE_SP      16  // BLOCK_SIZE << 2 
+#define BLOCK_SIZE8x8_SP   32  // BLOCK_SIZE8x8 << 2
 
 // number of intra prediction modes
 #define NO_INTRA_PMODE  9        
@@ -180,10 +172,10 @@ enum {
 #define MVPRED_U        2
 #define MVPRED_UR       3
 
-#define BLOCK_MULTIPLE        (MB_BLOCK_SIZE/BLOCK_SIZE)
-#define MB_BLOCK_PARTITIONS   (BLOCK_MULTIPLE * BLOCK_MULTIPLE)
-#define MB_PIXELS             (MB_BLOCK_SIZE * MB_BLOCK_SIZE)
-#define BLOCK_CONTEXT         (2 * 2 * MB_BLOCK_PARTITIONS)
+#define BLOCK_MULTIPLE        4   //(MB_BLOCK_SIZE/BLOCK_SIZE)
+#define MB_BLOCK_PARTITIONS   16  //(BLOCK_MULTIPLE * BLOCK_MULTIPLE)
+#define MB_PIXELS             256 //(MB_BLOCK_SIZE * MB_BLOCK_SIZE)
+#define BLOCK_CONTEXT         64  //(4 * MB_BLOCK_PARTITIONS)
 
 #define MAX_SYMBOLS_PER_MB  1200  //!< Maximum number of different syntax elements for one MB
                                   // CAVLC needs more symbols per MB
@@ -203,6 +195,9 @@ enum {
 #define Q_BITS_8        16
 #define DQ_BITS_8       6 
 #define DQ_ROUND_8      (1<<(DQ_BITS_8-1))
+
+// Context Adaptive Lagrange Multiplier (CALM)
+#define CALM_MF_FACTOR_THRESHOLD 512.0
 
 #endif
 

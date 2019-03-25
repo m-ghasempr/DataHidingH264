@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="7.10"
 	Name="ldecod"
-	RootNamespace="ldecod"
+	ProjectGUID="{5499B067-CF32-4141-A757-E0A29866994A}"
 	SccProjectName=""
 	SccLocalPath="">
 	<Platforms>
@@ -13,8 +13,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\ldecod/Debug"
-			IntermediateDirectory=".\ldecod/Debug"
+			OutputDirectory=".\ldecod/Debug_vc7"
+			IntermediateDirectory=".\ldecod/Debug_vc7"
 			ConfigurationType="1"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="FALSE"
@@ -27,10 +27,10 @@
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="5"
 				UsePrecompiledHeader="2"
-				PrecompiledHeaderFile=".\ldecod/Debug/ldecod.pch"
-				AssemblerListingLocation=".\ldecod/Debug/"
-				ObjectFile=".\ldecod/Debug/"
-				ProgramDataBaseFileName=".\ldecod/Debug/"
+				PrecompiledHeaderFile=".\ldecod/Debug_vc7/ldecod.pch"
+				AssemblerListingLocation=".\ldecod/Debug_vc7/"
+				ObjectFile=".\ldecod/Debug_vc7/"
+				ProgramDataBaseFileName=".\ldecod/Debug_vc7/"
 				BrowseInformation="1"
 				WarningLevel="3"
 				SuppressStartupBanner="TRUE"
@@ -45,12 +45,12 @@
 				LinkIncremental="2"
 				SuppressStartupBanner="TRUE"
 				GenerateDebugInformation="TRUE"
-				ProgramDatabaseFile=".\ldecod/Debug/ldecod.pdb"
+				ProgramDatabaseFile=".\ldecod/Debug_vc7/ldecod.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
 				Name="VCMIDLTool"
-				TypeLibraryName=".\ldecod/Debug/ldecod.tlb"
+				TypeLibraryName=".\ldecod/Debug_vc7/ldecod.tlb"
 				HeaderFileName=""/>
 			<Tool
 				Name="VCPostBuildEventTool"/>
@@ -75,47 +75,51 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\ldecod\Release"
-			IntermediateDirectory=".\ldecod\Release"
+			OutputDirectory=".\ldecod\Release_vc7"
+			IntermediateDirectory=".\ldecod\Release_vc7"
 			ConfigurationType="1"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="FALSE"
 			CharacterSet="2">
 			<Tool
 				Name="VCCLCompilerTool"
+				AdditionalOptions=""
 				Optimization="2"
 				InlineFunctionExpansion="2"
-				AdditionalIncludeDirectories="ldecod\inc,lcommon\inc"
+				AdditionalIncludeDirectories="ldecod\inc"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				StringPooling="TRUE"
 				RuntimeLibrary="4"
 				BufferSecurityCheck="TRUE"
 				EnableFunctionLevelLinking="TRUE"
 				UsePrecompiledHeader="2"
-				PrecompiledHeaderFile=".\ldecod\Release/ldecod.pch"
-				AssemblerListingLocation=".\ldecod\Release/"
-				ObjectFile=".\ldecod\Release/"
-				ProgramDataBaseFileName=".\ldecod\Release/"
+				PrecompiledHeaderFile=".\ldecod\Release_vc7/ldecod.pch"
+				AssemblerListingLocation=".\ldecod\Release_vc7/"
+				ObjectFile=".\ldecod\Release_vc7/"
+				ProgramDataBaseFileName=".\ldecod\Release_vc7/"
 				BrowseInformation="1"
-				BrowseInformationFile=".\ldecod\Release/"
+				BrowseInformationFile=".\ldecod\Release_vc7/"
 				WarningLevel="3"
 				SuppressStartupBanner="TRUE"
+				DebugInformationFormat="3"
 				CallingConvention="0"
 				CompileAs="0"/>
 			<Tool
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/FIXED:NO"
 				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
 				OutputFile="./bin/ldecod.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
-				ProgramDatabaseFile=".\ldecod\Release/ldecod.pdb"
+				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile=".\ldecod\Release_vc7/ldecod.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
 				Name="VCMIDLTool"
-				TypeLibraryName=".\ldecod\Release/ldecod.tlb"
+				TypeLibraryName=".\ldecod\Release_vc7/ldecod.tlb"
 				HeaderFileName=""/>
 			<Tool
 				Name="VCPostBuildEventTool"/>
@@ -243,104 +247,113 @@
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl">
 			<File
-				RelativePath="ldecod\inc\annexb.h">
+				RelativePath=".\ldecod\inc\annexb.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\biaridecod.h">
+				RelativePath=".\ldecod\inc\biaridecod.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\block.h">
+				RelativePath=".\ldecod\inc\block.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\cabac.h">
+				RelativePath=".\ldecod\inc\cabac.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\context_ini.h">
+				RelativePath=".\ldecod\inc\context_ini.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\contributors.h">
+				RelativePath=".\ldecod\inc\contributors.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\ctx_tables.h">
+				RelativePath=".\ldecod\inc\ctx_tables.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\defines.h">
+				RelativePath=".\ldecod\inc\defines.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\elements.h">
+				RelativePath=".\ldecod\inc\elements.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\erc_api.h">
+				RelativePath=".\ldecod\inc\erc_api.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\erc_do.h">
+				RelativePath=".\ldecod\inc\erc_do.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\erc_globals.h">
+				RelativePath=".\ldecod\inc\erc_globals.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\errorconcealment.h">
+				RelativePath=".\ldecod\inc\errorconcealment.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\fmo.h">
+				RelativePath=".\ldecod\inc\fmo.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\global.h">
+				RelativePath=".\ldecod\inc\global.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\header.h">
+				RelativePath=".\ldecod\inc\header.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\image.h">
+				RelativePath=".\ldecod\inc\ifunctions.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\leaky_bucket.h">
+				RelativePath=".\ldecod\inc\image.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\loopfilter.h">
+				RelativePath=".\ldecod\inc\leaky_bucket.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\macroblock.h">
+				RelativePath=".\ldecod\inc\loopfilter.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\mb_access.h">
+				RelativePath=".\ldecod\inc\macroblock.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\mbuffer.h">
+				RelativePath=".\ldecod\inc\mb_access.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\memalloc.h">
+				RelativePath=".\ldecod\inc\mbuffer.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\nalu.h">
+				RelativePath=".\ldecod\inc\memalloc.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\nalucommon.h">
+				RelativePath=".\ldecod\inc\nalu.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\output.h">
+				RelativePath=".\ldecod\inc\nalucommon.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\parset.h">
+				RelativePath=".\ldecod\inc\output.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\parsetcommon.h">
+				RelativePath=".\ldecod\inc\parset.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\rtp.h">
+				RelativePath=".\ldecod\inc\parsetcommon.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\sei.h">
+				RelativePath=".\ldecod\inc\rtp.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\transform8x8.h">
+				RelativePath=".\ldecod\inc\sei.h">
 			</File>
 			<File
-				RelativePath="ldecod\inc\vlc.h">
+				RelativePath=".\ldecod\inc\transform8x8.h">
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\vlc.h">
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\win32.h">
 			</File>
 		</Filter>
 		<File
 			RelativePath="bin\decoder.cfg">
+		</File>
+		<File
+			RelativePath=".\VTune\ldecod.vpj">
 		</File>
 	</Files>
 	<Globals>

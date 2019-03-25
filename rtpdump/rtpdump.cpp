@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
     printf ("Sequence Number: %d\n", ntohs(temp16));
     memcpy (&temp32, &buf[4], 4);
     printf ("Timestamp: %d\n", ntohl(temp32));
-    memcpy (&temp32, &buf[4], 4);
+    memcpy (&temp32, &buf[8], 4);
     printf ("SSRC: %d\n", ntohl(temp32));
 
     printf ("First Byte: 0x%x\n", buf[12]);

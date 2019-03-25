@@ -1647,6 +1647,12 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
 
   Bitstream* buf;
 
+  if (NULL==active_sps)
+  {
+    fprintf (stderr, "Warning: no active SPS, timing SEI cannot be parsed\n");
+    return;
+  }
+
   buf = malloc(sizeof(Bitstream));
   buf->bitstream_length = size;
   buf->streamBuffer = payload;
@@ -1654,18 +1660,13 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
 
   UsedBits = 0;
 
-  if (NULL==active_sps)
-  {
-    fprintf (stderr, "Warning: no active SPS, timing SEI cannot be parsed\n");
-    return;
-  }
 
 #ifdef PRINT_PCITURE_TIMING_INFO
   printf("Picture timing SEI message\n");
 #endif
 
   // CpbDpbDelaysPresentFlag can also be set "by some means not specified in this Recommendation | International Standard"
-  CpbDpbDelaysPresentFlag =  (active_sps->vui_parameters_present_flag 
+  CpbDpbDelaysPresentFlag =  (Boolean) (active_sps->vui_parameters_present_flag 
                               && (   (active_sps->vui_seq_parameters.nal_hrd_parameters_present_flag != 0)
                                    ||(active_sps->vui_seq_parameters.vcl_hrd_parameters_present_flag != 0)));
 

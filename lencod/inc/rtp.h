@@ -22,8 +22,8 @@
 
 #define MAXRTPPAYLOADLEN  (65536 - 40)    //!< Maximum payload size of an RTP packet
 #define MAXRTPPACKETSIZE  (65536 - 28)    //!< Maximum size of an RTP packet incl. header
-#define H26LPAYLOADTYPE 105               //!< RTP paylaod type fixed here for simplicity
-#define H26LSSRC 0x12345678               //!< SSRC, chosen to simplify debugging
+#define H264PAYLOADTYPE 105               //!< RTP paylaod type fixed here for simplicity
+#define H264SSRC 0x12345678               //!< SSRC, chosen to simplify debugging
 #define RTP_TR_TIMESTAMP_MULT 1000        //!< should be something like 27 Mhz / 29.97 Hz
 
 typedef struct 

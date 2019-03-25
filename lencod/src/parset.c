@@ -16,6 +16,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <time.h>
+#include <sys/timeb.h>
  
 #include "global.h"
 
@@ -228,10 +230,19 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   sps->level_idc = IdentifyLevel();
 
   // needs to be set according to profile
-  sps->constrained_set0_flag = 0;
-  sps->constrained_set1_flag = 0;
-  sps->constrained_set2_flag = 0;
-  sps->constrained_set3_flag = 0;
+  sps->constrained_set0_flag = FALSE;
+  sps->constrained_set1_flag = FALSE;
+  sps->constrained_set2_flag = FALSE;
+  
+  if ( (sps->level_idc == 9) && (sps->profile_idc < FREXT_HP) ) // Level 1.b
+  {
+    sps->constrained_set3_flag = TRUE;
+    sps->level_idc = 11;
+  }
+  else
+  {
+    sps->constrained_set3_flag = FALSE;
+  }
 
   // Parameter Set ID hard coded to zero
   sps->seq_parameter_set_id = 0;
@@ -240,7 +251,6 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   sps->bit_depth_luma_minus8   = input->BitDepthLuma - 8;
   sps->bit_depth_chroma_minus8 = input->BitDepthChroma - 8;
   img->lossless_qpprime_flag = input->lossless_qpprime_y_zero_flag & (sps->profile_idc==FREXT_Hi444);
-  img->residue_transform_flag = input->residue_transform_flag;
   
   //! POC stuff:
   //! The following values are hard-coded in init_poc().  Apparently,
@@ -268,18 +278,18 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   //required_frame_num_update_behaviour_flag hardcoded to zero
   sps->gaps_in_frame_num_value_allowed_flag = FALSE;    // double check
 
-  sps->frame_mbs_only_flag = !(input->PicInterlace || input->MbInterlace);
+  sps->frame_mbs_only_flag = (Boolean) !(input->PicInterlace || input->MbInterlace);
 
   // Picture size, finally a simple one :-)
   sps->pic_width_in_mbs_minus1 = ((input->img_width+img->auto_crop_right)/16) -1;
   sps->pic_height_in_map_units_minus1 = (((input->img_height+img->auto_crop_bottom)/16)/ (2 - sps->frame_mbs_only_flag)) - 1;
 
   // a couple of flags, simple
-  sps->mb_adaptive_frame_field_flag = (FRAME_CODING != input->MbInterlace);
-  sps->direct_8x8_inference_flag = input->directInferenceFlag;
+  sps->mb_adaptive_frame_field_flag = (Boolean) (FRAME_CODING != input->MbInterlace);
+  sps->direct_8x8_inference_flag = (Boolean) input->directInferenceFlag;
   
   // Sequence VUI not implemented, signalled as not present
-  sps->vui_parameters_present_flag = (input->rgb_input_flag && input->yuv_format==3);
+  sps->vui_parameters_present_flag = (Boolean) ((input->rgb_input_flag && input->yuv_format==3)|| input->Generate_SEIVUI);
 
   sps->chroma_format_idc = input->yuv_format;
 
@@ -302,7 +312,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   if(frext_profile)
   {
 
-    sps->seq_scaling_matrix_present_flag = (input->ScalingMatrixPresentFlag&1);
+    sps->seq_scaling_matrix_present_flag = (Boolean) (input->ScalingMatrixPresentFlag&1);
     for(i=0; i<8; i++)
     {
       if(i<6)
@@ -318,7 +328,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   }
   else
   {
-    sps->seq_scaling_matrix_present_flag = 0;
+    sps->seq_scaling_matrix_present_flag = FALSE;
     for(i=0; i<8; i++)
       sps->seq_scaling_list_present_flag[i] = 0;
 
@@ -345,7 +355,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   {
     sps->frame_cropping_flag = FALSE;
   }
-};
+}
 
 /*!
  ************************************************************************
@@ -384,13 +394,13 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
 
   pps->seq_parameter_set_id = sps->seq_parameter_set_id;
   pps->pic_parameter_set_id = PPS_id;
-  pps->entropy_coding_mode_flag = (input->symbol_mode==UVLC?0:1);
+  pps->entropy_coding_mode_flag = (input->symbol_mode==UVLC ? FALSE : TRUE);
 
   // Fidelity Range Extensions stuff
   if(frext_profile)
   {
-    pps->transform_8x8_mode_flag = input->Transform8x8Mode ? 1:0;
-    pps->pic_scaling_matrix_present_flag = (input->ScalingMatrixPresentFlag&2)>>1;
+    pps->transform_8x8_mode_flag = (input->Transform8x8Mode ? TRUE:FALSE);
+    pps->pic_scaling_matrix_present_flag = (Boolean) ((input->ScalingMatrixPresentFlag&2)>>1);
     for(i=0; i<8; i++)
     {
       if(i<6)
@@ -406,11 +416,12 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   }
   else
   {
-    pps->pic_scaling_matrix_present_flag = 0;
+    pps->pic_scaling_matrix_present_flag = FALSE;
     for(i=0; i<8; i++)
       pps->pic_scaling_list_present_flag[i] = 0;
 
-    pps->transform_8x8_mode_flag = input->Transform8x8Mode = 0;
+    pps->transform_8x8_mode_flag = FALSE;
+    input->Transform8x8Mode = 0;
   }
 
   // JVT-Fxxx (by Stephan Wenger, make this flag unconditional
@@ -455,7 +466,7 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
     case 5:
       pps->slice_group_map_type = input->slice_group_map_type;
 			
-      pps->slice_group_change_direction_flag = input->slice_group_change_direction_flag;
+      pps->slice_group_change_direction_flag = (Boolean) input->slice_group_change_direction_flag;
       pps->slice_group_change_rate_minus1 = input->slice_group_change_rate_minus1;
       break;
     case 6:
@@ -478,7 +489,7 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   pps->num_ref_idx_l0_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
   pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
   
-  pps->weighted_pred_flag = WeightedPrediction;
+  pps->weighted_pred_flag = (Boolean) WeightedPrediction;
   pps->weighted_bipred_idc = WeightedBiprediction;
 
   pps->pic_init_qp_minus26 = 0;         // hard coded to zero, QP lives in the slice header
@@ -493,12 +504,12 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   else
     pps->cb_qp_index_offset = pps->cr_qp_index_offset = pps->chroma_qp_index_offset;
 
-  pps->deblocking_filter_control_present_flag = input->LFSendParameters;
-  pps->constrained_intra_pred_flag = input->UseConstrainedIntraPred;
+  pps->deblocking_filter_control_present_flag = (Boolean) input->LFSendParameters;
+  pps->constrained_intra_pred_flag = (Boolean) input->UseConstrainedIntraPred;
   
   // if redundant slice is in use.
-  pps->redundant_pic_cnt_present_flag = input->redundant_pic_flag;
-};
+  pps->redundant_pic_cnt_present_flag = (Boolean) input->redundant_pic_flag;
+}
 
 /*! 
  *************************************************************************************
@@ -547,7 +558,7 @@ int Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingL
       *UseDefaultScalingMatrix|=(scanj==0 && nextScale==0); // Check first matrix value for zero
     }
 
-    scalingList[scanj] = (nextScale==0) ? lastScale:nextScale; // Update the actual scalingList matrix with the correct values
+    scalingList[scanj] = (short) ((nextScale==0) ? lastScale:nextScale); // Update the actual scalingList matrix with the correct values
     lastScale = scalingList[scanj];
   }
 
@@ -573,7 +584,7 @@ int Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingL
  *    an exit (-1)
  *************************************************************************************
  */
-int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, unsigned char *rbsp)
+int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
 {
   Bitstream *bitstream;
   int len = 0, LenInBytes;
@@ -607,7 +618,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, unsigned char
   {
     len+=ue_v ("SPS: chroma_format_idc",                        sps->chroma_format_idc,                          bitstream);
     if(img->yuv_format == 3)
-      len+=u_1  ("SPS: residue_transform_flag",                 img->residue_transform_flag,                     bitstream);
+      len+=u_1  ("SPS: residue_transform_flag",                 0,                                               bitstream);
     len+=ue_v ("SPS: bit_depth_luma_minus8",                    sps->bit_depth_luma_minus8,                      bitstream);
     len+=ue_v ("SPS: bit_depth_chroma_minus8",                  sps->bit_depth_chroma_minus8,                    bitstream);
     len+=u_1  ("SPS: lossless_qpprime_y_zero_flag",             img->lossless_qpprime_flag,                      bitstream);
@@ -699,7 +710,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, unsigned char
  ************************************************************************************************
  */
  
-int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, unsigned char *rbsp)
+int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
 {
   Bitstream *bitstream;
   int len = 0, LenInBytes;
@@ -843,7 +854,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, unsigned char
 int IdentifyProfile(void)
 {
   return input->ProfileIDC;
-};
+}
 
 /*! 
  *************************************************************************************
@@ -861,7 +872,7 @@ int IdentifyProfile(void)
 int IdentifyLevel(void)
 {
   return input->LevelIDC;
-};
+}
 
 
 /*! 
@@ -879,9 +890,9 @@ static int GenerateVUISequenceParameters(Bitstream *bitstream)
 
   // special case to signal the RGB format
   if(input->rgb_input_flag && input->yuv_format==3)
-  { 
+  {
     //still pretty much a dummy VUI
-    printf ("test: writing Sequence Parameter VUI to signal RGB format\n");
+    printf   ("VUI: writing Sequence Parameter VUI to signal RGB format\n");
     len+=u_1 ("VUI: aspect_ratio_info_present_flag", 0, bitstream);
     len+=u_1 ("VUI: overscan_info_present_flag", 0, bitstream);
     len+=u_1 ("VUI: video_signal_type_present_flag", 1, bitstream);
@@ -900,10 +911,141 @@ static int GenerateVUISequenceParameters(Bitstream *bitstream)
 
     return len;
   }
+  else if (input->Generate_SEIVUI)
+   {
+      int bitstream_restriction_flag = 0;
+      int timing_info_present_flag = 0;
+      int aspect_ratio_info_present_flag = 0;
+      len+=u_1 ("VUI: aspect_ratio_info_present_flag", 0, bitstream);
+      if (aspect_ratio_info_present_flag)
+      {
+        len+=u_v (8,"VUI: aspect_ratio_idc", 1, bitstream);    
+      }
+      len+=u_1 ("VUI: overscan_info_present_flag", 0, bitstream);
+      len+=u_1 ("VUI: video_signal_type_present_flag", 0, bitstream);
+      len+=u_1 ("VUI: chroma_loc_info_present_flag", 0, bitstream);
+      len+=u_1 ("VUI: timing_info_present_flag", timing_info_present_flag, bitstream);
+            // timing parameters
+      if (timing_info_present_flag)
+      {
+        len+=u_v (32,"VUI: num_units_in_tick", 416667, bitstream);    
+        len+=u_v (32,"VUI: time_scale", 20000000, bitstream);    
+        len+=u_1 ("VUI: fixed_frame_rate_flag", 1, bitstream);
+      }
+      // end of timing parameters
+      len+=u_1 ("VUI: nal_hrd_parameters_present_flag", 0, bitstream);
+      len+=u_1 ("VUI: vcl_hrd_parameters_present_flag", 0, bitstream);
+      len+=u_1 ("VUI: pic_struc_present_flag", 0, bitstream);
+
+      len+=u_1 ("VUI: bitstream_restriction_flag", bitstream_restriction_flag, bitstream);
+      if (bitstream_restriction_flag)
+      {
+        len+=u_1 ("VUI: motion_vectors_over_pic_boundaries_flag", 1, bitstream);
+        len+=ue_v ("VUI: max_bytes_per_pic_denom", 0, bitstream);    
+        len+=ue_v ("VUI: max_bits_per_mb_denom", 0, bitstream);    
+        len+=ue_v ("VUI: log2_max_mv_length_horizontal", 11, bitstream);    
+        len+=ue_v ("VUI: log2_max_mv_length_vertical", 11, bitstream);    
+        len+=ue_v ("VUI: num_reorder_frames", 3, bitstream);          	
+        len+=ue_v ("VUI: max_dec_frame_buffering", 4, bitstream);          	
+      }
+    }
   else 
   {
     printf ("Sequence Parameter VUI not yet implemented, this should never happen, exit\n");
     exit (-1);
   }
+
+  return 1;
 }
 
+/*! 
+ *************************************************************************************
+ * \brief
+ *    Function body for SEI message NALU generation
+ *
+ * \return
+ *    A NALU containing the SEI messages
+ *
+ *************************************************************************************
+ */
+NALU_t *GenerateSEImessage_NALU()
+{
+  NALU_t *n = AllocNALU(64000);
+  int RBSPlen = 0;
+  int NALUlen;
+  byte rbsp[MAXRBSPSIZE];
+
+  RBSPlen = GenerateSEImessage_rbsp (NORMAL_SEI, rbsp);
+  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SEI, NALU_PRIORITY_DISPOSABLE, 0, 1);
+  n->startcodeprefix_len = 4;
+
+  return n;
+}
+
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    int GenerateSEImessage_rbsp (int, bufferingperiod_information_struct*, char*)
+ *
+ *
+ * \return
+ *    size of the RBSP in bytes, negative in case of an error
+ *
+ * \note
+ *************************************************************************************
+ */
+int GenerateSEImessage_rbsp (int id, byte *rbsp)
+{
+  Bitstream *bitstream;
+
+  int len = 0, LenInBytes;
+  assert (rbsp != NULL);
+
+  if ((bitstream=calloc(1, sizeof(Bitstream)))==NULL) no_mem_exit("SeqParameterSet:bitstream");
+
+  // .. and use the rbsp provided (or allocated above) for the data
+  bitstream->streamBuffer = rbsp;
+  bitstream->bits_to_go = 8;
+
+  {
+    char sei_message[500];
+    char uuid_message[9] = "RandomMSG"; // This is supposed to be Random
+    unsigned int i, message_size = strlen(input->SEIMessageText);       
+    struct TIMEB tstruct;
+    ftime( &tstruct);    // start time ms  
+
+    if (message_size == 0) 
+    {
+      message_size = 13;
+      strncpy(sei_message,"Empty Message",message_size);
+    }
+    else
+      strncpy(sei_message,input->SEIMessageText,message_size);
+
+    len+=u_v (8,"SEI: last_payload_type_byte", 5, bitstream);
+    message_size += 17;
+    while (message_size > 254)
+    {
+      len+=u_v (8,"SEI: ff_byte",255, bitstream);
+      message_size -= 255;
+    }
+    len+=u_v (8,"SEI: last_payload_size_byte",message_size, bitstream);
+
+    // Lets randomize uuid based on time
+    len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) tstruct.timezone, bitstream);
+    len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) tstruct.time*1000+tstruct.millitm, bitstream);
+    len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) (uuid_message[0] << 24) + (uuid_message[1] << 16)  + (uuid_message[2] << 8) + (uuid_message[3] << 0), bitstream);
+    len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) (uuid_message[4] << 24) + (uuid_message[5] << 16)  + (uuid_message[6] << 8) + (uuid_message[7] << 0), bitstream);
+    for (i = 0; i < strlen(sei_message); i++)
+      len+=u_v (8,"SEI: user_data_payload_byte",sei_message[i], bitstream); 
+
+    len+=u_v (8,"SEI: user_data_payload_byte",   0, bitstream);
+  }
+  SODBtoRBSP(bitstream);     // copies the last couple of bits into the byte buffer
+
+  LenInBytes=bitstream->byte_pos;
+
+  free(bitstream);
+  return LenInBytes;
+}

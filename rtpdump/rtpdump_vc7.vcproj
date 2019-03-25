@@ -4,7 +4,8 @@
 	Version="7.10"
 	Name="rtpdump"
 	SccProjectName=""
-	SccLocalPath="">
+	SccLocalPath=""
+	ProjectGUID="{BE2D5D97-BD3F-489B-A346-123834DDDBBD}">
 	<Platforms>
 		<Platform
 			Name="Win32"/>
@@ -12,8 +13,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\Debug"
-			IntermediateDirectory=".\Debug"
+			OutputDirectory=".\Debug_vc7"
+			IntermediateDirectory=".\Debug_vc7"
 			ConfigurationType="1"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="FALSE"
@@ -26,10 +27,10 @@
 				RuntimeLibrary="5"
 				UsePrecompiledHeader="3"
 				PrecompiledHeaderThrough="stdafx.h"
-				PrecompiledHeaderFile=".\Debug/rtpdump.pch"
-				AssemblerListingLocation=".\Debug/"
-				ObjectFile=".\Debug/"
-				ProgramDataBaseFileName=".\Debug/"
+				PrecompiledHeaderFile=".\Debug_vc7/rtpdump.pch"
+				AssemblerListingLocation=".\Debug_vc7/"
+				ObjectFile=".\Debug_vc7/"
+				ProgramDataBaseFileName=".\Debug_vc7/"
 				BrowseInformation="1"
 				WarningLevel="3"
 				SuppressStartupBanner="TRUE"
@@ -39,16 +40,16 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
-				OutputFile=".\Debug/rtpdump.exe"
+				OutputFile=".\Debug_vc7/rtpdump.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="TRUE"
 				GenerateDebugInformation="TRUE"
-				ProgramDatabaseFile=".\Debug/rtpdump.pdb"
+				ProgramDatabaseFile=".\Debug_vc7/rtpdump.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
 				Name="VCMIDLTool"
-				TypeLibraryName=".\Debug/rtpdump.tlb"
+				TypeLibraryName=".\Debug_vc7/rtpdump.tlb"
 				HeaderFileName=""/>
 			<Tool
 				Name="VCPostBuildEventTool"/>
@@ -73,8 +74,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release"
-			IntermediateDirectory=".\Release"
+			OutputDirectory=".\Release_vc7"
+			IntermediateDirectory=".\Release_vc7"
 			ConfigurationType="1"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="FALSE"
@@ -89,10 +90,10 @@
 				EnableFunctionLevelLinking="TRUE"
 				UsePrecompiledHeader="3"
 				PrecompiledHeaderThrough="stdafx.h"
-				PrecompiledHeaderFile=".\Release/rtpdump.pch"
-				AssemblerListingLocation=".\Release/"
-				ObjectFile=".\Release/"
-				ProgramDataBaseFileName=".\Release/"
+				PrecompiledHeaderFile=".\Release_vc7/rtpdump.pch"
+				AssemblerListingLocation=".\Release_vc7/"
+				ObjectFile=".\Release_vc7/"
+				ProgramDataBaseFileName=".\Release_vc7/"
 				WarningLevel="3"
 				SuppressStartupBanner="TRUE"/>
 			<Tool
@@ -100,15 +101,15 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
-				OutputFile=".\Release/rtpdump.exe"
+				OutputFile=".\Release_vc7/rtpdump.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
-				ProgramDatabaseFile=".\Release/rtpdump.pdb"
+				ProgramDatabaseFile=".\Release_vc7/rtpdump.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
 				Name="VCMIDLTool"
-				TypeLibraryName=".\Release/rtpdump.tlb"
+				TypeLibraryName=".\Release_vc7/rtpdump.tlb"
 				HeaderFileName=""/>
 			<Tool
 				Name="VCPostBuildEventTool"/>

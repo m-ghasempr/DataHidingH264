@@ -93,13 +93,15 @@ int ComposeRTPPacket (RTPpacket_t *p)
 
   // Compose RTP header, little endian
 
-  p->packet[0] = (  ((p->v  & 0x03) << 6)
-                  | ((p->p  & 0x01) << 5)
-                  | ((p->x  & 0x01) << 4)
-                  | ((p->cc & 0x0F) << 0) );
+  p->packet[0] = (byte) 
+    ( ((p->v  & 0x03) << 6)
+    | ((p->p  & 0x01) << 5)
+    | ((p->x  & 0x01) << 4)
+    | ((p->cc & 0x0F) << 0) );
 
-  p->packet[1] = (  ((p->m  & 0x01) << 7)
-                  | ((p->pt & 0x7F) << 0) );
+  p->packet[1] = (byte)
+    ( ((p->m  & 0x01) << 7)
+    | ((p->pt & 0x7F) << 0) );
 
   // sequence number, msb first
   temp16 = htons((unsigned short)p->seq);
@@ -193,10 +195,10 @@ int WriteRTPNALU (NALU_t *n)
   assert (n != NULL);
   assert (n->len < 65000);
 
-  n->buf[0] =
-    n->forbidden_bit << 7      |
-    n->nal_reference_idc << 5  |
-    n->nal_unit_type;
+  n->buf[0] = (byte)
+    (n->forbidden_bit << 7      |
+     n->nal_reference_idc << 5  |
+     n->nal_unit_type );
 
   // Set RTP structure elements and alloca() memory foor the buffers
   if ((p = (RTPpacket_t *) malloc (sizeof (RTPpacket_t))) == NULL)
@@ -216,10 +218,10 @@ int WriteRTPNALU (NALU_t *n)
                                           //! For error resilience work, we need the correct
                                           //! marker bit.  Introduce a nalu->marker and set it in
                                           //! terminate_slice()?
-  p->pt=H26LPAYLOADTYPE;
+  p->pt=H264PAYLOADTYPE;
   p->seq=CurrentRTPSequenceNumber++;
   p->timestamp=CurrentRTPTimestamp;
-  p->ssrc=H26LSSRC;
+  p->ssrc=H264SSRC;
   p->paylen = n->len;
   memcpy (p->payload, n->buf, n->len);
 
@@ -382,10 +384,10 @@ int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void
   p->x=0;
   p->cc=0;
   p->m=Marker&1;
-  p->pt=H26LPAYLOADTYPE;
+  p->pt=H264PAYLOADTYPE;
   p->seq=CurrentRTPSequenceNumber++;
   p->timestamp=CurrentRTPTimestamp;
-  p->ssrc=H26LSSRC;
+  p->ssrc=H264SSRC;
 
   offset = 0;
   p->payload[offset++] = PacketType; // This is the first byte of the compound packet

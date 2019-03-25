@@ -161,14 +161,14 @@ void write_sei_message(int id, byte* payload, int payload_size, int payload_type
     sei_message[id].data[offset++] = 0xFF;
     type = type - 255;
   }
-  sei_message[id].data[offset++] = type;
+  sei_message[id].data[offset++] = (byte) type;
 
   while ( size > 255 )
   {
     sei_message[id].data[offset++] = 0xFF;
     size = size - 255;
   }
-  sei_message[id].data[offset++] = size;
+  sei_message[id].data[offset++] = (byte) size;
 
   memcpy(sei_message[id].data + offset, payload, payload_size);
   offset += payload_size;
@@ -231,7 +231,7 @@ void clear_sei_message(int id)
 void AppendTmpbits2Buf( Bitstream* dest, Bitstream* source )
 {
   int i, j;
-  unsigned char mask;
+  byte mask;
   int bits_in_last_byte;
 
   // copy the first bytes in source buffer
@@ -257,7 +257,7 @@ void AppendTmpbits2Buf( Bitstream* dest, Bitstream* source )
   bits_in_last_byte = 8-source->bits_to_go;
   if ( bits_in_last_byte > 0 )
   {
-    mask = 1 << (bits_in_last_byte-1);
+    mask = (byte) (1 << (bits_in_last_byte-1));
     for (j=0; j<bits_in_last_byte; j++)
     {
       dest->byte_buf <<= 1;
@@ -447,7 +447,7 @@ void CalculateSparePicture()
         tmp = 0;
         for (i0=0; i0<16; i0++)
           for (j0=0; j0<16; j0++)
-            tmp+=abs(fb->picbuf_short[m+1]->Refbuf11[(i*16+i0)*img->width+j*16+j0]-
+            tmp+=iabs(fb->picbuf_short[m+1]->Refbuf11[(i*16+i0)*img->width+j*16+j0]-
                        fb->picbuf_short[0]->Refbuf11[(i*16+i0)*img->width+j*16+j0]);
         tmp = (tmp<=threshold1? 255 : 0);
         map_sp[i][j] = (tmp==0? 1 : 0);
@@ -1352,7 +1352,7 @@ void UpdateUser_data_unregistered()
   for(i = 0; i < total_byte; i++)
   {
     temp_data = i * 4;
-    seiUser_data_unregistered.byte[i] = max(0, min(temp_data, 255));
+    seiUser_data_unregistered.byte[i] = (char) iClip3(0, 255, temp_data);
   }
   seiUser_data_unregistered.total_byte = total_byte;
 }
@@ -1471,7 +1471,7 @@ void UpdateUser_data_registered_itu_t_t35()
   for(i = 0; i < total_byte; i++)
   {
     temp_data = i * 3;
-    seiUser_data_registered_itu_t_t35.byte[i] = max(0, min(temp_data, 255));
+    seiUser_data_registered_itu_t_t35.byte[i] = (char) iClip3(0, 255, temp_data);
   }
   seiUser_data_registered_itu_t_t35.total_byte = total_byte;
 }

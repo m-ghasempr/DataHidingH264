@@ -3,6 +3,7 @@
 	ProjectType="Visual C++"
 	Version="7.10"
 	Name="lencod"
+	ProjectGUID="{9A39F1B7-3DFE-4263-8C02-8070F7D99AFA}"
 	SccProjectName=""
 	SccLocalPath="">
 	<Platforms>
@@ -12,8 +13,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\lencod/Debug"
-			IntermediateDirectory=".\lencod/Debug"
+			OutputDirectory=".\lencod/Debug_vc7"
+			IntermediateDirectory=".\lencod/Debug_vc7"
 			ConfigurationType="1"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="FALSE"
@@ -26,10 +27,10 @@
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="5"
 				UsePrecompiledHeader="2"
-				PrecompiledHeaderFile=".\lencod/Debug/lencod.pch"
-				AssemblerListingLocation=".\lencod/Debug/"
-				ObjectFile=".\lencod/Debug/"
-				ProgramDataBaseFileName=".\lencod/Debug/"
+				PrecompiledHeaderFile=".\lencod/Debug_vc7/lencod.pch"
+				AssemblerListingLocation=".\lencod/Debug_vc7/"
+				ObjectFile=".\lencod/Debug_vc7/"
+				ProgramDataBaseFileName=".\lencod/Debug_vc7/"
 				BrowseInformation="1"
 				WarningLevel="3"
 				SuppressStartupBanner="TRUE"
@@ -44,12 +45,12 @@
 				LinkIncremental="2"
 				SuppressStartupBanner="TRUE"
 				GenerateDebugInformation="TRUE"
-				ProgramDatabaseFile=".\lencod/Debug/lencod.pdb"
+				ProgramDatabaseFile=".\lencod/Debug_vc7/lencod.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
 				Name="VCMIDLTool"
-				TypeLibraryName=".\lencod/Debug/lencod.tlb"
+				TypeLibraryName=".\lencod/Debug_vc7/lencod.tlb"
 				HeaderFileName=""/>
 			<Tool
 				Name="VCPostBuildEventTool"/>
@@ -74,8 +75,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\lencod\Release"
-			IntermediateDirectory=".\lencod\Release"
+			OutputDirectory=".\lencod\Release_vc7"
+			IntermediateDirectory=".\lencod\Release_vc7"
 			ConfigurationType="1"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="FALSE"
@@ -84,38 +85,37 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="2"
-				AdditionalIncludeDirectories="lencod\inc,lcommon\inc"
-				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
+				AdditionalIncludeDirectories="lencod\inc"
+				PreprocessorDefinitions="WIN32;DEBUG;_CONSOLE"
 				StringPooling="TRUE"
 				RuntimeLibrary="4"
 				EnableFunctionLevelLinking="TRUE"
 				UsePrecompiledHeader="2"
-				PrecompiledHeaderFile=".\lencod\Release/lencod.pch"
-				AssemblerListingLocation=".\lencod\Release/"
-				ObjectFile=".\lencod\Release/"
-				ProgramDataBaseFileName=".\lencod\Release/"
+				PrecompiledHeaderFile=".\lencod\Release_vc7/lencod.pch"
+				AssemblerListingLocation=".\lencod\Release_vc7/"
+				ObjectFile=".\lencod\Release_vc7/"
+				ProgramDataBaseFileName=".\lencod\Release_vc7/"
 				BrowseInformation="1"
-				BrowseInformationFile=".\lencod\Release/"
 				WarningLevel="3"
 				SuppressStartupBanner="TRUE"
-				DebugInformationFormat="0"
-				CallingConvention="0"
+				DebugInformationFormat="3"
 				CompileAs="0"/>
 			<Tool
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/FIXED:NO"
 				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
 				OutputFile="./bin/lencod.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
-				GenerateDebugInformation="FALSE"
-				ProgramDatabaseFile=".\lencod\Release/lencod.pdb"
+				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile=".\lencod\Release_vc7/lencod.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
 				Name="VCMIDLTool"
-				TypeLibraryName=".\lencod\Release/lencod.tlb"
+				TypeLibraryName=".\lencod\Release_vc7/lencod.tlb"
 				HeaderFileName=""/>
 			<Tool
 				Name="VCPostBuildEventTool"/>
@@ -167,13 +167,7 @@
 				RelativePath=".\lencod\src\decoder.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\epzs.c">
-			</File>
-			<File
 				RelativePath=".\lencod\src\explicit_gop.c">
-			</File>
-			<File
-				RelativePath=".\lencod\src\fast_me.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\filehandle.c">
@@ -186,6 +180,12 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\image.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\img_chroma.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\img_luma.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\intrarefresh.c">
@@ -207,6 +207,36 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\mbuffer.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\md_high.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\md_highfast.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\md_highloss.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\md_low.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_distortion.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_epzs.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_fullfast.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_fullsearch.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_umhex.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_umhexsmp.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\memalloc.c">
@@ -245,6 +275,9 @@
 				RelativePath=".\lencod\src\ratectl.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\rc_quadratic.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\rdopt.c">
 			</File>
 			<File
@@ -263,9 +296,6 @@
 				RelativePath=".\lencod\src\sei.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\simplified_fast_me.c">
-			</File>
-			<File
 				RelativePath=".\lencod\src\slice.c">
 			</File>
 			<File
@@ -282,127 +312,151 @@
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl">
 			<File
-				RelativePath="lencod\inc\annexb.h">
+				RelativePath=".\lencod\inc\annexb.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\biariencode.h">
+				RelativePath=".\lencod\inc\biariencode.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\block.h">
+				RelativePath=".\lencod\inc\block.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\cabac.h">
+				RelativePath=".\lencod\inc\cabac.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\configfile.h">
+				RelativePath=".\lencod\inc\configfile.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\context_ini.h">
+				RelativePath=".\lencod\inc\context_ini.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\contributors.h">
+				RelativePath=".\lencod\inc\contributors.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\ctx_tables.h">
+				RelativePath=".\lencod\inc\ctx_tables.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\defines.h">
+				RelativePath=".\lencod\inc\defines.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\elements.h">
+				RelativePath=".\lencod\inc\elements.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\epzs.h">
+				RelativePath=".\lencod\inc\explicit_gop.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\explicit_gop.h">
+				RelativePath=".\lencod\inc\fmo.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\fast_me.h">
+				RelativePath=".\lencod\inc\global.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\fmo.h">
+				RelativePath=".\lencod\inc\header.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\global.h">
+				RelativePath=".\lencod\inc\ifunctions.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\header.h">
+				RelativePath=".\lencod\inc\image.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\image.h">
+				RelativePath=".\lencod\inc\img_chroma.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\intrarefresh.h">
+				RelativePath=".\lencod\inc\img_luma.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\leaky_bucket.h">
+				RelativePath=".\lencod\inc\intrarefresh.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\macroblock.h">
+				RelativePath=".\lencod\inc\leaky_bucket.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\mb_access.h">
+				RelativePath=".\lencod\inc\macroblock.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\mbuffer.h">
+				RelativePath=".\lencod\inc\mb_access.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\memalloc.h">
+				RelativePath=".\lencod\inc\mbuffer.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\minmax.h">
+				RelativePath=".\lencod\inc\me_distortion.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\mode_decision.h">
+				RelativePath=".\lencod\inc\me_epzs.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\mv-search.h">
+				RelativePath=".\lencod\inc\me_fullfast.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\nalu.h">
+				RelativePath=".\lencod\inc\me_fullsearch.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\nalucommon.h">
+				RelativePath=".\lencod\inc\me_umhex.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\output.h">
+				RelativePath=".\lencod\inc\me_umhexsmp.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\parset.h">
+				RelativePath=".\lencod\inc\memalloc.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\parsetcommon.h">
+				RelativePath=".\lencod\inc\minmax.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\q_matrix.h">
+				RelativePath=".\lencod\inc\mode_decision.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\q_offsets.h">
+				RelativePath=".\lencod\inc\mv-search.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\ratectl.h">
+				RelativePath=".\lencod\inc\nalu.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\rdopt_coding_state.h">
+				RelativePath=".\lencod\inc\nalucommon.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\refbuf.h">
+				RelativePath=".\lencod\inc\output.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\rtp.h">
+				RelativePath=".\lencod\inc\parset.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\sei.h">
+				RelativePath=".\lencod\inc\parsetcommon.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\simplified_fast_me.h">
+				RelativePath=".\lencod\inc\q_matrix.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\transform8x8.h">
+				RelativePath=".\lencod\inc\q_offsets.h">
 			</File>
 			<File
-				RelativePath="lencod\inc\vlc.h">
+				RelativePath=".\lencod\inc\ratectl.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rc_quadratic.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rdopt_coding_state.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\refbuf.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rtp.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\sei.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\transform8x8.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\vlc.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\win32.h">
 			</File>
 		</Filter>
 		<File
@@ -413,6 +467,9 @@
 		</File>
 		<File
 			RelativePath="bin\encoder_yuv444.cfg">
+		</File>
+		<File
+			RelativePath=".\VTune\lencod.vpj">
 		</File>
 	</Files>
 	<Globals>

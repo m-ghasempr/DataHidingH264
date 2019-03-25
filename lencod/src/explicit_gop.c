@@ -43,23 +43,24 @@ void create_hierarchy()
       {
         gop_structure[i].slice_type = B_SLICE;
         gop_structure[i].display_no = i * 2 + 1;
-        gop_structure[i].hierarchy_layer = 0;
+        gop_structure[i].hierarchy_layer = 1;
         gop_structure[i].reference_idc = NALU_PRIORITY_HIGH;
-        gop_structure[i].slice_qp = max(0, (input->qpB + (input->HierarchyLevelQPEnable ? -1: input->qpBRSOffset)));
+        gop_structure[i].slice_qp = imax(0, (input->qpB + (input->HierarchyLevelQPEnable ? -1: input->qpBRSOffset)));
 
       }
       else
       {
         gop_structure[i].slice_type = B_SLICE;
         gop_structure[i].display_no = (i - centerB) * 2;
-        gop_structure[i].hierarchy_layer = 1;
+        gop_structure[i].hierarchy_layer = 0;
         gop_structure[i].reference_idc = NALU_PRIORITY_DISPOSABLE;
         gop_structure[i].slice_qp = input->qpB;
       }      
     }
+    img->GopLevels = 2;
   }
   else
-  {    
+  {
     int GOPlevels = 1;
     int Bframes = input->successive_Bframe;
     int *curGOPLevelfrm,*curGOPLeveldist ;
@@ -71,8 +72,8 @@ void create_hierarchy()
       GOPlevels ++;
     }
      
-    curlevel = GOPlevels ;
-
+    curlevel = GOPlevels;
+    img->GopLevels = GOPlevels;
     if (NULL == (curGOPLevelfrm = (int*)malloc(GOPlevels * sizeof(int)))) no_mem_exit("create_hierarchy:curGOPLevelfrm");
     if (NULL == (curGOPLeveldist= (int*)malloc(GOPlevels * sizeof(int)))) no_mem_exit("create_hierarchy:curGOPLeveldist");
     
@@ -90,22 +91,22 @@ void create_hierarchy()
       for (i = (1 << j) - 1; i < Bframes + 1 - (1 << j); i += (1 << j)) {
         gop_structure[i].hierarchy_layer  = j;
         gop_structure[i].reference_idc  = NALU_PRIORITY_HIGH;
-        gop_structure[i].slice_qp = max(0, input->qpB + (input->HierarchyLevelQPEnable ? -j: input->qpBRSOffset));
+        gop_structure[i].slice_qp = imax(0, input->qpB + (input->HierarchyLevelQPEnable ? -j: input->qpBRSOffset));
       }     
-   }
+    }
 
     for (i = 1; i < Bframes; i++) 
-{
+    {
       j = i;
-  
+
       while (j > 0 && gop_structure[j].hierarchy_layer > gop_structure[j-1].hierarchy_layer) 
-  {
+      {
         tmp = gop_structure[j-1];
         gop_structure[j-1] = gop_structure[j];
         gop_structure[j] = tmp;
         j--;
+      }
     }
-  }
   }  
 }
 
@@ -121,7 +122,7 @@ void init_gop_structure()
 {
   int max_gopsize = input->HierarchicalCoding != 3 ? input->successive_Bframe  : input->jumpd;
   
-  gop_structure = calloc(max(10,max_gopsize), sizeof (GOP_DATA)); // +1 for reordering
+  gop_structure = calloc(imax(10,max_gopsize), sizeof (GOP_DATA)); // +1 for reordering
   if (NULL==gop_structure) 
     no_mem_exit("init_gop_structure: gop_structure");
 }
@@ -222,10 +223,13 @@ void interpret_gop_structure()
             case 'E':
             case 'e':
               gop_structure[coded_frame].reference_idc = NALU_PRIORITY_DISPOSABLE;
+              gop_structure[coded_frame].hierarchy_layer = 0;
               break;
             case 'R':
             case 'r':
               gop_structure[coded_frame].reference_idc= NALU_PRIORITY_HIGH;
+              gop_structure[coded_frame].hierarchy_layer = 1;
+              img->GopLevels = 2;
               break;
             default:
               snprintf(errortext, ET_SIZE, "Reference_IDC invalid in ExplicitHierarchyFormat param. Please check configuration file.");
@@ -247,7 +251,7 @@ void interpret_gop_structure()
               else
                 gop_structure[coded_frame].slice_qp = input->qpB;
 
-              gop_structure[coded_frame].slice_qp = Clip3(-img->bitdepth_luma_qp_scale, 51,gop_structure[coded_frame].slice_qp + dqp);
+              gop_structure[coded_frame].slice_qp = iClip3(-img->bitdepth_luma_qp_scale, 51,gop_structure[coded_frame].slice_qp + dqp);
                 qp_read = 1;
             }
             else
@@ -268,11 +272,9 @@ void interpret_gop_structure()
             {
               snprintf(errortext, ET_SIZE, "Total number of frames in Enhancement GOP need to be fewer or equal to FrameSkip parameter.");
               error (errortext, 400);
-            }
-            
+            }            
           }
-        }
-        
+        }        
       }      
     }
   }
@@ -298,7 +300,10 @@ void encode_enhancement_layer()
   
   if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0)) // B-frame(s) to encode
   {
-    img->type = B_SLICE;            // set image type to B-frame
+    if (input->PReplaceBSlice)
+      img->type = P_SLICE;            // set image type to P-frame
+    else
+      img->type = B_SLICE;            // set image type to B-frame
     
     if (input->NumFramesInELSubSeq == 0)
       img->layer = 0;
@@ -357,7 +362,7 @@ void encode_enhancement_layer()
         else
           img->bottompoc = img->toppoc+1;
         
-        img->framepoc = min (img->toppoc, img->bottompoc);
+        img->framepoc = imin (img->toppoc, img->bottompoc);
         
         img->delta_pic_order_cnt[1]= 0;   // POC200301
         
@@ -402,7 +407,7 @@ void encode_enhancement_layer()
         else
           img->bottompoc = img->toppoc+1;
         
-        img->framepoc = min (img->toppoc, img->bottompoc);
+        img->framepoc = imin (img->toppoc, img->bottompoc);
         
         //the following is sent in the slice header
         if (input->BRefPictures != 1)

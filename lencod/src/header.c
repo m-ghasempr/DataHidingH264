@@ -265,7 +265,7 @@ static int ref_pic_list_reordering(Bitstream *bitstream)
       do
       {
         i++;
-        len += ue_v ("SH: reordering_of_pic_num_idc", currSlice->reordering_of_pic_nums_idc_l0[i], bitstream);
+        len += ue_v ("SH: reordering_of_pic_nums_idc", currSlice->reordering_of_pic_nums_idc_l0[i], bitstream);
         if (currSlice->reordering_of_pic_nums_idc_l0[i]==0 ||
             currSlice->reordering_of_pic_nums_idc_l0[i]==1)
         {

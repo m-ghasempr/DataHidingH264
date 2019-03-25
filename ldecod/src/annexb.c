@@ -61,7 +61,10 @@ int GetAnnexbNALU (NALU_t *nalu)
   if(feof(bits))
   {
     if(pos==0)
-    return 0;
+    {
+      free (Buf);
+      return 0;
+    }
     else
     {
       printf( "GetAnnexbNALU can't read start code\n");

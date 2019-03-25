@@ -104,6 +104,56 @@ int start_sequence()
   {
      len = write_PPS(len, i);
   }
+
+  if (input->Generate_SEIVUI)
+  {
+    nalu = NULL;
+    nalu = GenerateSEImessage_NALU();
+    len += WriteNALU (nalu);
+    FreeNALU (nalu);
+  }
+
+  stats->bit_ctr_parametersets_n = len;
+  return 0;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    This function opens the output files and generates the
+ *    appropriate sequence header
+ ************************************************************************
+ */
+int rewrite_paramsets()
+{
+  int i,len=0, total_pps = (input->GenerateMultiplePPS) ? 3 : 1;
+  NALU_t *nalu;
+  
+
+  //! As a sequence header, here we write the both sequence and picture
+  //! parameter sets.  As soon as IDR is implemented, this should go to the
+  //! IDR part, as both parsets have to be transmitted as part of an IDR.
+  //! An alternative may be to consider this function the IDR start function.
+  
+  nalu = NULL;
+  nalu = GenerateSeq_parameter_set_NALU ();
+  len += WriteNALU (nalu);
+  FreeNALU (nalu);
+  
+  //! Lets write now the Picture Parameter sets. Output will be equal to the total number of bits spend here.
+  for (i=0;i<total_pps;i++)
+  {
+     len = write_PPS(len, i);
+  }
+
+  if (input->Generate_SEIVUI)
+  {
+    nalu = NULL;
+    nalu = GenerateSEImessage_NALU();
+    len += WriteNALU (nalu);
+    FreeNALU (nalu);
+  }
+
   stats->bit_ctr_parametersets_n = len;
   return 0;
 }

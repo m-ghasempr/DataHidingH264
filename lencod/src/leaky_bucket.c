@@ -57,7 +57,7 @@ int get_LeakyBucketRate(unsigned long NumberLeakyBuckets, unsigned long *Rmin)
   
   for(i=0; i<NumberLeakyBuckets; i++) 
   {
-    if(1 != fscanf(f, "%ld", &buf)) 
+    if(1 != fscanf(f, "%lu", &buf)) 
     {
       printf(" Leaky BucketRateFile does not have valid entries.\n Using rate calculated from avg. rate \n");
       fclose (f);

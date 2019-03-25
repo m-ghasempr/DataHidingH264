@@ -36,11 +36,16 @@ NALU_t *AllocNALU(int buffersize)
 {
   NALU_t *n;
 
-  if ((n = (NALU_t*)calloc (1, sizeof (NALU_t))) == NULL) no_mem_exit ("AllocNALU: n");
+  if ((n = (NALU_t*)calloc (1, sizeof (NALU_t))) == NULL) 
+    no_mem_exit ("AllocNALU: n");
 
   n->max_size=buffersize;
 
-  if ((n->buf = (byte*)calloc (buffersize, sizeof (byte))) == NULL) no_mem_exit ("AllocNALU: n->buf");
+  if ((n->buf = (byte*)calloc (buffersize, sizeof (byte))) == NULL) 
+  {
+    free (n);
+    no_mem_exit ("AllocNALU: n->buf");
+  }
   
   return n;
 }

@@ -61,19 +61,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-
-#if defined WIN32
-  #include <io.h>
-  #define strcasecmp strcmpi
-#else
-  #include <unistd.h>
-#endif
 #include <fcntl.h>
 #include <sys/stat.h>
 
 #include "global.h"
 #include "configfile.h"
-
 #include "fmo.h"
 
 char *GetConfigFileContent (char *Filename);
@@ -432,7 +424,7 @@ void ParseContent (char *buf, int bufsize)
         printf (".");
         break;
       default:
-        assert ("Unknown value type in the map definition of configfile.h");
+        error ("Unknown value type in the map definition of configfile.h",-1);
     }
   }
   memcpy (input, &configinput, sizeof (InputParameters));
@@ -656,6 +648,14 @@ static void PatchInp (void)
     input->part_size[7][0] = 1;
     input->part_size[7][1] = 1;
 
+    input->blocktype_lut[0][0] = 7; // 4x4
+    input->blocktype_lut[0][1] = 6; // 4x8
+    input->blocktype_lut[1][0] = 5; // 8x4
+    input->blocktype_lut[1][1] = 4; // 8x8
+    input->blocktype_lut[1][3] = 3; // 8x16
+    input->blocktype_lut[3][1] = 2; // 16x8
+    input->blocktype_lut[3][3] = 1; // 16x16
+
   for (j = 0; j<8;j++)
   {
     for (i = 0; i<2; i++) 
@@ -668,7 +668,7 @@ static void PatchInp (void)
   storedBplus1 = (input->BRefPictures ) ? input->successive_Bframe + 1: 1;
 
   if (input->Log2MaxFNumMinus4 == -1)
-    log2_max_frame_num_minus4 = Clip3(0,12, (int) (CeilLog2(input->no_frames * storedBplus1) - 4));
+    log2_max_frame_num_minus4 = iClip3(0,12, (int) (CeilLog2(input->no_frames * storedBplus1) - 4));
   else 
     log2_max_frame_num_minus4 = input->Log2MaxFNumMinus4;
   
@@ -680,7 +680,7 @@ static void PatchInp (void)
 
   // set proper log2_max_pic_order_cnt_lsb_minus4.
   if (input->Log2MaxPOCLsbMinus4 == - 1)
-    log2_max_pic_order_cnt_lsb_minus4 = Clip3(0,12, (int) (CeilLog2( 2*input->no_frames * (input->jumpd + 1)) - 4));
+    log2_max_pic_order_cnt_lsb_minus4 = iClip3(0,12, (int) (CeilLog2( 2*input->no_frames * (input->jumpd + 1)) - 4));
   else 
     log2_max_pic_order_cnt_lsb_minus4 = input->Log2MaxPOCLsbMinus4;
 
@@ -705,7 +705,7 @@ static void PatchInp (void)
   {
     if (input->directInferenceFlag==0)
       printf("\nDirectInferenceFlag set to 1 due to interlace coding.");
-    input->directInferenceFlag=1;
+    input->directInferenceFlag = 1;
   }
 
   if (input->PicInterlace>0)
@@ -857,8 +857,8 @@ static void PatchInp (void)
         int tmp;
 
         frame_mb_only = !(input->PicInterlace || input->MbInterlace);
-        mb_width= (input->img_width+img->auto_crop_right)/16;
-        mb_height= (input->img_height+img->auto_crop_bottom)/16;
+        mb_width= (input->img_width+img->auto_crop_right)>>4;
+        mb_height= (input->img_height+img->auto_crop_bottom)>>4;
         mapunit_height=mb_height/(2-frame_mb_only);
         
         input->slice_group_id=(byte * ) malloc(sizeof(byte)*mapunit_height*mb_width);
@@ -903,9 +903,9 @@ static void PatchInp (void)
   }
 
   // frame/field consistency check
-  if (input->MbInterlace != FRAME_CODING && input->MbInterlace != ADAPTIVE_CODING && input->MbInterlace != FIELD_CODING)
+  if (input->MbInterlace != FRAME_CODING && input->MbInterlace != ADAPTIVE_CODING && input->MbInterlace != FIELD_CODING && input->MbInterlace != SUPER_MB_CODING)
   {
-    snprintf (errortext, ET_SIZE, "Unsupported MbInterlace=%d, use frame based coding=0 or field based coding=1 or adaptive=2",input->MbInterlace);
+    snprintf (errortext, ET_SIZE, "Unsupported MbInterlace=%d, use frame based coding=0 or field based coding=1 or adaptive=2 or super MB only=3",input->MbInterlace);
     error (errortext, 400);
   }
    
@@ -929,12 +929,10 @@ static void PatchInp (void)
     error (errortext, 500);
   }
 
-  // the two HEX FME schemes support FAST Subpel ME. EPZS does not but works fine with
-  // Hadamard reduction with similar speed up. Subpel FME may be added at a later stage
-  // for this scheme for further speed increase.
-  if (input->hadamard == 2 && input->FMEnable != 0 && input->FMEnable != 3)
+  if ( (input->MEErrorMetric[Q_PEL] == ERROR_SATD && input->MEErrorMetric[H_PEL] == ERROR_SAD && input->MEErrorMetric[F_PEL] == ERROR_SAD) 
+    && input->SearchMode > FAST_FULL_SEARCH && input->SearchMode < EPZS)
   {
-    snprintf(errortext, ET_SIZE, "UseHadamard=2 is not allowed when UseFME is set to 1 or 2.");
+    snprintf(errortext, ET_SIZE, "MEDistortionQPel=2, MEDistortionHPel=0, MEDistortionFPel=0 is not allowed when SearchMode is set to 1 or 2.");
     error (errortext, 500);
   }
 
@@ -993,6 +991,12 @@ static void PatchInp (void)
       snprintf(errortext, ET_SIZE, "Frame size in macroblocks must be a multiple of BasicUnit.");
       error (errortext, 500);
     }
+
+    if ( (input->successive_Bframe || input->jumpd) && input->RCUpdateMode == RC_MODE_1 )
+    {
+      snprintf(errortext, ET_SIZE, "Use RC_MODE_1 only for all-intra coding.");
+      error (errortext, 500);
+    }
   }
 
   if ((input->successive_Bframe)&&(input->BRefPictures)&&(input->idr_enable)&&(input->intra_period)&&(input->pic_order_cnt_type!=0))
@@ -1032,28 +1036,31 @@ static void PatchInp (void)
     error (errortext, 500);
   }
   
-  // Residue Color Transform
-  if(input->yuv_format!=YUV444 && input->residue_transform_flag)
-  {
-    snprintf(errortext, ET_SIZE, "\nResidue color transform is supported only in YUV444.");
-    error (errortext, 500);
-  }
-
-  if ((input->BiPredMotionEstimation) && (input->search_range < input->BiPredMESearchRange))
+  if (input->successive_Bframe && ((input->BiPredMotionEstimation) && (input->search_range < input->BiPredMESearchRange)))
   {
     snprintf(errortext, ET_SIZE, "\nBiPredMESearchRange must be smaller or equal SearchRange.");
     error (errortext, 500);
   }
 
+  // check consistency
+  if ( input->ChromaMEEnable && !(input->ChromaMCBuffer) ) {
+    snprintf(errortext, ET_SIZE, "\nChromaMCBuffer must be set to 1 if ChromaMEEnable is set.");
+    error (errortext, 500);
+  }
 
-  if (input->EnableOpenGOP) 
-    input->ReferenceReorder = 1;
+  if ( input->ChromaMEEnable && input->yuv_format ==  YUV400) {
+    snprintf(errortext, ET_SIZE, "\nChromaMEEnable cannot be used with YUV400 color format.");
+    input->ChromaMEEnable = 0;
+  }
 
   if (input->EnableOpenGOP && input->PicInterlace) 
   {
     snprintf(errortext, ET_SIZE, "Open GOP currently not supported for Field coded pictures.");
     error (errortext, 500);
   }
+  
+  if (input->EnableOpenGOP) 
+    input->ReferenceReorder = 1;
 
   if (input->redundant_pic_flag)
   {
@@ -1084,6 +1091,19 @@ static void PatchInp (void)
     }
   }
   
+  if (input->num_ref_frames == 1 && input->successive_Bframe)
+  {
+    fprintf( stderr, "\nWarning: B slices used but only one reference allocated within reference buffer.\n");
+    fprintf( stderr, "         Performance may be considerably compromised! \n");
+    fprintf( stderr, "         2 or more references recommended for use with B slices.\n");
+  }
+  if ((input->HierarchicalCoding || input->BRefPictures) && input->successive_Bframe)
+  {
+    fprintf( stderr, "\nWarning: Hierarchical coding or Referenced B slices used.\n");
+    fprintf( stderr, "         Make sure that you have allocated enough references\n");
+    fprintf( stderr, "         in reference buffer to achieve best performance.\n");
+  }
+
   ProfileCheck();
   LevelCheck();
 }
@@ -1138,13 +1158,20 @@ static void ProfileCheck(void)
     }
   }
 
+  if (input->ChromaIntraDisable && input->FastCrIntraDecision)
+  {
+    fprintf( stderr, "\n----------------------------------------------------------------------------------\n");
+    fprintf( stderr, "\n Warning: ChromaIntraDisable and FastCrIntraDecision cannot be combined together.\n Using only Chroma Intra DC mode.\n");
+    fprintf( stderr, "\n----------------------------------------------------------------------------------\n");
+    input->FastCrIntraDecision=0;
+  }
 
   // baseline
   if (input->ProfileIDC == 66 )
   {
-    if (input->successive_Bframe || input->BRefPictures==2)
+    if ((input->successive_Bframe || input->BRefPictures==2) && input->PReplaceBSlice == 0)
     {
-      snprintf(errortext, ET_SIZE, "B pictures are not allowed in baseline.");
+      snprintf(errortext, ET_SIZE, "B slices are not allowed in baseline.");
       error (errortext, 500);
     }
     if (input->sp_periodicity)

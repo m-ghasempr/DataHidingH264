@@ -141,7 +141,7 @@ int RestOfSliceHeader()
     }
   }
 
-  currSlice->structure = img->structure;
+  currSlice->structure = (PictureStructure) img->structure;
 
   img->MbaffFrameFlag=(active_sps->mb_adaptive_frame_field_flag && (img->field_pic_flag==0));
 

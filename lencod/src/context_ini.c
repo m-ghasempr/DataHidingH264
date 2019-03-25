@@ -236,12 +236,12 @@ double XRate (BiContextTypePtr ctx, const int* model)
 {
   int     ctx_state, mod_state;
   double  weight, xr = 0.0;
-  int     qp = max(0,img->qp);
+  int     qp = imax(0,img->qp);
 
-  weight    = min (1.0, (double)ctx->count/(double)RELIABLE_COUNT);
+  weight    = dmin (1.0, (double)ctx->count/(double)RELIABLE_COUNT);
 
   mod_state = ((model[0]*qp)>>4)+model[1];
-  mod_state = min (max (0, mod_state), 127);
+  mod_state = iClip3(0, 127, mod_state);
   ctx_state = (ctx->MPS ? 64+ctx->state : 63-ctx->state);
 
   xr -= weight * probability[    ctx_state] * entropy[    mod_state];

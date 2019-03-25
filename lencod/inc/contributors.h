@@ -18,12 +18,13 @@
       Heinrich-Hertz-Institute for Communication Technology GmbH, Germany
       University of Hannover, Institut of Communication Theory and Signal Processing,Germany
       Videolocus, Canada
-	  LSI Logic, Canada
+      LSI Logic, Canada
       Motorola Inc., USA
       Microsoft Corp., USA
       Apple Computer, Inc.
       RealNetworks, Inc., USA
       Thomson, Inc., USA
+      Dolby Laboratories, Inc., USA
    \endverbatim
    \par Full Contact Information
    \verbatim
@@ -52,9 +53,15 @@
       D-10587 Berlin, Germany
 
       Jani Lainema                    <jani.lainema@nokia.com>
+      Ragip Kurceren                  <ragip.kurceren@nokia.com>      
       Nokia Inc. / Nokia Research Center
       6000 Connection Drive
       Irving, TX 75039, USA
+
+      Miska M. Hannuksela             <miska.hannuksela@nokia.com>
+      Nokia Corporation / Nokia Mobile Phones
+      P.O. Box 88
+      33721 Tampere, Finland
 
       Sebastian Purreiter             <sebastian.purreiter@mch.siemens.de>
       Siemens AG
@@ -69,29 +76,7 @@
       30167 Hannover
 
       Thomas Stockhammer              <stockhammer@ei.tum.de>
-      Institute for Communications Engineering
-      Munich University of Technology
-      80290 Munich
-      Germany
-
-      Detlev Marpe                    <marpe@hhi.de>
-      Heinrich-Hertz-Institute
-      Einsteinufer 37
-      10587 Berlin
-      Germany
-
-      Guido Heising                   <heising@hhi.de>
-      Heinrich-Hertz-Institute
-      Einsteinufer 37
-      10587 Berlin
-      Germany
-
-      Ragip Kurceren                  <ragip.kurceren@nokia.com>
-      Nokia Inc. / Nokia Research Center
-      6000 Connection Drive
-      Irving, TX 75039, USA
-
-      Tobias Oelbaum (TO)             <drehvial@gmx.net>
+      Tobias Oelbaum (TO)             <drehvial@gmx.net>      
       Institute for Communications Engineering
       Munich University of Technology
       80290 Munich
@@ -106,18 +91,10 @@
       Tampere International Center for Signal Processing
       33720 Tampere, Finland
 
-      Miska M. Hannuksela             <miska.hannuksela@nokia.com>
-      Nokia Corporation / Nokia Mobile Phones
-      P.O. Box 88
-      33721 Tampere, Finland
-
       Karsten Suehring                <suehring@hhi.de>
-      Heinrich-Hertz-Institute
-      Einsteinufer 37
-      10587 Berlin
-      Germany
-
       Heiko Schwarz                   <hschwarz@hhi.de>
+      Detlev Marpe                    <marpe@hhi.de>
+      Guido Heising                   <heising@hhi.de>      
       Heinrich-Hertz-Institute
       Einsteinufer 37
       10587 Berlin
@@ -138,14 +115,8 @@
       No.49, Zhichun Road, Hai Dian District,
       Beijing China 100080
 
-
       Mathias Wien                    <wien@ient.rwth-aachen.de>
-      Institut und Lehrstuhl für Nachrichtentechnik
-      RWTH Aachen University
-      52072 Aachen
-      Germany
-
-      Achim Dahlhoff                  <dahlhoff@ient.rwth-aachen.de>
+      Achim Dahlhoff                  <dahlhoff@ient.rwth-aachen.de>      
       Institut und Lehrstuhl für Nachrichtentechnik
       RWTH Aachen University
       52072 Aachen
@@ -162,12 +133,19 @@
       1006 Kadoma, Kadoma
       Osaka 663-8113, Japan
 
-      Dzung Hoang                     <dzung.hoang@conexant.com>
-      Eric Viscito                    <eric.viscito@conexant.com>
-      Conexant Systems. Inc.
-      MPEG Compression Group
-      20450 Stevens Creek Blvd.
-      Cupertino, CA 95014
+      Dzung Hoang                     <dthoang@yahoo.com>
+      10533 Roy Butler Dr.
+      Austin, TX 78717
+
+      Eric Viscito                    <eric@ev-consulting.com>
+      eV Consulting
+      52 Tracy Ln
+      Shelburne, VT 05482 USA
+
+      Dzung Hoang                     <dzung.hoang@xilient.com>
+      Xilient Inc.
+      10181 Bubb Rd.
+      Cupertino, CA 95014     
 
       Barry Haskell
       Apple Computer, Inc.            <bhaskell@apple.com>
@@ -199,7 +177,11 @@
       Haidian District 
       Beijing China, 100084
         
-      Alexis Michael Tourapis         <alexismt@ieee.org>
+      Alexis Michael Tourapis         <alexismt@ieee.org><atour@dolby.com>
+      Athanasios Leontaris            <aleon@dolby.com>
+      Dolby Laboratories Inc.
+      3601 West Alameda Ave.
+      Burbank, CA 91505
   
       Xiaoquan Yi                     <xyi@engr.scu.edu>
       Jun Zhang                       <jzhang2@engr.scu.edu>

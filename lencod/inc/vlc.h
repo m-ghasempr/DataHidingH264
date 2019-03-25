@@ -13,7 +13,7 @@
 #ifndef _VLC_H_
 #define _VLC_H_
 
-int u_1  (char *tracestring, int value, Bitstream *bitstream);
+Boolean u_1  (char *tracestring, int value, Bitstream *bitstream);
 int se_v (char *tracestring, int value, Bitstream *bitstream);
 int ue_v (char *tracestring, int value, Bitstream *bitstream);
 int u_v  (int n, char *tracestring, int value, Bitstream *bitstream);
@@ -44,8 +44,8 @@ int   writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *th
 int   writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart);
 int   writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *this_dataPart);
 int   writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataPartition *this_dataPart);
-int   writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPart);
-int   writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *this_dataPart);
+int   writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPart, int profile_idc);
+int   writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *this_dataPart, int profile_idc);
 int   writeSyntaxElement_Intra4x4PredictionMode(SyntaxElement *se, DataPartition *this_dataPart);
 
 #endif

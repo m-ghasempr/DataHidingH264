@@ -8,6 +8,7 @@
  *
  * \author
  *    Inge Lille-Langoy               <inge.lille-langoy@telenor.com>   \n
+ *    Alexis Michael Tourapis         <alexis.tourapis@dolby.com>       \n
  *    Copyright (C) 1999  Telenor Satellite Services, Norway
  *
  ************************************************************************
@@ -30,7 +31,7 @@ const int QP2QUANT[40]=
 // Currently only Integer Pel restrictions are used, 
 // since the way values are specified 
 // (i.e. mvlowbound = (levelmvlowbound + 1) and the way
-// Subpel me is performed subpel will always be within range.
+// Subpel ME is performed, subpel will always be within range.
  
 const int LEVELMVLIMIT[17][6] =
 {

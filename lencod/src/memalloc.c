@@ -108,6 +108,50 @@ int get_mem3Dpel(imgpel ****array3D, int frames, int rows, int columns)
 /*!
  ************************************************************************
  * \brief
+ *    Allocate 4D memory array -> imgpel array4D[sub_x][sub_y][rows][columns]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem4Dpel(imgpel *****array4D, int sub_x, int sub_y, int rows, int columns)
+{
+  int  j;
+      
+  if(((*array4D) = (imgpel****)calloc(sub_x,sizeof(imgpel***))) == NULL)
+    no_mem_exit("get_mem4Dpel: array4D");
+
+  for(j=0;j<sub_x;j++)
+    get_mem3Dpel( (*array4D)+j, sub_y, rows, columns ) ;
+
+  return sub_x*sub_y*rows*columns*sizeof(imgpel);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 5D memory array -> imgpel array5D[dims][sub_x][sub_y][rows][columns]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem5Dpel(imgpel ******array5D, int dims, int sub_x, int sub_y, int rows, int columns)
+{
+  int  j;
+      
+  if(((*array5D) = (imgpel*****)calloc(dims,sizeof(imgpel****))) == NULL)
+    no_mem_exit("get_mem5Dpel: array5D");
+
+  for(j=0;j<dims;j++)
+    get_mem4Dpel( (*array5D)+j, sub_x, sub_y, rows, columns ) ;
+
+  return dims*sub_x*sub_y*rows*columns*sizeof(imgpel);
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    free 2D memory array
  *    which was allocated with get_mem2Dpel()
  ************************************************************************
@@ -126,6 +170,7 @@ void free_mem2Dpel(imgpel **array2D)
     error ("free_mem2Dpel: trying to free unused memory",100);
   }
 }
+
 
 /*!
  ************************************************************************
@@ -148,6 +193,52 @@ void free_mem3Dpel(imgpel ***array3D, int frames)
   } else
   {
     error ("free_mem3Dpel: trying to free unused memory",100);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    free 4D memory array
+ *    which was allocated with get_mem4Dpel()
+ ************************************************************************
+ */
+void free_mem4Dpel(imgpel ****array4D, int sub_x, int sub_y)
+{
+  int i;
+      
+  if (array4D)
+  {
+    for (i=0;i<sub_x;i++)
+      free_mem3Dpel(array4D[i], sub_y);
+    free (array4D);
+  } 
+  else
+  {
+    error ("free_mem4Dpel: trying to free unused memory",100);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    free 5D memory array
+ *    which was allocated with get_mem5Dpel()
+ ************************************************************************
+ */
+void free_mem5Dpel(imgpel *****array5D, int dims, int sub_x, int sub_y)
+{
+  int i;
+      
+  if (array5D)
+  {
+    for (i=0;i<dims;i++)
+      free_mem4Dpel(array5D[i], sub_x, sub_y);
+    free (array5D);
+  } 
+  else
+  {
+    error ("free_mem5Dpel: trying to free unused memory",100);
   }
 }
 
@@ -734,7 +825,8 @@ void free_mem5Dshort(short *****array5D, int refs, int blocktype, int height)
     for(j=0;j<refs;j++)
       free_mem4Dshort( array5D[j], blocktype, height) ;
     free (array5D);
-  } else
+  } 
+  else
   {
     error ("free_mem5Dshort: trying to free unused memory",100);
   }
@@ -756,7 +848,8 @@ void free_mem6Dshort(short ******array6D, int list, int refs, int blocktype, int
     for(j=0;j<list;j++)
       free_mem5Dshort( array6D[j], refs, blocktype, height) ;
     free (array6D);
-  } else
+  } 
+  else
   {
     error ("free_mem6Dshort: trying to free unused memory",100);
   }
@@ -802,9 +895,9 @@ int get_mem2Ddb_offset(double ***array2D, int rows, int columns, int offset)
   int i;
   
   if((*array2D      = (double**)calloc(rows,        sizeof(double*))) == NULL)
-    no_mem_exit("get_mem2Ddouble: array2D");
+    no_mem_exit("get_mem2Ddb_offset: array2D");
   if(((*array2D)[0] = (double* )calloc(rows*columns,sizeof(double ))) == NULL)
-    no_mem_exit("get_mem2Ddouble: array2D");
+    no_mem_exit("get_mem2Ddb_offset: array2D");
   
   (*array2D)[0] += offset;
 
@@ -813,6 +906,72 @@ int get_mem2Ddb_offset(double ***array2D, int rows, int columns, int offset)
   
   return rows*columns*sizeof(double);
 }
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 3D memory double array -> double array3D[pels][rows][columns]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem3Ddb_offset(double ****array3D, int rows, int columns, int pels, int offset)
+{
+  int  i,j;
+
+  if(((*array3D) = (double***)calloc(rows,sizeof(double**))) == NULL)
+    no_mem_exit("get_mem3Ddb_offset: array3D");
+
+  if(((*array3D)[0] = (double** )calloc(rows*columns,sizeof(double*))) == NULL)
+    no_mem_exit("get_mem3Ddb_offset: array3D");
+
+  (*array3D) [0] += offset;
+
+  for(i=1 ; i<rows ; i++)
+    (*array3D)[i] =  (*array3D)[i-1] + columns  ;
+
+  for (i = 0; i < rows; i++)
+    for (j = -offset; j < columns - offset; j++)
+      if(((*array3D)[i][j] = (double* )calloc(pels,sizeof(double))) == NULL)
+        no_mem_exit("get_mem3Ddb_offset: array3D");
+
+  return rows*columns*pels*sizeof(double);
+}
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 3D memory int array -> int array3D[rows][columns][pels]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+
+
+int get_mem3Dint_offset(int ****array3D, int rows, int columns, int pels, int offset)
+{
+  int  i,j;
+
+  if(((*array3D) = (int***)calloc(rows,sizeof(int**))) == NULL)
+    no_mem_exit("get_mem3Dint_offset: array3D");
+
+  if(((*array3D)[0] = (int** )calloc(rows*columns,sizeof(int*))) == NULL)
+    no_mem_exit("get_mem3Dint_offset: array3D");
+
+  (*array3D) [0] += offset;
+
+  for(i=1 ; i<rows ; i++)
+    (*array3D)[i] =  (*array3D)[i-1] + columns  ;
+
+  for (i = 0; i < rows; i++)
+    for (j = -offset; j < columns - offset; j++)
+      if(((*array3D)[i][j] = (int* )calloc(pels,sizeof(int))) == NULL)
+        no_mem_exit("get_mem3Dint_offset: array3D");
+
+  return rows*columns*pels*sizeof(int);
+}
+
 
 /*!
  ************************************************************************
@@ -831,7 +990,8 @@ void free_mem2Ddouble(double **array2D)
 
     free (array2D);
 
-  } else
+  } 
+  else
   {
     error ("free_mem2Ddouble: trying to free unused memory",100);
   }
@@ -849,7 +1009,7 @@ void free_mem2Ddb_offset(double **array2D, int offset)
 {
   if (array2D)
   {
-    (*array2D)[0] -= offset;
+    array2D[0] -= offset;
     if (array2D[0]) 
       free (array2D[0]);
     else error ("free_mem2Ddb_offset: trying to free unused memory",100);
@@ -861,7 +1021,75 @@ void free_mem2Ddb_offset(double **array2D, int offset)
     error ("free_mem2Ddb_offset: trying to free unused memory",100);
   }
 }
+/*!
+ ************************************************************************
+ * \brief
+ *    free 3D memory array with offset
+ ************************************************************************
+ */
+void free_mem3Ddb_offset(double ***array3D, int rows, int columns, int offset)
+{
+  int i, j;
 
+  if (array3D)
+  {
+    for (i = 0; i < rows; i++)
+    {
+      for (j = -offset; j < columns - offset; j++)
+      {
+        if (array3D[i][j])
+          free(array3D[i][j]);
+        else
+          error ("free_mem3Ddb_offset: trying to free unused memory",100);
+      }
+    }
+    array3D[0] -= offset;
+    if (array3D[0])
+      free(array3D[0]);
+    else
+      error ("free_mem3Ddb_offset: trying to free unused memory",100);
+    free (array3D);
+  }
+  else
+  {
+    error ("free_mem3Ddb_offset: trying to free unused memory",100);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    free 3D memory array with offset
+ ************************************************************************
+ */
+void free_mem3Dint_offset(int ***array3D, int rows, int columns, int offset)
+{
+  int i, j;
+
+  if (array3D)
+  {
+    for (i = 0; i < rows; i++)
+    {
+      for (j = -offset; j < columns - offset; j++)
+      {
+        if (array3D[i][j])
+          free(array3D[i][j]);
+        else
+          error ("free_mem3Dint_offset: trying to free unused memory",100);
+      }
+    }
+    array3D[0] -= offset;
+    if (array3D[0])
+      free(array3D[0]);
+    else
+      error ("free_mem3Dint_offset: trying to free unused memory",100);
+    free (array3D);
+  }
+  else
+  {
+    error ("free_mem3Dint_offset: trying to free unused memory",100);
+  }
+}
 /*!
  ************************************************************************
  * \brief

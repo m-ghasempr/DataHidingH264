@@ -42,15 +42,16 @@ typedef struct storable_picture
   int         non_existing;
 
   int         size_x, size_y, size_x_cr, size_y_cr;
+  int         size_x_pad, size_y_pad;
+  int         size_x_cr_pad, size_y_cr_pad;
   int         chroma_vector_adjustment;
   int         coded_frame;
   int         MbaffFrameFlag;
 
   imgpel **   imgY;          //!< Y picture component
-  imgpel *    imgY_11;       //!< Y picture component with padded borders
-  imgpel *    imgY_11_w;     //!< Y picture component with padded borders for weighted prediction
-  imgpel **   imgY_ups;      //!< Y picture component upsampled (Quarter pel)
-  imgpel **   imgY_ups_w;    //!< Y picture component upsampled (Quarter pel) for weighted prediction
+  imgpel ****   imgY_sub;      //!< Y picture component upsampled (Quarter pel)
+  imgpel ****   imgY_sub_w;    //!< Y picture component upsampled (Quarter pel) for weighted prediction
+  imgpel *****  imgUV_sub;      //!< UV picture component upsampled (Quarter/One-Eighth pel)
   imgpel ***  imgUV;         //!< U and V picture components
 
   byte *      mb_field;      //!< field macroblock indicator

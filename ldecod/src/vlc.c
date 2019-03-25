@@ -122,15 +122,15 @@ int ue_v (char *tracestring, Bitstream *bitstream)
  */
 int se_v (char *tracestring, Bitstream *bitstream)
 {
-  SyntaxElement symbol, *sym=&symbol;
+  SyntaxElement symbol;
 
   assert (bitstream->streamBuffer != NULL);
-  sym->type = SE_HEADER;
-  sym->mapping = linfo_se;   // Mapping rule: signed integer
+  symbol.type = SE_HEADER;
+  symbol.mapping = linfo_se;   // Mapping rule: signed integer
   SYMTRACESTRING(tracestring);
-  readSyntaxElement_VLC (sym, bitstream);
-  UsedBits+=sym->len;
-  return sym->value1;
+  readSyntaxElement_VLC (&symbol, bitstream);
+  UsedBits+=symbol.len;
+  return symbol.value1;
 }
 
 
@@ -156,17 +156,18 @@ int se_v (char *tracestring, Bitstream *bitstream)
  */
 int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
 {
-  SyntaxElement symbol, *sym=&symbol;
+  SyntaxElement symbol;
+  symbol.inf = 0;
 
   assert (bitstream->streamBuffer != NULL);
-  sym->type = SE_HEADER;
-  sym->mapping = linfo_ue;   // Mapping rule
-  sym->len = LenInBits;
+  symbol.type = SE_HEADER;
+  symbol.mapping = linfo_ue;   // Mapping rule
+  symbol.len = LenInBits;
   SYMTRACESTRING(tracestring);
-  readSyntaxElement_FLC (sym, bitstream);
-  UsedBits+=sym->len;
-  return sym->inf;
-};
+  readSyntaxElement_FLC (&symbol, bitstream);
+  UsedBits+=symbol.len;
+  return symbol.inf;
+}
 
                 
 /*! 
@@ -186,9 +187,9 @@ int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
  *
  *************************************************************************************
  */
-int u_1 (char *tracestring, Bitstream *bitstream)
+Boolean u_1 (char *tracestring, Bitstream *bitstream)
 {
-  return u_v (1, tracestring, bitstream);
+  return (Boolean) u_v (1, tracestring, bitstream);
 }
 
 
@@ -205,8 +206,8 @@ int u_1 (char *tracestring, Bitstream *bitstream)
  */
 void linfo_ue(int len, int info, int *value1, int *dummy)
 {
-  assert (len/2<32);
-  *value1 = (1<<(len/2))+info-1;
+  assert ((len>>1)<32);
+  *value1 = (1<<(len>>1))+info-1;
 }
 
 /*!
@@ -222,9 +223,9 @@ void linfo_ue(int len, int info, int *value1, int *dummy)
 void linfo_se(int len,  int info, int *value1, int *dummy)
 {
   int n;
-  assert (len/2<32);
-  n = (1 << (len/2))+info-1;
-  *value1 = (n+1)/2;
+  assert ((len>>1)<32);
+  n = (1 << (len>>1))+info-1;
+  *value1 = (n+1)>>1;
   if((n & 0x01)==0)                           // lsb is signed bit
     *value1 = -*value1;
 }
@@ -276,11 +277,11 @@ void linfo_levrun_inter(int len, int info, int *level, int *irun)
 {
   int l2;
   int inf;
-  assert ((len/2-5)<32);
+  assert (((len>>1)-5)<32);
   if (len<=9)
   {
-    l2=max(0,len/2-1);
-    inf=info/2;
+    l2=imax(0,(len>>1)-1);
+    inf=info>>1;
     *level=NTAB1[l2][inf][0];
     *irun=NTAB1[l2][inf][1];
     if ((info&0x01)==1)
@@ -289,7 +290,7 @@ void linfo_levrun_inter(int len, int info, int *level, int *irun)
   else                                  // if len > 9, skip using the array
   {
     *irun=(info&0x1e)>>1;
-    *level = LEVRUN1[*irun] + info/32 + ( 1<< (len/2 - 5));
+    *level = LEVRUN1[*irun] + (info>>5) + ( 1<< ((len>>1) - 5));
     if ((info&0x01)==1)
       *level=-*level;
   }
@@ -313,8 +314,8 @@ void linfo_levrun_c2x2(int len, int info, int *level, int *irun)
 
   if (len<=5)
   {
-    l2=max(0,len/2-1);
-    inf=info/2;
+    l2=imax(0,(len>>1)-1);
+    inf=info>>1;
     *level=NTAB3[l2][inf][0];
     *irun=NTAB3[l2][inf][1];
     if ((info&0x01)==1)
@@ -323,7 +324,7 @@ void linfo_levrun_c2x2(int len, int info, int *level, int *irun)
   else                                  // if len > 5, skip using the array
   {
     *irun=(info&0x06)>>1;
-    *level = LEVRUN3[*irun] + info/8 + (1 << (len/2 - 3));
+    *level = LEVRUN3[*irun] + (info>>3) + (1 << ((len>>1) - 3));
     if ((info&0x01)==1)
       *level=-*level;
   }
@@ -365,7 +366,7 @@ int readSyntaxElement_VLC(SyntaxElement *sym, Bitstream *currStream)
  *    map it to the corresponding syntax element
  ************************************************************************
  */
-int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP)
+int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct datapartition *dP)
 {
   Bitstream   *currStream = dP->bitstream;
 
@@ -379,7 +380,7 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
  *    map it to the corresponding Intra Prediction Direction
  ************************************************************************
  */
-int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP)
+int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, struct img_par *img,struct datapartition *dP)
 {
   Bitstream   *currStream            = dP->bitstream;
   int         frame_bitoffset        = currStream->frame_bitoffset;
@@ -412,8 +413,8 @@ int GetVLCSymbol_IntraMode (byte buffer[],int totbitoffset,int *info, int byteco
   int len;
   int info_bit;
 
-  byteoffset = totbitoffset/8;
-  bitoffset  = 7-(totbitoffset%8);
+  byteoffset = totbitoffset>>3;
+  bitoffset  = 7-(totbitoffset&0x07);
   ctr_bit    = (buffer[byteoffset] & (0x01<<bitoffset));   // set up control bit
   len        = 1;
 
@@ -476,8 +477,8 @@ int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
   int cnt=0;
 
   
-  byteoffset= totbitoffset/8;
-  bitoffset= 7-(totbitoffset%8);
+  byteoffset= totbitoffset>>3;
+  bitoffset= 7-(totbitoffset&0x07);
 
   assert (byteoffset<bytecount);
 
@@ -510,7 +511,7 @@ int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
  *    Check if there are symbols for the next MB
  ************************************************************************
  */
-int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp, int dummy)
+int uvlc_startcode_follows(struct img_par *img, int dummy)
 {
   int dp_Nr = assignSE2partition[img->currentSlice->dp_mode][SE_MBTYPE];
   DataPartition *dP = &(img->currentSlice->partArr[dp_Nr]);
@@ -551,8 +552,8 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
   int len;
   int info_bit;
 
-  byteoffset= totbitoffset/8;
-  bitoffset= 7-(totbitoffset%8);
+  byteoffset= totbitoffset>>3;
+  bitoffset= 7-(totbitoffset&0x07);
   ctr_bit = (buffer[byteoffset] & (0x01<<bitoffset));   // set up control bit
 
   len=1;
@@ -1265,8 +1266,8 @@ int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
 
   int bitcounter=numbits;
 
-  byteoffset= totbitoffset/8;
-  bitoffset= 7-(totbitoffset%8);
+  byteoffset= totbitoffset>>3;
+  bitoffset= 7-(totbitoffset&0x07);
 
   inf=0;
   while (numbits)
@@ -1311,11 +1312,8 @@ int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits)
 {
 
   register int inf;
-  long byteoffset;      // byte from start of buffer
-  int bitoffset;      // bit from start of byte
-
-  byteoffset= totbitoffset/8;
-  bitoffset= 7-(totbitoffset%8);
+  long byteoffset = totbitoffset>>3;      // byte from start of buffer
+  int bitoffset   = 7-(totbitoffset&0x07);      // bit from start of byte
 
   inf=0;
   while (numbits)
@@ -1346,7 +1344,7 @@ int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits)
  *    if a skipped MB is field/frame
  ************************************************************************
  */
-int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP)
+int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct datapartition *dP)
 {
   Bitstream   *currStream = dP->bitstream;
   int frame_bitoffset = currStream->frame_bitoffset;

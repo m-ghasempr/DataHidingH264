@@ -19,13 +19,15 @@ CFG=lencod - Win32 Debug
 !MESSAGE 
 !MESSAGE "lencod - Win32 Release" (based on "Win32 (x86) Console Application")
 !MESSAGE "lencod - Win32 Debug" (based on "Win32 (x86) Console Application")
+!MESSAGE "lencod - Win32 VTune" (based on "Win32 (x86) Console Application")
+!MESSAGE "lencod - Win32 Intel" (based on "Win32 (x86) Console Application")
 !MESSAGE 
 
 # Begin Project
 # PROP AllowPerConfigDependencies 0
 # PROP Scc_ProjName ""
 # PROP Scc_LocalPath ""
-CPP=cl.exe
+CPP=xicl6.exe
 RSC=rc.exe
 
 !IF  "$(CFG)" == "lencod - Win32 Release"
@@ -42,15 +44,16 @@ RSC=rc.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /c
-# ADD CPP /nologo /W3 /GX /Zi /O2 /Ob2 /I "lencod\inc" /I "lcommon\inc" /D "WIN32" /D "DEBUG" /D "_CONSOLE" /D "_MBCS" /Fr /YX /FD /c
+# ADD CPP /nologo /W3 /GX /Zi /O2 /Ob2 /I "lencod\inc" /D "WIN32" /D "DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
 # ADD RSC /l 0x409 /d "NDEBUG"
 BSC32=bscmake.exe
 # ADD BASE BSC32 /nologo
 # ADD BSC32 /nologo
-LINK32=link.exe
+LINK32=xilink6.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib Ws2_32.lib /nologo /subsystem:console /debug /machine:I386 /out:"./bin/lencod.exe"
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib Ws2_32.lib /nologo /subsystem:console /debug /machine:I386 /out:"./bin/lencod.exe" /fixed:no
+# SUBTRACT LINK32 /pdb:none
 
 !ELSEIF  "$(CFG)" == "lencod - Win32 Debug"
 
@@ -72,9 +75,63 @@ LINK32=link.exe
 BSC32=bscmake.exe
 # ADD BASE BSC32 /nologo
 # ADD BSC32 /nologo
-LINK32=link.exe
+LINK32=xilink6.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386 /pdbtype:sept
 # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib Ws2_32.lib /nologo /subsystem:console /profile /debug /machine:I386 /out:"./bin/lencod.exe"
+
+!ELSEIF  "$(CFG)" == "lencod - Win32 VTune"
+
+# PROP BASE Use_MFC 0
+# PROP BASE Use_Debug_Libraries 0
+# PROP BASE Output_Dir "lencod\Win32_VTune"
+# PROP BASE Intermediate_Dir "lencod\Win32_VTune"
+# PROP BASE Ignore_Export_Lib 0
+# PROP BASE Target_Dir ""
+# PROP Use_MFC 0
+# PROP Use_Debug_Libraries 0
+# PROP Output_Dir "lencod\Win32_VTune"
+# PROP Intermediate_Dir "lencod\Win32_VTune"
+# PROP Ignore_Export_Lib 0
+# PROP Target_Dir ""
+# ADD BASE CPP /nologo /W3 /GX /Zi /O2 /Ob2 /I "lencod\inc" /I "lcommon\inc" /D "WIN32" /D "DEBUG" /D "_CONSOLE" /D "_MBCS" /Fr /YX /FD /c
+# ADD CPP /nologo /W3 /GX /Zi /Op /Ob2 /I "lencod\inc" /I "lcommon\inc" /D "WIN32" /D "DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
+# ADD BASE RSC /l 0x409 /d "NDEBUG"
+# ADD RSC /l 0x409 /d "NDEBUG"
+BSC32=bscmake.exe
+# ADD BASE BSC32 /nologo
+# ADD BSC32 /nologo
+LINK32=xilink6.exe
+# ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386 /out:"./bin/lencod.exe" /fixed:no
+# SUBTRACT BASE LINK32 /pdb:none
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386 /out:"./bin/lencod_vtune.exe" /fixed:no
+# SUBTRACT LINK32 /pdb:none
+
+!ELSEIF  "$(CFG)" == "lencod - Win32 Intel"
+
+# PROP BASE Use_MFC 0
+# PROP BASE Use_Debug_Libraries 0
+# PROP BASE Output_Dir "lencod\Win32_Intel"
+# PROP BASE Intermediate_Dir "lencod\Win32_Intel"
+# PROP BASE Ignore_Export_Lib 0
+# PROP BASE Target_Dir ""
+# PROP Use_MFC 0
+# PROP Use_Debug_Libraries 0
+# PROP Output_Dir "lencod\Win32_Intel"
+# PROP Intermediate_Dir "lencod\Win32_Intel"
+# PROP Ignore_Export_Lib 0
+# PROP Target_Dir ""
+# ADD BASE CPP /nologo /W3 /GX /Zi /O2 /Ob2 /I "lencod\inc" /I "lcommon\inc" /D "WIN32" /D "DEBUG" /D "_CONSOLE" /D "_MBCS" /Fr /YX /FD /c
+# ADD CPP /nologo /W4 /GX /Zi /O2 /Ob2 /I "lencod\inc" /I "lcommon\inc" /D "WIN32" /D "DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /QaxKWNP /fast /c
+# ADD BASE RSC /l 0x409 /d "NDEBUG"
+# ADD RSC /l 0x409 /d "NDEBUG"
+BSC32=bscmake.exe
+# ADD BASE BSC32 /nologo
+# ADD BSC32 /nologo
+LINK32=xilink6.exe
+# ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386 /out:"./bin/lencod.exe"
+# SUBTRACT BASE LINK32 /pdb:none
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib ws2_32.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386 /out:"./bin/lencod.exe" /fixed:no
+# SUBTRACT LINK32 /pdb:none
 
 !ENDIF 
 
@@ -82,6 +139,8 @@ LINK32=link.exe
 
 # Name "lencod - Win32 Release"
 # Name "lencod - Win32 Debug"
+# Name "lencod - Win32 VTune"
+# Name "lencod - Win32 Intel"
 # Begin Group "Source Files"
 
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
@@ -115,15 +174,7 @@ SOURCE=.\lencod\src\decoder.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lencod\src\epzs.c
-# End Source File
-# Begin Source File
-
 SOURCE=.\lencod\src\explicit_gop.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\src\fast_me.c
 # End Source File
 # Begin Source File
 
@@ -140,6 +191,14 @@ SOURCE=.\lencod\src\header.c
 # Begin Source File
 
 SOURCE=.\lencod\src\image.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\img_chroma.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\img_luma.c
 # End Source File
 # Begin Source File
 
@@ -168,6 +227,46 @@ SOURCE=.\lencod\src\mb_access.c
 # Begin Source File
 
 SOURCE=.\lencod\src\mbuffer.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\md_high.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\md_highfast.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\md_highloss.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\md_low.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\me_distortion.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\me_epzs.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\me_fullfast.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\me_fullsearch.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\me_umhex.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\me_umhexsmp.c
 # End Source File
 # Begin Source File
 
@@ -219,6 +318,10 @@ SOURCE=.\lencod\src\ratectl.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\rc_quadratic.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\rdopt.c
 # End Source File
 # Begin Source File
@@ -240,10 +343,6 @@ SOURCE=.\lencod\src\rtp.c
 # Begin Source File
 
 SOURCE=.\lencod\src\sei.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\src\simplified_fast_me.c
 # End Source File
 # Begin Source File
 
@@ -307,15 +406,7 @@ SOURCE=.\lencod\inc\elements.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lencod\inc\epzs.h
-# End Source File
-# Begin Source File
-
 SOURCE=.\lencod\inc\explicit_gop.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\inc\fast_me.h
 # End Source File
 # Begin Source File
 
@@ -331,7 +422,19 @@ SOURCE=.\lencod\inc\header.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\ifunctions.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\image.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\img_chroma.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\img_luma.h
 # End Source File
 # Begin Source File
 
@@ -352,6 +455,30 @@ SOURCE=.\lencod\inc\mb_access.h
 # Begin Source File
 
 SOURCE=.\lencod\inc\mbuffer.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\me_distortion.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\me_epzs.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\me_fullfast.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\me_fullsearch.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\me_umhex.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\me_umhexsmp.h
 # End Source File
 # Begin Source File
 
@@ -403,6 +530,10 @@ SOURCE=.\lencod\inc\ratectl.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\rc_quadratic.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\rdopt_coding_state.h
 # End Source File
 # Begin Source File
@@ -419,15 +550,15 @@ SOURCE=.\lencod\inc\sei.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lencod\inc\simplified_fast_me.h
-# End Source File
-# Begin Source File
-
 SOURCE=.\lencod\inc\transform8x8.h
 # End Source File
 # Begin Source File
 
 SOURCE=.\lencod\inc\vlc.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\win32.h
 # End Source File
 # End Group
 # Begin Source File

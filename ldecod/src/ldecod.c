@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 11.0 (FRExt)
+ *     JM 12.0 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -64,11 +64,12 @@
 #include "annexb.h"
 #include "output.h"
 #include "cabac.h"
+#include "parset.h"
 
 #include "erc_api.h"
 
-#define JM          "11 (FRExt)"
-#define VERSION     "11.0"
+#define JM          "12 (FRExt)"
+#define VERSION     "12.0"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -103,7 +104,7 @@ int global_init_done = 0;
  */
 void JMDecHelpExit ()
 {
-  fprintf( stderr, "\n   ldecod [-h] {[defdec.cfg] | {[-i bitstream.264]...[-o output.yuv] [-r reference.yuv] [-uv]}}\n\n"    
+  fprintf( stderr, "\n   ldecod [-h] {[defdec.cfg] | {[-p pocScale][-i bitstream.264]...[-o output.yuv] [-r reference.yuv] [-uv]}}\n\n"    
     "## Parameters\n\n"
 
     "## Options\n"
@@ -112,6 +113,7 @@ void JMDecHelpExit ()
     "   -i  :  Input file name. \n"
     "   -o  :  Output file name. If not specified default output is set as test_dec.yuv\n\n"
     "   -r  :  Reference file name. If not specified default output is set as test_rec.yuv\n\n"
+    "   -p  :  Poc Scale. \n"
     "   -uv :  write chroma components for monochrome streams(4:2:0)\n\n"
     
     "## Supported video file formats\n"
@@ -140,7 +142,8 @@ void Configure(int ac, char *av[])
   strcpy(input->reffile,"test_rec.yuv"); //! set default reference file name
   input->FileFormat = PAR_OF_ANNEXB;
   input->ref_offset=0;
-  input->poc_scale=1;
+  input->poc_scale=2;
+  input->silent = FALSE;
 
 #ifdef _LEAKYBUCKET_
   input->R_decoder=500000;          //! Decoder rate
@@ -154,6 +157,10 @@ void Configure(int ac, char *av[])
     if (0 == strncmp (av[1], "-h", 2))
     {
       JMDecHelpExit();
+    }
+    else if (0 == strncmp (av[1], "-s", 2))
+    {
+      input->silent = TRUE;
     }
     else
     {
@@ -174,6 +181,10 @@ void Configure(int ac, char *av[])
     {
       JMDecHelpExit();
     }
+    if (0 == strncmp (av[1], "-s", 2))
+    {
+      input->silent = TRUE;
+    }
   }
   
   // Parse the command line
@@ -185,6 +196,11 @@ void Configure(int ac, char *av[])
       JMDecHelpExit();
     }
     
+    if (0 == strncmp (av[CLcount], "-s", 2))
+    {
+      input->silent = TRUE;
+    }
+
     if (0 == strncmp (av[CLcount], "-i", 2))  //! Input file
     {
       strcpy(input->infile,av[CLcount+1]);      
@@ -198,6 +214,11 @@ void Configure(int ac, char *av[])
     else if (0 == strncmp (av[CLcount], "-r", 2))  //! Reference File
     {
       strcpy(input->reffile,av[CLcount+1]);
+      CLcount += 2;
+    }
+    else if (0 == strncmp (av[CLcount], "-p", 2))  //! Poc Scale
+    {
+      sscanf (av[CLcount+1], "%d", &input->poc_scale);
       CLcount += 2;
     }
     else if (0 == strncmp (av[CLcount], "-uv", 3))  //! indicate UV writing for 4:0:0
@@ -355,9 +376,10 @@ int main(int argc, char **argv)
 
   ercClose(erc_errorVar);
 
+  CleanUpPPS();
+
   free_dpb();
   uninit_out_buffer();
-
   free_colocated(Co_located);
   free (input);
   free (snr);
@@ -402,6 +424,7 @@ void init_frext(struct img_par *img)  //!< image parameters
     img->pic_unit_bitsize_on_disk = (img->bitdepth_chroma > 8)? 16:8;
   img->dc_pred_value_luma = 1<<(img->bitdepth_luma - 1);
   img->max_imgpel_value = (1<<img->bitdepth_luma) - 1;
+  img->mb_size[0][0] = img->mb_size[0][1] = MB_BLOCK_SIZE;
 
   if (active_sps->chroma_format_idc != YUV400)
   {
@@ -411,12 +434,8 @@ void init_frext(struct img_par *img)  //!< image parameters
     img->max_imgpel_value_uv      = (1<<img->bitdepth_chroma) - 1;
     img->num_blk8x8_uv = (1<<active_sps->chroma_format_idc)&(~(0x1));
     img->num_cdc_coeff = img->num_blk8x8_uv<<1;
-    img->mb_cr_size_x  = (active_sps->chroma_format_idc==YUV420 || active_sps->chroma_format_idc==YUV422)? 8:16;
-    img->mb_cr_size_y  = (active_sps->chroma_format_idc==YUV444 || active_sps->chroma_format_idc==YUV422)? 16:8;
-
-    // Residue Color Transform
-    if(img->residue_transform_flag)
-      img->bitdepth_chroma_qp_scale += 6;
+    img->mb_size[1][0] = img->mb_size[2][0] = img->mb_cr_size_x  = (active_sps->chroma_format_idc==YUV420 || active_sps->chroma_format_idc==YUV422)? 8:16;
+    img->mb_size[1][1] = img->mb_size[2][1] = img->mb_cr_size_y  = (active_sps->chroma_format_idc==YUV444 || active_sps->chroma_format_idc==YUV422)? 16:8;
   }
   else
   {
@@ -424,10 +443,12 @@ void init_frext(struct img_par *img)  //!< image parameters
     img->max_imgpel_value_uv      = 0;
     img->num_blk8x8_uv = 0;
     img->num_cdc_coeff = 0;
-    img->mb_cr_size_x  = 0;
-    img->mb_cr_size_y  = 0;
+    img->mb_size[1][0] = img->mb_size[2][0] = img->mb_cr_size_x  = 0;
+    img->mb_size[1][1] = img->mb_size[2][1] = img->mb_cr_size_y  = 0;
   }
-
+  img->mb_size_blk[0][0] = img->mb_size_blk[0][1] = img->mb_size[0][0] >> 2;
+  img->mb_size_blk[1][0] = img->mb_size_blk[2][0] = img->mb_size[1][0] >> 2;
+  img->mb_size_blk[1][1] = img->mb_size_blk[2][1] = img->mb_size[1][1] >> 2;
 }
 
 
@@ -541,6 +562,8 @@ void init_conf(struct inp_par *inp, char *config_filename)
   fscanf(fd,"%d",&inp->poc_gap);   // POC gap between consecutive frames in display order
   fscanf(fd,"%*[^\n]");
   img->poc_gap = inp->poc_gap;
+  fscanf(fd,"%d,",&inp->silent);     // use silent decode mode
+  fscanf(fd,"%*[^\n]");
 
   fclose (fd);
 }
@@ -876,9 +899,15 @@ int init_global_buffers()
   if(((img->intra_block) = (int*)calloc(img->FrameSizeInMbs, sizeof(int))) == NULL)
     no_mem_exit("init_global_buffers: img->intra_block");
 
-  memory_size += get_mem2Dint(&(img->ipredmode), 4*img->PicWidthInMbs , 4*img->FrameHeightInMbs);
+  memory_size += get_mem2Dint(&PicPos,img->FrameSizeInMbs + 1,2);  //! Helper array to access macroblock positions. We add 1 to also consider last MB.
 
-  memory_size += get_mem2Dint(&(img->field_anchor),4*img->FrameHeightInMbs, 4*img->PicWidthInMbs);
+  for (i = 0; i < (int) img->FrameSizeInMbs + 1;i++)
+  {
+    PicPos[i][0] = (i % img->PicWidthInMbs);
+    PicPos[i][1] = (i / img->PicWidthInMbs);
+  }
+
+  memory_size += get_mem2D(&(img->ipredmode), 4*img->FrameHeightInMbs, 4*img->PicWidthInMbs);
 
   memory_size += get_mem3Dint(&(img->wp_weight), 2, MAX_REFERENCE_PICTURES, 3);
   memory_size += get_mem3Dint(&(img->wp_offset), 6, MAX_REFERENCE_PICTURES, 3);
@@ -887,7 +916,7 @@ int init_global_buffers()
   // CAVLC mem
   memory_size += get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 4 + img->num_blk8x8_uv);
 
-  memory_size += get_mem2Dint(&(img->siblock),img->PicWidthInMbs  , img->FrameHeightInMbs);
+  memory_size += get_mem2Dint(&(img->siblock), img->FrameHeightInMbs, img->PicWidthInMbs);
   
   if(img->max_imgpel_value > img->max_imgpel_value_uv || active_sps->chroma_format_idc == YUV400)
     quad_range = (img->max_imgpel_value + 1) * 2;
@@ -897,9 +926,10 @@ int init_global_buffers()
   if ((img->quad = (int*)calloc (quad_range, sizeof(int))) == NULL)
     no_mem_exit ("init_img: img->quad");
 
+  img->quad+=quad_range/2;
   for (i=0; i < quad_range/2; ++i)
   {
-    img->quad[i]=i*i;
+    img->quad[i]=img->quad[-i]=i*i;
   }
   
   global_init_done = 1;
@@ -936,19 +966,22 @@ void free_global_buffers()
   free_mem2Dint(img->siblock);
 
   // free mem, allocated for structure img
-  if (img->mb_data       != NULL) free(img->mb_data);
+  if (img->mb_data != NULL) 
+    free(img->mb_data);
+  
+  free_mem2Dint(PicPos);
 
   free (img->intra_block);
-
-  free_mem2Dint (img->ipredmode);
-
-  free_mem2Dint(img->field_anchor);
+  free_mem2D(img->ipredmode);
 
   free_mem3Dint(img->wp_weight, 2);
   free_mem3Dint(img->wp_offset, 6);
   free_mem4Dint(img->wbp_weight, 6, MAX_REFERENCE_PICTURES);
 
-  free (img->quad);
+  if(img->max_imgpel_value > img->max_imgpel_value_uv)
+    free (img->quad-(img->max_imgpel_value + 1));
+  else
+    free (img->quad-(img->max_imgpel_value_uv + 1));
 
   global_init_done = 0;
 

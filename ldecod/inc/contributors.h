@@ -163,12 +163,14 @@
       1006 Kadoma, Kadoma
       Osaka 663-8113, Japan
 
-      Dzung Hoang                     <dzung.hoang@conexant.com>
-      Eric Viscito                    <eric.viscito@conexant.com>
-      Conexant Systems. Inc.
-      MPEG Compression Group
-      20450 Stevens Creek Blvd.
-      Cupertino, CA 95014
+      Dzung Hoang                     <dthoang@yahoo.com>
+      10533 Roy Butler Dr.
+      Austin, TX 78717
+
+      Eric Viscito                    <eric@ev-consulting.com>
+      eV Consulting
+      52 Tracy Ln
+      Shelburne, VT 05482 USA
 
       Barry Haskell
       Apple Computer, Inc.            <bhaskell@apple.com>
@@ -186,7 +188,11 @@
       2 Independence Way
       Princeton, NJ 08540
 
-      Alexis Michael Tourapis         <alexismt@ieee.org>
+      Alexis Michael Tourapis         <alexismt@ieee.org><atour@dolby.com>
+      Athanasios Leontaris            <aleon@dolby.com>
+      Dolby Laboratories Inc.
+      3601 West Alameda Ave.
+      Burbank, CA 91505
 
       Saurav K Bandyopadhyay          <saurav@ieee.org>
       Purvin Pandit                   <Purvin.Pandit@thomson.net>

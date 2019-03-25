@@ -65,11 +65,12 @@ void cabac_new_slice(void)
  */
 void CheckAvailabilityOfNeighborsCABAC(void)
 {
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  int mb_nr = img->current_mb_nr;
+  Macroblock *currMB = &img->mb_data[mb_nr];
   PixelPos up, left;
   
-  getNeighbour(img->current_mb_nr, -1,  0, 1, &left);
-  getNeighbour(img->current_mb_nr,  0, -1, 1, &up);
+  getNeighbour(mb_nr, -1,  0, IS_LUMA, &left);
+  getNeighbour(mb_nr,  0, -1, IS_LUMA, &up);
   
   if (up.available)
     currMB->mb_available_up = &img->mb_data[up.mb_addr];
@@ -649,8 +650,9 @@ void writeIntraPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
  */
 void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
+  int   mb_nr = img->current_mb_nr;
   MotionInfoContexts  *ctx    = img->currentSlice->mot_ctx;
-  Macroblock          *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock          *currMB = &img->mb_data[mb_nr];
   int                 addctx  = 0;
 
   int   a, b;
@@ -664,8 +666,8 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   PixelPos block_a, block_b;
   
-  getLuma4x4Neighbour(img->current_mb_nr, img->subblock_x, img->subblock_y, -1,  0, &block_a);
-  getLuma4x4Neighbour(img->current_mb_nr, img->subblock_x, img->subblock_y,  0, -1, &block_b);
+  getLuma4x4Neighbour(mb_nr, (img->subblock_x << 2) - 1, (img->subblock_y << 2), &block_a);
+  getLuma4x4Neighbour(mb_nr, (img->subblock_x << 2),     (img->subblock_y << 2) - 1, &block_b);
 
   b8a=((block_a.x >> 1) & 0x01)+2*((block_a.y >> 1) & 0x01);
   b8b=((block_b.x >> 1) & 0x01)+2*((block_b.y >> 1) & 0x01);
@@ -736,7 +738,7 @@ void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   if (dquant <= 0)
     sign = 1;
-  act_sym = absm(dquant) << 1;
+  act_sym = iabs(dquant) << 1;
 
   act_sym += sign;
   act_sym --;
@@ -765,8 +767,8 @@ void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
  */
 void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
-  int i = img->subblock_x;
-  int j = img->subblock_y;
+  int i = (img->subblock_x << 2);
+  int j = (img->subblock_y << 2);
   int a, b;
   int act_ctx;
   int act_sym;
@@ -775,18 +777,19 @@ void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   int mv_sign;
   int list_idx = se->value2 & 0x01;
   int k = (se->value2>>1); // MVD component
+  int mb_nr = img->current_mb_nr;
 
   PixelPos block_a, block_b;
 
   MotionInfoContexts  *ctx    = img->currentSlice->mot_ctx;
-  Macroblock          *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock          *currMB = &img->mb_data[mb_nr];
 
-  getLuma4x4Neighbour(img->current_mb_nr, i, j, -1,  0, &block_a);
-  getLuma4x4Neighbour(img->current_mb_nr, i, j,  0, -1, &block_b);
+  getLuma4x4Neighbour(mb_nr, i - 1, j, &block_a);
+  getLuma4x4Neighbour(mb_nr, i    , j - 1, &block_b);
 
   if (block_b.available)
   {
-    b = absm(img->mb_data[block_b.mb_addr].mvd[list_idx][block_b.y][block_b.x][k]);
+    b = iabs(img->mb_data[block_b.mb_addr].mvd[list_idx][block_b.y][block_b.x][k]);
     if (img->MbaffFrameFlag && (k==1)) 
     {
       if ((currMB->mb_field==0) && (img->mb_data[block_b.mb_addr].mb_field==1))
@@ -800,7 +803,7 @@ void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
           
   if (block_a.available)
   {
-    a = absm(img->mb_data[block_a.mb_addr].mvd[list_idx][block_a.y][block_a.x][k]);
+    a = iabs(img->mb_data[block_a.mb_addr].mvd[list_idx][block_a.y][block_a.x][k]);
     if (img->MbaffFrameFlag && (k==1)) 
     {
       if ((currMB->mb_field==0) && (img->mb_data[block_a.mb_addr].mb_field==1))
@@ -825,7 +828,7 @@ void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   mv_pred_res = se->value1;
   se->context = act_ctx;
 
-  act_sym = absm(mv_pred_res);
+  act_sym = iabs(mv_pred_res);
 
   if (act_sym == 0)
     biari_encode_symbol(eep_dp, 0, &ctx->mv_res_contexts[0][act_ctx] );
@@ -906,7 +909,7 @@ void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter
   
   if (mb_x == 0)
   {
-    getLuma4x4Neighbour(img->current_mb_nr, mb_x, mb_y, -1, 0, &block_a);
+    getLuma4x4Neighbour(img->current_mb_nr, (mb_x << 2) - 1, (mb_y << 2), &block_a);
     if (block_a.available)
     {
       {
@@ -1052,8 +1055,8 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
 
   if (y_ac || y_dc)
   {
-    getLuma4x4Neighbour(img->current_mb_nr, i, j, -1,  0, &block_a);
-    getLuma4x4Neighbour(img->current_mb_nr, i, j,  0, -1, &block_b);
+    getLuma4x4Neighbour(img->current_mb_nr, (i<<2) - 1, (j << 2),     &block_a);
+    getLuma4x4Neighbour(img->current_mb_nr, (i<<2),     (j << 2) -1, &block_b);
     if (y_ac)
     {
       if (block_a.available)
@@ -1064,8 +1067,8 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
   }
   else
   {
-    getChroma4x4Neighbour(img->current_mb_nr, i, j, -1,  0, &block_a);
-    getChroma4x4Neighbour(img->current_mb_nr, i, j,  0, -1, &block_b);
+    getChroma4x4Neighbour(img->current_mb_nr, (i<<2)-1, (j<<2),  &block_a);
+    getChroma4x4Neighbour(img->current_mb_nr, (i<<2),   (j<<2)-1,&block_b);
     if (u_ac||v_ac)
     {
       if (block_a.available)
@@ -1081,20 +1084,20 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
   {
     if (type==LUMA_8x8)
     {
-      currMB->cbp_bits   |= (1<< bit   );
-      currMB->cbp_bits   |= (1<<(bit+1));
-      currMB->cbp_bits   |= (1<<(bit+4));
-      currMB->cbp_bits   |= (1<<(bit+5));
+      currMB->cbp_bits   |= ((int64)1<< bit   );
+      currMB->cbp_bits   |= ((int64)1<<(bit+1));
+      currMB->cbp_bits   |= ((int64)1<<(bit+4));
+      currMB->cbp_bits   |= ((int64)1<<(bit+5));
     }
     else if (type==LUMA_8x4)
     {
-      currMB->cbp_bits   |= (1<< bit   );
-      currMB->cbp_bits   |= (1<<(bit+1));
+      currMB->cbp_bits   |= ((int64)1<< bit   );
+      currMB->cbp_bits   |= ((int64)1<<(bit+1));
     }
     else if (type==LUMA_4x8)
     {
-      currMB->cbp_bits   |= (1<< bit   );
-      currMB->cbp_bits   |= (1<<(bit+4));
+      currMB->cbp_bits   |= ((int64)1<< bit   );
+      currMB->cbp_bits   |= ((int64)1<<(bit+4));
     }
     else
     {
@@ -1190,14 +1193,17 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
 {
   int   k;
   unsigned short sig, last;
-  int   k0      = 0;
-  int   k1      = maxpos[type]-1;
+  int   k0 = 0;
+  int   k1 = maxpos[type]-1;
+  TextureInfoContexts*  tex_ctx = img->currentSlice->tex_ctx;
   
   int               fld       = ( img->structure!=FRAME || currMB->mb_field );
-  BiContextTypePtr  map_ctx   = ( fld ? img->currentSlice->tex_ctx->fld_map_contexts[type2ctx_map [type]]
-    : img->currentSlice->tex_ctx->map_contexts[type2ctx_map [type]] );
-  BiContextTypePtr  last_ctx  = ( fld ? img->currentSlice->tex_ctx->fld_last_contexts[type2ctx_last[type]]
-    : img->currentSlice->tex_ctx->last_contexts[type2ctx_last[type]] );
+  BiContextTypePtr  map_ctx   = ( fld 
+    ? tex_ctx->fld_map_contexts[type2ctx_map [type]]
+    : tex_ctx->map_contexts[type2ctx_map [type]] );
+  BiContextTypePtr  last_ctx  = ( fld 
+    ? tex_ctx->fld_last_contexts[type2ctx_last[type]]
+    : tex_ctx->last_contexts[type2ctx_last[type]] );
   
   if (!c1isdc[type])
   {
@@ -1209,12 +1215,12 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
     for (k=k0; k<k1; k++) // if last coeff is reached, it has to be significant
     {
       sig   = (coeff[k] != 0);      
-      biari_encode_symbol  (eep_dp, sig,  map_ctx+pos2ctx_map     [type][k]);
+      biari_encode_symbol  (eep_dp, sig,  map_ctx + pos2ctx_map  [type][k]);
       if (sig)
       {
         last = (--coeff_ctr == 0);
         
-        biari_encode_symbol(eep_dp, last, last_ctx+pos2ctx_last[type][k]);
+        biari_encode_symbol(eep_dp, last, last_ctx + pos2ctx_last[type][k]);
         if (last) return;
       }
     }
@@ -1226,12 +1232,12 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
     {
       sig   = (coeff[k] != 0);
       
-      biari_encode_symbol  (eep_dp, sig,  map_ctx+pos2ctx_map_int [type][k]);
+      biari_encode_symbol  (eep_dp, sig,  map_ctx + pos2ctx_map_int [type][k]);
       if (sig)
       {
         last = (--coeff_ctr == 0);
         
-        biari_encode_symbol(eep_dp, last, last_ctx+pos2ctx_last[type][k]);
+        biari_encode_symbol(eep_dp, last, last_ctx + pos2ctx_last[type][k]);
         if (last) return;
       }
     }
@@ -1265,12 +1271,12 @@ void write_significant_coefficients (Macroblock* currMB, EncodingEnvironmentPtr 
       greater_one = (absLevel>1);
 
       //--- if coefficient is one ---
-      ctx = min(c1,4);    
+      ctx = imin(c1,4);    
       biari_encode_symbol (eep_dp, greater_one, img->currentSlice->tex_ctx->one_contexts[type2ctx_one[type]] + ctx);
 
       if (greater_one)
       {
-        ctx = min(c2, max_c2[type]);
+        ctx = imin(c2, max_c2[type]);
         unary_exp_golomb_level_encode(eep_dp, absLevel-2, img->currentSlice->tex_ctx->abs_contexts[type2ctx_abs[type]] + ctx);
         c1 = 0;
         c2++;

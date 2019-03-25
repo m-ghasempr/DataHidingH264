@@ -18,12 +18,6 @@
 #include <assert.h>
 #include <string.h>
 
-#ifdef WIN32
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
-
 #include "global.h"
 #include "image.h"
 
@@ -96,7 +90,6 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
     // imgpel == pixel_in_file == 1 byte -> simple copy
     for(i=0;i<theight;i++)
       memcpy(buf+crop_left+(i*twidth),&(imgX[i+crop_top][crop_left]), twidth);
-    
   }
   else
   {
@@ -205,7 +198,7 @@ void write_out_picture(StorablePicture *p, int p_out)
 
   int crop_left, crop_right, crop_top, crop_bottom;
   int symbol_size_in_bytes = img->pic_unit_size_on_disk/8;
-  Boolean rgb_output = (input->rgb_input_flag && input->yuv_format==3);
+  Boolean rgb_output = (Boolean) (input->rgb_input_flag != 0 && input->yuv_format==3);
   unsigned char *buf;
 
   if (p->non_existing)
@@ -373,7 +366,7 @@ void write_unpaired_field(FrameStore* fs, int p_out)
 
   fs->is_used=3;
 }
-
+  
 /*!
  ************************************************************************
  * \brief
@@ -422,6 +415,7 @@ void write_stored_frame( FrameStore *fs,int p_out)
 
   fs->is_output = 1;
 }
+
 
 /*!
  ************************************************************************

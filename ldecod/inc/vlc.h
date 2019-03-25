@@ -17,7 +17,7 @@
 
 int se_v (char *tracestring, Bitstream *bitstream);
 int ue_v (char *tracestring, Bitstream *bitstream);
-int u_1 (char *tracestring, Bitstream *bitstream);
+Boolean u_1 (char *tracestring, Bitstream *bitstream);
 int u_v (int LenInBits, char *tracestring, Bitstream *bitstream);
 
 // UVLC mapping
@@ -30,8 +30,8 @@ void linfo_levrun_inter(int len,int info,int *level,int *irun);
 void linfo_levrun_c2x2(int len,int info,int *level,int *irun);
 
 int  readSyntaxElement_VLC (SyntaxElement *sym, Bitstream *currStream);
-int  readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dp);
-int  readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dp);
+int  readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct datapartition *dp);
+int  readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, struct img_par *img, struct datapartition *dp);
 
 int  GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount);
 int  GetVLCSymbol_IntraMode (byte buffer[],int totbitoffset,int *info, int bytecount);

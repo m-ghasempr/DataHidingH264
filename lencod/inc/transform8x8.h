@@ -27,6 +27,6 @@ double RDCost_for_8x8IntraBlocks(int *c_nz, int b8, int ipmode, double lambda, d
 
 int    dct_luma8x8(int b8,int *coeff_cost, int intra);
 
-void   LowPassForIntra8x8Pred(int *PredPel, int block_up_left, int block_up, int block_left);
+void   LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, int block_left);
 
 #endif //_TRANSFORM8X8_H_

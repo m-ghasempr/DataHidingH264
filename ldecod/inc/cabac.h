@@ -30,23 +30,23 @@ void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 
 void cabac_new_slice();
 
-void readMB_typeInfo_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readB8_typeInfo_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readIntraPredMode_CABAC(SyntaxElement *se, struct inp_par *inp,struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readRefFrame_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readMVD_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readCBP_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readRunLevel_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img,  DecodingEnvironmentPtr dep_dp);
-void readDquant_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
-void readCIPredMode_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
-void readMB_skip_flagInfo_CABAC( SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readFieldModeInfo_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp); 
+void readMB_typeInfo_CABAC(SyntaxElement *se, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readB8_typeInfo_CABAC(SyntaxElement *se, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readIntraPredMode_CABAC(SyntaxElement *se, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readRefFrame_CABAC(SyntaxElement *se, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readMVD_CABAC(SyntaxElement *se, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readCBP_CABAC(SyntaxElement *se, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readRunLevel_CABAC(SyntaxElement *se, struct img_par *img,  DecodingEnvironmentPtr dep_dp);
+void readDquant_CABAC(SyntaxElement *se,struct img_par *img,DecodingEnvironmentPtr dep_dp);
+void readCIPredMode_CABAC(SyntaxElement *se,struct img_par *img,DecodingEnvironmentPtr dep_dp);
+void readMB_skip_flagInfo_CABAC( SyntaxElement *se, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readFieldModeInfo_CABAC(SyntaxElement *se, struct img_par *img,DecodingEnvironmentPtr dep_dp); 
 
-void readMB_transform_size_flag_CABAC( SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readMB_transform_size_flag_CABAC( SyntaxElement *se, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 
-int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_par *inp, DataPartition *this_dataPart);
+int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, DataPartition *this_dataPart);
 
-int  check_next_mb_and_get_field_mode_CABAC(SyntaxElement *se,struct img_par *img,struct inp_par *inp,DataPartition  *act_dp);
+int  check_next_mb_and_get_field_mode_CABAC(SyntaxElement *se,struct img_par *img,DataPartition  *act_dp);
 void CheckAvailabilityOfNeighborsCABAC();
 
 

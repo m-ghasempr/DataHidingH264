@@ -74,7 +74,7 @@ static int FmoGenerateMapUnitToSliceGroupMap (pic_parameter_set_rbsp_t* pps, seq
     free (MapUnitToSliceGroupMap);
   if ((MapUnitToSliceGroupMap = malloc ((NumSliceGroupMapUnits) * sizeof (int))) == NULL)
   {
-    printf ("cannot allocated %d bytes for MapUnitToSliceGroupMap, exit\n", (pps->num_slice_group_map_units_minus1+1) * sizeof (int));
+    printf ("cannot allocated %d bytes for MapUnitToSliceGroupMap, exit\n", (int) ( (pps->num_slice_group_map_units_minus1+1) * sizeof (int)));
     exit (-1);
   }
 
@@ -137,7 +137,7 @@ static int FmoGenerateMbToSliceGroupMap (pic_parameter_set_rbsp_t* pps, seq_para
 
   if ((MbToSliceGroupMap = malloc ((img->PicSizeInMbs) * sizeof (int))) == NULL)
   {
-    printf ("cannot allocated %d bytes for MbToSliceGroupMap, exit\n", (img->PicSizeInMbs) * sizeof (int));
+    printf ("cannot allocate %d bytes for MbToSliceGroupMap, exit\n", (int) ((img->PicSizeInMbs) * sizeof (int)));
     exit (-1);
   }
 
@@ -295,7 +295,7 @@ int FmoGetLastMBInSliceGroup (int SliceGroup)
       return i;
   return -1;
 
-};
+}
 
 
 /*!
@@ -424,7 +424,7 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
   int x, y, xDir, yDir;
   int mapUnitVacant;
 
-  unsigned mapUnitsInSliceGroup0 = min((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
+  unsigned mapUnitsInSliceGroup0 = imin((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
 
   for( i = 0; i < PicSizeInMapUnits; i++ )
     MapUnitToSliceGroupMap[ i ] = 2;
@@ -448,7 +448,7 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
 
     if( xDir  ==  -1  &&  x  ==  leftBound ) 
     {
-      leftBound = max( leftBound - 1, 0 );
+      leftBound = imax( leftBound - 1, 0 );
       x = leftBound;
       xDir = 0;
       yDir = 2 * pps->slice_group_change_direction_flag - 1;
@@ -456,7 +456,7 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
     else 
       if( xDir  ==  1  &&  x  ==  rightBound ) 
       {
-        rightBound = min( rightBound + 1, (int)img->PicWidthInMbs - 1 );
+        rightBound = imin( rightBound + 1, (int)img->PicWidthInMbs - 1 );
         x = rightBound;
         xDir = 0;
         yDir = 1 - 2 * pps->slice_group_change_direction_flag;
@@ -464,7 +464,7 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
       else 
         if( yDir  ==  -1  &&  y  ==  topBound ) 
         {
-          topBound = max( topBound - 1, 0 );
+          topBound = imax( topBound - 1, 0 );
           y = topBound;
           xDir = 1 - 2 * pps->slice_group_change_direction_flag;
           yDir = 0;
@@ -472,7 +472,7 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
         else 
           if( yDir  ==  1  &&  y  ==  bottomBound ) 
           {
-            bottomBound = min( bottomBound + 1, (int)img->PicHeightInMapUnits - 1 );
+            bottomBound = imin( bottomBound + 1, (int)img->PicHeightInMapUnits - 1 );
             y = bottomBound;
             xDir = 2 * pps->slice_group_change_direction_flag - 1;
             yDir = 0;
@@ -496,7 +496,7 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
 static void FmoGenerateType4MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps, unsigned PicSizeInMapUnits )
 {
   
-  unsigned mapUnitsInSliceGroup0 = min((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
+  unsigned mapUnitsInSliceGroup0 = imin((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
   unsigned sizeOfUpperLeftGroup = pps->slice_group_change_direction_flag ? ( PicSizeInMapUnits - mapUnitsInSliceGroup0 ) : mapUnitsInSliceGroup0;
 
   unsigned i;
@@ -519,7 +519,7 @@ static void FmoGenerateType4MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
 static void FmoGenerateType5MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps, unsigned PicSizeInMapUnits )
 {
   
-  unsigned mapUnitsInSliceGroup0 = min((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
+  unsigned mapUnitsInSliceGroup0 = imin((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
   unsigned sizeOfUpperLeftGroup = pps->slice_group_change_direction_flag ? ( PicSizeInMapUnits - mapUnitsInSliceGroup0 ) : mapUnitsInSliceGroup0;
 
   unsigned i,j, k = 0;

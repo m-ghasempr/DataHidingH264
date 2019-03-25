@@ -17,18 +17,14 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 #include "transform8x8.h"
-
-
 
 #define Q_BITS_8        16
 #define DQ_BITS_8       6 
 #define DQ_ROUND_8      (1<<(DQ_BITS_8-1))
 
-
-
-
-static const int quant_coef8[6][8][8] = 
+const int quant_coef8[6][8][8] = 
 {
   { 
     {13107, 12222,  16777,  12222,  13107,  12222,  16777,  12222},
@@ -94,7 +90,7 @@ static const int quant_coef8[6][8][8] =
 
 
 
-static const int dequant_coef8[6][8][8] = 
+const int dequant_coef8[6][8][8] = 
 {
   {
     {20,  19, 25, 19, 20, 19, 25, 19},
@@ -252,7 +248,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
 {
   int i,j;
   int s0;
-  int PredPel[25];  // array of predictor pels
+  imgpel PredPel[25];  // array of predictor pels
   imgpel **imgY = dec_picture->imgY;  // For MB level frame/field coding tools -- set default to imgY
 
   int mb_nr=img->current_mb_nr;
@@ -268,17 +264,22 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
   int img_block_y = (img->mb_y)*4 + 2*(b8/2);
   int ioff = (b8%2)*8;
   int joff = (b8/2)*8;
+  int jpos0 = joff    , jpos1 = joff + 1, jpos2 = joff + 2, jpos3 = joff + 3;
+  int jpos4 = joff + 4, jpos5 = joff + 5, jpos6 = joff + 6, jpos7 = joff + 7;
+  int ipos0 = ioff    , ipos1 = ioff + 1, ipos2 = ioff + 2, ipos3 = ioff + 3;
+  int ipos4 = ioff + 4, ipos5 = ioff + 5, ipos6 = ioff + 6, ipos7 = ioff + 7;
+  int jpos, ipos;
 
-  byte predmode = img->ipredmode[img_block_x][img_block_y];
+  byte predmode = img->ipredmode[img_block_y][img_block_x];
 
   for (i=0;i<8;i++)
   {
-    getNeighbour(mb_nr, ioff -1 , joff +i , 1, &pix_a[i]);
+    getNeighbour(mb_nr, ioff -1 , joff +i , IS_LUMA, &pix_a[i]);
   }
 
-  getNeighbour(mb_nr, ioff    , joff -1 , 1, &pix_b);
-  getNeighbour(mb_nr, ioff +8 , joff -1 , 1, &pix_c);
-  getNeighbour(mb_nr, ioff -1 , joff -1 , 1, &pix_d);
+  getNeighbour(mb_nr, ioff    , joff -1 , IS_LUMA, &pix_b);
+  getNeighbour(mb_nr, ioff +8 , joff -1 , IS_LUMA, &pix_c);
+  getNeighbour(mb_nr, ioff -1 , joff -1 , IS_LUMA, &pix_d);
   
   pix_c.available = pix_c.available &&!(ioff == 8 && joff == 8);
 
@@ -364,7 +365,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
   
   LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
 
-//img->mpr[x][y]
+//img->mpr[y][x]
   switch(predmode)
   {
   case DC_PRED:
@@ -389,9 +390,9 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
       // top left corner, nothing to predict from
       s0 = img->dc_pred_value_luma;                           
     }
-    for(i = 0; i < 2*BLOCK_SIZE; i++)
-      for(j = 0; j < 2*BLOCK_SIZE; j++)
-        img->mpr[i+ioff][j+joff] = s0;
+    for(j = joff; j < joff + 2*BLOCK_SIZE; j++)
+      for(i = ioff; i < ioff + 2*BLOCK_SIZE; i++)      
+        img->mpr[j][i] = (imgpel) s0;
     break;
 
   case VERT_PRED:
@@ -400,14 +401,15 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
 
     for (i=0; i < 2*BLOCK_SIZE; i++)
     {
-      img->mpr[i+ioff][0+joff] = 
-      img->mpr[i+ioff][1+joff] = 
-      img->mpr[i+ioff][2+joff] = 
-      img->mpr[i+ioff][3+joff] = 
-      img->mpr[i+ioff][4+joff] = 
-      img->mpr[i+ioff][5+joff] = 
-      img->mpr[i+ioff][6+joff] = 
-      img->mpr[i+ioff][7+joff] = (&P_A)[i];
+      ipos = i+ioff;
+      img->mpr[jpos0][ipos] = 
+      img->mpr[jpos1][ipos] = 
+      img->mpr[jpos2][ipos] = 
+      img->mpr[jpos3][ipos] = 
+      img->mpr[jpos4][ipos] = 
+      img->mpr[jpos5][ipos] = 
+      img->mpr[jpos6][ipos] = 
+      img->mpr[jpos7][ipos] = (imgpel) (&P_A)[i];
     }
     break;
   case HOR_PRED:
@@ -416,14 +418,15 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
 
     for (j=0; j < 2*BLOCK_SIZE; j++)
     {
-      img->mpr[0+ioff][j+joff]  = 
-      img->mpr[1+ioff][j+joff]  = 
-      img->mpr[2+ioff][j+joff]  = 
-      img->mpr[3+ioff][j+joff]  = 
-      img->mpr[4+ioff][j+joff]  = 
-      img->mpr[5+ioff][j+joff]  = 
-      img->mpr[6+ioff][j+joff]  = 
-      img->mpr[7+ioff][j+joff]  = (&P_Q)[j];
+      jpos = j + joff;
+      img->mpr[jpos][ipos0]  = 
+      img->mpr[jpos][ipos1]  = 
+      img->mpr[jpos][ipos2]  = 
+      img->mpr[jpos][ipos3]  = 
+      img->mpr[jpos][ipos4]  = 
+      img->mpr[jpos][ipos5]  = 
+      img->mpr[jpos][ipos6]  = 
+      img->mpr[jpos][ipos7]  = (imgpel) (&P_Q)[j];
     }
     break;
 
@@ -431,140 +434,140 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
     if (!block_available_up)
       printf ("warning: Intra_8x8_Diagonal_Down_Left prediction mode not allowed at mb %d\n",img->current_mb_nr);
     // Mode DIAG_DOWN_LEFT_PRED
-    img->mpr[0+ioff][0+joff] = (P_A + P_C + 2*(P_B) + 2) >> 2;
-    img->mpr[0+ioff][1+joff] = 
-    img->mpr[1+ioff][0+joff] = (P_B + P_D + 2*(P_C) + 2) >> 2;
-    img->mpr[0+ioff][2+joff] =
-    img->mpr[1+ioff][1+joff] =
-    img->mpr[2+ioff][0+joff] = (P_C + P_E + 2*(P_D) + 2) >> 2;
-    img->mpr[0+ioff][3+joff] = 
-    img->mpr[1+ioff][2+joff] = 
-    img->mpr[2+ioff][1+joff] = 
-    img->mpr[3+ioff][0+joff] = (P_D + P_F + 2*(P_E) + 2) >> 2;
-    img->mpr[0+ioff][4+joff] = 
-    img->mpr[1+ioff][3+joff] = 
-    img->mpr[2+ioff][2+joff] = 
-    img->mpr[3+ioff][1+joff] = 
-    img->mpr[4+ioff][0+joff] = (P_E + P_G + 2*(P_F) + 2) >> 2;
-    img->mpr[0+ioff][5+joff] = 
-    img->mpr[1+ioff][4+joff] = 
-    img->mpr[2+ioff][3+joff] = 
-    img->mpr[3+ioff][2+joff] = 
-    img->mpr[4+ioff][1+joff] = 
-    img->mpr[5+ioff][0+joff] = (P_F + P_H + 2*(P_G) + 2) >> 2;
-    img->mpr[0+ioff][6+joff] = 
-    img->mpr[1+ioff][5+joff] = 
-    img->mpr[2+ioff][4+joff] = 
-    img->mpr[3+ioff][3+joff] = 
-    img->mpr[4+ioff][2+joff] = 
-    img->mpr[5+ioff][1+joff] = 
-    img->mpr[6+ioff][0+joff] = (P_G + P_I + 2*(P_H) + 2) >> 2;
-    img->mpr[0+ioff][7+joff] = 
-    img->mpr[1+ioff][6+joff] = 
-    img->mpr[2+ioff][5+joff] = 
-    img->mpr[3+ioff][4+joff] = 
-    img->mpr[4+ioff][3+joff] = 
-    img->mpr[5+ioff][2+joff] = 
-    img->mpr[6+ioff][1+joff] = 
-    img->mpr[7+ioff][0+joff] = (P_H + P_J + 2*(P_I) + 2) >> 2;
-    img->mpr[1+ioff][7+joff] = 
-    img->mpr[2+ioff][6+joff] = 
-    img->mpr[3+ioff][5+joff] = 
-    img->mpr[4+ioff][4+joff] = 
-    img->mpr[5+ioff][3+joff] = 
-    img->mpr[6+ioff][2+joff] = 
-    img->mpr[7+ioff][1+joff] = (P_I + P_K + 2*(P_J) + 2) >> 2;
-    img->mpr[2+ioff][7+joff] = 
-    img->mpr[3+ioff][6+joff] = 
-    img->mpr[4+ioff][5+joff] = 
-    img->mpr[5+ioff][4+joff] = 
-    img->mpr[6+ioff][3+joff] = 
-    img->mpr[7+ioff][2+joff] = (P_J + P_L + 2*(P_K) + 2) >> 2;
-    img->mpr[3+ioff][7+joff] = 
-    img->mpr[4+ioff][6+joff] = 
-    img->mpr[5+ioff][5+joff] = 
-    img->mpr[6+ioff][4+joff] = 
-    img->mpr[7+ioff][3+joff] = (P_K + P_M + 2*(P_L) + 2) >> 2;
-    img->mpr[4+ioff][7+joff] = 
-    img->mpr[5+ioff][6+joff] = 
-    img->mpr[6+ioff][5+joff] = 
-    img->mpr[7+ioff][4+joff] = (P_L + P_N + 2*(P_M) + 2) >> 2;
-    img->mpr[5+ioff][7+joff] = 
-    img->mpr[6+ioff][6+joff] = 
-    img->mpr[7+ioff][5+joff] = (P_M + P_O + 2*(P_N) + 2) >> 2;
-    img->mpr[6+ioff][7+joff] = 
-    img->mpr[7+ioff][6+joff] = (P_N + P_P + 2*(P_O) + 2) >> 2;
-    img->mpr[7+ioff][7+joff] = (P_O + 3*(P_P) + 2) >> 2;
+    img->mpr[jpos0][ipos0] = (imgpel) ((P_A + P_C + 2*(P_B) + 2) >> 2);
+    img->mpr[jpos1][ipos0] = 
+    img->mpr[jpos0][ipos1] = (imgpel) ((P_B + P_D + 2*(P_C) + 2) >> 2);
+    img->mpr[jpos2][ipos0] =
+    img->mpr[jpos1][ipos1] =
+    img->mpr[jpos0][ipos2] = (imgpel) ((P_C + P_E + 2*(P_D) + 2) >> 2);
+    img->mpr[jpos3][ipos0] = 
+    img->mpr[jpos2][ipos1] = 
+    img->mpr[jpos1][ipos2] = 
+    img->mpr[jpos0][ipos3] = (imgpel) ((P_D + P_F + 2*(P_E) + 2) >> 2);
+    img->mpr[jpos4][ipos0] = 
+    img->mpr[jpos3][ipos1] = 
+    img->mpr[jpos2][ipos2] = 
+    img->mpr[jpos1][ipos3] = 
+    img->mpr[jpos0][ipos4] = (imgpel) ((P_E + P_G + 2*(P_F) + 2) >> 2);
+    img->mpr[jpos5][ipos0] = 
+    img->mpr[jpos4][ipos1] = 
+    img->mpr[jpos3][ipos2] = 
+    img->mpr[jpos2][ipos3] = 
+    img->mpr[jpos1][ipos4] = 
+    img->mpr[jpos0][ipos5] = (imgpel) ((P_F + P_H + 2*(P_G) + 2) >> 2);
+    img->mpr[jpos6][ipos0] = 
+    img->mpr[jpos5][ipos1] = 
+    img->mpr[jpos4][ipos2] = 
+    img->mpr[jpos3][ipos3] = 
+    img->mpr[jpos2][ipos4] = 
+    img->mpr[jpos1][ipos5] = 
+    img->mpr[jpos0][ipos6] = (imgpel) ((P_G + P_I + 2*(P_H) + 2) >> 2);
+    img->mpr[jpos7][ipos0] = 
+    img->mpr[jpos6][ipos1] = 
+    img->mpr[jpos5][ipos2] = 
+    img->mpr[jpos4][ipos3] = 
+    img->mpr[jpos3][ipos4] = 
+    img->mpr[jpos2][ipos5] = 
+    img->mpr[jpos1][ipos6] = 
+    img->mpr[jpos0][ipos7] = (imgpel) ((P_H + P_J + 2*(P_I) + 2) >> 2);
+    img->mpr[jpos7][ipos1] = 
+    img->mpr[jpos6][ipos2] = 
+    img->mpr[jpos5][ipos3] = 
+    img->mpr[jpos4][ipos4] = 
+    img->mpr[jpos3][ipos5] = 
+    img->mpr[jpos2][ipos6] = 
+    img->mpr[jpos1][ipos7] = (imgpel) ((P_I + P_K + 2*(P_J) + 2) >> 2);
+    img->mpr[jpos7][ipos2] = 
+    img->mpr[jpos6][ipos3] = 
+    img->mpr[jpos5][ipos4] = 
+    img->mpr[jpos4][ipos5] = 
+    img->mpr[jpos3][ipos6] = 
+    img->mpr[jpos2][ipos7] = (imgpel) ((P_J + P_L + 2*(P_K) + 2) >> 2);
+    img->mpr[jpos7][ipos3] = 
+    img->mpr[jpos6][ipos4] = 
+    img->mpr[jpos5][ipos5] = 
+    img->mpr[jpos4][ipos6] = 
+    img->mpr[jpos3][ipos7] = (imgpel) ((P_K + P_M + 2*(P_L) + 2) >> 2);
+    img->mpr[jpos7][ipos4] = 
+    img->mpr[jpos6][ipos5] = 
+    img->mpr[jpos5][ipos6] = 
+    img->mpr[jpos4][ipos7] = (imgpel) ((P_L + P_N + 2*(P_M) + 2) >> 2);
+    img->mpr[jpos7][ipos5] = 
+    img->mpr[jpos6][ipos6] = 
+    img->mpr[jpos5][ipos7] = (imgpel) ((P_M + P_O + 2*(P_N) + 2) >> 2);
+    img->mpr[jpos7][ipos6] = 
+    img->mpr[jpos6][ipos7] = (imgpel) ((P_N + P_P + 2*(P_O) + 2) >> 2);
+    img->mpr[jpos7][ipos7] = (imgpel) ((P_O + 3*(P_P) + 2) >> 2);
     break;
 
   case VERT_LEFT_PRED:
     if (!block_available_up)
       printf ("warning: Intra_4x4_Vertical_Left prediction mode not allowed at mb %d\n",img->current_mb_nr);
 
-    img->mpr[0+ioff][0+joff] = (P_A + P_B + 1) >> 1;
-    img->mpr[1+ioff][0+joff] = 
-    img->mpr[0+ioff][2+joff] = (P_B + P_C + 1) >> 1;
-    img->mpr[2+ioff][0+joff] = 
-    img->mpr[1+ioff][2+joff] = 
-    img->mpr[0+ioff][4+joff] = (P_C + P_D + 1) >> 1;
-    img->mpr[3+ioff][0+joff] = 
-    img->mpr[2+ioff][2+joff] = 
-    img->mpr[1+ioff][4+joff] = 
-    img->mpr[0+ioff][6+joff] = (P_D + P_E + 1) >> 1;
-    img->mpr[4+ioff][0+joff] = 
-    img->mpr[3+ioff][2+joff] = 
-    img->mpr[2+ioff][4+joff] = 
-    img->mpr[1+ioff][6+joff] = (P_E + P_F + 1) >> 1;
-    img->mpr[5+ioff][0+joff] = 
-    img->mpr[4+ioff][2+joff] = 
-    img->mpr[3+ioff][4+joff] = 
-    img->mpr[2+ioff][6+joff] = (P_F + P_G + 1) >> 1;
-    img->mpr[6+ioff][0+joff] = 
-    img->mpr[5+ioff][2+joff] = 
-    img->mpr[4+ioff][4+joff] = 
-    img->mpr[3+ioff][6+joff] = (P_G + P_H + 1) >> 1;
-    img->mpr[7+ioff][0+joff] = 
-    img->mpr[6+ioff][2+joff] = 
-    img->mpr[5+ioff][4+joff] = 
-    img->mpr[4+ioff][6+joff] = (P_H + P_I + 1) >> 1;
-    img->mpr[7+ioff][2+joff] = 
-    img->mpr[6+ioff][4+joff] = 
-    img->mpr[5+ioff][6+joff] = (P_I + P_J + 1) >> 1;
-    img->mpr[7+ioff][4+joff] = 
-    img->mpr[6+ioff][6+joff] = (P_J + P_K + 1) >> 1;
-    img->mpr[7+ioff][6+joff] = (P_K + P_L + 1) >> 1;
-    img->mpr[0+ioff][1+joff] = (P_A + P_C + 2*P_B + 2) >> 2;
-    img->mpr[1+ioff][1+joff] = 
-    img->mpr[0+ioff][3+joff] = (P_B + P_D + 2*P_C + 2) >> 2;
-    img->mpr[2+ioff][1+joff] = 
-    img->mpr[1+ioff][3+joff] = 
-    img->mpr[0+ioff][5+joff] = (P_C + P_E + 2*P_D + 2) >> 2;
-    img->mpr[3+ioff][1+joff] = 
-    img->mpr[2+ioff][3+joff] = 
-    img->mpr[1+ioff][5+joff] = 
-    img->mpr[0+ioff][7+joff] = (P_D + P_F + 2*P_E + 2) >> 2;
-    img->mpr[4+ioff][1+joff] = 
-    img->mpr[3+ioff][3+joff] = 
-    img->mpr[2+ioff][5+joff] = 
-    img->mpr[1+ioff][7+joff] = (P_E + P_G + 2*P_F + 2) >> 2;
-    img->mpr[5+ioff][1+joff] = 
-    img->mpr[4+ioff][3+joff] = 
-    img->mpr[3+ioff][5+joff] = 
-    img->mpr[2+ioff][7+joff] = (P_F + P_H + 2*P_G + 2) >> 2;
-    img->mpr[6+ioff][1+joff] = 
-    img->mpr[5+ioff][3+joff] = 
-    img->mpr[4+ioff][5+joff] = 
-    img->mpr[3+ioff][7+joff] = (P_G + P_I + 2*P_H + 2) >> 2;
-    img->mpr[7+ioff][1+joff] = 
-    img->mpr[6+ioff][3+joff] = 
-    img->mpr[5+ioff][5+joff] = 
-    img->mpr[4+ioff][7+joff] = (P_H + P_J + 2*P_I + 2) >> 2;
-    img->mpr[7+ioff][3+joff] = 
-    img->mpr[6+ioff][5+joff] = 
-    img->mpr[5+ioff][7+joff] = (P_I + P_K + 2*P_J + 2) >> 2;
-    img->mpr[7+ioff][5+joff] = 
-    img->mpr[6+ioff][7+joff] = (P_J + P_L + 2*P_K + 2) >> 2;
-    img->mpr[7+ioff][7+joff] = (P_K + P_M + 2*P_L + 2) >> 2;
+    img->mpr[jpos0][ipos0] = (imgpel) ((P_A + P_B + 1) >> 1);
+    img->mpr[jpos0][ipos1] = 
+    img->mpr[jpos2][ipos0] = (imgpel) ((P_B + P_C + 1) >> 1);
+    img->mpr[jpos0][ipos2] = 
+    img->mpr[jpos2][ipos1] = 
+    img->mpr[jpos4][ipos0] = (imgpel) ((P_C + P_D + 1) >> 1);
+    img->mpr[jpos0][ipos3] = 
+    img->mpr[jpos2][ipos2] = 
+    img->mpr[jpos4][ipos1] = 
+    img->mpr[jpos6][ipos0] = (imgpel) ((P_D + P_E + 1) >> 1);
+    img->mpr[jpos0][ipos4] = 
+    img->mpr[jpos2][ipos3] = 
+    img->mpr[jpos4][ipos2] = 
+    img->mpr[jpos6][ipos1] = (imgpel) ((P_E + P_F + 1) >> 1);
+    img->mpr[jpos0][ipos5] = 
+    img->mpr[jpos2][ipos4] = 
+    img->mpr[jpos4][ipos3] = 
+    img->mpr[jpos6][ipos2] = (imgpel) ((P_F + P_G + 1) >> 1);
+    img->mpr[jpos0][ipos6] = 
+    img->mpr[jpos2][ipos5] = 
+    img->mpr[jpos4][ipos4] = 
+    img->mpr[jpos6][ipos3] = (imgpel) ((P_G + P_H + 1) >> 1);
+    img->mpr[jpos0][ipos7] = 
+    img->mpr[jpos2][ipos6] = 
+    img->mpr[jpos4][ipos5] = 
+    img->mpr[jpos6][ipos4] = (imgpel) ((P_H + P_I + 1) >> 1);
+    img->mpr[jpos2][ipos7] = 
+    img->mpr[jpos4][ipos6] = 
+    img->mpr[jpos6][ipos5] = (imgpel) ((P_I + P_J + 1) >> 1);
+    img->mpr[jpos4][ipos7] = 
+    img->mpr[jpos6][ipos6] = (imgpel) ((P_J + P_K + 1) >> 1);
+    img->mpr[jpos6][ipos7] = (imgpel) ((P_K + P_L + 1) >> 1);
+    img->mpr[jpos1][ipos0] = (imgpel) ((P_A + P_C + 2*P_B + 2) >> 2);
+    img->mpr[jpos1][ipos1] = 
+    img->mpr[jpos3][ipos0] = (imgpel) ((P_B + P_D + 2*P_C + 2) >> 2);
+    img->mpr[jpos1][ipos2] = 
+    img->mpr[jpos3][ipos1] = 
+    img->mpr[jpos5][ipos0] = (imgpel) ((P_C + P_E + 2*P_D + 2) >> 2);
+    img->mpr[jpos1][ipos3] = 
+    img->mpr[jpos3][ipos2] = 
+    img->mpr[jpos5][ipos1] = 
+    img->mpr[jpos7][ipos0] = (imgpel) ((P_D + P_F + 2*P_E + 2) >> 2);
+    img->mpr[jpos1][ipos4] = 
+    img->mpr[jpos3][ipos3] = 
+    img->mpr[jpos5][ipos2] = 
+    img->mpr[jpos7][ipos1] = (imgpel) ((P_E + P_G + 2*P_F + 2) >> 2);
+    img->mpr[jpos1][ipos5] = 
+    img->mpr[jpos3][ipos4] = 
+    img->mpr[jpos5][ipos3] = 
+    img->mpr[jpos7][ipos2] = (imgpel) ((P_F + P_H + 2*P_G + 2) >> 2);
+    img->mpr[jpos1][ipos6] = 
+    img->mpr[jpos3][ipos5] = 
+    img->mpr[jpos5][ipos4] = 
+    img->mpr[jpos7][ipos3] = (imgpel) ((P_G + P_I + 2*P_H + 2) >> 2);
+    img->mpr[jpos1][ipos7] = 
+    img->mpr[jpos3][ipos6] = 
+    img->mpr[jpos5][ipos5] = 
+    img->mpr[jpos7][ipos4] = (imgpel) ((P_H + P_J + 2*P_I + 2) >> 2);
+    img->mpr[jpos3][ipos7] = 
+    img->mpr[jpos5][ipos6] = 
+    img->mpr[jpos7][ipos5] = (imgpel) ((P_I + P_K + 2*P_J + 2) >> 2);
+    img->mpr[jpos5][ipos7] = 
+    img->mpr[jpos7][ipos6] = (imgpel) ((P_J + P_L + 2*P_K + 2) >> 2);
+    img->mpr[jpos7][ipos7] = (imgpel) ((P_K + P_M + 2*P_L + 2) >> 2);
     break;
 
 
@@ -573,280 +576,280 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
       printf ("warning: Intra_8x8_Diagonal_Down_Right prediction mode not allowed at mb %d\n",img->current_mb_nr);
 
     // Mode DIAG_DOWN_RIGHT_PRED
-    img->mpr[0+ioff][7+joff] = (P_X + P_V + 2*(P_W) + 2) >> 2;
-    img->mpr[0+ioff][6+joff] = 
-    img->mpr[1+ioff][7+joff] = (P_W + P_U + 2*(P_V) + 2) >> 2;
-    img->mpr[0+ioff][5+joff] = 
-    img->mpr[1+ioff][6+joff] = 
-    img->mpr[2+ioff][7+joff] = (P_V + P_T + 2*(P_U) + 2) >> 2;
-    img->mpr[0+ioff][4+joff] = 
-    img->mpr[1+ioff][5+joff] = 
-    img->mpr[2+ioff][6+joff] = 
-    img->mpr[3+ioff][7+joff] = (P_U + P_S + 2*(P_T) + 2) >> 2;
-    img->mpr[0+ioff][3+joff] = 
-    img->mpr[1+ioff][4+joff] = 
-    img->mpr[2+ioff][5+joff] = 
-    img->mpr[3+ioff][6+joff] = 
-    img->mpr[4+ioff][7+joff] = (P_T + P_R + 2*(P_S) + 2) >> 2;
-    img->mpr[0+ioff][2+joff] = 
-    img->mpr[1+ioff][3+joff] = 
-    img->mpr[2+ioff][4+joff] = 
-    img->mpr[3+ioff][5+joff] = 
-    img->mpr[4+ioff][6+joff] = 
-    img->mpr[5+ioff][7+joff] = (P_S + P_Q + 2*(P_R) + 2) >> 2;
-    img->mpr[0+ioff][1+joff] = 
-    img->mpr[1+ioff][2+joff] = 
-    img->mpr[2+ioff][3+joff] = 
-    img->mpr[3+ioff][4+joff] = 
-    img->mpr[4+ioff][5+joff] = 
-    img->mpr[5+ioff][6+joff] = 
-    img->mpr[6+ioff][7+joff] = (P_R + P_Z + 2*(P_Q) + 2) >> 2;
-    img->mpr[0+ioff][0+joff] = 
-    img->mpr[1+ioff][1+joff] = 
-    img->mpr[2+ioff][2+joff] = 
-    img->mpr[3+ioff][3+joff] = 
-    img->mpr[4+ioff][4+joff] = 
-    img->mpr[5+ioff][5+joff] = 
-    img->mpr[6+ioff][6+joff] = 
-    img->mpr[7+ioff][7+joff] = (P_Q + P_A + 2*(P_Z) + 2) >> 2;
-    img->mpr[1+ioff][0+joff] = 
-    img->mpr[2+ioff][1+joff] = 
-    img->mpr[3+ioff][2+joff] = 
-    img->mpr[4+ioff][3+joff] = 
-    img->mpr[5+ioff][4+joff] = 
-    img->mpr[6+ioff][5+joff] = 
-    img->mpr[7+ioff][6+joff] = (P_Z + P_B + 2*(P_A) + 2) >> 2;
-    img->mpr[2+ioff][0+joff] = 
-    img->mpr[3+ioff][1+joff] = 
-    img->mpr[4+ioff][2+joff] = 
-    img->mpr[5+ioff][3+joff] = 
-    img->mpr[6+ioff][4+joff] = 
-    img->mpr[7+ioff][5+joff] = (P_A + P_C + 2*(P_B) + 2) >> 2;
-    img->mpr[3+ioff][0+joff] = 
-    img->mpr[4+ioff][1+joff] = 
-    img->mpr[5+ioff][2+joff] = 
-    img->mpr[6+ioff][3+joff] = 
-    img->mpr[7+ioff][4+joff] = (P_B + P_D + 2*(P_C) + 2) >> 2;
-    img->mpr[4+ioff][0+joff] = 
-    img->mpr[5+ioff][1+joff] = 
-    img->mpr[6+ioff][2+joff] = 
-    img->mpr[7+ioff][3+joff] = (P_C + P_E + 2*(P_D) + 2) >> 2;
-    img->mpr[5+ioff][0+joff] = 
-    img->mpr[6+ioff][1+joff] = 
-    img->mpr[7+ioff][2+joff] = (P_D + P_F + 2*(P_E) + 2) >> 2;
-    img->mpr[6+ioff][0+joff] = 
-    img->mpr[7+ioff][1+joff] = (P_E + P_G + 2*(P_F) + 2) >> 2;
-    img->mpr[7+ioff][0+joff] = (P_F + P_H + 2*(P_G) + 2) >> 2;
+    img->mpr[jpos7][ipos0] = (imgpel) ((P_X + P_V + 2*(P_W) + 2) >> 2);
+    img->mpr[jpos6][ipos0] = 
+    img->mpr[jpos7][ipos1] = (imgpel) ((P_W + P_U + 2*(P_V) + 2) >> 2);
+    img->mpr[jpos5][ipos0] = 
+    img->mpr[jpos6][ipos1] = 
+    img->mpr[jpos7][ipos2] = (imgpel) ((P_V + P_T + 2*(P_U) + 2) >> 2);
+    img->mpr[jpos4][ipos0] = 
+    img->mpr[jpos5][ipos1] = 
+    img->mpr[jpos6][ipos2] = 
+    img->mpr[jpos7][ipos3] = (imgpel) ((P_U + P_S + 2*(P_T) + 2) >> 2);
+    img->mpr[jpos3][ipos0] = 
+    img->mpr[jpos4][ipos1] = 
+    img->mpr[jpos5][ipos2] = 
+    img->mpr[jpos6][ipos3] = 
+    img->mpr[jpos7][ipos4] = (imgpel) ((P_T + P_R + 2*(P_S) + 2) >> 2);
+    img->mpr[jpos2][ipos0] = 
+    img->mpr[jpos3][ipos1] = 
+    img->mpr[jpos4][ipos2] = 
+    img->mpr[jpos5][ipos3] = 
+    img->mpr[jpos6][ipos4] = 
+    img->mpr[jpos7][ipos5] = (imgpel) ((P_S + P_Q + 2*(P_R) + 2) >> 2);
+    img->mpr[jpos1][ipos0] = 
+    img->mpr[jpos2][ipos1] = 
+    img->mpr[jpos3][ipos2] = 
+    img->mpr[jpos4][ipos3] = 
+    img->mpr[jpos5][ipos4] = 
+    img->mpr[jpos6][ipos5] = 
+    img->mpr[jpos7][ipos6] = (imgpel) ((P_R + P_Z + 2*(P_Q) + 2) >> 2);
+    img->mpr[jpos0][ipos0] = 
+    img->mpr[jpos1][ipos1] = 
+    img->mpr[jpos2][ipos2] = 
+    img->mpr[jpos3][ipos3] = 
+    img->mpr[jpos4][ipos4] = 
+    img->mpr[jpos5][ipos5] = 
+    img->mpr[jpos6][ipos6] = 
+    img->mpr[jpos7][ipos7] = (imgpel) ((P_Q + P_A + 2*(P_Z) + 2) >> 2);
+    img->mpr[jpos0][ipos1] = 
+    img->mpr[jpos1][ipos2] = 
+    img->mpr[jpos2][ipos3] = 
+    img->mpr[jpos3][ipos4] = 
+    img->mpr[jpos4][ipos5] = 
+    img->mpr[jpos5][ipos6] = 
+    img->mpr[jpos6][ipos7] = (imgpel) ((P_Z + P_B + 2*(P_A) + 2) >> 2);
+    img->mpr[jpos0][ipos2] = 
+    img->mpr[jpos1][ipos3] = 
+    img->mpr[jpos2][ipos4] = 
+    img->mpr[jpos3][ipos5] = 
+    img->mpr[jpos4][ipos6] = 
+    img->mpr[jpos5][ipos7] = (imgpel) ((P_A + P_C + 2*(P_B) + 2) >> 2);
+    img->mpr[jpos0][ipos3] = 
+    img->mpr[jpos1][ipos4] = 
+    img->mpr[jpos2][ipos5] = 
+    img->mpr[jpos3][ipos6] = 
+    img->mpr[jpos4][ipos7] = (imgpel) ((P_B + P_D + 2*(P_C) + 2) >> 2);
+    img->mpr[jpos0][ipos4] = 
+    img->mpr[jpos1][ipos5] = 
+    img->mpr[jpos2][ipos6] = 
+    img->mpr[jpos3][ipos7] = (imgpel) ((P_C + P_E + 2*(P_D) + 2) >> 2);
+    img->mpr[jpos0][ipos5] = 
+    img->mpr[jpos1][ipos6] = 
+    img->mpr[jpos2][ipos7] = (imgpel) ((P_D + P_F + 2*(P_E) + 2) >> 2);
+    img->mpr[jpos0][ipos6] = 
+    img->mpr[jpos1][ipos7] = (imgpel) ((P_E + P_G + 2*(P_F) + 2) >> 2);
+    img->mpr[jpos0][ipos7] = (imgpel) ((P_F + P_H + 2*(P_G) + 2) >> 2);
     break;
 
   case  VERT_RIGHT_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
     if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
       printf ("warning: Intra_8x8_Vertical_Right prediction mode not allowed at mb %d\n",img->current_mb_nr);
 
-    img->mpr[0+ioff][0+joff] = 
-    img->mpr[1+ioff][2+joff] = 
-    img->mpr[2+ioff][4+joff] = 
-    img->mpr[3+ioff][6+joff] = (P_Z + P_A + 1) >> 1;
-    img->mpr[1+ioff][0+joff] = 
-    img->mpr[2+ioff][2+joff] = 
-    img->mpr[3+ioff][4+joff] = 
-    img->mpr[4+ioff][6+joff] = (P_A + P_B + 1) >> 1;
-    img->mpr[2+ioff][0+joff] = 
-    img->mpr[3+ioff][2+joff] = 
-    img->mpr[4+ioff][4+joff] = 
-    img->mpr[5+ioff][6+joff] = (P_B + P_C + 1) >> 1;
-    img->mpr[3+ioff][0+joff] = 
-    img->mpr[4+ioff][2+joff] = 
-    img->mpr[5+ioff][4+joff] = 
-    img->mpr[6+ioff][6+joff] = (P_C + P_D + 1) >> 1;
-    img->mpr[4+ioff][0+joff] = 
-    img->mpr[5+ioff][2+joff] = 
-    img->mpr[6+ioff][4+joff] = 
-    img->mpr[7+ioff][6+joff] = (P_D + P_E + 1) >> 1;
-    img->mpr[5+ioff][0+joff] = 
-    img->mpr[6+ioff][2+joff] = 
-    img->mpr[7+ioff][4+joff] = (P_E + P_F + 1) >> 1;
-    img->mpr[6+ioff][0+joff] = 
-    img->mpr[7+ioff][2+joff] = (P_F + P_G + 1) >> 1;
-    img->mpr[7+ioff][0+joff] = (P_G + P_H + 1) >> 1;
-    img->mpr[0+ioff][1+joff] = 
-    img->mpr[1+ioff][3+joff] = 
-    img->mpr[2+ioff][5+joff] = 
-    img->mpr[3+ioff][7+joff] = (P_Q + P_A + 2*P_Z + 2) >> 2;
-    img->mpr[1+ioff][1+joff] = 
-    img->mpr[2+ioff][3+joff] = 
-    img->mpr[3+ioff][5+joff] = 
-    img->mpr[4+ioff][7+joff] = (P_Z + P_B + 2*P_A + 2) >> 2;
-    img->mpr[2+ioff][1+joff] = 
-    img->mpr[3+ioff][3+joff] = 
-    img->mpr[4+ioff][5+joff] = 
-    img->mpr[5+ioff][7+joff] = (P_A + P_C + 2*P_B + 2) >> 2;
-    img->mpr[3+ioff][1+joff] = 
-    img->mpr[4+ioff][3+joff] = 
-    img->mpr[5+ioff][5+joff] = 
-    img->mpr[6+ioff][7+joff] = (P_B + P_D + 2*P_C + 2) >> 2;
-    img->mpr[4+ioff][1+joff] = 
-    img->mpr[5+ioff][3+joff] = 
-    img->mpr[6+ioff][5+joff] = 
-    img->mpr[7+ioff][7+joff] = (P_C + P_E + 2*P_D + 2) >> 2;
-    img->mpr[5+ioff][1+joff] = 
-    img->mpr[6+ioff][3+joff] = 
-    img->mpr[7+ioff][5+joff] = (P_D + P_F + 2*P_E + 2) >> 2;
-    img->mpr[6+ioff][1+joff] = 
-    img->mpr[7+ioff][3+joff] = (P_E + P_G + 2*P_F + 2) >> 2;
-    img->mpr[7+ioff][1+joff] = (P_F + P_H + 2*P_G + 2) >> 2;
-    img->mpr[0+ioff][2+joff] =
-    img->mpr[1+ioff][4+joff] =
-    img->mpr[2+ioff][6+joff] = (P_R + P_Z + 2*P_Q + 2) >> 2;
-    img->mpr[0+ioff][3+joff] =
-    img->mpr[1+ioff][5+joff] =
-    img->mpr[2+ioff][7+joff] = (P_S + P_Q + 2*P_R + 2) >> 2;
-    img->mpr[0+ioff][4+joff] =
-    img->mpr[1+ioff][6+joff] = (P_T + P_R + 2*P_S + 2) >> 2;
-    img->mpr[0+ioff][5+joff] =
-    img->mpr[1+ioff][7+joff] = (P_U + P_S + 2*P_T + 2) >> 2;
-    img->mpr[0+ioff][6+joff] = (P_V + P_T + 2*P_U + 2) >> 2;
-    img->mpr[0+ioff][7+joff] = (P_W + P_U + 2*P_V + 2) >> 2;
+    img->mpr[jpos0][ipos0] = 
+    img->mpr[jpos2][ipos1] = 
+    img->mpr[jpos4][ipos2] = 
+    img->mpr[jpos6][ipos3] = (imgpel) ((P_Z + P_A + 1) >> 1);
+    img->mpr[jpos0][ipos1] = 
+    img->mpr[jpos2][ipos2] = 
+    img->mpr[jpos4][ipos3] = 
+    img->mpr[jpos6][ipos4] = (imgpel) ((P_A + P_B + 1) >> 1);
+    img->mpr[jpos0][ipos2] = 
+    img->mpr[jpos2][ipos3] = 
+    img->mpr[jpos4][ipos4] = 
+    img->mpr[jpos6][ipos5] = (imgpel) ((P_B + P_C + 1) >> 1);
+    img->mpr[jpos0][ipos3] = 
+    img->mpr[jpos2][ipos4] = 
+    img->mpr[jpos4][ipos5] = 
+    img->mpr[jpos6][ipos6] = (imgpel) ((P_C + P_D + 1) >> 1);
+    img->mpr[jpos0][ipos4] = 
+    img->mpr[jpos2][ipos5] = 
+    img->mpr[jpos4][ipos6] = 
+    img->mpr[jpos6][ipos7] = (imgpel) ((P_D + P_E + 1) >> 1);
+    img->mpr[jpos0][ipos5] = 
+    img->mpr[jpos2][ipos6] = 
+    img->mpr[jpos4][ipos7] = (imgpel) ((P_E + P_F + 1) >> 1);
+    img->mpr[jpos0][ipos6] = 
+    img->mpr[jpos2][ipos7] = (imgpel) ((P_F + P_G + 1) >> 1);
+    img->mpr[jpos0][ipos7] = (imgpel) ((P_G + P_H + 1) >> 1);
+    img->mpr[jpos1][ipos0] = 
+    img->mpr[jpos3][ipos1] = 
+    img->mpr[jpos5][ipos2] = 
+    img->mpr[jpos7][ipos3] = (imgpel) ((P_Q + P_A + 2*P_Z + 2) >> 2);
+    img->mpr[jpos1][ipos1] = 
+    img->mpr[jpos3][ipos2] = 
+    img->mpr[jpos5][ipos3] = 
+    img->mpr[jpos7][ipos4] = (imgpel) ((P_Z + P_B + 2*P_A + 2) >> 2);
+    img->mpr[jpos1][ipos2] = 
+    img->mpr[jpos3][ipos3] = 
+    img->mpr[jpos5][ipos4] = 
+    img->mpr[jpos7][ipos5] = (imgpel) ((P_A + P_C + 2*P_B + 2) >> 2);
+    img->mpr[jpos1][ipos3] = 
+    img->mpr[jpos3][ipos4] = 
+    img->mpr[jpos5][ipos5] = 
+    img->mpr[jpos7][ipos6] = (imgpel) ((P_B + P_D + 2*P_C + 2) >> 2);
+    img->mpr[jpos1][ipos4] = 
+    img->mpr[jpos3][ipos5] = 
+    img->mpr[jpos5][ipos6] = 
+    img->mpr[jpos7][ipos7] = (imgpel) ((P_C + P_E + 2*P_D + 2) >> 2);
+    img->mpr[jpos1][ipos5] = 
+    img->mpr[jpos3][ipos6] = 
+    img->mpr[jpos5][ipos7] = (imgpel) ((P_D + P_F + 2*P_E + 2) >> 2);
+    img->mpr[jpos1][ipos6] = 
+    img->mpr[jpos3][ipos7] = (imgpel) ((P_E + P_G + 2*P_F + 2) >> 2);
+    img->mpr[jpos1][ipos7] = (imgpel) ((P_F + P_H + 2*P_G + 2) >> 2);
+    img->mpr[jpos2][ipos0] =
+    img->mpr[jpos4][ipos1] =
+    img->mpr[jpos6][ipos2] = (imgpel) ((P_R + P_Z + 2*P_Q + 2) >> 2);
+    img->mpr[jpos3][ipos0] =
+    img->mpr[jpos5][ipos1] =
+    img->mpr[jpos7][ipos2] = (imgpel) ((P_S + P_Q + 2*P_R + 2) >> 2);
+    img->mpr[jpos4][ipos0] =
+    img->mpr[jpos6][ipos1] = (imgpel) ((P_T + P_R + 2*P_S + 2) >> 2);
+    img->mpr[jpos5][ipos0] =
+    img->mpr[jpos7][ipos1] = (imgpel) ((P_U + P_S + 2*P_T + 2) >> 2);
+    img->mpr[jpos6][ipos0] = (imgpel) ((P_V + P_T + 2*P_U + 2) >> 2);
+    img->mpr[jpos7][ipos0] = (imgpel) ((P_W + P_U + 2*P_V + 2) >> 2);
     break;
 
   case  HOR_DOWN_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
     if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
       printf ("warning: Intra_8x8_Horizontal_Down prediction mode not allowed at mb %d\n",img->current_mb_nr);
     
-    img->mpr[0+ioff][0+joff] = 
-    img->mpr[2+ioff][1+joff] = 
-    img->mpr[4+ioff][2+joff] = 
-    img->mpr[6+ioff][3+joff] = (P_Q + P_Z + 1) >> 1;
-    img->mpr[0+ioff][1+joff] = 
-    img->mpr[2+ioff][2+joff] = 
-    img->mpr[4+ioff][3+joff] = 
-    img->mpr[6+ioff][4+joff] = (P_R + P_Q + 1) >> 1;
-    img->mpr[0+ioff][2+joff] = 
-    img->mpr[2+ioff][3+joff] = 
-    img->mpr[4+ioff][4+joff] = 
-    img->mpr[6+ioff][5+joff] = (P_S + P_R + 1) >> 1;
-    img->mpr[0+ioff][3+joff] = 
-    img->mpr[2+ioff][4+joff] = 
-    img->mpr[4+ioff][5+joff] = 
-    img->mpr[6+ioff][6+joff] = (P_T + P_S + 1) >> 1;
-    img->mpr[0+ioff][4+joff] = 
-    img->mpr[2+ioff][5+joff] = 
-    img->mpr[4+ioff][6+joff] = 
-    img->mpr[6+ioff][7+joff] = (P_U + P_T + 1) >> 1;
-    img->mpr[0+ioff][5+joff] = 
-    img->mpr[2+ioff][6+joff] = 
-    img->mpr[4+ioff][7+joff] = (P_V + P_U + 1) >> 1;
-    img->mpr[0+ioff][6+joff] = 
-    img->mpr[2+ioff][7+joff] = (P_W + P_V + 1) >> 1;
-    img->mpr[0+ioff][7+joff] = (P_X + P_W + 1) >> 1;
-    img->mpr[1+ioff][0+joff] =
-    img->mpr[3+ioff][1+joff] =
-    img->mpr[5+ioff][2+joff] =
-    img->mpr[7+ioff][3+joff] = (P_Q + P_A + 2*P_Z + 2) >> 2;
-    img->mpr[1+ioff][1+joff] =
-    img->mpr[3+ioff][2+joff] =
-    img->mpr[5+ioff][3+joff] =
-    img->mpr[7+ioff][4+joff] = (P_Z + P_R + 2*P_Q + 2) >> 2;
-    img->mpr[1+ioff][2+joff] =
-    img->mpr[3+ioff][3+joff] =
-    img->mpr[5+ioff][4+joff] =
-    img->mpr[7+ioff][5+joff] = (P_Q + P_S + 2*P_R + 2) >> 2;
-    img->mpr[1+ioff][3+joff] =
-    img->mpr[3+ioff][4+joff] =
-    img->mpr[5+ioff][5+joff] =
-    img->mpr[7+ioff][6+joff] = (P_R + P_T + 2*P_S + 2) >> 2;
-    img->mpr[1+ioff][4+joff] =
-    img->mpr[3+ioff][5+joff] =
-    img->mpr[5+ioff][6+joff] =
-    img->mpr[7+ioff][7+joff] = (P_S + P_U + 2*P_T + 2) >> 2;
-    img->mpr[1+ioff][5+joff] =
-    img->mpr[3+ioff][6+joff] =
-    img->mpr[5+ioff][7+joff] = (P_T + P_V + 2*P_U + 2) >> 2;
-    img->mpr[1+ioff][6+joff] =
-    img->mpr[3+ioff][7+joff] = (P_U + P_W + 2*P_V + 2) >> 2;
-    img->mpr[1+ioff][7+joff] = (P_V + P_X + 2*P_W + 2) >> 2;
-    img->mpr[2+ioff][0+joff] = 
-    img->mpr[4+ioff][1+joff] = 
-    img->mpr[6+ioff][2+joff] = (P_Z + P_B + 2*P_A + 2) >> 2;
-    img->mpr[3+ioff][0+joff] = 
-    img->mpr[5+ioff][1+joff] = 
-    img->mpr[7+ioff][2+joff] = (P_A + P_C + 2*P_B + 2) >> 2;
-    img->mpr[4+ioff][0+joff] = 
-    img->mpr[6+ioff][1+joff] = (P_B + P_D + 2*P_C + 2) >> 2;
-    img->mpr[5+ioff][0+joff] = 
-    img->mpr[7+ioff][1+joff] = (P_C + P_E + 2*P_D + 2) >> 2;
-    img->mpr[6+ioff][0+joff] = (P_D + P_F + 2*P_E + 2) >> 2;
-    img->mpr[7+ioff][0+joff] = (P_E + P_G + 2*P_F + 2) >> 2;
+    img->mpr[jpos0][ipos0] = 
+    img->mpr[jpos1][ipos2] = 
+    img->mpr[jpos2][ipos4] = 
+    img->mpr[jpos3][ipos6] = (imgpel) ((P_Q + P_Z + 1) >> 1);
+    img->mpr[jpos1][ipos0] = 
+    img->mpr[jpos2][ipos2] = 
+    img->mpr[jpos3][ipos4] = 
+    img->mpr[jpos4][ipos6] = (imgpel) ((P_R + P_Q + 1) >> 1);
+    img->mpr[jpos2][ipos0] = 
+    img->mpr[jpos3][ipos2] = 
+    img->mpr[jpos4][ipos4] = 
+    img->mpr[jpos5][ipos6] = (imgpel) ((P_S + P_R + 1) >> 1);
+    img->mpr[jpos3][ipos0] = 
+    img->mpr[jpos4][ipos2] = 
+    img->mpr[jpos5][ipos4] = 
+    img->mpr[jpos6][ipos6] = (imgpel) ((P_T + P_S + 1) >> 1);
+    img->mpr[jpos4][ipos0] = 
+    img->mpr[jpos5][ipos2] = 
+    img->mpr[jpos6][ipos4] = 
+    img->mpr[jpos7][ipos6] = (imgpel) ((P_U + P_T + 1) >> 1);
+    img->mpr[jpos5][ipos0] = 
+    img->mpr[jpos6][ipos2] = 
+    img->mpr[jpos7][ipos4] = (imgpel) ((P_V + P_U + 1) >> 1);
+    img->mpr[jpos6][ipos0] = 
+    img->mpr[jpos7][ipos2] = (imgpel) ((P_W + P_V + 1) >> 1);
+    img->mpr[jpos7][ipos0] = (imgpel) ((P_X + P_W + 1) >> 1);
+    img->mpr[jpos0][ipos1] =
+    img->mpr[jpos1][ipos3] =
+    img->mpr[jpos2][ipos5] =
+    img->mpr[jpos3][ipos7] = (imgpel) ((P_Q + P_A + 2*P_Z + 2) >> 2);
+    img->mpr[jpos1][ipos1] =
+    img->mpr[jpos2][ipos3] =
+    img->mpr[jpos3][ipos5] =
+    img->mpr[jpos4][ipos7] = (imgpel) ((P_Z + P_R + 2*P_Q + 2) >> 2);
+    img->mpr[jpos2][ipos1] =
+    img->mpr[jpos3][ipos3] =
+    img->mpr[jpos4][ipos5] =
+    img->mpr[jpos5][ipos7] = (imgpel) ((P_Q + P_S + 2*P_R + 2) >> 2);
+    img->mpr[jpos3][ipos1] =
+    img->mpr[jpos4][ipos3] =
+    img->mpr[jpos5][ipos5] =
+    img->mpr[jpos6][ipos7] = (imgpel) ((P_R + P_T + 2*P_S + 2) >> 2);
+    img->mpr[jpos4][ipos1] =
+    img->mpr[jpos5][ipos3] =
+    img->mpr[jpos6][ipos5] =
+    img->mpr[jpos7][ipos7] = (imgpel) ((P_S + P_U + 2*P_T + 2) >> 2);
+    img->mpr[jpos5][ipos1] =
+    img->mpr[jpos6][ipos3] =
+    img->mpr[jpos7][ipos5] = (imgpel) ((P_T + P_V + 2*P_U + 2) >> 2);
+    img->mpr[jpos6][ipos1] =
+    img->mpr[jpos7][ipos3] = (imgpel) ((P_U + P_W + 2*P_V + 2) >> 2);
+    img->mpr[jpos7][ipos1] = (imgpel) ((P_V + P_X + 2*P_W + 2) >> 2);
+    img->mpr[jpos0][ipos2] = 
+    img->mpr[jpos1][ipos4] = 
+    img->mpr[jpos2][ipos6] = (imgpel) ((P_Z + P_B + 2*P_A + 2) >> 2);
+    img->mpr[jpos0][ipos3] = 
+    img->mpr[jpos1][ipos5] = 
+    img->mpr[jpos2][ipos7] = (imgpel) ((P_A + P_C + 2*P_B + 2) >> 2);
+    img->mpr[jpos0][ipos4] = 
+    img->mpr[jpos1][ipos6] = (imgpel) ((P_B + P_D + 2*P_C + 2) >> 2);
+    img->mpr[jpos0][ipos5] = 
+    img->mpr[jpos1][ipos7] = (imgpel) ((P_C + P_E + 2*P_D + 2) >> 2);
+    img->mpr[jpos0][ipos6] = (imgpel) ((P_D + P_F + 2*P_E + 2) >> 2);
+    img->mpr[jpos0][ipos7] = (imgpel) ((P_E + P_G + 2*P_F + 2) >> 2);
     break;
 
   case  HOR_UP_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
     if (!block_available_left)
       printf ("warning: Intra_8x8_Horizontal_Up prediction mode not allowed at mb %d\n",img->current_mb_nr);
 
-    img->mpr[0+ioff][0+joff] = (P_Q + P_R + 1) >> 1;
-    img->mpr[0+ioff][1+joff] =
-    img->mpr[2+ioff][0+joff] = (P_R + P_S + 1) >> 1;
-    img->mpr[0+ioff][2+joff] =
-    img->mpr[2+ioff][1+joff] =
-    img->mpr[4+ioff][0+joff] = (P_S + P_T + 1) >> 1;
-    img->mpr[0+ioff][3+joff] =
-    img->mpr[2+ioff][2+joff] =
-    img->mpr[4+ioff][1+joff] =
-    img->mpr[6+ioff][0+joff] = (P_T + P_U + 1) >> 1;
-    img->mpr[0+ioff][4+joff] =
-    img->mpr[2+ioff][3+joff] =
-    img->mpr[4+ioff][2+joff] =
-    img->mpr[6+ioff][1+joff] = (P_U + P_V + 1) >> 1;
-    img->mpr[0+ioff][5+joff] =
-    img->mpr[2+ioff][4+joff] =
-    img->mpr[4+ioff][3+joff] =
-    img->mpr[6+ioff][2+joff] = (P_V + P_W + 1) >> 1;
-    img->mpr[0+ioff][6+joff] =
-    img->mpr[2+ioff][5+joff] =
-    img->mpr[4+ioff][4+joff] =
-    img->mpr[6+ioff][3+joff] = (P_W + P_X + 1) >> 1;
-    img->mpr[6+ioff][4+joff] =
-      img->mpr[7+ioff][4+joff] =
-      img->mpr[4+ioff][5+joff] =
-      img->mpr[5+ioff][5+joff] =
-      img->mpr[6+ioff][5+joff] =
-      img->mpr[7+ioff][5+joff] =
-      img->mpr[2+ioff][6+joff] =
-      img->mpr[3+ioff][6+joff] =
-      img->mpr[4+ioff][6+joff] =
-      img->mpr[5+ioff][6+joff] =
-      img->mpr[6+ioff][6+joff] =
-      img->mpr[7+ioff][6+joff] =
-      img->mpr[0+ioff][7+joff] =
-      img->mpr[1+ioff][7+joff] =
-      img->mpr[2+ioff][7+joff] =
-      img->mpr[3+ioff][7+joff] =
-      img->mpr[4+ioff][7+joff] =
-      img->mpr[5+ioff][7+joff] =
-      img->mpr[6+ioff][7+joff] =
-      img->mpr[7+ioff][7+joff] = P_X;
-    img->mpr[1+ioff][6+joff] =
-      img->mpr[3+ioff][5+joff] =
-      img->mpr[5+ioff][4+joff] =
-      img->mpr[7+ioff][3+joff] = (P_W + 3*P_X + 2) >> 2;
-    img->mpr[1+ioff][5+joff] =
-      img->mpr[3+ioff][4+joff] =
-      img->mpr[5+ioff][3+joff] =
-      img->mpr[7+ioff][2+joff] = (P_X + P_V + 2*P_W + 2) >> 2;
-    img->mpr[1+ioff][4+joff] =
-      img->mpr[3+ioff][3+joff] =
-      img->mpr[5+ioff][2+joff] =
-      img->mpr[7+ioff][1+joff] = (P_W + P_U + 2*P_V + 2) >> 2;
-    img->mpr[1+ioff][3+joff] =
-      img->mpr[3+ioff][2+joff] =
-      img->mpr[5+ioff][1+joff] =
-      img->mpr[7+ioff][0+joff] = (P_V + P_T + 2*P_U + 2) >> 2;
-    img->mpr[1+ioff][2+joff] =
-      img->mpr[3+ioff][1+joff] =
-      img->mpr[5+ioff][0+joff] = (P_U + P_S + 2*P_T + 2) >> 2;
-    img->mpr[1+ioff][1+joff] =
-      img->mpr[3+ioff][0+joff] = (P_T + P_R + 2*P_S + 2) >> 2;
-    img->mpr[1+ioff][0+joff] = (P_S + P_Q + 2*P_R + 2) >> 2;
+    img->mpr[jpos0][ipos0] = (imgpel) ((P_Q + P_R + 1) >> 1);
+    img->mpr[jpos1][ipos0] =
+    img->mpr[jpos0][ipos2] = (imgpel) ((P_R + P_S + 1) >> 1);
+    img->mpr[jpos2][ipos0] =
+    img->mpr[jpos1][ipos2] =
+    img->mpr[jpos0][ipos4] = (imgpel) ((P_S + P_T + 1) >> 1);
+    img->mpr[jpos3][ipos0] =
+    img->mpr[jpos2][ipos2] =
+    img->mpr[jpos1][ipos4] =
+    img->mpr[jpos0][ipos6] = (imgpel) ((P_T + P_U + 1) >> 1);
+    img->mpr[jpos4][ipos0] =
+    img->mpr[jpos3][ipos2] =
+    img->mpr[jpos2][ipos4] =
+    img->mpr[jpos1][ipos6] = (imgpel) ((P_U + P_V + 1) >> 1);
+    img->mpr[jpos5][ipos0] =
+    img->mpr[jpos4][ipos2] =
+    img->mpr[jpos3][ipos4] =
+    img->mpr[jpos2][ipos6] = (imgpel) ((P_V + P_W + 1) >> 1);
+    img->mpr[jpos6][ipos0] =
+    img->mpr[jpos5][ipos2] =
+    img->mpr[jpos4][ipos4] =
+    img->mpr[jpos3][ipos6] = (imgpel) ((P_W + P_X + 1) >> 1);
+    img->mpr[jpos4][ipos6] =
+      img->mpr[jpos4][ipos7] =
+      img->mpr[jpos5][ipos4] =
+      img->mpr[jpos5][ipos5] =
+      img->mpr[jpos5][ipos6] =
+      img->mpr[jpos5][ipos7] =
+      img->mpr[jpos6][ipos2] =
+      img->mpr[jpos6][ipos3] =
+      img->mpr[jpos6][ipos4] =
+      img->mpr[jpos6][ipos5] =
+      img->mpr[jpos6][ipos6] =
+      img->mpr[jpos6][ipos7] =
+      img->mpr[jpos7][ipos0] =
+      img->mpr[jpos7][ipos1] =
+      img->mpr[jpos7][ipos2] =
+      img->mpr[jpos7][ipos3] =
+      img->mpr[jpos7][ipos4] =
+      img->mpr[jpos7][ipos5] =
+      img->mpr[jpos7][ipos6] =
+      img->mpr[jpos7][ipos7] = (imgpel) P_X;
+    img->mpr[jpos6][ipos1] =
+      img->mpr[jpos5][ipos3] =
+      img->mpr[jpos4][ipos5] =
+    img->mpr[jpos3][ipos7] = (imgpel) ((P_W + 3*P_X + 2) >> 2);
+    img->mpr[jpos5][ipos1] =
+    img->mpr[jpos4][ipos3] =
+    img->mpr[jpos3][ipos5] =
+    img->mpr[jpos2][ipos7] = (imgpel) ((P_X + P_V + 2*P_W + 2) >> 2);
+    img->mpr[jpos4][ipos1] =
+    img->mpr[jpos3][ipos3] =
+    img->mpr[jpos2][ipos5] =
+    img->mpr[jpos1][ipos7] = (imgpel) ((P_W + P_U + 2*P_V + 2) >> 2);
+    img->mpr[jpos3][ipos1] =
+    img->mpr[jpos2][ipos3] =
+    img->mpr[jpos1][ipos5] =
+    img->mpr[jpos0][ipos7] = (imgpel) ((P_V + P_T + 2*P_U + 2) >> 2);
+    img->mpr[jpos2][ipos1] =
+    img->mpr[jpos1][ipos3] =
+    img->mpr[jpos0][ipos5] = (imgpel) ((P_U + P_S + 2*P_T + 2) >> 2);
+    img->mpr[jpos1][ipos1] =
+    img->mpr[jpos0][ipos3] = (imgpel) ((P_T + P_R + 2*P_S + 2) >> 2);
+    img->mpr[jpos0][ipos1] = (imgpel) ((P_S + P_Q + 2*P_R + 2) >> 2);
     break;
     
   default:
@@ -865,30 +868,29 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
  *    Prefiltering for Intra8x8 prediction
  *************************************************************************************
  */
-void LowPassForIntra8x8Pred(int *PredPel, int block_up_left, int block_up, int block_left)
+void LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, int block_left)
 {
   int i;
-  int LoopArray[25];
+  imgpel LoopArray[25];
  
-
-  for(i = 0; i < 25; i++)
-     LoopArray[i] = PredPel[i] ;
+ 
+  memcpy(&LoopArray[0], &PredPel[0], 25 * sizeof(imgpel));
 
  	if(block_up)
 	{
 		if(block_up_left) 
 		{
-			LoopArray[1] = ((&P_Z)[0] + ((&P_Z)[1]<<1) + (&P_Z)[2] + 2)>>2;
+			LoopArray[1] = (((&P_Z)[0] + ((&P_Z)[1]<<1) + (&P_Z)[2] + 2)>>2);
 		}
 		else
-			LoopArray[1] = ((&P_Z)[1] + ((&P_Z)[1]<<1) + (&P_Z)[2] + 2)>>2; 
+			LoopArray[1] = (((&P_Z)[1] + ((&P_Z)[1]<<1) + (&P_Z)[2] + 2)>>2); 
 
 
 		for(i = 2; i <16; i++)
 		{
-			LoopArray[i] = ((&P_Z)[i-1] + ((&P_Z)[i]<<1) + (&P_Z)[i+1] + 2)>>2;
+			LoopArray[i] = (((&P_Z)[i-1] + ((&P_Z)[i]<<1) + (&P_Z)[i+1] + 2)>>2);
 		}
-		LoopArray[16] = (P_P + (P_P<<1) + P_O + 2)>>2;
+		LoopArray[16] = ((P_P + (P_P<<1) + P_O + 2)>>2);
 	}
 
 	if(block_up_left) 
@@ -896,15 +898,15 @@ void LowPassForIntra8x8Pred(int *PredPel, int block_up_left, int block_up, int b
 		
 		if(block_up && block_left)
 		{
-				LoopArray[0] = (P_Q + (P_Z<<1) + P_A +2)>>2;
+				LoopArray[0] = ((P_Q + (P_Z<<1) + P_A +2)>>2);
 		}
 		else
 		{
 			if(block_up)
-				LoopArray[0] = (P_Z + (P_Z<<1) + P_A +2)>>2;
+				LoopArray[0] = ((P_Z + (P_Z<<1) + P_A +2)>>2);
 			else
 				if(block_left)
-					LoopArray[0] = (P_Z + (P_Z<<1) + P_Q +2)>>2;
+					LoopArray[0] = ((P_Z + (P_Z<<1) + P_Q +2)>>2);
 		}
 
 	}
@@ -912,19 +914,18 @@ void LowPassForIntra8x8Pred(int *PredPel, int block_up_left, int block_up, int b
 	if(block_left)
 	{
 		if(block_up_left)
-			LoopArray[17] = (P_Z + (P_Q<<1) + P_R + 2)>>2; 
+			LoopArray[17] = ((P_Z + (P_Q<<1) + P_R + 2)>>2); 
 		else
-			LoopArray[17] = (P_Q + (P_Q<<1) + P_R + 2)>>2;
+			LoopArray[17] = ((P_Q + (P_Q<<1) + P_R + 2)>>2);
 
 		for(i = 18; i <24; i++)
 		{
-			LoopArray[i] = ((&P_Z)[i-1] + ((&P_Z)[i]<<1) + (&P_Z)[i+1] + 2)>>2;
+			LoopArray[i] = (((&P_Z)[i-1] + ((&P_Z)[i]<<1) + (&P_Z)[i+1] + 2)>>2);
 		}
-		LoopArray[24] = (P_W + (P_X<<1) + P_X + 2)>>2;
+		LoopArray[24] = ((P_W + (P_X<<1) + P_X + 2)>>2);
 	}
 
-  for(i = 0; i < 25; i++)
-    PredPel[i] = LoopArray[i];
+  memcpy(&PredPel[0], &LoopArray[0], 25 * sizeof(imgpel));
 }
 
 
@@ -941,95 +942,89 @@ void itrans8x8(struct img_par *img, //!< image parameters
 {
   int i,j;
   int m6[8][8];
-  Boolean lossless_qpprime = ((img->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
+  Boolean lossless_qpprime = (Boolean) ((img->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
+  static int jpos, ipos;
+  static int a[8], b[8];
 
-  int residue_transform_flag = img->residue_transform_flag;
-
-
-  for( i=0; i<8 && !lossless_qpprime; i++)
+  if(lossless_qpprime)
   {
-    int a[8], b[8];
-    a[0] = img->m7[ioff + 0][joff + i] + img->m7[ioff + 4][joff + i];
-    a[4] = img->m7[ioff + 0][joff + i] - img->m7[ioff + 4][joff + i];
-    a[2] = (img->m7[ioff + 2][joff + i]>>1) - img->m7[ioff + 6][joff + i];
-    a[6] = img->m7[ioff + 2][joff + i] + (img->m7[ioff + 6][joff + i]>>1);
-
-    b[0] = a[0] + a[6];
-    b[2] = a[4] + a[2];
-    b[4] = a[4] - a[2];
-    b[6] = a[0] - a[6];
-
-    a[1] = -img->m7[ioff + 3][joff + i] + img->m7[ioff + 5][joff + i] - img->m7[ioff + 7][joff + i] - (img->m7[ioff + 7][joff + i]>>1);
-    a[3] = img->m7[ioff + 1][joff + i] + img->m7[ioff + 7][joff + i] - img->m7[ioff + 3][joff + i] - (img->m7[ioff + 3][joff + i]>>1);
-    a[5] = -img->m7[ioff + 1][joff + i] + img->m7[ioff + 7][joff + i] + img->m7[ioff + 5][joff + i] + (img->m7[ioff + 5][joff + i]>>1);
-    a[7] = img->m7[ioff + 3][joff + i] + img->m7[ioff + 5][joff + i] + img->m7[ioff + 1][joff + i] + (img->m7[ioff + 1][joff + i]>>1);
-
-    b[1] = a[1] + (a[7]>>2);
-//    b[7] = -(a[1]>>2 + 0) + a[7];  KS: do we need to add zero?
-    b[7] = -(a[1]>>2) + a[7];
-    b[3] = a[3] + (a[5]>>2);
-    b[5] = (a[3]>>2) - a[5];
-
-    m6[0][i] = b[0] + b[7];
-    m6[1][i] = b[2] + b[5];
-    m6[2][i] = b[4] + b[3];
-    m6[3][i] = b[6] + b[1];
-    m6[4][i] = b[6] - b[1];
-    m6[5][i] = b[4] - b[3];
-    m6[6][i] = b[2] - b[5];
-    m6[7][i] = b[0] - b[7];
-  }
-  for( i=0; i<8 && !lossless_qpprime; i++)
-  {
-    int a[8], b[8];
-    a[0] = m6[i][0] + m6[i][4];
-    a[4] = m6[i][0] - m6[i][4];
-    a[2] = (m6[i][2]>>1) - m6[i][6];
-    a[6] = m6[i][2] + (m6[i][6]>>1);
-
-    b[0] = a[0] + a[6];
-    b[2] = a[4] + a[2];
-    b[4] = a[4] - a[2];
-    b[6] = a[0] - a[6];
-
-    a[1] = -m6[i][3] + m6[i][5] - m6[i][7] - (m6[i][7]>>1);
-    a[3] = m6[i][1] + m6[i][7] - m6[i][3] - (m6[i][3]>>1);
-    a[5] = -m6[i][1] + m6[i][7] + m6[i][5] + (m6[i][5]>>1);
-    a[7] = m6[i][3] + m6[i][5] + m6[i][1] + (m6[i][1]>>1);
-
-    b[1] = a[1] + (a[7]>>2);
-    b[7] = -(a[1]>>2) + a[7];
-    b[3] = a[3] + (a[5]>>2);
-    b[5] = (a[3]>>2) - a[5];
-
-    img->m7[ioff + i][joff + 0] = b[0] + b[7];
-    img->m7[ioff + i][joff + 1] = b[2] + b[5];
-    img->m7[ioff + i][joff + 2] = b[4] + b[3];
-    img->m7[ioff + i][joff + 3] = b[6] + b[1];
-    img->m7[ioff + i][joff + 4] = b[6] - b[1];
-    img->m7[ioff + i][joff + 5] = b[4] - b[3];
-    img->m7[ioff + i][joff + 6] = b[2] - b[5];
-    img->m7[ioff + i][joff + 7] = b[0] - b[7];
-  }
-  for( i=0; i<8; i++)
-  {
-    for( j=0; j<8; j++)
+    for( j=joff; j<joff + 8; j++)
     {
-      // Residue Color Transform
-      if(!residue_transform_flag)
-      {
-        if(lossless_qpprime)
-          img->m7[i+ioff][j+joff] =min(img->max_imgpel_value,max(0,img->m7[ioff + i][joff + j]+(long)img->mpr[i+ioff][j+joff]));
-        else
-          img->m7[i+ioff][j+joff] =min(img->max_imgpel_value,max(0,(img->m7[ioff + i][joff + j]+((long)img->mpr[i+ioff][j+joff] << DQ_BITS_8)+DQ_ROUND_8)>>DQ_BITS_8));
-      }
-      else
-      {
-        if(lossless_qpprime)
-          img->m7[i+ioff][j+joff] = img->m7[ioff + i][joff + j];
-        else
-          img->m7[i+ioff][j+joff] =(img->m7[ioff + i][joff + j]+DQ_ROUND_8)>>DQ_BITS_8;
-      }
+      for( i=ioff; i<+ioff + 8; i++)
+        img->m7[j][i] = iClip1(img->max_imgpel_value, (img->m7[j][i]+(long)img->mpr[j][i]));
     }
   }
-} 
+  else
+  {
+    for( i=0; i<8; i++)
+    {            
+      jpos = joff + i;
+      a[0] =  img->m7[jpos][ioff + 0] + img->m7[jpos][ioff + 4];
+      a[4] =  img->m7[jpos][ioff + 0] - img->m7[jpos][ioff + 4];
+      a[2] = (img->m7[jpos][ioff + 2]>>1) - img->m7[jpos][ioff + 6];
+      a[6] = img->m7[jpos][ioff + 2] + (img->m7[jpos][ioff + 6]>>1);
+
+      b[0] = a[0] + a[6];
+      b[2] = a[4] + a[2];
+      b[4] = a[4] - a[2];
+      b[6] = a[0] - a[6];
+
+      a[1] = -img->m7[jpos][ioff + 3] + img->m7[jpos][ioff + 5] - img->m7[jpos][ioff + 7] - (img->m7[jpos][ioff + 7]>>1);
+      a[3] =  img->m7[jpos][ioff + 1] + img->m7[jpos][ioff + 7] - img->m7[jpos][ioff + 3] - (img->m7[jpos][ioff + 3]>>1);
+      a[5] = -img->m7[jpos][ioff + 1] + img->m7[jpos][ioff + 7] + img->m7[jpos][ioff + 5] + (img->m7[jpos][ioff + 5]>>1);
+      a[7] =  img->m7[jpos][ioff + 3] + img->m7[jpos][ioff + 5] + img->m7[jpos][ioff + 1] + (img->m7[jpos][ioff + 1]>>1);
+
+      b[1] = a[1] + (a[7]>>2);
+      b[7] = -(a[1]>>2) + a[7];
+      b[3] = a[3] + (a[5]>>2);
+      b[5] = (a[3]>>2) - a[5];
+
+      m6[0][i] = b[0] + b[7];
+      m6[1][i] = b[2] + b[5];
+      m6[2][i] = b[4] + b[3];
+      m6[3][i] = b[6] + b[1];
+      m6[4][i] = b[6] - b[1];
+      m6[5][i] = b[4] - b[3];
+      m6[6][i] = b[2] - b[5];
+      m6[7][i] = b[0] - b[7];
+    }
+    for( i=0; i<8; i++)
+    {
+      ipos = ioff + i;
+      a[0] = m6[i][0] + m6[i][4];
+      a[4] = m6[i][0] - m6[i][4];
+      a[2] = (m6[i][2]>>1) - m6[i][6];
+      a[6] = m6[i][2] + (m6[i][6]>>1);
+
+      b[0] = a[0] + a[6];
+      b[2] = a[4] + a[2];
+      b[4] = a[4] - a[2];
+      b[6] = a[0] - a[6];
+
+      a[1] = -m6[i][3] + m6[i][5] - m6[i][7] - (m6[i][7]>>1);
+      a[3] = m6[i][1] + m6[i][7] - m6[i][3] - (m6[i][3]>>1);
+      a[5] = -m6[i][1] + m6[i][7] + m6[i][5] + (m6[i][5]>>1);
+      a[7] = m6[i][3] + m6[i][5] + m6[i][1] + (m6[i][1]>>1);
+
+      b[1] = a[1] + (a[7]>>2);
+      b[7] = -(a[1]>>2) + a[7];
+      b[3] = a[3] + (a[5]>>2);
+      b[5] = (a[3]>>2) - a[5];
+
+      img->m7[joff + 0][ipos] = b[0] + b[7];
+      img->m7[joff + 1][ipos] = b[2] + b[5];
+      img->m7[joff + 2][ipos] = b[4] + b[3];
+      img->m7[joff + 3][ipos] = b[6] + b[1];
+      img->m7[joff + 4][ipos] = b[6] - b[1];
+      img->m7[joff + 5][ipos] = b[4] - b[3];
+      img->m7[joff + 6][ipos] = b[2] - b[5];
+      img->m7[joff + 7][ipos] = b[0] - b[7];
+    }
+
+    for( j=joff; j<joff + 8; j++)
+    {
+      for( i=ioff; i<+ioff + 8; i++)
+        img->m7[j][i] =iClip1(img->max_imgpel_value, ((img->m7[j][i]+((long)img->mpr[j][i] << DQ_BITS_8)+DQ_ROUND_8)>>DQ_BITS_8));
+    }
+  }
+}

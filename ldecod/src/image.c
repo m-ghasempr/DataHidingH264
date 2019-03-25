@@ -94,7 +94,7 @@ void MbAffPostProc()
   {
     if (dec_picture->mb_field[i])
     {
-      get_mb_pos(i, &x0, &y0);
+      get_mb_pos(i, &x0, &y0, IS_LUMA);
       for (y=0; y<(2*MB_BLOCK_SIZE);y++)
         for (x=0; x<MB_BLOCK_SIZE; x++)
           temp[x][y] = imgY[y0+y][x0+x];
@@ -225,7 +225,7 @@ void buf2img (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
   {
     // imgpel == pixel_in_file == 1 byte -> simple copy
     for(j=0;j<size_y;j++)
-      memcpy(imgX[j], buf+j*size_x, size_x);
+      memcpy(&imgX[j][0], buf+j*size_x, size_x);
   }
   else
   {
@@ -276,12 +276,28 @@ void buf2img (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
     else
     {
       // little endian
-      for (j=0; j < size_y; j++)
-        for (i=0; i < size_x; i++)
+      if (symbol_size_in_bytes == 1)
+      {
+        for (j=0; j < size_y; j++)
         {
-          imgX[j][i]=0;
-          memcpy(&(imgX[j][i]), buf +((i+j*size_x)*symbol_size_in_bytes), symbol_size_in_bytes);
+          for (i=0; i < size_x; i++)
+          {
+            imgX[j][i]=*(buf++);
+          }
         }
+      }
+      else
+      {
+        for (j=0; j < size_y; j++)
+        {
+          int jpos = j*size_x;
+          for (i=0; i < size_x; i++)
+          {
+            imgX[j][i]=0;
+            memcpy(&(imgX[j][i]), buf +((i+jpos)*symbol_size_in_bytes), symbol_size_in_bytes);
+          }
+        }
+      }
 
     }
   }
@@ -300,8 +316,8 @@ void find_snr(
               StorablePicture *p,     //!< picture to be compared
               int p_ref)              //!< open reference YUV file
 {
-  int SubWidthC  [4]= { 1, 2, 2, 1};
-  int SubHeightC [4]= { 1, 2, 1, 1};
+  static const int SubWidthC  [4]= { 1, 2, 2, 1};
+  static const int SubHeightC [4]= { 1, 2, 1, 1};
   int crop_left, crop_right, crop_top, crop_bottom;
 
   int i,j;
@@ -314,7 +330,7 @@ void find_snr(
   int64 framesize_in_bytes;
   unsigned int max_pix_value_sqd = img->max_imgpel_value * img->max_imgpel_value;
   unsigned int max_pix_value_sqd_uv = img->max_imgpel_value_uv * img->max_imgpel_value_uv;
-  Boolean rgb_output = (active_sps->vui_seq_parameters.matrix_coefficients==0);
+  Boolean rgb_output = (Boolean) (active_sps->vui_seq_parameters.matrix_coefficients==0);
   unsigned char *buf;
 
   // picture error concealment
@@ -329,7 +345,7 @@ void find_snr(
     crop_left   = SubWidthC[p->chroma_format_idc] * p->frame_cropping_rect_left_offset;
     crop_right  = SubWidthC[p->chroma_format_idc] * p->frame_cropping_rect_right_offset;
     crop_top    = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) *  p->frame_cropping_rect_top_offset;
-    crop_bottom = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) *   p->frame_cropping_rect_bottom_offset;
+    crop_bottom = SubHeightC[p->chroma_format_idc]*( 2 - p->frame_mbs_only_flag ) *  p->frame_cropping_rect_bottom_offset;
   }
   else
   {
@@ -368,7 +384,7 @@ void find_snr(
   if (psnrPOC==0 && img->psnr_number)
     img->idr_psnr_number = img->number*img->ref_poc_gap/(input->poc_scale);
 
-  img->psnr_number=max(img->psnr_number,img->idr_psnr_number+psnrPOC);
+  img->psnr_number=imax(img->psnr_number,img->idr_psnr_number+psnrPOC);  
 
   frame_no = img->idr_psnr_number+psnrPOC;
 
@@ -417,7 +433,7 @@ void find_snr(
   {
     for (i=0; i < size_x; ++i)
     {
-      diff_y += img->quad[abs(p->imgY[j][i]-imgY_ref[j][i])];
+      diff_y += img->quad[p->imgY[j][i]-imgY_ref[j][i]];
     }
   }
 
@@ -431,8 +447,8 @@ void find_snr(
     {
       for (i=0; i < size_x_cr; ++i)
       {
-        diff_u += img->quad[abs(imgUV_ref[0][j][i]-p->imgUV[0][j][i])];
-        diff_v += img->quad[abs(imgUV_ref[1][j][i]-p->imgUV[1][j][i])];
+        diff_u += img->quad[imgUV_ref[0][j][i]-p->imgUV[0][j][i]];
+        diff_v += img->quad[imgUV_ref[1][j][i]-p->imgUV[1][j][i]];
       }
     }
   }
@@ -495,41 +511,51 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
 {
 
   int dx, dy;
-  int x, y;
   int i, j;
   int maxold_x,maxold_y;
   int result;
-  int pres_x;
-  int pres_y; 
-  int tmp_res[4][9];
+  int pres_x, pres_y; 
+  
+  int tmp_res[9][9];
   static const int COEF[6] = {    1, -5, 20, 20, -5, 1  };
+  StorablePicture *curr_ref = list[ref_frame];
+  static imgpel **cur_imgY, *cur_lineY;
+  static int jpos_m2, jpos_m1, jpos, jpos_p1, jpos_p2, jpos_p3;
+  static int ipos_m2, ipos_m1, ipos, ipos_p1, ipos_p2, ipos_p3;
 
-  if (list[ref_frame] == no_reference_picture && img->framepoc < img->recovery_poc)
+  if (curr_ref == no_reference_picture && img->framepoc < img->recovery_poc)
   {
       printf("list[ref_frame] is equal to 'no reference picture' before RAP\n");
 
       /* fill the block with sample value 128 */
       for (j = 0; j < BLOCK_SIZE; j++)
         for (i = 0; i < BLOCK_SIZE; i++)
-          block[i][j] = 128;
+          block[j][i] = 128;
       return;
   }
+  cur_imgY = curr_ref->imgY;
   dx = x_pos&3;
   dy = y_pos&3;
-  x_pos = (x_pos-dx)/4;
-  y_pos = (y_pos-dy)/4;
+  x_pos = (x_pos-dx)>>2;
+  y_pos = (y_pos-dy)>>2;
 
-  maxold_x = dec_picture->size_x-1;
-  maxold_y = dec_picture->size_y-1;
+  maxold_x = dec_picture->size_x_m1;
+  maxold_y = dec_picture->size_y_m1;
 
   if (dec_picture->mb_field[img->current_mb_nr])
-    maxold_y = dec_picture->size_y/2 - 1;
+    maxold_y = (dec_picture->size_y >> 1) - 1;
 
   if (dx == 0 && dy == 0) 
   {  /* fullpel position */
     for (j = 0; j < BLOCK_SIZE; j++)
-      for (i = 0; i < BLOCK_SIZE; i++)
-        block[i][j] = list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i))];
+    {      
+      cur_lineY = cur_imgY[iClip3(0,maxold_y,y_pos+j)];
+
+      block[j][0] = cur_lineY[iClip3(0,maxold_x,x_pos  )];
+      block[j][1] = cur_lineY[iClip3(0,maxold_x,x_pos+1)];
+      block[j][2] = cur_lineY[iClip3(0,maxold_x,x_pos+2)];
+      block[j][3] = cur_lineY[iClip3(0,maxold_x,x_pos+3)];
+    }
   }
   else 
   { /* other positions */
@@ -537,21 +563,37 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
     if (dy == 0) 
     { /* No vertical interpolation */
 
-      for (j = 0; j < BLOCK_SIZE; j++) 
+      for (i = 0; i < BLOCK_SIZE; i++) 
       {
-        for (i = 0; i < BLOCK_SIZE; i++) 
+        ipos_m2 = iClip3(0, maxold_x, x_pos + i - 2);
+        ipos_m1 = iClip3(0, maxold_x, x_pos + i - 1);
+        ipos    = iClip3(0, maxold_x, x_pos + i    );
+        ipos_p1 = iClip3(0, maxold_x, x_pos + i + 1);
+        ipos_p2 = iClip3(0, maxold_x, x_pos + i + 2);
+        ipos_p3 = iClip3(0, maxold_x, x_pos + i + 3);
+
+        for (j = 0; j < BLOCK_SIZE; j++) 
         {
-          for (result = 0, x = -2; x < 4; x++)
-            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
-          block[i][j] = max(0, min(img->max_imgpel_value, (result+16)/32));
+          cur_lineY = cur_imgY[iClip3(0,maxold_y,y_pos+j)];
+
+          result  = (cur_lineY[ipos_m2] + cur_lineY[ipos_p3]) * COEF[0];
+          result += (cur_lineY[ipos_m1] + cur_lineY[ipos_p2]) * COEF[1];
+          result += (cur_lineY[ipos   ] + cur_lineY[ipos_p1]) * COEF[2];
+
+          block[j][i] = iClip1(img->max_imgpel_value, ((result+16)>>5));
         }
       }
 
       if ((dx&1) == 1) 
       {
         for (j = 0; j < BLOCK_SIZE; j++)
-          for (i = 0; i < BLOCK_SIZE; i++)
-            block[i][j] = (block[i][j] + list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+dx/2))] +1 )/2;
+        {
+          cur_lineY = cur_imgY[iClip3(0,maxold_y,y_pos+j)];          
+          block[j][0] = (block[j][0] + cur_lineY[iClip3(0,maxold_x,x_pos  +(dx>>1))] + 1 )>>1;
+          block[j][1] = (block[j][1] + cur_lineY[iClip3(0,maxold_x,x_pos+1+(dx>>1))] + 1 )>>1;
+          block[j][2] = (block[j][2] + cur_lineY[iClip3(0,maxold_x,x_pos+2+(dx>>1))] + 1 )>>1;
+          block[j][3] = (block[j][3] + cur_lineY[iClip3(0,maxold_x,x_pos+3+(dx>>1))] + 1 )>>1;
+        }
       }
     }
     else if (dx == 0) 
@@ -559,46 +601,87 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
 
       for (j = 0; j < BLOCK_SIZE; j++) 
       {
+        jpos_m2 = iClip3(0, maxold_y, y_pos + j - 2);
+        jpos_m1 = iClip3(0, maxold_y, y_pos + j - 1);
+        jpos    = iClip3(0, maxold_y, y_pos + j    );
+        jpos_p1 = iClip3(0, maxold_y, y_pos + j + 1);
+        jpos_p2 = iClip3(0, maxold_y, y_pos + j + 2);
+        jpos_p3 = iClip3(0, maxold_y, y_pos + j + 3);
         for (i = 0; i < BLOCK_SIZE; i++) 
         {
-          for (result = 0, y = -2; y < 4; y++)
-            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
-          block[i][j] = max(0, min(img->max_imgpel_value, (result+16)/32));
+          pres_x = iClip3(0,maxold_x,x_pos+i);
+
+          result  = (cur_imgY[jpos_m2][pres_x] + cur_imgY[jpos_p3][pres_x]) * COEF[0];
+          result += (cur_imgY[jpos_m1][pres_x] + cur_imgY[jpos_p2][pres_x]) * COEF[1];
+          result += (cur_imgY[jpos   ][pres_x] + cur_imgY[jpos_p1][pres_x]) * COEF[2];
+          block[j][i] = iClip1(img->max_imgpel_value, ((result+16)>>5));
         }
       }
 
       if ((dy&1) == 1) 
       {
         for (j = 0; j < BLOCK_SIZE; j++)
-          for (i = 0; i < BLOCK_SIZE; i++)
-           block[i][j] = (block[i][j] + list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+dy/2))][max(0,min(maxold_x,x_pos+i))] +1 )/2;
+        {          
+          cur_lineY = cur_imgY[iClip3(0,maxold_y,y_pos+j+(dy>>1))];          
+          block[j][0] = (block[j][0] + cur_lineY[iClip3(0,maxold_x,x_pos  )] + 1 )>>1;
+          block[j][1] = (block[j][1] + cur_lineY[iClip3(0,maxold_x,x_pos+1)] + 1 )>>1;
+          block[j][2] = (block[j][2] + cur_lineY[iClip3(0,maxold_x,x_pos+2)] + 1 )>>1;
+          block[j][3] = (block[j][3] + cur_lineY[iClip3(0,maxold_x,x_pos+3)] + 1 )>>1;
+        }
       }
     }
     else if (dx == 2) 
     {  /* Vertical & horizontal interpolation */
 
-      for (j = -2; j < BLOCK_SIZE+3; j++) 
+      for (i = 0; i < BLOCK_SIZE; i++)
       {
-        for (i = 0; i < BLOCK_SIZE; i++)
-          for (tmp_res[i][j+2] = 0, x = -2; x < 4; x++)
-            tmp_res[i][j+2] += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
+        ipos_m2 = iClip3(0, maxold_x, x_pos + i - 2);
+        ipos_m1 = iClip3(0, maxold_x, x_pos + i - 1);
+        ipos    = iClip3(0, maxold_x, x_pos + i    );
+        ipos_p1 = iClip3(0, maxold_x, x_pos + i + 1);
+        ipos_p2 = iClip3(0, maxold_x, x_pos + i + 2);
+        ipos_p3 = iClip3(0, maxold_x, x_pos + i + 3);
+
+        for (j = 0; j < BLOCK_SIZE + 5; j++) 
+        {          
+          cur_lineY = cur_imgY[iClip3(0,maxold_y,y_pos + j - 2)];
+
+          tmp_res[j][i]  = (cur_lineY[ipos_m2] + cur_lineY[ipos_p3]) * COEF[0];
+          tmp_res[j][i] += (cur_lineY[ipos_m1] + cur_lineY[ipos_p2]) * COEF[1];
+          tmp_res[j][i] += (cur_lineY[ipos   ] + cur_lineY[ipos_p1]) * COEF[2];
+        }
       }
 
       for (j = 0; j < BLOCK_SIZE; j++) 
       {
+        jpos_m2 = j    ;
+        jpos_m1 = j + 1;
+        jpos    = j + 2;
+        jpos_p1 = j + 3;
+        jpos_p2 = j + 4;
+        jpos_p3 = j + 5;
+
         for (i = 0; i < BLOCK_SIZE; i++) 
         {
-          for (result = 0, y = -2; y < 4; y++)
-            result += tmp_res[i][j+y+2]*COEF[y+2];
-          block[i][j] = max(0, min(img->max_imgpel_value, (result+512)/1024));
+          result  = (tmp_res[jpos_m2][i] + tmp_res[jpos_p3][i]) * COEF[0];
+          result += (tmp_res[jpos_m1][i] + tmp_res[jpos_p2][i]) * COEF[1];
+          result += (tmp_res[jpos   ][i] + tmp_res[jpos_p1][i]) * COEF[2];
+
+          block[j][i] = iClip1(img->max_imgpel_value, ((result+512)>>10));
         } 
       }
 
       if ((dy&1) == 1)
       {
         for (j = 0; j < BLOCK_SIZE; j++)
-          for (i = 0; i < BLOCK_SIZE; i++)
-            block[i][j] = (block[i][j] + max(0, min(img->max_imgpel_value, (tmp_res[i][j+2+dy/2]+16)/32)) +1 )/2;
+        {
+          pres_y = j+2+(dy>>1);
+
+          block[j][0] = (block[j][0] + iClip1(img->max_imgpel_value, ((tmp_res[pres_y][0]+16)>>5)) +1 )>>1;        
+          block[j][1] = (block[j][1] + iClip1(img->max_imgpel_value, ((tmp_res[pres_y][1]+16)>>5)) +1 )>>1;      
+          block[j][2] = (block[j][2] + iClip1(img->max_imgpel_value, ((tmp_res[pres_y][2]+16)>>5)) +1 )>>1;      
+          block[j][3] = (block[j][3] + iClip1(img->max_imgpel_value, ((tmp_res[pres_y][3]+16)>>5)) +1 )>>1;      
+        }
       }
     }
     else if (dy == 2)
@@ -606,52 +689,85 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
 
       for (j = 0; j < BLOCK_SIZE; j++)
       {
-        for (i = -2; i < BLOCK_SIZE+3; i++)
-          for (tmp_res[j][i+2] = 0, y = -2; y < 4; y++)
-            tmp_res[j][i+2] += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
+        jpos_m2 = iClip3(0, maxold_y, y_pos + j - 2);
+        jpos_m1 = iClip3(0, maxold_y, y_pos + j - 1);
+        jpos    = iClip3(0, maxold_y, y_pos + j    );
+        jpos_p1 = iClip3(0, maxold_y, y_pos + j + 1);
+        jpos_p2 = iClip3(0, maxold_y, y_pos + j + 2);
+        jpos_p3 = iClip3(0, maxold_y, y_pos + j + 3);
+        for (i = 0; i < BLOCK_SIZE+5; i++) 
+        {
+          pres_x = iClip3(0,maxold_x,x_pos+i - 2);
+          tmp_res[j][i]  = (cur_imgY[jpos_m2][pres_x] + cur_imgY[jpos_p3][pres_x])*COEF[0];
+          tmp_res[j][i] += (cur_imgY[jpos_m1][pres_x] + cur_imgY[jpos_p2][pres_x])*COEF[1];
+          tmp_res[j][i] += (cur_imgY[jpos   ][pres_x] + cur_imgY[jpos_p1][pres_x])*COEF[2];
+        }
       }
 
       for (j = 0; j < BLOCK_SIZE; j++)
       {
         for (i = 0; i < BLOCK_SIZE; i++)
         {
-          for (result = 0, x = -2; x < 4; x++)
-            result += tmp_res[j][i+x+2]*COEF[x+2];
-          block[i][j] = max(0, min(img->max_imgpel_value, (result+512)/1024));
+          result  = (tmp_res[j][i    ] + tmp_res[j][i + 5]) * COEF[0];
+          result += (tmp_res[j][i + 1] + tmp_res[j][i + 4]) * COEF[1];
+          result += (tmp_res[j][i + 2] + tmp_res[j][i + 3]) * COEF[2];
+          block[j][i] = iClip1(img->max_imgpel_value, ((result+512)>>10));
         }
       }
 
       if ((dx&1) == 1)
       {
         for (j = 0; j < BLOCK_SIZE; j++)
-          for (i = 0; i < BLOCK_SIZE; i++)
-            block[i][j] = (block[i][j] + max(0, min(img->max_imgpel_value, (tmp_res[j][i+2+dx/2]+16)/32))+1)/2;
+        {
+          block[j][0] = (block[j][0] + iClip1(img->max_imgpel_value, ((tmp_res[j][2+(dx>>1)]+16)>>5))+1)>>1;
+          block[j][1] = (block[j][1] + iClip1(img->max_imgpel_value, ((tmp_res[j][3+(dx>>1)]+16)>>5))+1)>>1;
+          block[j][2] = (block[j][2] + iClip1(img->max_imgpel_value, ((tmp_res[j][4+(dx>>1)]+16)>>5))+1)>>1;
+          block[j][3] = (block[j][3] + iClip1(img->max_imgpel_value, ((tmp_res[j][5+(dx>>1)]+16)>>5))+1)>>1;
+        }
       }
     }
     else
     {  /* Diagonal interpolation */
 
-      for (j = 0; j < BLOCK_SIZE; j++)
+      for (i = 0; i < BLOCK_SIZE; i++)
       {
-        for (i = 0; i < BLOCK_SIZE; i++)
-        {
-          pres_y = dy == 1 ? y_pos+j : y_pos+j+1;
-          pres_y = max(0,min(maxold_y,pres_y));
-          for (result = 0, x = -2; x < 4; x++)
-            result += list[ref_frame]->imgY[pres_y][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
-          block[i][j] = max(0, min(img->max_imgpel_value, (result+16)/32));
+        ipos_m2 = iClip3(0, maxold_x, x_pos + i - 2);
+        ipos_m1 = iClip3(0, maxold_x, x_pos + i - 1);
+        ipos    = iClip3(0, maxold_x, x_pos + i    );
+        ipos_p1 = iClip3(0, maxold_x, x_pos + i + 1);
+        ipos_p2 = iClip3(0, maxold_x, x_pos + i + 2);
+        ipos_p3 = iClip3(0, maxold_x, x_pos + i + 3);
+
+        for (j = 0; j < BLOCK_SIZE; j++)
+        {          
+          cur_lineY = cur_imgY[iClip3(0,maxold_y,(dy == 1 ? y_pos+j : y_pos+j+1))];
+
+          result  = (cur_lineY[ipos_m2] + cur_lineY[ipos_p3]) * COEF[0];
+          result += (cur_lineY[ipos_m1] + cur_lineY[ipos_p2]) * COEF[1];
+          result += (cur_lineY[ipos   ] + cur_lineY[ipos_p1]) * COEF[2];
+
+          block[j][i] = iClip1(img->max_imgpel_value, ((result+16)>>5));
         }
       }
 
       for (j = 0; j < BLOCK_SIZE; j++)
-      {
+      {        
+        jpos_m2 = iClip3(0, maxold_y, y_pos + j - 2);
+        jpos_m1 = iClip3(0, maxold_y, y_pos + j - 1);
+        jpos    = iClip3(0, maxold_y, y_pos + j    );
+        jpos_p1 = iClip3(0, maxold_y, y_pos + j + 1);
+        jpos_p2 = iClip3(0, maxold_y, y_pos + j + 2);
+        jpos_p3 = iClip3(0, maxold_y, y_pos + j + 3);
         for (i = 0; i < BLOCK_SIZE; i++)
         {
-          pres_x = dx == 1 ? x_pos+i : x_pos+i+1;
-          pres_x = max(0,min(maxold_x,pres_x));
-          for (result = 0, y = -2; y < 4; y++)
-            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][pres_x]*COEF[y+2];
-          block[i][j] = (block[i][j] + max(0, min(img->max_imgpel_value, (result+16)/32)) +1 ) / 2;
+          pres_x = dx == 1 ? x_pos+i : x_pos+i+1;          
+          pres_x = iClip3(0,maxold_x,pres_x);
+
+          result  = (cur_imgY[jpos_m2][pres_x] + cur_imgY[jpos_p3][pres_x]) * COEF[0];
+          result += (cur_imgY[jpos_m1][pres_x] + cur_imgY[jpos_p2][pres_x]) * COEF[1];
+          result += (cur_imgY[jpos   ][pres_x] + cur_imgY[jpos_p1][pres_x]) * COEF[2];
+
+          block[j][i] = (block[j][i] + iClip1(img->max_imgpel_value, ((result+16)>>5)) +1 ) >>1;
         }
       }
 
@@ -792,7 +908,8 @@ int read_new_slice()
       printf ("Error while getting the NALU in file format %s, exit\n", input->FileFormat==PAR_OF_ANNEXB?"Annex B":"RTP");
     if (ret == 0)
     {
-        return EOS;
+      FreeNALU(nalu);
+      return EOS;
     }
 
     // Got a NALU
@@ -968,7 +1085,10 @@ int read_new_slice()
         if (ret < 0)
           printf ("Error while getting the NALU in file format %s, exit\n", input->FileFormat==PAR_OF_ANNEXB?"Annex B":"RTP");
         if (ret == 0)
+        {
+          FreeNALU(nalu);
           return current_header;
+        }
 
         if ( NALU_TYPE_DPB == nalu->nal_unit_type)
         {
@@ -1006,7 +1126,10 @@ int read_new_slice()
           if (ret < 0)
             printf ("Error while getting the NALU in file format %s, exit\n", input->FileFormat==PAR_OF_ANNEXB?"Annex B":"RTP");
           if (ret == 0)
+          {
+            FreeNALU(nalu);
             return current_header;
+          }
         }
 
         // check if we got DP_C
@@ -1171,7 +1294,7 @@ void init_picture(struct img_par *img, struct inp_par *inp)
     time( &(img->ltime_start));                // start time s
   }
 
-  dec_picture = alloc_storable_picture (img->structure, img->width, img->height, img->width_cr, img->height_cr);
+  dec_picture = alloc_storable_picture ((PictureStructure) img->structure, img->width, img->height, img->width_cr, img->height_cr);
   dec_picture->top_poc=img->toppoc;
   dec_picture->bottom_poc=img->bottompoc;
   dec_picture->frame_poc=img->framepoc;
@@ -1197,7 +1320,7 @@ void init_picture(struct img_par *img, struct inp_par *inp)
   case BOTTOM_FIELD:
     {
       dec_picture->poc=img->bottompoc;
-      img->number++;
+      img->number = img->number * 2 + 1;
       break;
     }
   case FRAME:
@@ -1255,6 +1378,12 @@ void init_picture(struct img_par *img, struct inp_par *inp)
 
   dec_picture->MbaffFrameFlag = img->MbaffFrameFlag;
   dec_picture->PicWidthInMbs = img->PicWidthInMbs;
+
+  get_mb_block_pos = dec_picture->MbaffFrameFlag ? get_mb_block_pos_mbaff : get_mb_block_pos_normal;
+  getNeighbour = dec_picture->MbaffFrameFlag ? getAffNeighbour : getNonAffNeighbour;
+
+
+
   dec_picture->pic_num = img->frame_num;
   dec_picture->frame_num = img->frame_num;
 
@@ -1292,8 +1421,8 @@ void exit_picture()
   unsigned int i;
   int structure, frame_poc, slice_type, refpic, qp, pic_num, chroma_format_idc;
 
-  int tmp_time;                   // time used by decoding the last frame
-  char yuvFormat[10];
+  time_t tmp_time;                   // time used by decoding the last frame
+  char   yuvFormat[10];
 
   // return if the last picture has already been finished
   if (dec_picture==NULL)
@@ -1397,22 +1526,22 @@ void exit_picture()
     
     if(slice_type == I_SLICE) // I picture
       fprintf(stdout,"%04d(I)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
+      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, (int)tmp_time);
     else if(slice_type == P_SLICE) // P pictures
       fprintf(stdout,"%04d(P)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
+      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, (int)tmp_time);
     else if(slice_type == SP_SLICE) // SP pictures
       fprintf(stdout,"%04d(SP) %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
+      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, (int)tmp_time);
     else if (slice_type == SI_SLICE)
       fprintf(stdout,"%04d(SI) %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
+      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, (int)tmp_time);
     else if(refpic) // stored B pictures
       fprintf(stdout,"%04d(RB) %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
+      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, (int)tmp_time);
     else // B pictures
       fprintf(stdout,"%04d(B)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
-      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, tmp_time);
+      frame_no, frame_poc, pic_num, qp, snr->snr_y, snr->snr_u, snr->snr_v, yuvFormat, (int)tmp_time);
 
     fflush(stdout);
 
@@ -1673,7 +1802,7 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
 #endif
 
 	// Initializes the current macroblock
-    start_macroblock(img,inp, img->current_mb_nr);
+    start_macroblock(img, img->current_mb_nr);
     // Get the syntax elements from the NAL
     read_flag = read_one_macroblock(img,inp);
     decode_one_macroblock(img,inp);
@@ -1811,7 +1940,7 @@ void fill_wp_params(struct img_par *img)
           }
           else if (active_pps->weighted_bipred_idc == 2)
           {
-            td = Clip3(-128,127,listX[LIST_1][j]->poc - listX[LIST_0][i]->poc);
+            td = iClip3(-128,127,listX[LIST_1][j]->poc - listX[LIST_0][i]->poc);
             if (td == 0 || listX[LIST_1][j]->is_long_term || listX[LIST_0][i]->is_long_term)
             {
               img->wbp_weight[0][i][j][comp] =   32;
@@ -1819,10 +1948,10 @@ void fill_wp_params(struct img_par *img)
             }
             else
             {
-              tb = Clip3(-128,127,img->ThisPOC - listX[LIST_0][i]->poc);
+              tb = iClip3(-128,127,img->ThisPOC - listX[LIST_0][i]->poc);
 
-              tx = (16384 + abs(td/2))/td;
-              DistScaleFactor = Clip3(-1024, 1023, (tx*tb + 32 )>>6);
+              tx = (16384 + iabs(td/2))/td;
+              DistScaleFactor = iClip3(-1024, 1023, (tx*tb + 32 )>>6);
               
               img->wbp_weight[1][i][j][comp] = DistScaleFactor >> 2;
               img->wbp_weight[0][i][j][comp] = 64 - img->wbp_weight[1][i][j][comp];
@@ -1861,7 +1990,7 @@ void fill_wp_params(struct img_par *img)
             }
             else if (active_pps->weighted_bipred_idc == 2)
             {
-              td = Clip3(-128,127,listX[k+LIST_1][j]->poc - listX[k+LIST_0][i]->poc);
+              td = iClip3(-128,127,listX[k+LIST_1][j]->poc - listX[k+LIST_0][i]->poc);
               if (td == 0 || listX[k+LIST_1][j]->is_long_term || listX[k+LIST_0][i]->is_long_term)
               {
                 img->wbp_weight[k+0][i][j][comp] =   32;
@@ -1869,10 +1998,10 @@ void fill_wp_params(struct img_par *img)
               }
               else
               {
-                tb = Clip3(-128,127,((k==2)?img->toppoc:img->bottompoc) - listX[k+LIST_0][i]->poc);
+                tb = iClip3(-128,127,((k==2)?img->toppoc:img->bottompoc) - listX[k+LIST_0][i]->poc);
                 
-                tx = (16384 + abs(td/2))/td;
-                DistScaleFactor = Clip3(-1024, 1023, (tx*tb + 32 )>>6);
+                tx = (16384 + iabs(td/2))/td;
+                DistScaleFactor = iClip3(-1024, 1023, (tx*tb + 32 )>>6);
 
                 img->wbp_weight[k+1][i][j][comp] = DistScaleFactor >> 2;
                 img->wbp_weight[k+0][i][j][comp] = 64 - img->wbp_weight[k+1][i][j][comp];

@@ -16,6 +16,9 @@
 
 int testEndian(void);
 
+void flush_direct_output(int p_out);
+void direct_output_paff(StorablePicture *p, int p_out);
+void write_out_picture(StorablePicture *p, int p_out);
 void write_stored_frame(FrameStore *fs, int p_out);
 void direct_output(StorablePicture *p, int p_out);
 void direct_output_paff(StorablePicture *p, int p_out);

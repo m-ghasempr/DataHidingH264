@@ -169,12 +169,27 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
         size = symbol_size_in_bytes;
       }
 
-      for(i=crop_top;i<size_y-crop_bottom;i++)
-        for(j=crop_left;j<size_x-crop_right;j++)
+      if ((crop_top || crop_bottom || crop_left || crop_right) || (size != 1))
+      {
+        for(i=crop_top;i<size_y-crop_bottom;i++)
         {
-          memcpy(buf+((j-crop_left+((i-crop_top)*(twidth)))*symbol_size_in_bytes),&(imgX[i][j]), size);
+          int ipos = (i-crop_top)*(twidth);
+          for(j=crop_left;j<size_x-crop_right;j++)
+          {
+            memcpy(buf+((j-crop_left+(ipos))*symbol_size_in_bytes),&(imgX[i][j]), size);
+          }
         }
-
+      }
+      else
+      {
+        for(i=0;i<size_y;i++)
+        {          
+          for(j=0;j<size_x;j++)
+          {
+            *(buf++)=(char) imgX[i][j];
+          }
+        }
+      }
     }
   }
 }
@@ -368,7 +383,7 @@ void write_out_picture(StorablePicture *p, int p_out)
 
   int crop_left, crop_right, crop_top, crop_bottom;
   int symbol_size_in_bytes = img->pic_unit_bitsize_on_disk/8;
-  Boolean rgb_output = (active_sps->vui_seq_parameters.matrix_coefficients==0);
+  Boolean rgb_output = (Boolean) (active_sps->vui_seq_parameters.matrix_coefficients==0);
   unsigned char *buf;
 
   if (p->non_existing)
@@ -442,7 +457,7 @@ void write_out_picture(StorablePicture *p, int p_out)
     if (input->write_uv)
     {
       int i,j;
-      imgpel cr_val = 1<<(img->bitdepth_luma - 1);
+      imgpel cr_val = (imgpel) (1<<(img->bitdepth_luma - 1));
       
       get_mem3Dpel (&(p->imgUV), 1, p->size_y/2, p->size_x/2);
       for (j=0; j<p->size_y/2; j++)
@@ -511,17 +526,17 @@ void clear_picture(StorablePicture *p)
   for(i=0;i<p->size_y;i++)
   {
     for (j=0; j<p->size_x; j++)
-      p->imgY[i][j] = img->dc_pred_value_luma;
+      p->imgY[i][j] = (imgpel) img->dc_pred_value_luma;
   }
   for(i=0;i<p->size_y_cr;i++)
   {
     for (j=0; j<p->size_x_cr; j++)
-      p->imgUV[0][i][j] = img->dc_pred_value_chroma;
+      p->imgUV[0][i][j] = (imgpel) img->dc_pred_value_chroma;
   }
   for(i=0;i<p->size_y_cr;i++)
   {
     for (j=0; j<p->size_x_cr; j++)
-      p->imgUV[1][i][j] = img->dc_pred_value_chroma;
+      p->imgUV[1][i][j] = (imgpel) img->dc_pred_value_chroma;
   }
     
 }
@@ -647,7 +662,7 @@ void direct_output(StorablePicture *p, int p_out)
     // so output it directly
     flush_direct_output(p_out);
     write_picture (p, p_out, FRAME);
-    if (-1!=p_ref)
+    if (-1!=p_ref && !input->silent)
       find_snr(snr, p, p_ref);
     free_storable_picture(p);
     return;
@@ -674,7 +689,7 @@ void direct_output(StorablePicture *p, int p_out)
     // we have both fields, so output them
     dpb_combine_field_yuv(out_buffer);
     write_picture (out_buffer->frame, p_out, FRAME);
-    if (-1!=p_ref)
+    if (-1!=p_ref && !input->silent)
       find_snr(snr, out_buffer->frame, p_ref);
     free_storable_picture(out_buffer->frame);
     out_buffer->frame = NULL;

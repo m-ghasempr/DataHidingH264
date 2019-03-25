@@ -18,8 +18,13 @@
 extern int ****LevelOffset4x4Luma;
 extern int *****LevelOffset4x4Chroma;
 extern int ****LevelOffset8x8Luma;
+extern short **OffsetList4x4;
+extern short **OffsetList8x8;
+extern const int OffsetBits;
+
 
 extern int AdaptRndWeight;
+extern int AdaptRndCrWeight;
 
 void Init_QOffsetMatrix (void);
 void CalculateOffsetParam(void);

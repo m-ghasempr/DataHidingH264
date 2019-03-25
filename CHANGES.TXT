@@ -1,3 +1,40 @@
+Changes in Version JM 12.0 (since JM 11.0)
+------------------------------------------
+
+- encoder: Context Adaptive Lagrange Multiplier [JVT-T046] (JZ)
+- encoder: Severe Rate Control reorganization and debugging. Support for interlace coding modes and hierarchical/multi-pass encoding (AL/AT)
+- encoder: Lagrangian Cleanups based on "layered" motion estimation (YD/AT)
+- encoder: reorganization/unification of motion estimation and compensation functions (AL/AT)
+- encoder: Revised Luma/Chroma interpolation  (AL/AT)
+- encoder: Chroma motion estimation consideration (AL/AT)
+- encoder: Separation of intra chroma mode decision and RDO (AL/AT)
+- encoder: split up macroblock mode decision (AT)
+- encoder: Bug correction relating to 64bit type statistics output (AT)
+- encoder: Simple "text" SEI message generation and basic support for VUI parameters (to be extended) (AT)
+- encoder: reorganization of adaptive quantization and support of 4:2:2 and 4:4:4 formats (AT)
+- encoder: resolved 8x8 intra prediction + MB-AFF bug  (AT)
+- encoder: resolved illegal WP value vs Eq.8-294 bug  (AT)
+- encoder: subpel EPZS bug resolutions and addition of bipredictive subpel EPZS  (AT)
+- encoder: resolve bug with IDR pictures + RDPictureDecision (AT)
+- encoder: fix SP/SI memory leaks  (AT)
+- encoder: bidirectional search for simplified fast ME (BY)
+- encoder: fix start code prefix length (SN)
+- decoder: update of decoder input parameters (AT)
+- encoder: fix incorrect usage of 8x8 transform with direct mode and non-rd-opt coding (DH)
+- encoder: fix wrong pointer dereferences (KS/SH)
+- encoder: fix SP/SI file i/o issue (ES)
+- encoder: allocate less stream buffer memory for slice modes 1 and 2 (KS)
+- encoder: fix bit statistics for slice mode 2 (enricomasala)
+- decoder: trace file format cleanup (KS)
+- decoder: fix psnr calculation for field with IDR (SN)
+- decoder: error concealment - conceal intra blocks from decoded blocks first (KS)
+- decoder: decoder cleanups and optimizations (AT/KS)
+- encoder/decoder: various small code cleanups (AT)
+- encoder/decoder: correction of fix for predict_nnz with constrained intra and data partitioning (CK/KS)
+- encoder/decoder: fix memory leaks mostly in error paths (KS)
+- encoder/decoder: add MS Visual Studio 2005 project files (KS)
+
+
 Changes in Version JM 11.0 (since JM 10.2)
 ------------------------------------------
 - encoder: FME updated [JVT-R085 and JVT-Q088] (XX)
@@ -1084,9 +1121,9 @@ Bug Fixes
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 People:
 KS      Karsten Suehring        suehring@hhi.de
-SM      Siwei Ma                swma@jdl.ac.cn
 AF      Arild Fuldseth          arild.fuldseth@tandberg.no
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
+AL      Athanasios Leontaris    athanasios.leontaris@dolby.com
 AJ      Anthony Joch            anthony@ubvideo.com
 AM	Alan MacDonald		newslists@warpzillion.com
 AS      Albert Simpson          ASimpson@amphion.com
@@ -1095,7 +1132,9 @@ AW      Armand Wemelsfelder     wemel@planet.nl
 BH      Barry Haskell           bhaskell@apple.com
 BJ	Byeungwoo Jeon		bjeon@yurim.skku.ac.kr
 BL	Brandon Lin		brandon@ubvideo.com
+BY	Bill Yi			bill.xyi@gmail.com
 CG      Cristina Gomila         GomilaC@tce.com
+CK	Christopher Kotchey	ckotchey@us.ibm.com
 CS	Christian Schmidt	schmidt@ece.ucsb.edu
 CZ	Chunbo Zhu		cbzhu@mail.ustc.edu.cn
 DC      Doug Chin               dougchin@sandvideo.com
@@ -1126,6 +1165,7 @@ JS      Joonho Song             jhsong@varovision.com
 JSa     Jose Sanches		jose.sanches@st.com
 JX      Jian Feng Xu            fenax@video.mdc.tsinghua.edu.cn
 JXi     Jun Xin                 jxin@merl.com
+JZ	Jun Zhang		j_zhang1999@yahoo.com
 KL      Karl Lillevold          Karll@real.com
 KP      Krit Panusopone         KPanusopone@gi.com
 KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
@@ -1156,9 +1196,11 @@ RV      Rajesh Kumar S Venkata  v-rajesh.kumar@st.com
 SB      Saurav Bandyopadhyay	skb3@buffalo.edu
 SF	Simon Fenney		simon.fenney@powervr.com
 SG      Steve Gordon            sgordon@broadcom.com
+SH	Sven Heithecker		heithecker@ida.ing.tu-bs.de
 SK	Shafi Ullah Khan	shafi@sarayusoftech.com
 SL	Stephan Lachowsky	stephan@mobilygen.com
 SKa	Shinya Kadono		kadono.shinya@jp.panasonic.com
+SM      Siwei Ma                swma@jdl.ac.cn
 SM	Sebastian Manciulea	sebastian@splash.ro
 SMy	Stefaan Mys		stefaan.mys@ugent.be
 SN	Satoshi Nakagawa	nakagawa@okilab.net
@@ -1190,6 +1232,7 @@ XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com
 XX	Xiaozhong Xu		xxz@video.mdc.tsinghua.edu.cn
 XY      Xiaoquan Yi             xyi@scu.edu
 YC	Yi-Jen Chiu		yi-jen.chiu@intel.com
+YD      Yunyang Dai             ydai@dolby.com
 YH	Yu-Wen Huang		YW_Huang@mtk.com.tw
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com

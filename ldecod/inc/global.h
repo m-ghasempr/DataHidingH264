@@ -4,7 +4,7 @@
  *  \file
  *     global.h
  *  \brief
- *     global definitions for for H.264 decoder.
+ *     global definitions for H.264 decoder.
  *  \author
  *     Copyright (C) 1999  Telenor Satellite Services,Norway
  *                         Ericsson Radio Systems, Sweden
@@ -27,49 +27,22 @@
 #define _GLOBAL_H_
 
 #include <stdio.h>                              //!< for FILE
+#include <stdarg.h>
+
 #include <time.h>
 #include <sys/timeb.h>
+#include "win32.h"
 #include "defines.h"
+#include "ifunctions.h"
 #include "parsetcommon.h"
-
-#ifdef WIN32
-#define  snprintf _snprintf
-#define  open     _open
-#define  close    _close
-#define  read     _read
-#define  write    _write
-#define  lseek    _lseeki64
-#define  fsync    _commit
-#define  OPENFLAGS_WRITE _O_WRONLY|_O_CREAT|_O_BINARY|_O_TRUNC
-#define  OPEN_PERMISSIONS _S_IREAD | _S_IWRITE
-#define  OPENFLAGS_READ  _O_RDONLY|_O_BINARY
-#else
-#define  OPENFLAGS_WRITE O_WRONLY|O_CREAT|O_TRUNC
-#define  OPENFLAGS_READ  O_RDONLY
-#define  OPEN_PERMISSIONS S_IRUSR | S_IWUSR
-#endif
 
 
 typedef unsigned char   byte;                   //!<  8 bit unsigned
 typedef int             int32;
 typedef unsigned int    u_int32;
 
-#define imgpel unsigned short
-
-#if defined(WIN32) && !defined(__GNUC__)
-  typedef __int64   int64;
-# define FORMAT_OFF_T "I64d"
-#ifndef INT64_MIN
-# define INT64_MIN        (-9223372036854775807i64 - 1i64)
-#endif
-#else
-  typedef long long int64;
-# define FORMAT_OFF_T "lld"
-#ifndef INT64_MIN
-# define INT64_MIN        (-9223372036854775807LL - 1LL)
-#endif
-#endif
-
+//typedef unsigned short imgpel;
+typedef unsigned char  imgpel;                //!<  Pixel type definition
 
 pic_parameter_set_rbsp_t *active_pps;
 seq_parameter_set_rbsp_t *active_sps;
@@ -80,6 +53,7 @@ int  **refFrArr;                                //!< Array for reference frames 
 imgpel **imgY_ref;                                //!< reference frame find snr
 imgpel ***imgUV_ref;
 
+int **PicPos;
 int  ReMapRef[20];
 // B pictures
 int  Bframe_ctr;
@@ -210,6 +184,13 @@ typedef enum {
   SI_SLICE
 } SliceType;
 
+typedef enum
+{
+  IS_LUMA = 0,  
+  IS_CHROMA = 1
+} Component_Type;
+
+
 /***********************************************************************
  * D a t a    t y p e s   f o r  C A B A C
  ***********************************************************************
@@ -331,7 +312,7 @@ typedef struct syntaxelement
   //! for mapping of UVLC to syntaxElement
   void    (*mapping)(int len, int info, int *value1, int *value2);
   //! used for CABAC: refers to actual coding method of each individual syntax element type
-  void  (*reading)(struct syntaxelement *, struct inp_par *, struct img_par *, DecodingEnvironmentPtr);
+  void  (*reading)(struct syntaxelement *, struct img_par *, DecodingEnvironmentPtr);
 
 } SyntaxElement;
 
@@ -357,8 +338,8 @@ typedef struct macroblock
   int           is_skip;
 
   int           i16mode;
-  int           b8mode[4];
-  int           b8pdir[4];
+  char          b8mode[4];
+  char          b8pdir[4];
   int           ei_flag;
 
   int           LFDisableIdc;
@@ -398,7 +379,7 @@ typedef struct datapartition
   Bitstream           *bitstream;
   DecodingEnvironment de_cabac;
 
-  int     (*readSyntaxElement)(SyntaxElement *, struct img_par *, struct inp_par *, struct datapartition *);
+  int     (*readSyntaxElement)(SyntaxElement *, struct img_par *, struct datapartition *);
           /*!< virtual function;
                actual method depends on chosen data partition and
                entropy coding method  */
@@ -459,6 +440,7 @@ typedef struct img_par
   int width;
   int height;
   int width_cr;                               //!< width chroma
+  int width_cr_m1;                               //!< width chroma
   int height_cr;                              //!< height chroma
   int mb_y;
   int mb_x;
@@ -475,7 +457,7 @@ typedef struct img_par
   int m7[16][16];                             //!< final 4x4 block. Extended to 16x16 for ABT
   int cof[4][12][4][4];                       //!< correction coefficients from predicted   
   int cofu[16];                                                                             
-  int **ipredmode;                            //!< prediction type [90][74]
+  byte **ipredmode;                            //!< prediction type [90][74]
   int *quad;
   int ***nz_coeff;
   int **siblock;
@@ -499,8 +481,6 @@ typedef struct img_par
 
   // for signalling to the neighbour logic that this is a deblocker call
   int DeblockCall;
-
-  int **field_anchor;
 
   DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //!< stores the memory management control operations
 
@@ -598,15 +578,16 @@ typedef struct img_par
   int num_cdc_coeff;
   int mb_cr_size_x;
   int mb_cr_size_y;
-  
+  int mb_cr_size_x_blk;
+  int mb_cr_size_y_blk;
+  int mb_size[3][2];                         //!< component macroblock dimensions
+  int mb_size_blk[3][2];                         //!< component macroblock dimensions
+
   int idr_psnr_number;
   int psnr_number;
 
   time_t ltime_start;               // for time measurement
   time_t ltime_end;                 // for time measurement
-
-  // Residue Color Transform
-  int residue_transform_flag;
 
 #ifdef WIN32
   struct _timeb tstruct_start;
@@ -659,7 +640,7 @@ struct snr_par
   float msse_v;                                //!< Average SSE V
 };
 
-int tot_time;
+time_t tot_time;
 
 // input parameters from configuration file
 struct inp_par
@@ -671,6 +652,7 @@ struct inp_par
   int ref_offset;
   int poc_scale;
   int write_uv;
+  int silent;
 
 #ifdef _LEAKYBUCKET_
   unsigned long R_decoder;                //!< Decoder Rate in HRD Model
@@ -725,10 +707,6 @@ FILE *p_log;                    //!< SNR file
 FILE *p_trace;
 #endif
 
-// Residue Color Transform
-int mprRGB[3][16][16];
-int rec_res[3][16][16];
-
 // Redundant slices
 int previous_frame_num;          //!< frame number of previous slice
 int ref_flag[17];                //!< 0: i-th previous frame is incorrect 
@@ -753,11 +731,11 @@ void exit_picture();
 int  read_new_slice();
 void decode_one_slice(struct img_par *img,struct inp_par *inp);
 
-void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInScanOrder);
+void start_macroblock(struct img_par *img,int CurrentMBInScanOrder);
 int  read_one_macroblock(struct img_par *img,struct inp_par *inp);
 void read_ipred_modes(struct img_par *img,struct inp_par *inp);
 int  decode_one_macroblock(struct img_par *img,struct inp_par *inp);
-int  exit_macroblock(struct img_par *img,struct inp_par *inp, int eos_bit);
+Boolean  exit_macroblock(struct img_par *img,struct inp_par *inp, int eos_bit);
 void decode_ipcm_mb(struct img_par *img);
 
 
@@ -776,14 +754,13 @@ int  intrapred(struct img_par *img,int ioff,int joff,int i4,int j4);
 void itrans_2(struct img_par *img);
 int  intrapred_luma_16x16(struct img_par *img,int predmode);
 void intrapred_chroma(struct img_par *img, int uv);
-int  sign(int a , int b);
 
 // SLICE function pointers
-int  (*nal_startcode_follows) ();
+int  (*nal_startcode_follows) (struct img_par*, int );
 
 // NAL functions TML/CABAC bitstream
-int  uvlc_startcode_follows();
-int  cabac_startcode_follows();
+int  uvlc_startcode_follows(struct img_par *img, int dummy);
+int  cabac_startcode_follows(struct img_par *img, int eos_bit);
 void free_Partition(Bitstream *currStream);
 
 // ErrorConcealment
@@ -812,7 +789,7 @@ int  decode_super_macroblock(struct img_par *img,struct inp_par *inp);
 void decode_one_Copy_topMB(struct img_par *img,struct inp_par *inp);
 
 void SetOneRefMV(struct img_par* img);
-int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP);
+int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct datapartition *dP);
 
 void fill_wp_params(struct img_par *img);
 

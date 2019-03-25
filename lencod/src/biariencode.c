@@ -321,10 +321,7 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
  */
 void biari_init_context (BiContextTypePtr ctx, const int* ini)
 {
-  int pstate;
-
-  pstate = ((ini[0]* max(0, img->currentSlice->qp)) >> 4) + ini[1];
-  pstate = min (max ( 1, pstate), 126);
+  int pstate = iClip3 ( 1, 126, ((ini[0]* imax(0, img->currentSlice->qp)) >> 4) + ini[1]);
 
   if ( pstate >= 64 )
   {

@@ -76,7 +76,7 @@ void Scaling_List(int *scalingList, int sizeOfScalingList, Boolean *UseDefaultSc
     {
       delta_scale = se_v (   "   : delta_sl   "                           , s);
       nextScale = (lastScale + delta_scale + 256) % 256;
-      *UseDefaultScalingMatrix = (scanj==0 && nextScale==0);
+      *UseDefaultScalingMatrix = (Boolean) (scanj==0 && nextScale==0);
     }
 
     scalingList[scanj] = (nextScale==0) ? lastScale:nextScale;
@@ -128,9 +128,6 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   sps->bit_depth_chroma_minus8 = 0;
   img->lossless_qpprime_flag   = 0;
 
-  // Residue Color Transform
-  img->residue_transform_flag = 0;
-
   if((sps->profile_idc==FREXT_HP   ) ||
      (sps->profile_idc==FREXT_Hi10P) ||
      (sps->profile_idc==FREXT_Hi422) ||
@@ -140,7 +137,13 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
     
     // Residue Color Transform
     if(sps->chroma_format_idc == 3)
-      img->residue_transform_flag = u_1  ("SPS: residue_transform_flag"            , s);
+    {
+      i                                         = u_1  ("SPS: residue_transform_flag"                  , s);
+      if (i==1)
+      {
+        error ("[Deprecated High444 Profile] residue_transform_flag = 1 is no longer supported", 1000);
+      }
+    }
 
     sps->bit_depth_luma_minus8                  = ue_v ("SPS: bit_depth_luma_minus8"                   , s);
     sps->bit_depth_chroma_minus8                = ue_v ("SPS: bit_depth_chroma_minus8"                 , s);
@@ -185,7 +188,7 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   sps->frame_mbs_only_flag                   = u_1  ("SPS: frame_mbs_only_flag"                    , s);
   if (!sps->frame_mbs_only_flag)
   {
-    sps->mb_adaptive_frame_field_flag          = u_1  ("SPS: mb_adaptive_frame_field_flag"           , s);
+    sps->mb_adaptive_frame_field_flag        = u_1  ("SPS: mb_adaptive_frame_field_flag"           , s);
   }
   sps->direct_8x8_inference_flag             = u_1  ("SPS: direct_8x8_inference_flag"              , s);
   sps->frame_cropping_flag                   = u_1  ("SPS: frame_cropping_flag"                , s);
@@ -197,7 +200,7 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
     sps->frame_cropping_rect_top_offset       = ue_v ("SPS: frame_cropping_rect_top_offset"            , s);
     sps->frame_cropping_rect_bottom_offset    = ue_v ("SPS: frame_cropping_rect_bottom_offset"         , s);
   }
-  sps->vui_parameters_present_flag           = u_1  ("SPS: vui_parameters_present_flag"            , s);
+  sps->vui_parameters_present_flag           = (Boolean) u_1  ("SPS: vui_parameters_present_flag"            , s);
   
   InitVUI(sps);
   ReadVUI(p, sps);
@@ -389,7 +392,7 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
 
   pps->num_ref_idx_l0_active_minus1          = ue_v ("PPS: num_ref_idx_l0_active_minus1"           , s);
   pps->num_ref_idx_l1_active_minus1          = ue_v ("PPS: num_ref_idx_l1_active_minus1"           , s);
-  pps->weighted_pred_flag                    = u_1  ("PPS: weighted prediction flag"               , s);
+  pps->weighted_pred_flag                    = u_1  ("PPS: weighted_prediction_flag"               , s);
   pps->weighted_bipred_idc                   = u_v  ( 2, "PPS: weighted_bipred_idc"                , s);
   pps->pic_init_qp_minus26                   = se_v ("PPS: pic_init_qp_minus26"                    , s);
   pps->pic_init_qs_minus26                   = se_v ("PPS: pic_init_qs_minus26"                    , s);
@@ -404,7 +407,7 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
   {
     //Fidelity Range Extensions Stuff
     pps->transform_8x8_mode_flag           = u_1  ("PPS: transform_8x8_mode_flag"                , s);
-    pps->pic_scaling_matrix_present_flag     = u_1  ("PPS: pic_scaling_matrix_present_flag"        , s);
+    pps->pic_scaling_matrix_present_flag   =  u_1  ("PPS: pic_scaling_matrix_present_flag"        , s);
 
     if(pps->pic_scaling_matrix_present_flag)
     {
@@ -453,11 +456,25 @@ void MakePPSavailable (int id, pic_parameter_set_rbsp_t *pps)
 
   memcpy (&PicParSet[id], pps, sizeof (pic_parameter_set_rbsp_t));
 
-  if ((PicParSet[id].slice_group_id = calloc (PicParSet[id].num_slice_group_map_units_minus1+1, sizeof(int))) == NULL)
-    no_mem_exit ("MakePPSavailable: Cannot calloc slice_group_id");
-  
-  memcpy (PicParSet[id].slice_group_id, pps->slice_group_id, (pps->num_slice_group_map_units_minus1+1)*sizeof(int));
+  // we can simply use the memory provided with the pps. the PPS is destroyed after this function 
+  // call and will not try to free if pps->slice_group_id == NULL
+  PicParSet[id].slice_group_id = pps->slice_group_id;
+  pps->slice_group_id          = NULL;
 }
+
+void CleanUpPPS()
+{
+  int i;
+
+  for (i=0; i<MAXPPS; i++)
+  {
+    if (PicParSet[i].Valid == TRUE && PicParSet[i].slice_group_id != NULL)
+      free (PicParSet[i].slice_group_id);
+
+    PicParSet[i].Valid = FALSE;
+  }
+}
+
 
 void MakeSPSavailable (int id, seq_parameter_set_rbsp_t *sps)
 {
@@ -572,12 +589,12 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
 
     if (sps->chroma_format_idc == YUV420)
     {
-      img->width_cr = img->width /2;
-      img->height_cr = img->height / 2;
+      img->width_cr = img->width >>1;
+      img->height_cr = img->height >>1;
     }
     else if (sps->chroma_format_idc == YUV422)
     {
-      img->width_cr = img->width /2;
+      img->width_cr = img->width >>1;
       img->height_cr = img->height;
     }
     else if (sps->chroma_format_idc == YUV444)
@@ -587,6 +604,7 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
       img->height_cr = img->height;
     }
 
+    img->width_cr_m1 = img->width_cr - 1;
     init_frext(img);                                               
     init_global_buffers();
     if (!img->no_output_of_prior_pics_flag)

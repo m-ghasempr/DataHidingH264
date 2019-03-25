@@ -68,15 +68,15 @@ typedef struct
 //!< sei_message[1]: this struct is to store the sei message packtized together with slice data
 extern sei_struct sei_message[2];
 
-void InitSEIMessages();
-void CloseSEIMessages();
-Boolean HaveAggregationSEI();
+void InitSEIMessages(void);
+void CloseSEIMessages(void);
+Boolean HaveAggregationSEI(void);
 void write_sei_message(int id, byte* payload, int payload_size, int payload_type);
 void finalize_sei_message(int id);
 void clear_sei_message(int id);
 void AppendTmpbits2Buf( Bitstream* dest, Bitstream* source );
 
-void PrepareAggregationSEIMessage();
+void PrepareAggregationSEIMessage(void);
 
 
 //! Spare Picture
@@ -264,4 +264,62 @@ void UpdateRandomAccess();
 void FinalizeRandomAccess();
 void CloseRandomAccess();
 
+
+// This is only temp
+//! Buffering Period Information
+#define MAX_CPB_CNT_MINUS1 31
+#define MAX_PIC_STRUCT_VALUE 16
+typedef struct
+{
+  int seq_parameter_set_id;
+  int initial_cpb_removal_delay[MAX_CPB_CNT_MINUS1+1];
+  int initial_cpb_removal_delay_offset[MAX_CPB_CNT_MINUS1+1];
+
+  Bitstream *data;
+  int payloadSize;
+} bufferingperiod_information_struct;
+Boolean seiHasBufferingPeriod_info;
+bufferingperiod_information_struct seiBufferingPeriod;
+
+void InitBufferingPeriod();
+void ClearBufferingPeriod();
+void CloseBufferingPeriod();
+void UpdateBufferingPeriod();
+void FinalizeBufferingPeriod();
+
+//! Picture timing Information
+typedef struct
+{
+  int cpb_removal_delay;
+  int dpb_output_delay;
+  int pic_struct;
+  Boolean clock_timestamp_flag[MAX_PIC_STRUCT_VALUE];
+  int ct_type;
+  Boolean nuit_field_based_flag;
+  int counting_type;
+  Boolean full_timestamp_flag;
+  Boolean discontinuity_flag;
+  Boolean cnt_dropped_flag;
+  int n_frames;
+  int seconds_value;
+  int minutes_value;
+  int hours_value;
+  Boolean seconds_flag;
+  Boolean minutes_flag;
+  Boolean hours_flag;
+  int time_offset;
+
+  Bitstream *data;
+  int payloadSize;
+} pictiming_information_struct;
+Boolean seiHasPicTiming_info;
+pictiming_information_struct seiPicTiming;
+
+void InitPicTiming();
+void ClearPicTiming();
+void ClosePicTiming();
+void UpdatePicTiming();
+void FinalizePicTiming();
+
+// end of temp additions
 #endif

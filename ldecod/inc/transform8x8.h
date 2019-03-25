@@ -32,7 +32,7 @@ int intrapred8x8(struct img_par *img, int b8);
 void itrans8x8(struct img_par *img, int ioff, int joff);           
 double RDCost_for_8x8IntraBlocks(int *c_nz, int b8, int ipmode, double lambda, double min_rdcost, int mostProbableMode);
 int dct_luma8x8(int block_x,int block_y,int *coeff_cost);
-void LowPassForIntra8x8Pred(int *PredPel, int block_up_left, int block_up, int block_left);
+void LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, int block_left);
       
 
 #endif

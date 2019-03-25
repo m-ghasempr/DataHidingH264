@@ -22,8 +22,6 @@
 #include "rdopt_coding_state.h"
 #include "cabac.h"
 
-
-
 /*!
  ************************************************************************
  * \brief
@@ -120,21 +118,20 @@ store_coding_state (CSptr cs)
     //only one partition for IDR img
     for (i = 0; i < i_last; i++)
     {
-      memcpy (&(cs->encenv[i]), &(currSlice->partArr[i].ee_cabac), sizeof(EncodingEnvironment));
-      memcpy (&(cs->bitstream[i]), currSlice->partArr[i].bitstream, sizeof(Bitstream));
+      cs->encenv[i] = currSlice->partArr[i].ee_cabac;;
+      cs->bitstream[i] = *currSlice->partArr[i].bitstream;;
     }
     
     //=== contexts for binary arithmetic coding ===
-    memcpy (cs->mot_ctx, currSlice->mot_ctx, sizeof(MotionInfoContexts));
-    memcpy (cs->tex_ctx, currSlice->tex_ctx, sizeof(TextureInfoContexts));
-    
+    *cs->mot_ctx = *currSlice->mot_ctx;
+    *cs->tex_ctx = *currSlice->tex_ctx;    
   }
   else
   {
     //=== important variables of data partition array ===
     for (i = 0; i < i_last; i++)
     {    
-      memcpy (&(cs->bitstream[i]), currSlice->partArr[i].bitstream, sizeof(Bitstream));
+      cs->bitstream[i] = *currSlice->partArr[i].bitstream;;
     }
   }
   //=== syntax element number and bitcounters ===
@@ -170,15 +167,13 @@ void reset_coding_state (CSptr cs)
     for (i = 0; i < i_last; i++)
     {
       //--- parameters of encoding environments ---
-      memcpy (&(currSlice->partArr[i].ee_cabac), &(cs->encenv   [i]), sizeof(EncodingEnvironment));
-      memcpy (currSlice->partArr[i].bitstream, &(cs->bitstream[i]), sizeof(Bitstream));
+      currSlice->partArr[i].ee_cabac = cs->encenv[i];
+      *currSlice->partArr[i].bitstream = cs->bitstream[i];
     }
     
-    
     //=== contexts for binary arithmetic coding ===
-    memcpy (currSlice->mot_ctx, cs->mot_ctx, sizeof(MotionInfoContexts));
-    memcpy (currSlice->tex_ctx, cs->tex_ctx, sizeof(TextureInfoContexts));
-    
+    *currSlice->mot_ctx = *cs->mot_ctx;
+    *currSlice->tex_ctx = *cs->tex_ctx;    
   }
   else
   {
@@ -187,7 +182,7 @@ void reset_coding_state (CSptr cs)
     for (i = 0; i < i_last; i++)      
     {
       //--- parameters of encoding environments ---   
-      memcpy (currSlice->partArr[i].bitstream, &(cs->bitstream[i]), sizeof(Bitstream));
+      *currSlice->partArr[i].bitstream = cs->bitstream[i];
     }
   }
   

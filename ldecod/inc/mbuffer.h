@@ -52,6 +52,7 @@ typedef struct storable_picture
   short       max_slice_id;
 
   int         size_x, size_y, size_x_cr, size_y_cr;
+  int         size_x_m1, size_y_m1, size_x_cr_m1, size_y_cr_m1;
   int         chroma_vector_adjustment;
   int         coded_frame;
   int         MbaffFrameFlag;
@@ -190,14 +191,14 @@ extern DecodedPictureBuffer dpb;
 extern StorablePicture **listX[6];
 extern int listXsize[6];
 
-void             init_dpb();
-void             free_dpb();
-FrameStore*      alloc_frame_store();
+void             init_dpb(void);
+void             free_dpb(void);
+FrameStore*      alloc_frame_store(void);
 void             free_frame_store(FrameStore* f);
 StorablePicture* alloc_storable_picture(PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
 void             free_storable_picture(StorablePicture* p);
 void             store_picture_in_dpb(StorablePicture* p);
-void             flush_dpb();
+void             flush_dpb(void);
 
 void             dpb_split_field(FrameStore *fs);
 void             dpb_combine_field(FrameStore *fs);
