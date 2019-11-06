@@ -56,14 +56,14 @@ endif()
 
 if( CMAKE_SYSTEM_NAME STREQUAL "Linux" )
   add_custom_command( TARGET ${EXE_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy
-                                                          $<$<CONFIG:Debug>:${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}/lencod>
-                                                          $<$<CONFIG:Release>:${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}/lencod>
-                                                          $<$<CONFIG:RelWithDebInfo>:${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO}/lencod>
-                                                          $<$<CONFIG:MinSizeRel>:${CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL}/lencod>
-                                                          $<$<CONFIG:Debug>:${CMAKE_SOURCE_DIR}/bin/lencod_static>
-                                                          $<$<CONFIG:Release>:${CMAKE_SOURCE_DIR}/bin/lencod_static>
-                                                          $<$<CONFIG:RelWithDebInfo>:${CMAKE_SOURCE_DIR}/bin/lencod_static>
-                                                          $<$<CONFIG:MinSizeRel>:${CMAKE_SOURCE_DIR}/bin/lencod_static> )
+                                                          $<$<CONFIG:Debug>:${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}/rtpdump>
+                                                          $<$<CONFIG:Release>:${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}/rtpdump>
+                                                          $<$<CONFIG:RelWithDebInfo>:${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO}/rtpdump>
+                                                          $<$<CONFIG:MinSizeRel>:${CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL}/rtpdump>
+                                                          $<$<CONFIG:Debug>:${CMAKE_SOURCE_DIR}/bin/rtpdump_static>
+                                                          $<$<CONFIG:Release>:${CMAKE_SOURCE_DIR}/bin/rtpdump_static>
+                                                          $<$<CONFIG:RelWithDebInfo>:${CMAKE_SOURCE_DIR}/bin/rtpdump_static>
+                                                          $<$<CONFIG:MinSizeRel>:${CMAKE_SOURCE_DIR}/bin/rtpdump_static> )
 endif()
 
 # example: place header files in different folders
