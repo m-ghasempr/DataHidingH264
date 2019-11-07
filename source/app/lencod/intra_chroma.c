@@ -744,6 +744,8 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
     {
       int cr_x = (cr_MB_x >> 1);
       int cr_y = (cr_MB_y >> 1);
+      if (cr_y>8)
+        cr_y=8;
 
       int iaa, iv, ib, ic;
       int ih = cr_x * (hline[cr_MB_x-1] - image[pix_d.pos_y][pix_d.pos_x]);
@@ -1015,6 +1017,8 @@ void intra_chroma_prediction_mbaff(Macroblock *currMB, int *mb_up, int *mb_left,
     {
       int cr_x = (cr_MB_x >> 1);
       int cr_y = (cr_MB_y >> 1);
+      if (cr_y>8)
+        cr_y=8;
 
       int iaa, iv, ib, ic;
       int ih = cr_x * (hline[cr_MB_x-1] - image[pix_a[0].pos_y][pix_a[0].pos_x]);
