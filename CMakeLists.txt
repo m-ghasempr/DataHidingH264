@@ -70,7 +70,9 @@ endif()
 # bb_enable_warnings( gcc -Wno-unused-variable )
 # bb_enable_warnings( gcc-4.8 warnings-as-errors -Wno-unused-variable )
 # for gcc 8.2:
-bb_enable_warnings( gcc warnings-as-errors -Wno-sign-compare -Wno-class-memaccess)
+bb_enable_warnings( gcc warnings-as-errors -Wno-sign-compare)
+bb_enable_warnings( gcc-5 -fno-strict-overflow -Wno-strict-aliasing)
+bb_enable_warnings( gcc-7 -fno-strict-overflow -Wno-strict-aliasing)
 
 if( XCODE )
   bb_enable_warnings( clang warnings-as-errors

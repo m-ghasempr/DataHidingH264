@@ -1374,7 +1374,7 @@ int CloseDecoder()
 void OpenOutputFiles(VideoParameters *p_Vid, int view0_id, int view1_id)
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
-  char out_ViewFileName[2][FILE_NAME_SIZE], chBuf[FILE_NAME_SIZE], *pch;  
+  char out_ViewFileName[2][FILE_NAME_SIZE+15], chBuf[FILE_NAME_SIZE], *pch;  
   if ((strcasecmp(p_Inp->outfile, "\"\"")!=0) && (strlen(p_Inp->outfile)>0))
   {
     strcpy(chBuf, p_Inp->outfile);

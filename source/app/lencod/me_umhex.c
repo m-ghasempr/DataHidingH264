@@ -414,9 +414,9 @@ sec_step: //Unsymmetrical-cross search
   //early termination alogrithm, refer to JVT-G016
   EARLY_TERMINATION
 
-    //sub step 2:  Multi-Hexagon-grid search
-    memcpy(temp_Big_Hexagon_X,Big_Hexagon_X,64);
-  memcpy(temp_Big_Hexagon_Y,Big_Hexagon_Y,64);
+  //sub step 2:  Multi-Hexagon-grid search
+  memcpy(temp_Big_Hexagon_X,Big_Hexagon_X,sizeof(Big_Hexagon_X));
+  memcpy(temp_Big_Hexagon_Y,Big_Hexagon_Y,sizeof(Big_Hexagon_Y));
   for(i=1;i<=(search_range >> 2); i++)
   {
 
@@ -1037,8 +1037,8 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
   EARLY_TERMINATION;      //added back by xxz
 
   //sub step2: multi-grid-hexagon-search
-  memcpy(temp_Big_Hexagon_X,Big_Hexagon_X,64);
-  memcpy(temp_Big_Hexagon_Y,Big_Hexagon_Y,64);
+  memcpy(temp_Big_Hexagon_X,Big_Hexagon_X,sizeof(Big_Hexagon_X));
+  memcpy(temp_Big_Hexagon_Y,Big_Hexagon_Y,sizeof(Big_Hexagon_Y));
   for(i=1;i<=(p_Inp->search_range[p_Vid->view_id] >> 2); i++)
   {
 
