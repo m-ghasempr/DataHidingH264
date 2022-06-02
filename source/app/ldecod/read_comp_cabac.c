@@ -19,6 +19,8 @@
 #include "cabac.h"
 #include "vlc.h"
 #include "transform.h"
+#include "Enc_Entropy.h"
+#include "Cabac_Func.h"
 
 #if TRACE
 #define TRACE_STRING(s) strncpy(currSE.tracestring, s, TRACESTRING_SIZE)
@@ -55,6 +57,7 @@ static void read_comp_coeff_4x4_smb_CABAC (Macroblock *currMB, SyntaxElement *cu
   const byte (*pos_scan4x4)[2] = ((currSlice->structure == FRAME) && (!currMB->mb_field)) ? SNGL_SCAN : FIELD_SCAN;
   const byte *pos_scan_4x4 = pos_scan4x4[0];
   int **cof = currSlice->cof[pl];
+  memset(cabacCoeff, 0, 64 * sizeof(int));
 
   for (j = block_y; j < block_y + BLOCK_SIZE_8x8; j += 4)
   {
@@ -93,6 +96,7 @@ static void read_comp_coeff_4x4_smb_CABAC (Macroblock *currMB, SyntaxElement *cu
 
         if (level != 0)    /* leave if level == 0 */
         {
+		  memcpy(cabacCoeff + (j - block_y) * 8 + (i - block_x) * 4, currSlice->coeff, 16 * sizeof(int));
           pos_scan_4x4 += 2 * currSE->value2;
 
           i0 = *pos_scan_4x4++;
@@ -161,6 +165,11 @@ static void read_comp_coeff_4x4_CABAC (Macroblock *currMB, SyntaxElement *currSE
   int block_y, block_x;
   int i, j;
   int64 *cbp_blk = &currMB->s_cbp[pl].blk;
+  int PLNZ, numCoeff;
+  int test[2];
+  int ACLevelC[17] = { 0 }, ACRunC[17] = { 0 };
+  EncodingEnvironment Cs;
+  int len;
 
   if( pl == PLANE_Y || (p_Vid->separate_colour_plane_flag != 0) )
     currSE->context = (IS_I16MB(currMB) ? LUMA_16AC: LUMA_4x4);
@@ -169,6 +178,9 @@ static void read_comp_coeff_4x4_CABAC (Macroblock *currMB, SyntaxElement *currSE
   else
     currSE->context = (IS_I16MB(currMB) ? CR_16AC: CR_4x4);  
 
+  if ((endInfo.SliceMbNum < (((currSlice->end_mb_nr_plus1)*currSlice->current_slice_nr) + currMB->mbAddrX)) && (endInfo.FrameNum <= fna))
+	  AllowInsertion = 1;
+
   for (block_y = 0; block_y < MB_BLOCK_SIZE; block_y += BLOCK_SIZE_8x8) /* all modes */
   {
     int **cof = &currSlice->cof[pl][block_y];
@@ -176,7 +188,147 @@ static void read_comp_coeff_4x4_CABAC (Macroblock *currMB, SyntaxElement *currSE
     {
       if (cbp & (1 << ((block_y >> 2) + (block_x >> 3))))  // are there any coeff in current block at all
       {
+		  if (FirstMB == 0)
+		  {
+			  FirstMB = 1;
+			  *Enc_MB->p_Slice->tex_ctx = *currSlice->tex_ctx;
+		  }
+		  store_coding_state_cabacE(Enc_Stream, &Cs, &len);
+
         read_comp_coeff_4x4_smb_CABAC (currMB, currSE, pl, block_y, block_x, start_scan, cbp_blk);
+		Enc_MBs[((Enc_Vid->width * currMB->mb.y) / 16) + currMB->mb.x].mb_type = currMB->mb_type;
+		if ((currSE->context == LUMA_4x4))// || (currSE->context == LUMA_16AC))
+		{
+			test[0] = Enc_Stream->Elow;
+			test[1] = Enc_Stream->Erange;
+			reset_coding_state_cabacE(Enc_Stream, &Cs, &len);
+			initData(currMB, Enc_MB);
+
+			Enc_MB->p_Slice->partArr->ee_cabac = *Enc_Stream;
+
+
+			PLNZ = 0;//(currSE->context == LUMA_16AC) ? 1 : 0;
+			numCoeff = RunLevelAC(0, 0, ACLevelC, ACRunC, cabacCoeff, &PLNZ, block_y, block_x);
+			if ((PLNZ > THR) && (I_Finish == 0) && AllowInsertion)
+			{
+				if ((InsertingSlice == currSlice->slice_type) || ((InsertingSlice == SP_SLICE) && (currSlice->slice_type == P_SLICE)))
+				{
+					if ((InsertingSlice != I_SLICE) && (InsertingSlice != SP_SLICE))
+						Embedding_CABAC(&pInput_MD, Input_MD, ACLevelC, ACRunC, numCoeff, PLNZ);
+
+					if ((pInput_MD >> 3) == Input_Len)
+					{
+						if (!large_File)
+						{
+							I_Finish = 1;
+							endInfo.FrameNum = fna;
+							endInfo.MetaDataNum++;
+							endInfo.Threshold = THR;
+							endInfo.SliceMbNum = ((currSlice->end_mb_nr_plus1)*currSlice->current_slice_nr) + currMB->mbAddrX;
+						}
+						else
+						{
+							Handle_Large_File(G_File_MDIn, &Input_Len, &large_File, Input_MD, endInfo.MetaDataNum);
+							Pmd += pInput_MD;
+							pInput_MD = 0;
+						}
+					}
+				}
+			}
+			writeCoeff4x4_CABAC(Enc_MB, pl, block_x + 0, block_y + 0, ACLevelC, ACRunC);
+
+			PLNZ = 0;// (currSE->context == LUMA_16AC) ? 1 : 0;
+			numCoeff = RunLevelAC(0, 1, ACLevelC, ACRunC, cabacCoeff, &PLNZ, block_y, block_x);
+			if ((PLNZ > THR) && (I_Finish == 0) && AllowInsertion)
+			{
+				if ((InsertingSlice == currSlice->slice_type) || ((InsertingSlice == SP_SLICE) && (currSlice->slice_type == P_SLICE)))
+				{
+					if ((InsertingSlice != I_SLICE) && (InsertingSlice != SP_SLICE))
+						Embedding_CABAC(&pInput_MD, Input_MD, ACLevelC, ACRunC, numCoeff, PLNZ);
+					if ((pInput_MD >> 3) == Input_Len)
+					{
+						if (!large_File)
+						{
+							I_Finish = 1;
+							endInfo.FrameNum = fna;
+							endInfo.MetaDataNum++;
+							endInfo.Threshold = THR;
+							endInfo.SliceMbNum = ((currSlice->end_mb_nr_plus1)*currSlice->current_slice_nr) + currMB->mbAddrX;
+						}
+						else
+						{
+							Handle_Large_File(G_File_MDIn, &Input_Len, &large_File, Input_MD, endInfo.MetaDataNum);
+							Pmd += pInput_MD;
+							pInput_MD = 0;
+						}
+					}
+				}
+			}
+			writeCoeff4x4_CABAC(Enc_MB, pl, block_x + 4, block_y + 0, ACLevelC, ACRunC);
+
+			PLNZ = 0;// (currSE->context == LUMA_16AC) ? 1 : 0;
+			numCoeff = RunLevelAC(1, 0, ACLevelC, ACRunC, cabacCoeff, &PLNZ, block_y, block_x);
+			if ((PLNZ > THR) && (I_Finish == 0) && AllowInsertion)
+			{
+				if ((InsertingSlice == currSlice->slice_type) || ((InsertingSlice == SP_SLICE) && (currSlice->slice_type == P_SLICE)))
+				{
+					if ((InsertingSlice != I_SLICE) && (InsertingSlice != SP_SLICE))
+						Embedding_CABAC(&pInput_MD, Input_MD, ACLevelC, ACRunC, numCoeff, PLNZ);
+					if ((pInput_MD >> 3) == Input_Len)
+					{
+						if (!large_File)
+						{
+							I_Finish = 1;
+							endInfo.FrameNum = fna;
+							endInfo.MetaDataNum++;
+							endInfo.Threshold = THR;
+							endInfo.SliceMbNum = ((currSlice->end_mb_nr_plus1)*currSlice->current_slice_nr) + currMB->mbAddrX;
+						}
+						else
+						{
+							Handle_Large_File(G_File_MDIn, &Input_Len, &large_File, Input_MD, endInfo.MetaDataNum);
+							Pmd += pInput_MD;
+							pInput_MD = 0;
+						}
+					}
+				}
+			}
+			writeCoeff4x4_CABAC(Enc_MB, pl, block_x + 0, block_y + 4, ACLevelC, ACRunC);
+
+			PLNZ = 0;//(currSE->context == LUMA_16AC) ? 1 : 0;
+			numCoeff = RunLevelAC(1, 1, ACLevelC, ACRunC, cabacCoeff, &PLNZ, block_y, block_x);
+			if ((PLNZ > THR) && (I_Finish == 0) && AllowInsertion)
+			{
+				if ((InsertingSlice == currSlice->slice_type) || ((InsertingSlice == SP_SLICE) && (currSlice->slice_type == P_SLICE)))
+				{
+					if ((InsertingSlice != I_SLICE) && (InsertingSlice != SP_SLICE))
+						Embedding_CABAC(&pInput_MD, Input_MD, ACLevelC, ACRunC, numCoeff, PLNZ);
+					else if ((block_x == 8) && (block_y == 8))
+						Embedding_CABAC(&pInput_MD, Input_MD, ACLevelC, ACRunC, numCoeff, PLNZ);
+
+					if ((pInput_MD >> 3) == Input_Len)
+					{
+						if (!large_File)
+						{
+							I_Finish = 1;
+							endInfo.FrameNum = fna;
+							endInfo.MetaDataNum++;
+							endInfo.Threshold = THR;
+							endInfo.SliceMbNum = ((currSlice->end_mb_nr_plus1)*currSlice->current_slice_nr) + currMB->mbAddrX;
+						}
+						else
+						{
+							Handle_Large_File(G_File_MDIn, &Input_Len, &large_File, Input_MD, endInfo.MetaDataNum);
+							Pmd += pInput_MD;
+							pInput_MD = 0;
+						}
+					}
+				}
+			}
+			writeCoeff4x4_CABAC(Enc_MB, pl, block_x + 4, block_y + 4, ACLevelC, ACRunC);
+
+			*Enc_Stream = Enc_MB->p_Slice->partArr->ee_cabac;
+		}
 
         if (start_scan == 0)
         {

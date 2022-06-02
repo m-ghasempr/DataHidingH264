@@ -20,6 +20,8 @@
 #include "fast_memory.h"
 #include "transform.h"
 #include "mb_access.h"
+#include "Enc_Entropy.h"
+#include "Cavlc_Func.h"
 
 #if TRACE
 #define TRACE_STRING(s) strncpy(currSE.tracestring, s, TRACESTRING_SIZE)
@@ -695,6 +697,8 @@ static void read_comp_coeff_4x4_CAVLC (Macroblock *currMB, ColorPlane pl, int (*
   int64 *cur_cbp = &currMB->s_cbp[pl].blk;
   int cur_context; 
   int block_y4, block_x4;
+  int PLNZ = 0;
+
 
   if (IS_I16MB(currMB))
   {
@@ -715,6 +719,8 @@ static void read_comp_coeff_4x4_CAVLC (Macroblock *currMB, ColorPlane pl, int (*
       cur_context = CR;
   }
 
+  if ((endInfo.SliceMbNum < (((currSlice->end_mb_nr_plus1)*currSlice->current_slice_nr) + currMB->mbAddrX)) && (endInfo.FrameNum <= fna))
+	  AllowInsertion = 1;
 
   for (block_y = 0; block_y < 4; block_y += 2) /* all modes */
   {
@@ -730,8 +736,48 @@ static void read_comp_coeff_4x4_CAVLC (Macroblock *currMB, ColorPlane pl, int (*
         {
           for (i = block_x4; i < block_x4 + 8; i += BLOCK_SIZE)
           {
+			startOff = currMB->p_Slice->partArr->bitstream->frame_bitoffset;
             currSlice->read_coeff_4x4_CAVLC(currMB, cur_context, i >> 2, j >> 2, levarr, runarr, &numcoeff);
-            pos_scan_4x4 = pos_scan4x4[start_scan];
+			endOff = currMB->p_Slice->partArr->bitstream->frame_bitoffset;
+
+			WriteFrame(writepoint, startOff, currSlice);
+			writepoint = endOff;
+			init_Data(outputBuffer.byteBuffFrame >> outputBuffer.bits2Go, outputBuffer.bits2Go, currMB, currSlice, p_Vid, Enc_MB, Enc_currSlice, Enc_Vid);
+			PLNZ = ReadPLNZV(numcoeff, runarr);
+			if ((PLNZ > THR) && (I_Finish == 0) && (AllowInsertion) && (cur_context == LUMA) && (fs <= fna))
+			{
+				if ((InsertingSlice == currSlice->slice_type) || ((InsertingSlice == SP_SLICE) && (currSlice->slice_type == P_SLICE)))
+				{
+					//if ((InsertingSlice != I_SLICE) && (InsertingSlice != SP_SLICE))
+					Embeding(&pInput_MD, Input_MD, levarr, runarr, numcoeff, PLNZ);
+					//else if ((i == 12) && (j == 12))
+					//  Embeding(&pInput_MD, Input_MD, levarr, runarr, numcoeff, PLNZ);
+
+					if ((pInput_MD >> 3) == Input_Len)
+					{
+						if (!large_File)
+						{
+							I_Finish = 1;
+							endInfo.FrameNum = fna;
+							endInfo.MetaDataNum++;
+							endInfo.Threshold = THR;
+							endInfo.SliceMbNum = ((currSlice->end_mb_nr_plus1)*currSlice->current_slice_nr) + currMB->mbAddrX;
+						}
+						else
+						{
+							Handle_Large_File(G_File_MDIn, &Input_Len, &large_File, Input_MD, endInfo.MetaDataNum);
+							Pmd += pInput_MD;
+							pInput_MD = 0;
+						}
+					}
+				}
+			}
+
+			writeCoeff4x4_CAVLC_normal(Enc_MB, cur_context, i >> 2, j >> 2, 0, levarr, runarr, p_Vid);
+			outputBuffer.byteBuffFrame = Enc_MB->p_Slice->partArr->bitstream->byte_buf << Enc_MB->p_Slice->partArr->bitstream->bits_to_go;
+			outputBuffer.bits2Go = Enc_MB->p_Slice->partArr->bitstream->bits_to_go;
+			outputBuffer.pBuffFrame = Enc_MB->p_Slice->partArr->bitstream->byte_pos;
+			pos_scan_4x4 = pos_scan4x4[start_scan];
 
             for (k = 0; k < numcoeff; ++k)
             {
@@ -760,7 +806,17 @@ static void read_comp_coeff_4x4_CAVLC (Macroblock *currMB, ColorPlane pl, int (*
         nzcoeff[block_y + 1][block_x + 1] = 0;
       }
     }
-  }      
+  }
+  if (cur_context != LUMA)
+  {
+	  for (int o = 0; o < 4; o++)
+	  {
+		  for (int p = 0; p < 4; p++)
+		  {
+			  Enc_MB->p_Vid->nz_coeff[currMB->mbAddrX][o][p] = currMB->p_Vid->nz_coeff[currMB->mbAddrX][0][p][o];
+		  }
+	  }
+  }
 }
 
 /*!

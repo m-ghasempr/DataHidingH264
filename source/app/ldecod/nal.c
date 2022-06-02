@@ -98,6 +98,7 @@ int EBSPtoRBSP(byte *streamBuffer, int end_bytepos, int begin_bytepos)
       return -1;
     if(count == ZEROBYTES_SHORTSTARTCODE && streamBuffer[i] == 0x03)
     {
+	  Numberof03[pSizeW]++;
       //check the 4th byte after 0x000003, except when cabac_zero_word is used, in which case the last three bytes of this NAL unit must be 0x000003
       if((i < end_bytepos-1) && (streamBuffer[i+1] > 0x03))
         return -1;

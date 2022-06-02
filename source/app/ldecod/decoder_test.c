@@ -15,10 +15,11 @@
 
 #include <sys/stat.h>
 
-//#include "global.h"
 #include "win32.h"
 #include "h264decoder.h"
 #include "configfile.h"
+#include "Enc_Entropy.h"
+#include "memalloc.h"
 
 #define DECOUTPUT_TEST      0
 
@@ -219,6 +220,11 @@ int main(int argc, char **argv)
   int hFileDecOutput0=-1, hFileDecOutput1=-1;
   int iFramesOutput=0, iFramesDecoded=0;
   InputParameters InputParams;
+  
+  unsigned char fileN[256];
+  unsigned char sizeH = 0;
+  int OffsetEnd = 5, BitOffsetEnd = 8;
+  unsigned char threeEnd = 0x3;
 
 #if DECOUTPUT_TEST
   hFileDecOutput0 = open(DECOUTPUT_VIEW0_FILENAME, OPENFLAGS_WRITE, OPEN_PERMISSIONS);
@@ -231,6 +237,111 @@ int main(int argc, char **argv)
 
   //get input parameters;
   Configure(&InputParams, argc, argv);
+  Enc_MB = (Enc_Macroblock *)calloc(1, sizeof(Enc_Macroblock));
+  Enc_currSlice = (Enc_Slice *)calloc(1, sizeof(Enc_Slice));
+  Enc_dp = (Enc_DataPartition *)calloc(1, sizeof(Enc_DataPartition));
+  Enc_Vid = (Enc_VideoParameters *)calloc(1, sizeof(Enc_VideoParameters));
+  Enc_Stream = (EncodingEnvironment *)calloc(1, sizeof(EncodingEnvironment));
+  Enc_VStream = (Enc_Bitstream *)calloc(1, sizeof(Enc_Bitstream));
+  Enc_Vid->active_pps = (pic_parameter_set_rbsp_t*)calloc(1, sizeof(pic_parameter_set_rbsp_t));
+  Enc_Vid->PicPos = (BlockPos *)calloc(1, sizeof(BlockPos));
+  Enc_currSlice->tex_ctx = (TextureInfoContexts *)calloc(1, sizeof(TextureInfoContexts));
+
+  Enc_currSlice->p_Vid = Enc_Vid;
+  Enc_currSlice->partArr = Enc_dp;
+  Enc_currSlice->partArr->ee_cabac = *Enc_Stream;
+  Enc_MB->p_Slice = Enc_currSlice;
+  Enc_MB->p_Vid = Enc_Vid;
+
+  strcpy(fileN, InputParams.infile);
+  strcat(fileN, ".264");
+  Input_File = fopen(InputParams.infile, "rb");
+  Output_File = fopen(fileN, "wb");
+
+  InsertingSlice = Find_Slice_type(Input_File, fileN);
+  //read Size
+  fseek(Input_File, -1, SEEK_END);
+  fread(&sizeH, 1, 1, Input_File);
+
+  fseek(Input_File, (sizeH * -1), SEEK_END);
+  fread(fileN, 1, 5, Input_File);
+
+  if ((fileN[1] == 0x0) && (fileN[2] == 0x0) && (fileN[3] == 0x1) && (fileN[4] == 28))				// fileN[0] bekhater ffmpeg 3 bayti check nashode
+  {
+	  Inserted = 1;
+	  for (int j = 5; j <= sizeH; j++)
+	  {
+		  fread(&fileN[j], 1, 1, Input_File);
+		  if ((fileN[j - 2] == 0) && (fileN[j - 1] == 0) && (fileN[j] == 3))
+		  {
+			  fread(&fileN[j], 1, 1, Input_File);
+			  sizeH--;
+		  }
+	  }
+	  endInfo.FrameNum = ReadExpGlomb(fileN, &OffsetEnd, &BitOffsetEnd);
+	  endInfo.SliceMbNum = ReadExpGlomb(fileN, &OffsetEnd, &BitOffsetEnd);
+	  endInfo.Threshold = ReadExpGlomb(fileN, &OffsetEnd, &BitOffsetEnd);
+	  endInfo.MetaDataNum = ReadExpGlomb(fileN, &OffsetEnd, &BitOffsetEnd);
+	  endInfo.FrameType = ReadExpGlomb(fileN, &OffsetEnd, &BitOffsetEnd);
+	  if (THR != 1)
+	  {
+		  if (endInfo.Threshold != THR)
+		  {
+			  fprintf(stderr, "THN\n");
+			  return -1;
+		  }
+	  }
+	  if (InsFrame != 4)
+	  {
+		  if (endInfo.FrameType != InsFrame)
+		  {
+			  fprintf(stderr, "FTN\n");
+			  return -1;
+		  }
+	  }
+  }
+  else
+  {
+	  endInfo.FrameNum = 0;
+	  endInfo.SliceMbNum = -1;
+	  endInfo.Threshold = THR;
+	  endInfo.MetaDataNum = 0;
+	  endInfo.FrameType = InsFrame;
+	  if (InsFrame == 4)
+	  {
+		  fprintf(stderr, "BFN\n");
+		  return -1;
+	  }
+	  if (THR == 0)
+	  {
+		  fprintf(stderr, "ZTH\n");
+		  return -1;
+	  }
+	  AllowInsertion = 1;
+  }
+  THR = endInfo.Threshold;
+  if ((endInfo.Threshold < 1) || (endInfo.Threshold > 14))
+  {
+	  fprintf(stderr, "HMH\n");
+	  return -1;
+  }
+
+
+  if (InsFrame == 0)
+	  InsertingSlice = B_SLICE;
+  /*else if ((InsFrame != 4) && (InsFrame != 1))
+	  InsertingSlice = InsFrame;
+  else if (InsFrame == 1)
+	  InsertingSlice = InsertingSlice;*/
+  else if (InsFrame == 1)
+	  InsertingSlice = I_SLICE;
+  else if (InsFrame == 2)
+	  InsertingSlice = P_SLICE;
+  else if (InsFrame == 3)
+	  InsertingSlice = SP_SLICE; //limited P
+  else if (InsFrame == 4)
+	  InsertingSlice = (endInfo.FrameType == B_SLICE) ? InsertingSlice : endInfo.FrameType;
+
   //open decoder;
   iRet = OpenDecoder(&InputParams);
   if(iRet != DEC_OPEN_NOERR)
@@ -239,10 +350,31 @@ int main(int argc, char **argv)
     return -1; //failed;
   }
 
+  Input_MD = Init_Output_Buffer(G_File_MDIn, NULL, &Input_Len, &large_File);
+  Input_MD[1] = endInfo.MetaDataNum >> 8; Input_MD[2] = endInfo.MetaDataNum & 0xFF;
+  pInput_MD = 0;
+  Start_Slice_Input += 4;
+  get_mem3Dint(&Enc_Vid->nz_coeff, 512 * 256, 4, 4);				//frame MB no.
+
+
+
   //decoding;
   do
   {
     iRet = DecodeOneFrame(&pDecPicList);
+	if (I_Finish)
+	{
+		fprintf(stderr, "Frame : %d\n", fna);
+		break;
+	}
+	fna++;
+	if ((fna % 10) == 0)
+	{
+		fprintf(stderr, "Frame : %d\n", fna);
+		fprintf(stderr, "Percent : %5.2f\n", (float)((pInput_MD + Pmd) * 99) / (float)(total_len << 3));
+	}
+
+
     if(iRet==DEC_EOS || iRet==DEC_SUCCEED)
     {
       //process the decoded picture, output or display;
@@ -255,6 +387,57 @@ int main(int argc, char **argv)
       fprintf(stderr, "Error in decoding process: 0x%x\n", iRet);
     }
   }while((iRet == DEC_SUCCEED) && ((p_Dec->p_Inp->iDecFrmNum==0) || (iFramesDecoded<p_Dec->p_Inp->iDecFrmNum)));
+  if (Enc_Vid->nz_coeff)
+	  free_mem3Dint(Enc_Vid->nz_coeff);
+  Copy2End(Input_File_PTR, Input_File, Output_File);
+  fprintf(stderr, "Percent : 100.0\n");
+  fflush(stderr);
+  if (Inserted)
+  {
+	  fseek(Input_File, (sizeH * -1) + 1, SEEK_END);					//vase ffmpeg
+	  fseek(Output_File, (sizeH * -1) + 1, SEEK_END);					//vase ffmpeg
+  }
+  else
+	  fseek(Input_File, 0, SEEK_END);
+
+  if (I_Finish)
+  {
+	  memset(fileN, 0, 256);
+	  OffsetEnd = 5; BitOffsetEnd = 8;
+	  fileN[0] = fileN[1] = fileN[2] = 0x0;
+	  fileN[3] = 0x1;
+	  fileN[4] = 28;
+	  WriteExpGlomb(fileN, &OffsetEnd, &BitOffsetEnd, endInfo.FrameNum);
+	  WriteExpGlomb(fileN, &OffsetEnd, &BitOffsetEnd, endInfo.SliceMbNum);
+	  WriteExpGlomb(fileN, &OffsetEnd, &BitOffsetEnd, endInfo.Threshold);
+	  WriteExpGlomb(fileN, &OffsetEnd, &BitOffsetEnd, endInfo.MetaDataNum);
+	  WriteExpGlomb(fileN, &OffsetEnd, &BitOffsetEnd, endInfo.FrameType);
+	  fprintf(stderr, "Id : %d\n", endInfo.MetaDataNum);
+	  sizeH = OffsetEnd + 1;
+	  if (Inserted)
+		  fwrite(fileN + 1, 1, 4, Output_File);
+	  else
+		  fwrite(fileN, 1, 5, Output_File);
+	  for (int j = 5; j <= OffsetEnd; j++)
+	  {
+		  fwrite(&fileN[j], 1, 1, Output_File);
+		  if ((fileN[j] == 0) && (fileN[j - 1] == 0) && (fileN[j + 1] <= 3))
+		  {
+			  fwrite(&threeEnd, 1, 1, Output_File);
+			  sizeH++;
+		  }
+	  }
+	  sizeH++;
+	  fwrite(&sizeH, 1, 1, Output_File);
+	  fprintf(stderr, "Last : %ld\n", endInfo.FrameNum);
+	  fprintf(stderr, "Completed.");
+	  fflush(stderr);
+  }
+  else
+  {
+	  fprintf(stderr, "VoL\n");
+	  fflush(stderr);
+  }
 
   iRet = FinitDecoder(&pDecPicList);
   iFramesOutput += WriteOneFrame(pDecPicList, hFileDecOutput0, hFileDecOutput1 , 1);
@@ -271,6 +454,15 @@ int main(int argc, char **argv)
   }
 
   printf("%d frames are decoded.\n", iFramesDecoded);
+  Enc_MB = NULL;
+  Enc_currSlice = NULL;
+  Enc_dp = NULL;
+  Enc_Vid = NULL;
+  free(Enc_MB);
+  free(Enc_currSlice);
+  free(Enc_dp);
+  free(Enc_Vid);
+
   return 0;
 }
 

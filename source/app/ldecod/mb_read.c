@@ -44,6 +44,8 @@
 #include "mb_prediction.h"
 #include "fast_memory.h"
 #include "filehandle.h"
+#include "Enc_Entropy.h"
+#include "Cabac_Func.h"
 
 #if TRACE
 #define TRACE_STRING(s) strncpy(currSE.tracestring, s, TRACESTRING_SIZE)
@@ -1220,6 +1222,10 @@ static void read_one_macroblock_i_slice_cabac(Macroblock *currMB)
   }
 
   CheckAvailabilityOfNeighborsCABAC(currMB);
+  if (currMB->mbAddrX != currSlice->start_mb_nr)
+  {
+	  biari_encode_symbol_final(Enc_Stream, 0);
+  }
 
   //  read MB type
   TRACE_STRING("mb_type");
@@ -1600,6 +1606,11 @@ static void read_one_macroblock_p_slice_cabac(Macroblock *currMB)
       field_flag_inference(currMB);
 
     CheckAvailabilityOfNeighborsCABAC(currMB);
+	if (currMB->mbAddrX != currSlice->start_mb_nr)
+	{
+		biari_encode_symbol_final(Enc_Stream, 0);
+	}
+
     TRACE_STRING("mb_skip_flag");
     currSE.reading = read_skip_flag_CABAC_p_slice;
     dP->readSyntaxElement(currMB, &currSE, dP);
@@ -1962,6 +1973,11 @@ static void read_one_macroblock_b_slice_cabac(Macroblock *currMB)
       currSE.mapping = linfo_ue;
 
     CheckAvailabilityOfNeighborsCABAC(currMB);
+	if (currMB->mbAddrX != currSlice->start_mb_nr)
+	{
+		biari_encode_symbol_final(Enc_Stream, 0);
+	}
+
     TRACE_STRING("mb_skip_flag");
     currSE.reading = read_skip_flag_CABAC_b_slice;
     dP->readSyntaxElement(currMB, &currSE, dP);
@@ -2025,6 +2041,11 @@ static void read_one_macroblock_b_slice_cabac(Macroblock *currMB)
       field_flag_inference(currMB);
 
     CheckAvailabilityOfNeighborsCABAC(currMB);
+	if (currMB->mbAddrX != currSlice->start_mb_nr)
+	{
+		biari_encode_symbol_final(Enc_Stream, 0);
+	}
+
     TRACE_STRING("mb_skip_flag");
     currSE.reading = read_skip_flag_CABAC_b_slice;
     dP->readSyntaxElement(currMB, &currSE, dP);

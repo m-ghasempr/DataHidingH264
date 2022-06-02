@@ -45,10 +45,54 @@
 typedef struct bit_stream_dec Bitstream;
 
 #define ET_SIZE 300      //!< size of error text buffer
+#define BUFFER_SLICE 16
+
 extern char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
 
 struct pic_motion_params_old;
 struct pic_motion_params;
+FILE *Output_File, *Input_File;
+SliceType InsertingSlice;
+unsigned char *Input_MD;
+int pInput_MD;
+int THR;
+unsigned int fs;
+unsigned long int Input_Len;
+unsigned long int total_len;
+unsigned long int Pmd;
+int ExcSlice;
+int Ispps;
+int another00;				//for slice type aud and etc
+int MD_Number;
+unsigned char Inserted;
+unsigned long int Input_File_PTR;
+unsigned long int Start_Slice_Input;
+
+int Slice_Size[BUFFER_SLICE];
+int Numberof03[BUFFER_SLICE];
+int ppsTSize[BUFFER_SLICE];					//temp for multiple pps
+int ppsT03[BUFFER_SLICE];
+int another00Buffer[BUFFER_SLICE];				//for slice type aud and etc
+int pSizeW, pSizeR;
+int GoP_Size;
+unsigned long int fna;
+unsigned char frame_Copy;
+unsigned char large_File;
+int oneS;
+unsigned char I_Finish;
+char G_File_MDIn[256];
+int AllowInsertion;
+int cabacCoeff[64];
+int InsFrame;
+typedef struct infos
+{
+	unsigned long int FrameNum;
+	int SliceMbNum;
+	unsigned char Threshold;
+	unsigned int MetaDataNum;
+	int FrameType;
+}INFOs;
+INFOs endInfo;
 
 /***********************************************************************
  * T y p e    d e f i n i t i o n s    f o r    J M

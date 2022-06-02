@@ -130,169 +130,189 @@ static inline void conf_read_check (int val, int expected)
  */
 void ParseCommand(InputParameters *p_Inp, int ac, char *av[])
 {
-  char *content = NULL;
-  int CLcount, ContentLen, NumberParams;
-  char *filename=DEFAULTCONFIGFILENAME;
+	char *content = NULL;
+	int CLcount, ContentLen, NumberParams;
+	char *filename = DEFAULTCONFIGFILENAME;
 
-  if (ac==2)
-  {
-    if (0 == strncmp (av[1], "-v", 2))
-    {
-      printf("JM " JM ": compiled " __DATE__ " " __TIME__ "\n");
-      exit(-1);
-    }
+	if (ac == 2)
+	{
+		if (0 == strncmp(av[1], "-v", 2))
+		{
+			printf("JM " JM ": compiled " __DATE__ " " __TIME__ "\n");
+			exit(-1);
+		}
 
-    if (0 == strncmp (av[1], "-h", 2))
-    {
-      JMDecHelpExit();
-    }
-  }
+		if (0 == strncmp(av[1], "-h", 2))
+		{
+			JMDecHelpExit();
+		}
+	}
 
-  memcpy (&cfgparams, p_Inp, sizeof (InputParameters));
-  //Set default parameters.
-  printf ("Setting Default Parameters...\n");
-  InitParams(Map);
+	memcpy(&cfgparams, p_Inp, sizeof(InputParameters));
+	//Set default parameters.
+	//printf ("Setting Default Parameters...\n");
+	InitParams(Map);
 
-  *p_Inp = cfgparams;
-  // Process default config file
-  CLcount = 1;
+	*p_Inp = cfgparams;
+	// Process default config file
+	CLcount = 1;
 
-  if (ac>=3)
-  {
-    if ((strlen(av[1])==2) && (0 == strncmp (av[1], "-d", 2)))
-    {
-      if(0 == strncmp (av[2], "null", 4))
-        filename=NULL;
-      else
-        filename=av[2];
-      CLcount = 3;
-    }
-    if (0 == strncmp (av[1], "-h", 2))
-    {
-      JMDecHelpExit();
-    }
-  }
-  if(filename)
-  {
-    printf ("Parsing Configfile %s\n", filename);
-    content = GetConfigFileContent (filename);
-    if (NULL != content)
-    {
-      //error (errortext, 300);
-      ParseContent (p_Inp, Map, content, (int) strlen(content));
-      printf ("\n");
-      free (content);
-    }
-  }
-  // Parse the command line
+	if (ac >= 3)
+	{
+		if ((strlen(av[1]) == 2) && (0 == strncmp(av[1], "-d", 2)))
+		{
+			if (0 == strncmp(av[2], "null", 4))
+				filename = NULL;
+			else
+				filename = av[2];
+			CLcount = 3;
+		}
+		if (0 == strncmp(av[1], "-h", 2))
+		{
+			JMDecHelpExit();
+		}
+	}
+	if (filename)
+	{
+		//printf ("Parsing Configfile %s\n", filename);
+		content = GetConfigFileContent(filename);
+		if (NULL != content)
+		{
+			//error (errortext, 300);
+			ParseContent(p_Inp, Map, content, (int)strlen(content));
+			//printf ("\n");
+			free(content);
+		}
+	}
+	// Parse the command line
 
-  while (CLcount < ac)
-  {
-    if (0 == strncmp (av[CLcount], "-h", 2))
-    {
-      JMDecHelpExit();
-    }
+	while (CLcount < ac)
+	{
+		if (0 == strncmp(av[CLcount], "-h", 2))
+		{
+			JMDecHelpExit();
+		}
 
-    if (0 == strncmp (av[CLcount], "-f", 2) || 0 == strncmp (av[CLcount], "-F", 2))  // A file parameter?
-    {
-      content = GetConfigFileContent (av[CLcount+1]);
-      if (NULL==content)
-        error (errortext, 300);
-      printf ("Parsing Configfile %s", av[CLcount+1]);
-      ParseContent (p_Inp, Map, content, (int) strlen (content));
-      printf ("\n");
-      free (content);
-      CLcount += 2;
-    } 
-    else if (0 == strncmp (av[CLcount], "-i", 2) || 0 == strncmp (av[CLcount], "-I", 2))  // A file parameter?
-    {
-      strncpy(p_Inp->infile, av[CLcount+1], FILE_NAME_SIZE);
-      CLcount += 2;
-    } 
-    else if (0 == strncmp (av[CLcount], "-r", 2) || 0 == strncmp (av[CLcount], "-R", 2))  // A file parameter?
-    {
-      strncpy(p_Inp->reffile, av[CLcount+1], FILE_NAME_SIZE);
-      CLcount += 2;
-    } 
-    else if (0 == strncmp (av[CLcount], "-o", 2) || 0 == strncmp (av[CLcount], "-O", 2))  // A file parameter?
-    {
-      strncpy(p_Inp->outfile, av[CLcount+1], FILE_NAME_SIZE);
-      CLcount += 2;
-    } 
-    else if (0 == strncmp (av[CLcount], "-s", 2) || 0 == strncmp (av[CLcount], "-S", 2))  // A file parameter?
-    {
-      p_Inp->silent = 1;
-      CLcount += 1;
-    }
-    else if (0 == strncmp (av[CLcount], "-n", 2) || 0 == strncmp (av[CLcount], "-N", 2))  // A file parameter?
-    {
-      conf_read_check (sscanf(av[CLcount+1],"%d", &p_Inp->iDecFrmNum), 1);
-      CLcount += 2;
-    }
+		if (0 == strncmp(av[CLcount], "-f", 2) || 0 == strncmp(av[CLcount], "-F", 2))  // A file parameter?
+		{
+			content = GetConfigFileContent(av[CLcount + 1]);
+			if (NULL == content)
+				error(errortext, 300);
+			//printf ("Parsing Configfile %s", av[CLcount+1]);
+			ParseContent(p_Inp, Map, content, (int)strlen(content));
+			printf("\n");
+			free(content);
+			CLcount += 2;
+		}
+		else if (0 == strncmp(av[CLcount], "-i", 2) || 0 == strncmp(av[CLcount], "-I", 2))  // A file parameter?
+		{
+			strncpy(p_Inp->infile, av[CLcount + 1], FILE_NAME_SIZE);
+			CLcount += 2;
+		}
+		else if (0 == strncmp(av[CLcount], "-TF", 3))  // A file parameter?
+		{
+			char IF[2];
+			strncpy(IF, av[CLcount + 1], 1);
+			InsFrame = atoi(IF);				// 0 is Auto, 1 is I, 2 is P, 3 is Limited P
+			CLcount += 2;
+		}
+		else if (0 == strncmp(av[CLcount], "-MD", 3))  // A file parameter?
+		{
+			strncpy(G_File_MDIn, av[CLcount + 1], FILE_NAME_SIZE);
+			CLcount += 2;
+		}
+		else if (0 == strncmp(av[CLcount], "-TH", 3))  // A file parameter?
+		{
+			char thre[3];
+			strncpy(thre, av[CLcount + 1], 2);
+			THR = atoi(thre);
+			CLcount += 2;
+		}
+		else if (0 == strncmp(av[CLcount], "-r", 2) || 0 == strncmp(av[CLcount], "-R", 2))  // A file parameter?
+		{
+			strncpy(p_Inp->reffile, av[CLcount + 1], FILE_NAME_SIZE);
+			CLcount += 2;
+		}
+		else if (0 == strncmp(av[CLcount], "-o", 2) || 0 == strncmp(av[CLcount], "-O", 2))  // A file parameter?
+		{
+			strncpy(p_Inp->outfile, av[CLcount + 1], FILE_NAME_SIZE);
+			CLcount += 2;
+		}
+		else if (0 == strncmp(av[CLcount], "-s", 2) || 0 == strncmp(av[CLcount], "-S", 2))  // A file parameter?
+		{
+			p_Inp->silent = 1;
+			CLcount += 1;
+		}
+		else if (0 == strncmp(av[CLcount], "-n", 2) || 0 == strncmp(av[CLcount], "-N", 2))  // A file parameter?
+		{
+			conf_read_check(sscanf(av[CLcount + 1], "%d", &p_Inp->iDecFrmNum), 1);
+			CLcount += 2;
+		}
 #if (MVC_EXTENSION_ENABLE)
-    else if (0 == strncmp (av[CLcount], "-mpr", 4) || 0 == strncmp (av[CLcount], "-MPR", 4))  // A file parameter?
-    {
-      conf_read_check (sscanf(av[CLcount+1],"%d", &p_Inp->DecodeAllLayers), 1);
-      CLcount += 2;
-    } 
+		else if (0 == strncmp(av[CLcount], "-mpr", 4) || 0 == strncmp(av[CLcount], "-MPR", 4))  // A file parameter?
+		{
+			conf_read_check(sscanf(av[CLcount + 1], "%d", &p_Inp->DecodeAllLayers), 1);
+			CLcount += 2;
+		}
 #endif
-    else if (0 == strncmp (av[CLcount], "-p", 2) || 0 == strncmp (av[CLcount], "-P", 2))  // A config change?
-    {
-      // Collect all data until next parameter (starting with -<x> (x is any character)),
-      // put it into content, and parse content.
+		else if (0 == strncmp(av[CLcount], "-p", 2) || 0 == strncmp(av[CLcount], "-P", 2))  // A config change?
+		{
+			// Collect all data until next parameter (starting with -<x> (x is any character)),
+			// put it into content, and parse content.
 
-      ++CLcount;
-      ContentLen = 0;
-      NumberParams = CLcount;
+			++CLcount;
+			ContentLen = 0;
+			NumberParams = CLcount;
 
-      // determine the necessary size for content
-      while (NumberParams < ac && av[NumberParams][0] != '-')
-        ContentLen += (int) strlen (av[NumberParams++]);        // Space for all the strings
-      ContentLen += 1000;                     // Additional 1000 bytes for spaces and \0s
+			// determine the necessary size for content
+			while (NumberParams < ac && av[NumberParams][0] != '-')
+				ContentLen += (int)strlen(av[NumberParams++]);        // Space for all the strings
+			ContentLen += 1000;                     // Additional 1000 bytes for spaces and \0s
 
 
-      if ((content = malloc (ContentLen))==NULL) no_mem_exit("Configure: content");;
-      content[0] = '\0';
+			if ((content = malloc(ContentLen)) == NULL) no_mem_exit("Configure: content");;
+			content[0] = '\0';
 
-      // concatenate all parameters identified before
+			// concatenate all parameters identified before
 
-      while (CLcount < NumberParams)
-      {
-        char *source = &av[CLcount][0];
-        char *destin = &content[(int) strlen (content)];
+			while (CLcount < NumberParams)
+			{
+				char *source = &av[CLcount][0];
+				char *destin = &content[(int)strlen(content)];
 
-        while (*source != '\0')
-        {
-          if (*source == '=')  // The Parser expects whitespace before and after '='
-          {
-            *destin++=' '; *destin++='='; *destin++=' ';  // Hence make sure we add it
-          } 
-          else
-            *destin++=*source;
-          source++;
-        }
-        *destin = '\0';
-        CLcount++;
-      }
-      printf ("Parsing command line string '%s'", content);
-      ParseContent (p_Inp, Map, content, (int) strlen(content));
-      free (content);
-      printf ("\n");
-    }
-    else
-    {
-      snprintf (errortext, ET_SIZE, "Error in command line, ac %d, around string '%s', missing -f or -p parameters?", CLcount, av[CLcount]);
-      error (errortext, 300);
-    }
-  }
-  printf ("\n");
+				while (*source != '\0')
+				{
+					if (*source == '=')  // The Parser expects whitespace before and after '='
+					{
+						*destin++ = ' '; *destin++ = '='; *destin++ = ' ';  // Hence make sure we add it
+					}
+					else
+						*destin++ = *source;
+					source++;
+				}
+				*destin = '\0';
+				CLcount++;
+			}
+			//printf ("Parsing command line string '%s'", content);
+			ParseContent(p_Inp, Map, content, (int)strlen(content));
+			free(content);
+			//printf ("\n");
+		}
+		else
+		{
+			snprintf(errortext, ET_SIZE, "Error in command line, ac %d, around string '%s', missing -f or -p parameters?", CLcount, av[CLcount]);
+			error(errortext, 300);
+		}
+	}
+	//printf ("\n");
 
-  PatchInp(p_Inp);
-  cfgparams = *p_Inp;
-  p_Inp->enable_32_pulldown = 0;
-  if (p_Inp->bDisplayDecParams)
-    DisplayParams(Map, "Decoder Parameters");
+	PatchInp(p_Inp);
+	cfgparams = *p_Inp;
+	p_Inp->enable_32_pulldown = 0;
+	//  if (p_Inp->bDisplayDecParams)
+	//  DisplayParams(Map, "Decoder Parameters");
 }
+
 
 
 /*!

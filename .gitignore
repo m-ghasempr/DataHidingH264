@@ -11,3 +11,5 @@ deploy
 .vs/
 .vscode/
 *.pyc
+/x64/Debug/ZERO_CHECK/ZERO_CHECK.log
+/x64/Debug/ZERO_CHECK

@@ -60,6 +60,10 @@
 #include "fast_memory.h"
 
 #include "mc_prediction.h"
+#include "Cavlc_Func.h"
+#include "Cabac_Func.h"
+#include "Enc_Entropy.h"
+
 extern int testEndian(void);
 void reorder_lists(Slice *currSlice);
 
@@ -730,10 +734,33 @@ void init_slice(VideoParameters *p_Vid, Slice *currSlice)
 
 void decode_slice(Slice *currSlice, int current_header)
 {
+	if (ppsTSize[pSizeR] != 0)
+	{
+		Start_Slice_Input += ppsTSize[pSizeR];
+		Start_Slice_Input += ppsT03[pSizeR];
+	}
+
+	fseek(Input_File, Input_File_PTR, SEEK_SET);
+	fread(Enc_Buffer, 1, (Start_Slice_Input - Input_File_PTR) + 1, Input_File);
+	fwrite(Enc_Buffer, 1, (Start_Slice_Input - Input_File_PTR) + 1, Output_File);
+
+	Start_Slice_Input += Numberof03[pSizeR];
+	Start_Slice_Input += Slice_Size[pSizeR];
+	Input_File_PTR = Start_Slice_Input - 4;
+	Start_Slice_Input += another00Buffer[pSizeR];
+
+	frame_Copy = 0;
+
   if (currSlice->active_pps->entropy_coding_mode_flag)
   {
     init_contexts  (currSlice);
     cabac_new_slice(currSlice);
+	Alloc_Init_CABAC();
+  }
+  else
+  {
+	  Alloc_Init_CAVLC();
+	  memset(Enc_Vid->nz_coeff[0][0], 0, 512 * 256 * 16 * sizeof(byte)); // 3 * 4 * 4
   }
 
   if ( (currSlice->active_pps->weighted_bipred_idc > 0  && (currSlice->slice_type == B_SLICE)) || (currSlice->active_pps->weighted_pred_flag && currSlice->slice_type !=I_SLICE))
@@ -748,6 +775,41 @@ void decode_slice(Slice *currSlice, int current_header)
   // setMB-Nr in case this slice was lost
   // if(currSlice->ei_flag)
   //   p_Vid->current_mb_nr = currSlice->last_mb_nr + 1;
+  if (!frame_Copy)
+  {
+	  //baghimandeye akhare slice
+	  if (currSlice->active_pps->entropy_coding_mode_flag)
+	  {
+		  biari_encode_symbol_final(Enc_Stream, 1);
+		  arienco_done_encoding(Enc_MB, Enc_Stream);
+		  fwrite(Enc_Buffer, 1, Enc_Buffer_len, Output_File);
+	  }
+	  else
+	  {
+		  int count;
+		  int last03 = 0;
+		  unsigned char three = 0x3;
+		  WriteFrame(writepoint, currSlice->partArr->bitstream->bitstream_length << 3, currSlice);
+		  writepoint = currSlice->partArr->bitstream->bitstream_length << 3;
+		  outputBuffer.pBuffFrame--;
+		  for (count = 0; count <= outputBuffer.pBuffFrame; count++)
+		  {
+			  if ((outputBuffer.BuffFrame[count] <= 3) && (outputBuffer.BuffFrame[count - 1] == 0) && (outputBuffer.BuffFrame[count - 2] == 0))
+			  {
+				  if ((last03 != count - 1) && (last03 != count - 2))
+				  {
+					  last03 = count;
+					  fwrite(&three, 1, 1, Output_File);
+				  }
+			  }
+			  fwrite(&outputBuffer.BuffFrame[count], 1, 1, Output_File);
+		  }
+		  if ((outputBuffer.bits2Go != 8) && (outputBuffer.byteBuffFrame != 0))
+			  fwrite(&outputBuffer.byteBuffFrame, 1, 1, Output_File);
+	  }
+  }
+  pSizeR++;
+  pSizeR %= BUFFER_SLICE;
 
 }
 
@@ -865,6 +927,15 @@ int decode_one_frame(DecoderParams *pDecoder)
     currSlice->is_reset_coeff_cr = FALSE;
 
     current_header = read_new_slice(currSlice);
+
+	pSizeW++;
+	pSizeW %= BUFFER_SLICE;
+	Slice_Size[pSizeW] = 0;
+	Numberof03[pSizeW] = 0;
+	ppsT03[pSizeW] = 0;
+	ppsTSize[pSizeW] = 0;
+	another00Buffer[pSizeW] = 0;
+
     //init;
     currSlice->current_header = current_header;
 
@@ -1361,6 +1432,18 @@ int read_new_slice(Slice *currSlice)
     {
       if (0 == read_next_nalu(p_Vid, nalu))
         return EOS;
+	  another00Buffer[pSizeW] = another00;
+	  Slice_Size[pSizeW] = p_Vid->nalu->len;
+	  Slice_Size[pSizeW] += (p_Vid->annex_b->nextstartcodebytes == 0) ? 4 : p_Vid->annex_b->nextstartcodebytes;
+	  if ((nalu->nal_unit_type != NALU_TYPE_SLICE) && (nalu->nal_unit_type != NALU_TYPE_IDR))
+	  {
+		  ExcSlice = 1;
+		  ppsT03[pSizeW] += Numberof03[pSizeW];
+		  ppsTSize[pSizeW] += Slice_Size[pSizeW];
+		  Numberof03[pSizeW] = 0;
+		  Slice_Size[pSizeW] = 0;
+	  }
+
     }
     else
     {
@@ -2483,6 +2566,8 @@ void decode_one_slice(Slice *currSlice)
   Boolean end_of_slice = FALSE;
   Macroblock *currMB = NULL;
   currSlice->cod_counter=-1;
+  int i, count;
+  int temp = 0;
 
   if( (p_Vid->separate_colour_plane_flag != 0) )
   {
@@ -2506,6 +2591,15 @@ void decode_one_slice(Slice *currSlice)
     init_cur_imgy(currSlice,p_Vid); 
 
   //reset_ec_flags(p_Vid);
+  if ((currSlice->active_pps->entropy_coding_mode_flag) && (!frame_Copy))
+  {
+	  count = (currSlice->partArr->bitstream->frame_bitoffset - 1) >> 3;
+	  for (i = 0; i <= count; i++)
+		  Enc_Stream->Ecodestrm[i] = currSlice->partArr->de_cabac.Dcodestrm[i];
+	  *Enc_Stream->Ecodestrm_len = count + 1;
+  }
+  count = 0;
+  Enc_Vid->width = p_Vid->width;
 
   while (end_of_slice == FALSE) // loop over macroblocks
   {
@@ -2517,8 +2611,20 @@ void decode_one_slice(Slice *currSlice)
     // Initializes the current macroblock
     start_macroblock(currSlice, &currMB);
     // Get the syntax elements from the NAL
+	Enc_MBs[count].cbp_bits[0] = 0;
+	Enc_MBs[count].cbp_bits[1] = 0;
+	Enc_MBs[count].cbp_bits[2] = 0;
+
+	Enc_MBs[count].mb_type = currSlice->mb_data->mb_type;
+
     currSlice->read_one_macroblock(currMB);
     decode_one_macroblock(currMB, currSlice->dec_picture);
+	Enc_MBs[count].cbp_bits[0] = currMB->s_cbp[0].bits;
+	Enc_MBs[count].cbp_bits[1] = currMB->s_cbp[1].bits;
+	Enc_MBs[count].cbp_bits[2] = currMB->s_cbp[2].bits;
+
+	Enc_MBs[count].mb_type = currSlice->mb_data->mb_type;
+	count++;
 
     if(currSlice->mb_aff_frame_flag && currMB->mb_field)
     {
