@@ -266,7 +266,7 @@ int main(int argc, char **argv)
   fseek(Input_File, (sizeH * -1), SEEK_END);
   fread(fileN, 1, 5, Input_File);
 
-  if ((fileN[1] == 0x0) && (fileN[2] == 0x0) && (fileN[3] == 0x1) && (fileN[4] == 28))				// fileN[0] bekhater ffmpeg 3 bayti check nashode
+  if ((fileN[1] == 0x0) && (fileN[2] == 0x0) && (fileN[3] == 0x1) && (fileN[4] == 28))				// fileN[0] is not checked because of 3bytes of ffmpeg
   {
 	  Inserted = 1;
 	  for (int j = 5; j <= sizeH; j++)
