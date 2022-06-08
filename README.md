@@ -1,115 +1,42 @@
-How to build JM
+H.264 Data Embedder
 ===============
 
-The software uses CMake to create platform-specific build files. 
+This software embeds data into H.264 coded videos. The embedded data can be extracted by <a target="_blank" href="https://github.com/mohghasem/DataExtractorH264">Data Extractor</a>. It uses quantized DCT coefficients to embed data and can embeds multiple data into the video. For more information, please read the paper that is cited below.
 
-Build instructions for plain CMake (suggested)
+### Paper presenting video data hiding:
+M. Ghasempour and M. Ghanbari, "A Low Complexity System for Multiple Data Embedding Into H.264 Coded Video Bit-Stream," in IEEE Transactions on Circuits and Systems for Video Technology, vol. 30, no. 11, pp. 4009-4019, Nov. 2020, [DOI: 10.1109/TCSVT.2019.2947545](https://doi.org/10.1109/TCSVT.2019.2947545)
+
+- [Build](#build)
+- [Usage](#usage)
+- [Copyright](#copyright)
+- [References](#references)
+
+Build
 ----------------------------------------------
 
-**Note:** A working CMake installation is required for building the software.
+1. You will need to check [JM repository](https://vcgit.hhi.fraunhofer.de/jvet/JM) to see how to build the project.
 
-CMake generates configuration files for the compiler environment/development environment on each platform. 
-The following is a list of examples for Windows (MS Visual Studio), macOS (Xcode) and Linux (make).
-
-Open a command prompt on your system and change into the root directory of this project.
-
-Create a build directory in the root directory:
-```bash
-mkdir build 
+Usage
+----------------------------------------------
 ```
-
-Use one of the following CMake commands, based on your platform. Feel free to change the commands to satisfy
-your needs.
-
-**Windows Visual Studio 2015/17/19 64 Bit:**
-
-Use the proper generator string for generating Visual Studio files, e.g. for VS 2015:
-
-```bash
-cd build
-cmake .. -G "Visual Studio 14 2015 Win64"
+./ldecod (or ldecod.exe on Windows) [-d JM_CONFIG_FILE] [-MD INPUT_TEXT_FILE] [-TF FRAME_TYPE] [-TH THRESHOLD_VALUE]
 ```
+- **JM_CONFIG_FILE**: The original config file for H.264/AVC JM reference software
+- **INPUT_TEXT_FILE**: The path and name of the data file that should be embedded into the video.
+- **FRAME_TYPE**: The frame type that is used for embedding data. The value can be from 0 to 4. 0: **B-frames**, 1: **I-frames**, 2: **P-frames**, 3: **Limited P-frames (only the last P-frame of each GOP to prevent drift distortion)** 4: **Only for multiple data insertion**
+- **THRESHOLD_VALUE**: The threshold value specifies which block is selected for embedding data. The blocks, which the position of last non-zero coefficient is higher than the threshold value, are embedding candidate blocks. It can be 1 to 14. The higher threshold value, the lower embedding capacity can be achieved, but the quality of video is preserved.
 
-Then open the generated solution file in MS Visual Studio.
-
-For VS 2017 use "Visual Studio 15 2017 Win64", for VS 2019 use "Visual Studio 16 2019".
-
-Visual Studio 2019 also allows you to open the CMake directory directly. Choose "File->Open->CMake" for this option.
-
-**macOS Xcode:**
-
-For generating an Xcode workspace type:
-```bash
-cd build
-cmake .. -G "Xcode"
+Example:
 ```
-Then open the generated work space in Xcode.
-
-For generating Makefiles with optional non-default compilers, use the following commands:
-
-```bash
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-9 -DCMAKE_CXX_COMPILER=g++-9
+./ldecod -d decoder.cfg -MD input.txt -TF 0 -TH 7
 ```
-In this example the brew installed GCC 9 is used for a release build.
+The example command embeds "input.txt" file into the macroblocks of B-frames, which the position of last non-zero coefficient is higher than 7.
 
-**Linux**
+Copyright
+----------------------------------------------
+Permission is hereby granted, without written agreement and without license or royalty fees, to use, copy, modify, and distribute the software provided and its documentation for research purpose only, provided that this copyright notice and the original authors' names appear on all copies and supporting documentation. The software provided may not be commercially distributed.
 
-For generating Linux Release Makefile:
-```bash
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-```
-For generating Linux Debug Makefile:
-```bash
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Debug
-```
-
-Then type
-```bash
-make -j
-```
-
-For more details, refer to the CMake documentation: https://cmake.org/cmake/help/latest/
-
-Build instructions for make
----------------------------
-
-**Note:** The build instructions in this section require the make tool and Python to be installed, which are
-part of usual Linux and macOS environments. See below for installation instruction for Python and GnuWin32 
-on Windows.
-
-Open a command prompt on your system and change into the root directory of this project.
-
-To use the default system compiler simply call:
-```bash
-make all
-```
-For MSYS2 and MinGW: Open an MSYS MinGW 64-Bit terminal and change into the root directory of this project.
-
-Call:
-```bash
-make all toolset=gcc
-```
-
-
-Tool Installation on Windows
-----------------------------
-Download CMake: http://www.cmake.org/ and install it.
-
-Python and GnuWin32 are not mandatory, but they simplify the build process for the user.
-
-python:    https://www.python.org/downloads/release/python-371/
-
-gnuwin32:  https://sourceforge.net/projects/getgnuwin32/files/getgnuwin32/0.6.30/GetGnuWin32-0.6.3.exe/download
-
-To use MinGW, install MSYS2: http://repo.msys2.org/distrib/msys2-x86_64-latest.exe
-
-Installation instructions: https://www.msys2.org/
-
-Install the needed toolchains:
-```bash
-pacman -S --needed base-devel mingw-w64-i686-toolchain mingw-w64-x86_64-toolchain git subversion mingw-w64-i686-cmake mingw-w64-x86_64-cmake
-```
-
+References
+----------------------------------------------
+- T. Wiegand, G. J. Sullivan, G. Bjontegaard and A. Luthra, “Overview of the H.264/AVC video coding standard,” IEEE Transactions on Circuits and Systems for Video Technology, 13(7), 560–576, 2003.
+- M. Fallahpour, S. Shirmohammadi, M. Ghanbari, “A high capacity data hiding algorithm for H.264/AVC video,” Security and Communication Networks, 8(16), 2947-2955, 2015.
